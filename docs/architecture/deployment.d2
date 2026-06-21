@@ -1,0 +1,55 @@
+direction: down
+vars: {
+  d2-config: {
+    layout-engine: elk
+    theme-id: 200
+  }
+}
+
+client: {
+  label: "Client application"
+  shape: rectangle
+}
+
+stack: "Tamga Stack (docker-compose)" {
+  edge: "Edge" {
+    proxy: "Proxy\n:8443 TLS\n:8080 metrics" {
+      shape: rectangle
+      style.fill: "#1e3a5f"
+      style.stroke: "#3b82f6"
+    }
+  }
+
+  inspection: "Inspection" {
+    analyzer: "Analyzer\n:50051 gRPC\n:8444 HTTP" {
+      shape: rectangle
+      style.fill: "#0d3a3a"
+      style.stroke: "#14b8a6"
+    }
+  }
+
+  data: "Data" {
+    postgres: "PostgreSQL 16\n:5432" { shape: cylinder }
+    redis: "Redis 7\n:6379" { shape: cylinder }
+  }
+
+  obs: "Observability" {
+    jaeger: "Jaeger\n:16686 UI\n:4317 OTLP" { shape: rectangle }
+  }
+
+  mgmt: "Management" {
+    dashboard: "Dashboard\n:3000\nNext.js" {
+      shape: rectangle
+      style.fill: "#3a2d0a"
+      style.stroke: "#f59e0b"
+    }
+  }
+}
+
+client -> stack.edge.proxy: "HTTPS"
+stack.edge.proxy -> stack.inspection.analyzer: "gRPC"
+stack.edge.proxy -> stack.data.postgres: "SQL"
+stack.edge.proxy -> stack.data.redis: "cache + rate limit"
+stack.edge.proxy -> stack.obs.jaeger: "OTLP"
+stack.mgmt.dashboard -> stack.edge.proxy: "REST API"
+stack.mgmt.dashboard -> stack.data.postgres: "read events"
