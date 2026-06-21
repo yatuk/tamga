@@ -1,0 +1,100 @@
+{
+  "category": "policy",
+  "test": "policy_bypass",
+  "timestamp": "2026-06-17T19:59:53.187219+00:00",
+  "total": 11,
+  "detected": 0,
+  "bypassed": 7,
+  "bypass_rate": 1.0,
+  "error": 11,
+  "vectors": [
+    {
+      "name": "Path traversal %2F encoded",
+      "expected_finding": true,
+      "detected": false,
+      "bypassed": true,
+      "findings_count": 0,
+      "status_code": 0
+    },
+    {
+      "name": "Path traversal %252F double",
+      "expected_finding": true,
+      "detected": false,
+      "bypassed": true,
+      "findings_count": 0,
+      "status_code": 0
+    },
+    {
+      "name": "Path traversal overlong UTF-8",
+      "expected_finding": true,
+      "detected": false,
+      "bypassed": true,
+      "findings_count": 0,
+      "status_code": 0
+    },
+    {
+      "name": "Path traversal encoded dots",
+      "expected_finding": true,
+      "detected": false,
+      "bypassed": true,
+      "findings_count": 0,
+      "status_code": 0
+    },
+    {
+      "name": "Path traversal plain ../",
+      "expected_finding": true,
+      "detected": false,
+      "bypassed": true,
+      "findings_count": 0,
+      "status_code": 0
+    },
+    {
+      "name": "Path traversal backslash",
+      "expected_finding": true,
+      "detected": false,
+      "bypassed": true,
+      "findings_count": 0,
+      "status_code": 0
+    },
+    {
+      "name": "Health endpoint accessible",
+      "expected_finding": false,
+      "detected": false,
+      "bypassed": false,
+      "findings_count": 0,
+      "status_code": 0
+    },
+    {
+      "name": "API without auth key",
+      "expected_finding": true,
+      "detected": false,
+      "bypassed": true,
+      "findings_count": 0,
+      "status_code": 0
+    },
+    {
+      "name": "Stats with auth",
+      "expected_finding": false,
+      "detected": false,
+      "bypassed": false,
+      "findings_count": 0,
+      "status_code": 0
+    },
+    {
+      "name": "Policies with auth",
+      "expected_finding": false,
+      "detected": false,
+      "bypassed": false,
+      "findings_count": 0,
+      "status_code": 0
+    },
+    {
+      "name": "Events with auth",
+      "expected_finding": false,
+      "detected": false,
+      "bypassed": false,
+      "findings_count": 0,
+      "status_code": 0
+    }
+  ]
+}

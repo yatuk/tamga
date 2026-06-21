@@ -1,0 +1,56 @@
+{
+  "category": "load",
+  "test": "baseline_rps_discovery",
+  "timestamp": "2026-06-13T21:38:00+03:00",
+  "target": "http://localhost:8443",
+  "results": [
+    {
+      "rps_target": 100,
+      "achieved_rps": 100,
+      "p50_ms": 3.71,
+      "p95_ms": 5.46,
+      "p99_ms": 7.06,
+      "error_rate": 0.0,
+      "status": "PASS"
+    },
+    {
+      "rps_target": 250,
+      "achieved_rps": 250,
+      "p50_ms": 2.08,
+      "p95_ms": 3.39,
+      "p99_ms": 6.04,
+      "error_rate": 0.0,
+      "status": "PASS"
+    },
+    {
+      "rps_target": 500,
+      "achieved_rps": 500,
+      "p50_ms": 1.58,
+      "p95_ms": 3.66,
+      "p99_ms": 8.92,
+      "error_rate": 0.0,
+      "status": "PASS"
+    },
+    {
+      "rps_target": 1000,
+      "achieved_rps": 1000,
+      "p50_ms": 6.21,
+      "p95_ms": 130.88,
+      "p99_ms": 166.51,
+      "error_rate": 0.0,
+      "status": "WARN"
+    },
+    {
+      "rps_target": 2000,
+      "achieved_rps": 1079,
+      "p50_ms": 1820,
+      "p95_ms": 1970,
+      "p99_ms": 2110,
+      "error_rate": 0.0,
+      "status": "FAIL"
+    }
+  ],
+  "bottleneck": "CPU-bound (all 7 scanners run synchronously per request)",
+  "max_sustained_rps": 500,
+  "breakpoint_rps": "500-1000"
+}

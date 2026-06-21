@@ -1,0 +1,17 @@
+{
+  "version": "1.0.0",
+  "updated_at": "2026-06-17",
+  "source_commit": "2e1f1044ec6a9be5d927aa146a21b64f6904105b",
+  "adversarial": {
+    "pii": { "total": 17, "detected": 6, "bypassed": 11 },
+    "injection": { "total": 22, "detected": 9, "bypassed": 13 },
+    "secret": { "total": 12, "detected": 8, "bypassed": 4 },
+    "policy": { "total": 11, "detected": 10, "bypassed": 1 },
+    "total_bypassed": 29
+  },
+  "load": {
+    "100rps":  { "p95_ms": 5.5,   "error_rate": 0.0 },
+    "500rps":  { "p95_ms": 3.7,   "error_rate": 0.0 },
+    "1000rps": { "p95_ms": 130.0, "error_rate": 0.0, "status": "WARN" }
+  }
+}
