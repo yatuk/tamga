@@ -1,0 +1,117 @@
+name: Integration Smoke Test (Docker)
+
+on:
+  push:
+    branches: [dev]
+    paths:
+      - "proxy/**"
+      - "deploy/**"
+      - "scripts/smoke-test.sh"
+  pull_request:
+    branches: [dev]
+    paths:
+      - "proxy/**"
+      - "deploy/**"
+      - "scripts/smoke-test.sh"
+  workflow_dispatch:
+
+jobs:
+  docker-smoke:
+    name: Proxy-Only Smoke Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: tamga
+          POSTGRES_PASSWORD: smoke-pg-pass
+          POSTGRES_DB: tamga
+        options: >-
+          --health-cmd "pg_isready -U tamga"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build proxy image
+        run: docker build -t tamga-proxy ./proxy
+
+      - name: Start proxy (mock upstream, no analyzer)
+        run: |
+          docker run -d --name tamga-proxy \
+            --network host \
+            -e TAMGA_PROXY_PORT=8443 \
+            -e TAMGA_ADMIN_KEY=smoke-test-admin-key \
+            -e TAMGA_MOCK_UPSTREAM=true \
+            -e TAMGA_DB_URL="postgresql://tamga:smoke-pg-pass@localhost:5432/tamga" \
+            -e REDIS_URL="redis://localhost:6379" \
+            -e TAMGA_ANALYZER_ADDR="" \
+            -v ${{ github.workspace }}/proxy/tamga-policy.yaml:/app/tamga-policy.yaml:ro \
+            tamga-proxy
+
+      - name: Wait for proxy
+        run: |
+          for i in $(seq 1 30); do
+            if curl -s http://localhost:8443/health > /dev/null 2>&1; then
+              echo "Proxy ready after ${i}s"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Proxy failed to start"
+          docker logs tamga-proxy
+          exit 1
+
+      - name: Health check
+        run: |
+          curl -s http://localhost:8443/health | grep '"status":"ok"'
+          curl -s http://localhost:8443/api/v1/health/detailed | jq '{proxy,scanner_count,database,redis}'
+
+      - name: Clean request (PASS)
+        run: |
+          CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://localhost:8443/v1/chat/completions \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer demo-key" \
+            -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"Merhaba"}]}')
+          [ "$CODE" = "200" ] || { echo "Expected 200, got $CODE"; exit 1; }
+
+      - name: Credit card BLOCK
+        run: |
+          CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://localhost:8443/v1/chat/completions \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer demo-key" \
+            -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"Card 4532015112830366"}]}')
+          [ "$CODE" = "403" ] || { echo "Expected 403, got $CODE"; exit 1; }
+
+      - name: API auth check
+        run: |
+          # No key → 401
+          NOAUTH=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8443/api/v1/stats)
+          [ "$NOAUTH" = "401" ] || { echo "Expected 401, got $NOAUTH"; exit 1; }
+
+          # With key → 200
+          AUTH=$(curl -s -o /dev/null -w "%{http_code}" -H "X-Tamga-Admin-Key: smoke-test-admin-key" http://localhost:8443/api/v1/stats)
+          [ "$AUTH" = "200" ] || { echo "Expected 200, got $AUTH"; exit 1; }
+
+      - name: Collect logs on failure
+        if: failure()
+        run: docker logs tamga-proxy
