@@ -1,0 +1,389 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>telemetry: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">github.com/tamga-dev/tamga-proxy/internal/telemetry/grpc_interceptor.go (100.0%)</option>
+				
+				<option value="file1">github.com/tamga-dev/tamga-proxy/internal/telemetry/tracing.go (95.7%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">not covered</span>
+				<span class="cov8">covered</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">package telemetry
+
+import (
+        "context"
+
+        "go.opentelemetry.io/otel/propagation"
+        "google.golang.org/grpc"
+        "google.golang.org/grpc/metadata"
+)
+
+// UnaryClientTraceInterceptor injects W3C trace context into outgoing gRPC
+// metadata so the server can continue the distributed trace. Use this when
+// dialing the scanner-service or analyzer gRPC endpoints.
+func UnaryClientTraceInterceptor() grpc.UnaryClientInterceptor <span class="cov8" title="1">{
+        return func(
+                ctx context.Context,
+                method string,
+                req, reply any,
+                cc *grpc.ClientConn,
+                invoker grpc.UnaryInvoker,
+                opts ...grpc.CallOption,
+        ) error </span><span class="cov8" title="1">{
+                md, ok := metadata.FromOutgoingContext(ctx)
+                if !ok </span><span class="cov8" title="1">{
+                        md = metadata.New(nil)
+                }</span>
+                // Inject W3C Trace Context (traceparent, tracestate) into gRPC metadata.
+                <span class="cov8" title="1">prop := propagation.TraceContext{}
+                prop.Inject(ctx, propagation.HeaderCarrier(md))
+                ctx = metadata.NewOutgoingContext(ctx, md)
+
+                return invoker(ctx, method, req, reply, cc, opts...)</span>
+        }
+}
+
+// UnaryServerTraceInterceptor extracts W3C trace context from incoming gRPC
+// metadata and creates a server span for the RPC. Use this on the scanner-service
+// gRPC server to continue the trace started by the proxy.
+func UnaryServerTraceInterceptor() grpc.UnaryServerInterceptor <span class="cov8" title="1">{
+        return func(
+                ctx context.Context,
+                req any,
+                info *grpc.UnaryServerInfo,
+                handler grpc.UnaryHandler,
+        ) (any, error) </span><span class="cov8" title="1">{
+                md, _ := metadata.FromIncomingContext(ctx)
+                prop := propagation.TraceContext{}
+                ctx = prop.Extract(ctx, propagation.HeaderCarrier(md))
+
+                ctx, span := Tracer().Start(ctx, "grpc."+info.FullMethod)
+                defer span.End()
+
+                return handler(ctx, req)
+        }</span>
+}
+</pre>
+		
+		<pre class="file" id="file1" style="display: none">package telemetry
+
+import (
+        "context"
+        "net/url"
+        "os"
+        "strconv"
+        "strings"
+        "time"
+
+        "go.opentelemetry.io/otel"
+        "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+        "go.opentelemetry.io/otel/propagation"
+        sdkresource "go.opentelemetry.io/otel/sdk/resource"
+        sdktrace "go.opentelemetry.io/otel/sdk/trace"
+        semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
+        "go.opentelemetry.io/otel/trace"
+)
+
+const tracerName = "github.com/tamga-dev/tamga-proxy"
+
+// Shutdown flushes pending spans on process exit.
+type Shutdown func(context.Context) error
+
+// TracingConfig controls OTLP export and sampling.
+type TracingConfig struct {
+        Enabled        bool
+        Endpoint       string // host:port or full URL — passed to OTLP HTTP client
+        URLPath        string // e.g. /v1/traces
+        Insecure       bool
+        Headers        map[string]string
+        SampleRate     float64
+        Environment    string
+        ServiceName    string
+        ServiceVersion string
+}
+
+// ConfigFromEnv loads tracing settings. Legacy: TAMGA_OTLP_ENDPOINT still enables export
+// when TAMGA_OTEL_ENABLED is unset.
+func ConfigFromEnv(serviceName, version string) TracingConfig <span class="cov8" title="1">{
+        explicitOff := strings.EqualFold(strings.TrimSpace(os.Getenv("TAMGA_OTEL_ENABLED")), "false") ||
+                strings.TrimSpace(os.Getenv("TAMGA_OTEL_ENABLED")) == "0"
+
+        enabled := strings.EqualFold(strings.TrimSpace(os.Getenv("TAMGA_OTEL_ENABLED")), "true") ||
+                strings.TrimSpace(os.Getenv("TAMGA_OTEL_ENABLED")) == "1"
+        endpoint := strings.TrimSpace(os.Getenv("TAMGA_OTEL_ENDPOINT"))
+        if endpoint == "" </span><span class="cov8" title="1">{
+                endpoint = strings.TrimSpace(os.Getenv("TAMGA_OTLP_ENDPOINT"))
+        }</span>
+        <span class="cov8" title="1">if !explicitOff &amp;&amp; endpoint != "" &amp;&amp; !enabled </span><span class="cov8" title="1">{
+                // Backward compatibility: OTLP endpoint alone turns tracing on.
+                enabled = true
+        }</span>
+        <span class="cov8" title="1">if explicitOff </span><span class="cov8" title="1">{
+                enabled = false
+        }</span>
+
+        <span class="cov8" title="1">sample := 0.05 // 5% — production-safe default, prevents trace volume explosion
+        if s := strings.TrimSpace(os.Getenv("TAMGA_OTEL_SAMPLE_RATE")); s != "" </span><span class="cov8" title="1">{
+                if f, err := strconv.ParseFloat(s, 64); err == nil &amp;&amp; f &gt;= 0 &amp;&amp; f &lt;= 1 </span><span class="cov8" title="1">{
+                        sample = f
+                }</span>
+        }
+        <span class="cov8" title="1">env := strings.TrimSpace(os.Getenv("TAMGA_OTEL_ENVIRONMENT"))
+        if env == "" </span><span class="cov8" title="1">{
+                env = "development"
+        }</span>
+        <span class="cov8" title="1">insecure := true
+        if v := strings.TrimSpace(os.Getenv("TAMGA_OTEL_INSECURE")); v == "0" || strings.EqualFold(v, "false") </span><span class="cov8" title="1">{
+                insecure = false
+        }</span>
+
+        <span class="cov8" title="1">headers := parseHeaderList(os.Getenv("TAMGA_OTEL_HEADERS"))
+
+        path := strings.TrimSpace(os.Getenv("TAMGA_OTEL_URL_PATH"))
+        if path == "" </span><span class="cov8" title="1">{
+                path = "/v1/traces"
+        }</span>
+
+        <span class="cov8" title="1">ep, pathFromURL, useInsecure := normalizeOTLPEndpoint(endpoint, insecure)
+        if pathFromURL != "" </span><span class="cov0" title="0">{
+                path = pathFromURL
+        }</span>
+        <span class="cov8" title="1">if useInsecure != nil </span><span class="cov8" title="1">{
+                insecure = *useInsecure
+        }</span>
+
+        <span class="cov8" title="1">return TracingConfig{
+                Enabled:        enabled,
+                Endpoint:       ep,
+                URLPath:        path,
+                Insecure:       insecure,
+                Headers:        headers,
+                SampleRate:     sample,
+                Environment:    env,
+                ServiceName:    serviceName,
+                ServiceVersion: version,
+        }</span>
+}
+
+func parseHeaderList(raw string) map[string]string <span class="cov8" title="1">{
+        raw = strings.TrimSpace(raw)
+        if raw == "" </span><span class="cov8" title="1">{
+                return nil
+        }</span>
+        <span class="cov8" title="1">out := map[string]string{}
+        for _, part := range strings.Split(raw, ",") </span><span class="cov8" title="1">{
+                part = strings.TrimSpace(part)
+                if part == "" </span><span class="cov8" title="1">{
+                        continue</span>
+                }
+                <span class="cov8" title="1">k, v, ok := strings.Cut(part, ":")
+                if !ok </span><span class="cov8" title="1">{
+                        k, v, ok = strings.Cut(part, "=")
+                }</span>
+                <span class="cov8" title="1">if !ok </span><span class="cov8" title="1">{
+                        continue</span>
+                }
+                <span class="cov8" title="1">k = strings.TrimSpace(k)
+                v = strings.TrimSpace(v)
+                if k != "" </span><span class="cov8" title="1">{
+                        out[k] = v
+                }</span>
+        }
+        <span class="cov8" title="1">if len(out) == 0 </span><span class="cov8" title="1">{
+                return nil
+        }</span>
+        <span class="cov8" title="1">return out</span>
+}
+
+// normalizeOTLPEndpoint returns host:port, optional path override, optional insecure override.
+func normalizeOTLPEndpoint(endpoint string, defaultInsecure bool) (hostPort string, path string, insecure *bool) <span class="cov8" title="1">{
+        endpoint = strings.TrimSpace(endpoint)
+        if endpoint == "" </span><span class="cov8" title="1">{
+                return "", "", nil
+        }</span>
+        <span class="cov8" title="1">if !strings.Contains(endpoint, "://") </span><span class="cov8" title="1">{
+                return endpoint, "", nil
+        }</span>
+        <span class="cov8" title="1">u, err := url.Parse(endpoint)
+        if err != nil || u.Host == "" </span><span class="cov8" title="1">{
+                return endpoint, "", nil
+        }</span>
+        <span class="cov8" title="1">hostPort = u.Host
+        path = u.Path
+        inv := u.Scheme == "http"
+        return hostPort, path, &amp;inv</span>
+}
+
+// InitTracing wires OTLP/HTTP export and global propagator. No-op shutdown when disabled.
+func InitTracing(ctx context.Context, cfg TracingConfig) (Shutdown, error) <span class="cov8" title="1">{
+        otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+                propagation.TraceContext{},
+                propagation.Baggage{},
+        ))
+
+        if !cfg.Enabled || cfg.Endpoint == "" </span><span class="cov8" title="1">{
+                return func(context.Context) error </span><span class="cov8" title="1">{ return nil }</span>, nil
+        }
+
+        <span class="cov8" title="1">opts := []otlptracehttp.Option{
+                otlptracehttp.WithEndpoint(cfg.Endpoint),
+                otlptracehttp.WithTimeout(8 * time.Second),
+        }
+        if cfg.URLPath != "" </span><span class="cov8" title="1">{
+                opts = append(opts, otlptracehttp.WithURLPath(cfg.URLPath))
+        }</span>
+        <span class="cov8" title="1">if cfg.Insecure </span><span class="cov8" title="1">{
+                opts = append(opts, otlptracehttp.WithInsecure())
+        }</span>
+        <span class="cov8" title="1">if len(cfg.Headers) &gt; 0 </span><span class="cov0" title="0">{
+                opts = append(opts, otlptracehttp.WithHeaders(cfg.Headers))
+        }</span>
+
+        <span class="cov8" title="1">exp, err := otlptracehttp.New(ctx, opts...)
+        if err != nil </span><span class="cov0" title="0">{
+                return func(context.Context) error </span><span class="cov0" title="0">{ return nil }</span>, err
+        }
+
+        <span class="cov8" title="1">res, _ := sdkresource.Merge(
+                sdkresource.Default(),
+                sdkresource.NewWithAttributes(
+                        semconv.SchemaURL,
+                        semconv.ServiceName(cfg.ServiceName),
+                        semconv.ServiceVersion(cfg.ServiceVersion),
+                        semconv.DeploymentEnvironment(cfg.Environment),
+                ),
+        )
+
+        sampler := sdktrace.ParentBased(sdktrace.TraceIDRatioBased(cfg.SampleRate))
+        tp := sdktrace.NewTracerProvider(
+                sdktrace.WithBatcher(exp),
+                sdktrace.WithResource(res),
+                sdktrace.WithSampler(sampler),
+        )
+        otel.SetTracerProvider(tp)
+        return tp.Shutdown, nil</span>
+}
+
+// Init is a convenience wrapper: ConfigFromEnv + InitTracing.
+func Init(ctx context.Context, serviceName, version string) (Shutdown, error) <span class="cov8" title="1">{
+        return InitTracing(ctx, ConfigFromEnv(serviceName, version))
+}</span>
+
+// Tracer returns the global Tamga tracer (no-op if telemetry was not enabled).
+func Tracer() trace.Tracer <span class="cov8" title="1">{
+        return otel.Tracer(tracerName)
+}</span>
+
+// TraceIDFromContext extracts the hex trace ID from a context, or "" if none.
+func TraceIDFromContext(ctx context.Context) string <span class="cov8" title="1">{
+        sc := trace.SpanContextFromContext(ctx)
+        if !sc.IsValid() </span><span class="cov8" title="1">{
+                return ""
+        }</span>
+        <span class="cov8" title="1">return sc.TraceID().String()</span>
+}
+
+// SpanName returns stable span names for scanner sub-spans.
+func SpanNameForScanner(scannerName string) string <span class="cov8" title="1">{
+        s := strings.TrimSpace(strings.ToLower(scannerName))
+        s = strings.ReplaceAll(s, " ", "_")
+        if s == "" </span><span class="cov8" title="1">{
+                return "scanner.unknown"
+        }</span>
+        <span class="cov8" title="1">return "scanner." + s</span>
+}
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>
