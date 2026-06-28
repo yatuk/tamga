@@ -1,0 +1,31 @@
+# Cursor IDE — paylaşılan kurallar `tamga/.cursor/rules/*.mdc` (commitlenir); diğer yerel durum ignore
+**/.cursor/*
+!**/.cursor/rules/
+!**/.cursor/rules/**
+
+# Secrets and env (never commit real keys — root-level files are not covered by tamga/.gitignore)
+.env
+.env.local
+.env.*.local
+# Broad match for other variants; keep tracked templates
+.env.*
+!.env.example
+!**/.env.example
+
+# Terraform local state and providers
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+
+# Python / test caches (also under tamga/ for tools that run from repo root)
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# OS
+Thumbs.db
+.DS_Store

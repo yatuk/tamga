@@ -1,0 +1,125 @@
+name: Security (govulncheck + SBOM)
+
+on:
+  push:
+    branches: [dev]
+    paths:
+      - "proxy/**"
+      - "!proxy/**/*_test.go"
+  pull_request:
+    branches: [dev]
+  schedule:
+    - cron: "0 8 * * 1" # Every Monday at 08:00 UTC
+
+defaults:
+  run:
+    working-directory: proxy
+
+jobs:
+  govulncheck:
+    name: Go Vulnerability Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+          cache-dependency-path: proxy/go.sum
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
+  gosec:
+    name: Go Security Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: gosec
+        uses: securego/gosec@master
+        with:
+          args: "-quiet -exclude-dir=scripts ./proxy/..."
+
+  sbom:
+    name: Generate SBOM (CycloneDX)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+          cache-dependency-path: proxy/go.sum
+      - name: Generate SBOM
+        run: |
+          go install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@latest
+          cyclonedx-gomod app -output sbom.json -licenses -assert-licenses
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: proxy/sbom.json
+
+  go-test:
+    name: Go Test (race + E2E)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+          cache-dependency-path: proxy/go.sum
+      - name: E2E integration tests (full-stack, mock upstream)
+        run: go test -race -count=1 -run "TestE2E_" ./internal/proxy/
+      - name: Test all packages
+        run: go test -race -count=1 -coverprofile=coverage.out -covermode=atomic ./...
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: proxy/coverage.out
+
+  verify-bin-data:
+    name: Verify BIN Dataset Integrity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check BIN SHA256
+        run: bash scripts/verify-bin-data.sh
+
+  fuzz:
+    name: Fuzz (15 min)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+          cache-dependency-path: proxy/go.sum
+      - name: Fuzz scanners
+        run: |
+          go test -fuzz=FuzzValidLuhn -fuzztime=5m ./internal/scanner/
+          go test -fuzz=FuzzValidTCKN -fuzztime=5m ./internal/scanner/
+          go test -fuzz=FuzzMaskPAN -fuzztime=5m ./internal/scanner/
+
+  benchmark-regression:
+    name: Benchmark Regression Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+          cache-dependency-path: proxy/go.sum
+      - name: Run benchmarks
+        run: |
+          go test -bench=. -benchmem -count=3 ./internal/scanner/ | tee bench_output.txt
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: proxy/bench_output.txt

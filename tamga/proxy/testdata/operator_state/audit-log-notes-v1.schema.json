@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/jugeni/jugeni/contracts/audit-log-notes-v1.schema.json",
+  "title": "jugeni notes audit log entry (v1)",
+  "description": "Append-only audit log entry for knowledge-atom (note) lifecycle events. One JSON object per line in JSONL format. Location on disk: <repo>/.jugeni/notes/audit.jsonl. Notes are factual/architectural atoms separate from decisions (which have lifecycle); this stream is shape-similar to decisions audit but tracks ADD/ARCHIVE only. Hash chain fields (prev_hash, entry_hash) are roadmap (v2).",
+  "type": "object",
+  "required": ["ts", "action", "note", "detail"],
+  "additionalProperties": false,
+  "properties": {
+    "ts": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp with timezone offset (local time preserved). Same shape as decisions audit.",
+      "examples": ["2026-06-23T14:07:00+02:00"]
+    },
+    "action": {
+      "type": "string",
+      "enum": ["add", "archive"],
+      "description": "Lifecycle event. 'add' creates a new note (notes are immutable after add). 'archive' marks a note as no longer authoritative without deleting it (preserves provenance). Notes do NOT have proposed/accepted/locked lifecycle — they're additive knowledge atoms, not decisions."
+    },
+    "note": {
+      "type": "string",
+      "pattern": "^N-\\d{4}-\\d{2}-\\d{2}-\\d{3,}$",
+      "description": "Note identifier. Format: N-YYYY-MM-DD-NNN where YYYY-MM-DD is creation date and NNN is monotonic counter within that day (zero-padded to at least 3 digits).",
+      "examples": ["N-2026-06-23-001", "N-2026-06-23-024"]
+    },
+    "detail": {
+      "type": "string",
+      "description": "Note kind classifier. Stable enum used at write-time, free-form in schema for forward-compatibility. Current values in production: 'pattern', 'architecture', 'reflection', 'hypothesis', 'anti-pattern'. New kinds may be added without schema bump.",
+      "examples": ["architecture", "reflection", "pattern"]
+    }
+  }
+}

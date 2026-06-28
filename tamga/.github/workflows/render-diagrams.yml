@@ -1,0 +1,35 @@
+name: Render D2 Diagrams
+
+on:
+  push:
+    paths:
+      - 'docs/architecture/**.d2'
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install D2
+        run: curl -fsSL https://d2lang.com/install.sh | sh -s --
+
+      - name: Render diagrams
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          for f in docs/architecture/*.d2; do
+            d2 "$f" "${f%.d2}.svg" --theme=200 --layout=elk
+            d2 "$f" "${f%.d2}.png" --theme=200 --layout=elk --scale 2
+          done
+
+      - name: Commit rendered diagrams
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/architecture/*.svg docs/architecture/*.png
+          if ! git diff --quiet --cached; then
+            git commit -m "ci: auto-render D2 diagrams [skip ci]"
+            git push
+          fi

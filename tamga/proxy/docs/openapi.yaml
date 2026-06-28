@@ -1,0 +1,2429 @@
+openapi: 3.0.3
+info:
+  title: Tamga AI Security Proxy API
+  version: 0.1.1
+  description: |
+    Tamga bir in-line LLM güvenlik proxy'sidir. OpenAI/Anthropic/Gemini/Mistral/Bedrock
+    endpointlerini karşılar, policy motoru ile PII/secret/jailbreak taraması
+    uygular ve dashboard yönetim API'lerini sağlar.
+
+    Kimlik doğrulama iki şekilde yapılır:
+    1. `X-Tamga-Admin-Key` başlığı (ana admin anahtarı)
+    2. Scoped API key (`read`, `write`, `admin`)
+  contact:
+    name: Tamga Security
+    email: security@tamga.io
+    url: https://tamga.io/trust
+
+servers:
+  - url: https://api.tamga.io
+    description: Production
+  - url: http://localhost:8080
+    description: Local
+
+security:
+  - AdminKey: []
+  - ApiKey: []
+
+tags:
+  - name: health
+    description: Health check and runtime diagnostics
+  - name: auth
+    description: OAuth / SSO authentication (no auth required)
+  - name: stats
+    description: Dashboard overview statistics
+  - name: events
+    description: Security event listing, detail, export, and privacy
+  - name: timeseries
+    description: Bucketed time series data
+  - name: findings
+    description: Finding-type breakdowns
+  - name: incidents
+    description: Incident lifecycle management
+  - name: mttr
+    description: Mean Time to Resolution metrics
+  - name: audit
+    description: Audit log and hash-chain verification
+  - name: live
+    description: Server-Sent Events stream
+  - name: policies
+    description: Policy CRUD, validation, simulation, custom entities, history, proposals
+  - name: apikeys
+    description: Scoped API key management
+  - name: webhooks
+    description: Webhook destination management
+  - name: metrics
+    description: Prometheus metrics text and histogram JSON
+  - name: patterns
+    description: Custom detection pattern CRUD
+  - name: saved-hunts
+    description: Server-side saved threat-hunting queries
+  - name: team
+    description: Team member listing and role assignment
+  - name: billing
+    description: Pricing catalogue and cost breakdowns
+  - name: maintenance
+    description: Retention and circuit-breaker reset
+  - name: budget
+    description: Organisation-level token/cost budget
+  - name: providers
+    description: Supported LLM provider catalogue
+  - name: ratelimit
+    description: Rate limiter statistics
+  - name: proxy
+    description: Proxied chat completions endpoint
+  - name: scim
+    description: SCIM v2 user provisioning
+
+paths:
+  # ────────────────────────────────────────────────────────────────────
+  # Health
+  # ────────────────────────────────────────────────────────────────────
+  /health:
+    get:
+      tags: [health]
+      summary: Health check
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+
+  /api/v1/health/detailed:
+    get:
+      tags: [health]
+      summary: Detailed health status with provider pool snapshots
+      description: |
+        Returns proxy, database, Redis, analyzer status plus scanner
+        count, uptime, and any upstream provider pool health snapshots.
+        Returns 503 when any dependency (DB/Redis/analyzer) is unhealthy.
+      responses:
+        "200":
+          description: All dependencies healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardHealthDetailed"
+        "503":
+          description: One or more dependencies unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardHealthDetailed"
+
+  /api/v1/health/detail:
+    get:
+      tags: [health]
+      summary: Runtime operational profile
+      description: |
+        Exposes TLS, mTLS, Redis, Postgres status plus policy identity and
+        tier information for the Settings / Runtime dashboard tab.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardHealthDetail"
+
+  # ────────────────────────────────────────────────────────────────────
+  # Auth (public — no security required)
+  # ────────────────────────────────────────────────────────────────────
+  /api/v1/auth/github/login:
+    get:
+      tags: [auth]
+      summary: Redirect to GitHub OAuth login
+      security: []
+      responses:
+        "302":
+          description: Redirect to GitHub
+
+  /api/v1/auth/github/callback:
+    get:
+      tags: [auth]
+      summary: GitHub OAuth callback
+      security: []
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: OAuth error
+
+  /api/v1/auth/github/exchange:
+    post:
+      tags: [auth]
+      summary: Exchange GitHub code for JWT session
+      security: []
+      responses:
+        "200":
+          description: OK
+
+  /api/v1/auth/session:
+    get:
+      tags: [auth]
+      summary: Get current session info
+      security: []
+      responses:
+        "200":
+          description: OK
+
+  # ────────────────────────────────────────────────────────────────────
+  # Stats
+  # ────────────────────────────────────────────────────────────────────
+  /api/v1/stats:
+    get:
+      tags: [stats]
+      summary: Dashboard overview statistics
+      parameters:
+        - in: query
+          name: range
+          schema:
+            $ref: "#/components/schemas/ReportRange"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardStatsV2"
+
+  /api/v1/stats/models:
+    get:
+      tags: [stats]
+      summary: Per-model and per-family request counts
+      parameters:
+        - in: query
+          name: range
+          schema:
+            $ref: "#/components/schemas/ReportRange"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelStatsResponse"
+
+  # ────────────────────────────────────────────────────────────────────
+  # Events
+  # ────────────────────────────────────────────────────────────────────
+  /api/v1/events:
+    get:
+      tags: [events]
+      summary: List security events (paginated, filterable)
+      description: |
+        Varsayılan zaman penceresi `range=7d`. PostgreSQL açıkken sunucu
+        tarafında filtrelenir; aksi halde in-memory Recent buffer üzerinde
+        filtre uygulanır (kapasite sınırlı).
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - in: query
+          name: action
+          description: BLOCK, REDACT, WARN, PASS, ...
+          schema: { type: string }
+        - in: query
+          name: provider
+          description: Küçük harf provider adı veya `shadow`
+          schema: { type: string }
+        - in: query
+          name: shadow
+          description: "true ise yalnızca enterprise olmayan provider'lar"
+          schema: { type: boolean }
+        - in: query
+          name: finding_type
+          schema: { type: string, example: pii }
+        - in: query
+          name: severity
+          schema: { type: string, example: high }
+        - in: query
+          name: category
+          description: Bulgu category içinde substring
+          schema: { type: string }
+        - in: query
+          name: technique
+          description: findings JSON içinde substring (OWASP kodu vb.)
+          schema: { type: string }
+        - in: query
+          name: q
+          description: request_id veya findings metninde arama
+          schema: { type: string }
+        - in: query
+          name: range
+          schema:
+            $ref: "#/components/schemas/ReportRange"
+        - in: query
+          name: since
+          description: RFC3339 — belirtilirse `range` yerine geçer
+          schema: { type: string, format: date-time }
+        - in: query
+          name: until
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  events:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SecurityEvent"
+                  total:
+                    type: integer
+        "400":
+          description: Bad query parameters
+
+  /api/v1/events/{request_id}:
+    get:
+      tags: [events]
+      summary: Get a single security event by request ID
+      parameters:
+        - in: path
+          name: request_id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecurityEventDetail"
+        "400":
+          description: Missing request_id
+        "404":
+          description: Event not found
+
+  /api/v1/events/export:
+    get:
+      tags: [events]
+      summary: Export filtered events as CSV or JSON
+      parameters:
+        - in: query
+          name: format
+          schema: { type: string, enum: [csv, json], default: csv }
+        - in: query
+          name: action
+          schema: { type: string }
+        - in: query
+          name: provider
+          schema: { type: string }
+        - in: query
+          name: range
+          schema:
+            $ref: "#/components/schemas/ReportRange"
+        - in: query
+          name: request_id
+          schema: { type: string }
+      responses:
+        "200":
+          description: CSV or JSON attachment
+          content:
+            text/csv:
+              schema: { type: string }
+            application/json:
+              schema:
+                type: object
+                properties:
+                  events:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SecurityEvent"
+                  total: { type: integer }
+    post:
+      tags: [events]
+      summary: Export filtered events (POST variant for larger filters)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                format: { type: string, enum: [csv, json], default: csv }
+                action: { type: string }
+                provider: { type: string }
+                range: { $ref: "#/components/schemas/ReportRange" }
+                request_id: { type: string }
+      responses:
+        "200":
+          description: CSV or JSON attachment
+
+  /api/v1/events/subject:
+    get:
+      tags: [events]
+      summary: GDPR Art. 15 / KVKK madde 11 subject access
+      description: Return request_log rows for a data subject.
+      parameters:
+        - in: query
+          name: user_id
+          schema: { type: string }
+        - in: query
+          name: email
+          schema: { type: string, format: email }
+        - in: query
+          name: tckn_hash
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  subject:
+                    type: object
+                    properties:
+                      user_id: { type: string }
+                      email: { type: string }
+                      tckn_hash: { type: string }
+                  rows: { type: array }
+                  count: { type: integer }
+        "400":
+          description: Missing identifier query param
+
+    delete:
+      tags: [events]
+      summary: KVKK/GDPR subject erase
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - required: [user_id]
+                  properties:
+                    user_id: { type: string }
+                - required: [email]
+                  properties:
+                    email: { type: string, format: email }
+                - required: [tckn_hash]
+                  properties:
+                    tckn_hash: { type: string, description: "SHA-256 of the TCKN" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  deleted: { type: integer }
+        "400":
+          description: Missing or invalid identifier
+
+  # ────────────────────────────────────────────────────────────────────
+  # Timeseries
+  # ────────────────────────────────────────────────────────────────────
+  /api/v1/timeseries:
+    get:
+      tags: [timeseries]
+      summary: Bucketed time series for the overview chart
+      parameters:
+        - in: query
+          name: range
+          schema:
+            $ref: "#/components/schemas/ReportRange"
+        - in: query
+          name: bucket
+          schema: { type: string, enum: [hour, day] }
+          description: Default hour for 24h, day otherwise
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimeseriesResponse"
+        "400":
+          description: Invalid bucket
+
+  # ────────────────────────────────────────────────────────────────────
+  # Findings
+  # ────────────────────────────────────────────────────────────────────
+  /api/v1/findings/breakdown:
+    get:
+      tags: [findings]
+      summary: Finding type, category, and severity breakdown
+      parameters:
+        - in: query
+          name: range
+          schema:
+            $ref: "#/components/schemas/ReportRange"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BreakdownResponse"
+
+  # ────────────────────────────────────────────────────────────────────
+  # Incidents
+  # ────────────────────────────────────────────────────────────────────
+  /api/v1/incidents:
+    get:
+      tags: [incidents]
+      summary: List incidents
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, default: 200 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/IncidentState"
+                  total: { type: integer }
+        "503":
+          description: Incidents store unavailable
+
+  /api/v1/incidents/{request_id}:
+    get:
+      tags: [incidents]
+      summary: Get a single incident by request ID
+      parameters:
+        - in: path
+          name: request_id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IncidentState"
+        "400":
+          description: Missing request_id
+        "404":
+          description: Incident not found
+        "503":
+          description: Incidents store unavailable
+
+    patch:
+      tags: [incidents]
+      summary: Patch an incident (status, assignee, tags, comment)
+      parameters:
+        - in: path
+          name: request_id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IncidentPatch"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IncidentState"
+        "400":
+          description: Invalid status or JSON
+        "503":
+          description: Incidents store unavailable
+
+  /api/v1/incidents/{request_id}/triage:
+    post:
+      tags: [incidents]
+      summary: Triage an incident (assign + set In Progress)
+      parameters:
+        - in: path
+          name: request_id
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                assignee: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IncidentState"
+        "400":
+          description: Missing request_id
+        "503":
+          description: Lifecycle store unavailable
+
+  /api/v1/incidents/{request_id}/resolve:
+    post:
+      tags: [incidents]
+      summary: Resolve an incident
+      parameters:
+        - in: path
+          name: request_id
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                resolution:
+                  type: string
+                  enum: [true_positive, false_positive, accepted_risk, remediated]
+                  description: Defaults to true_positive
+                notes: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IncidentState"
+        "400":
+          description: Missing request_id
+        "503":
+          description: Lifecycle store unavailable
+
+  /api/v1/incidents/{request_id}/reopen:
+    post:
+      tags: [incidents]
+      summary: Reopen a resolved incident
+      parameters:
+        - in: path
+          name: request_id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IncidentState"
+        "400":
+          description: Missing request_id
+        "503":
+          description: Lifecycle store unavailable
+
+  # ────────────────────────────────────────────────────────────────────
+  # MTTR
+  # ────────────────────────────────────────────────────────────────────
+  /api/v1/mttr:
+    get:
+      tags: [mttr]
+      summary: Mean Time to Resolution statistics
+      parameters:
+        - in: query
+          name: range
+          schema:
+            $ref: "#/components/schemas/ReportRange"
+        - in: query
+          name: org_id
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MTTRStats"
+        "503":
+          description: Lifecycle store unavailable
+
+  # ────────────────────────────────────────────────────────────────────
+  # Audit
+  # ────────────────────────────────────────────────────────────────────
+  /api/v1/auditlog:
+    get:
+      tags: [audit]
+      summary: List audit log entries
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, default: 200 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AuditEntry"
+                  total: { type: integer }
+
+  /api/v1/audit/verify:
+    get:
+      tags: [audit]
+      summary: Verify the audit hash-chain
+      description: |
+        Returns `chain_ok=true` when every entry's `prev_hash`/`hash`
+        link is intact. `chain_ok=false` + `broken_at` points to the
+        first tampered entry.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditChainResult"
+
+  # ────────────────────────────────────────────────────────────────────
+  # Live
+  # ────────────────────────────────────────────────────────────────────
+  /api/v1/live/events:
+    get:
+      tags: [live]
+      summary: Server-Sent Events stream of scanned/blocked requests
+      description: |
+        text/event-stream yanıt; `request_scanned` ve `request_blocked`
+        event tiplerini yayınlar. Bağlantı client kapatana kadar açık kalır.
+      responses:
+        "200":
+          description: SSE stream
+          content:
+            text/event-stream:
+              schema: { type: string }
+        "503":
+          description: Live stream unavailable (no broker)
+
+  # ────────────────────────────────────────────────────────────────────
+  # Policies
+  # ────────────────────────────────────────────────────────────────────
+  /api/v1/policies:
+    get:
+      tags: [policies]
+      summary: Get active policy (returns array for dashboard compatibility)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TamgaPolicy"
+        "500":
+          description: Policy store unavailable
+
+    put:
+      tags: [policies]
+      summary: Overwrite the on-disk policy YAML and reload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PolicyPutBody"
+          text/yaml:
+            schema:
+              type: string
+              description: Raw YAML policy document
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, enum: [true] }
+                  name: { type: string }
+                  version: { type: string }
+        "400":
+          description: Empty policy or parse error
+        "422":
+          description: Semantic validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PolicyValidationError"
+
+  /api/v1/policies/reload:
+    post:
+      tags: [policies]
+      summary: Reload the policy from disk without changing content
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, enum: [true] }
+                  name: { type: string }
+        "500":
+          description: Policy store unavailable or reload failed
+
+  /api/v1/policies/validate:
+    post:
+      tags: [policies]
+      summary: Validate policy YAML/JSON without persisting (dry-run)
+      description: |
+        Gövde `PUT /api/v1/policies` ile aynıdır: ham YAML (`text/yaml`) veya
+        JSON `{ "yaml": "..." }`. Sözdizimi + semantik kontrol; hata yoksa 200 ve
+        uyarılar listesi, bloklayıcı hata varsa 422 ve `error.code=validation_failed`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PolicyPutBody"
+      responses:
+        "200":
+          description: Policy geçerli (uyarılar olabilir)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PolicyValidateOK"
+        "400":
+          description: Parse veya boş gövde hatası
+        "422":
+          description: Semantik doğrulama başarısız
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PolicyValidationError"
+
+  /api/v1/policies/simulate:
+    post:
+      tags: [policies]
+      summary: Dry-run scan against policy-supplied YAML and sample text
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sample_text]
+              properties:
+                yaml:
+                  type: string
+                  description: Policy YAML (empty = use active policy)
+                sample_text:
+                  type: string
+                  description: Text to scan
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PolicySimulateResult"
+        "400":
+          description: Parse error or no policy to simulate
+
+  /api/v1/policies/custom-entities:
+    get:
+      tags: [policies]
+      summary: List custom entities from the active policy
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/CustomEntity"
+                  total: { type: integer }
+        "500":
+          description: Policy store unavailable or no policy loaded
+
+    post:
+      tags: [policies]
+      summary: Add a custom entity to the policy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomEntity"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, enum: [true] }
+                  entity:
+                    $ref: "#/components/schemas/CustomEntity"
+        "400":
+          description: Missing name/pattern or invalid regex
+        "403":
+          description: Tier does not allow custom entities
+        "409":
+          description: Entity with this name already exists
+
+  /api/v1/policies/custom-entities/{name}:
+    delete:
+      tags: [policies]
+      summary: Remove a custom entity by name and reload
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, enum: [true] }
+        "400":
+          description: Name is required
+        "404":
+          description: Entity not found
+        "500":
+          description: Policy store unavailable
+
+  /api/v1/policies/history:
+    get:
+      tags: [policies]
+      summary: List policy revisions
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PolicyRevision"
+
+  /api/v1/policies/revisions/{id}:
+    get:
+      tags: [policies]
+      summary: Get a single policy revision
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PolicyRevision"
+        "404":
+          description: Revision not found
+
+  /api/v1/policies/rollback/{id}:
+    post:
+      tags: [policies]
+      summary: Roll back to a previous policy revision
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, enum: [true] }
+                  revision: { type: string }
+        "400":
+          description: History not configured
+        "404":
+          description: Revision not found
+
+  /api/v1/policies/proposals:
+    get:
+      tags: [policies]
+      summary: List pending policy proposals
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PolicyProposal"
+
+    post:
+      tags: [policies]
+      summary: Create a policy proposal (requires two-person approval)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message, yaml]
+              properties:
+                message: { type: string }
+                yaml: { type: string }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PolicyProposal"
+        "400":
+          description: History not configured or invalid JSON
+
+  /api/v1/policies/proposals/{id}/approve:
+    post:
+      tags: [policies]
+      summary: Approve a pending proposal
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Approved and applied
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, enum: [true] }
+                  revision_id: { type: string }
+        "400":
+          description: History not configured
+        "403":
+          description: Dual-control prevents self-approval
+        "404":
+          description: Proposal not found
+
+  /api/v1/policies/proposals/{id}/reject:
+    post:
+      tags: [policies]
+      summary: Reject a pending proposal
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PolicyProposal"
+        "400":
+          description: History not configured
+        "404":
+          description: Proposal not found
+
+  # ────────────────────────────────────────────────────────────────────
+  # API Keys
+  # ────────────────────────────────────────────────────────────────────
+  /api/v1/apikeys:
+    get:
+      tags: [apikeys]
+      summary: List scoped API keys (prefix only, raw key not returned)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ApiKey"
+                  total: { type: integer }
+
+    post:
+      tags: [apikeys]
+      summary: Create a new scoped API key
+      description: |
+        `scope` varsayılan olarak `read`'dir. Yanıt `raw_key` alanını
+        içerir — bu key yalnızca oluşturma anında gösterilir.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [label]
+              properties:
+                label: { type: string }
+                scope:
+                  type: string
+                  enum: [read, write, admin]
+                  default: read
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKeyCreated"
+        "400":
+          description: Invalid scope or label
+        "503":
+          description: API keys store unavailable
+
+  /api/v1/apikeys/{id}:
+    delete:
+      tags: [apikeys]
+      summary: Revoke an API key
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, enum: [true] }
+        "404":
+          description: Key not found
+        "503":
+          description: API keys store unavailable
+
+  # ────────────────────────────────────────────────────────────────────
+  # Webhooks
+  # ────────────────────────────────────────────────────────────────────
+  /api/v1/webhooks:
+    get:
+      tags: [webhooks]
+      summary: List configured webhooks
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Webhook"
+                  total: { type: integer }
+
+    post:
+      tags: [webhooks]
+      summary: Create a new webhook destination
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebhookCreate"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Webhook"
+        "400":
+          description: Invalid body
+        "503":
+          description: Webhooks unavailable
+
+  /api/v1/webhooks/{id}/test:
+    post:
+      tags: [webhooks]
+      summary: Send a test event to a webhook
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Test completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  status_code: { type: integer }
+        "404":
+          description: Webhook not found
+        "502":
+          description: Test delivery failed
+        "503":
+          description: Webhooks unavailable
+
+  /api/v1/webhooks/{id}:
+    delete:
+      tags: [webhooks]
+      summary: Delete a webhook
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, enum: [true] }
+        "404":
+          description: Webhook not found
+        "503":
+          description: Webhooks unavailable
+
+  # ────────────────────────────────────────────────────────────────────
+  # Metrics
+  # ────────────────────────────────────────────────────────────────────
+  /api/v1/metrics:
+    get:
+      tags: [metrics]
+      summary: Prometheus text-format metrics snapshot
+      responses:
+        "200":
+          description: Prometheus text format
+          content:
+            text/plain:
+              schema: { type: string }
+
+  /api/v1/metrics/histograms:
+    get:
+      tags: [metrics]
+      summary: Prometheus histogram metrics as JSON
+      description: |
+        Returns scan_latency, total_latency, and per-scanner latency
+        histograms as structured JSON for the dashboard charts.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  histograms:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/HistogramMetric"
+
+  # ────────────────────────────────────────────────────────────────────
+  # Rate Limit
+  # ────────────────────────────────────────────────────────────────────
+  /api/v1/ratelimit/stats:
+    get:
+      tags: [ratelimit]
+      summary: Rate limiter statistics snapshot
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enabled: { type: boolean }
+                  total_requests: { type: integer }
+                  limited_requests: { type: integer }
+                  max_requests_per_min: { type: integer }
+                  top_keys: { type: object }
+                  snapshot_t: { type: string, format: date-time }
+
+  # ────────────────────────────────────────────────────────────────────
+  # Patterns
+  # ────────────────────────────────────────────────────────────────────
+  /api/v1/patterns:
+    get:
+      tags: [patterns]
+      summary: List custom detection patterns
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/CustomPattern"
+                  total: { type: integer }
+
+    post:
+      tags: [patterns]
+      summary: Create a new detection pattern
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomPatternCreate"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomPattern"
+        "400":
+          description: Invalid body
+        "503":
+          description: Patterns store unavailable
+
+  /api/v1/patterns/{id}:
+    put:
+      tags: [patterns]
+      summary: Update an existing detection pattern
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomPatternUpdate"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomPattern"
+        "400":
+          description: Invalid body
+        "404":
+          description: Pattern not found
+        "503":
+          description: Patterns store unavailable
+
+    delete:
+      tags: [patterns]
+      summary: Delete a detection pattern
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, enum: [true] }
+        "404":
+          description: Pattern not found
+        "503":
+          description: Patterns store unavailable
+
+  # ────────────────────────────────────────────────────────────────────
+  # Saved Hunts
+  # ────────────────────────────────────────────────────────────────────
+  /api/v1/saved-hunts:
+    get:
+      tags: [saved-hunts]
+      summary: List saved threat-hunting queries
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SavedHunt"
+                  total: { type: integer }
+        "503":
+          description: Saved hunts store unavailable
+
+    post:
+      tags: [saved-hunts]
+      summary: Save a new threat-hunting query
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, query_json]
+              properties:
+                name: { type: string }
+                query_json: { type: object }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedHunt"
+        "400":
+          description: Missing name or org_id
+        "503":
+          description: Saved hunts store unavailable
+
+  /api/v1/saved-hunts/{id}:
+    put:
+      tags: [saved-hunts]
+      summary: Update a saved hunt
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                query_json: { type: object }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedHunt"
+        "400":
+          description: Missing id or org_id
+        "404":
+          description: Saved hunt not found
+        "503":
+          description: Saved hunts store unavailable
+
+    delete:
+      tags: [saved-hunts]
+      summary: Delete a saved hunt
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, enum: [true] }
+        "400":
+          description: Missing id or org_id
+        "404":
+          description: Saved hunt not found
+        "503":
+          description: Saved hunts store unavailable
+
+  # ────────────────────────────────────────────────────────────────────
+  # Team
+  # ────────────────────────────────────────────────────────────────────
+  /api/v1/team:
+    get:
+      tags: [team]
+      summary: List team members with roles
+      description: |
+        If Clerk is configured, merges Clerk user profiles with local
+        role assignments. Returns `clerk: false` when Clerk is unavailable.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TeamMember"
+                  total: { type: integer }
+                  clerk: { type: boolean }
+
+  /api/v1/team/{id}/role:
+    put:
+      tags: [team]
+      summary: Set a team member's role
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role:
+                  $ref: "#/components/schemas/TeamRole"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeamMember"
+        "400":
+          description: Invalid role or body
+        "503":
+          description: Users store unavailable
+
+  # ────────────────────────────────────────────────────────────────────
+  # Billing
+  # ────────────────────────────────────────────────────────────────────
+  /api/v1/billing/pricing:
+    get:
+      tags: [billing]
+      summary: List active model pricing entries
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pricing:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ModelPricing"
+                  currency: { type: string }
+                  updated_at: { type: string, format: date-time }
+        "503":
+          description: Pricing store not configured
+
+  /api/v1/billing/costs/breakdown:
+    get:
+      tags: [billing]
+      summary: Per-model cost breakdown for a time range
+      parameters:
+        - in: query
+          name: range
+          schema:
+            $ref: "#/components/schemas/ReportRange"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  range: { type: string }
+                  breakdown:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/CostBreakdownRow"
+                  total_usd: { type: number }
+
+  # ────────────────────────────────────────────────────────────────────
+  # Budget
+  # ────────────────────────────────────────────────────────────────────
+  /api/v1/budget/stats:
+    get:
+      tags: [budget]
+      summary: Daily token + cost counters for an organisation
+      parameters:
+        - in: query
+          name: org
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BudgetStats"
+
+  # ────────────────────────────────────────────────────────────────────
+  # Maintenance
+  # ────────────────────────────────────────────────────────────────────
+  /api/v1/maintenance/retention:
+    post:
+      tags: [maintenance]
+      summary: Trigger a retention maintenance cycle
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, enum: [true] }
+                  last_run: { type: string, format: date-time }
+        "503":
+          description: Retention not enabled
+
+  /api/v1/maintenance/circuit-reset:
+    post:
+      tags: [maintenance]
+      summary: Reset a circuit breaker for an upstream pool/endpoint
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pool, endpoint]
+              properties:
+                pool: { type: string }
+                endpoint: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, enum: [true] }
+                  pool: { type: string }
+                  endpoint: { type: string }
+        "400":
+          description: Missing pool or endpoint
+        "503":
+          description: Upstream registry not configured
+
+  # ────────────────────────────────────────────────────────────────────
+  # Providers
+  # ────────────────────────────────────────────────────────────────────
+  /api/v1/providers:
+    get:
+      tags: [providers]
+      summary: List supported providers and models (with pricing)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProviderCatalogEntry"
+
+  # ────────────────────────────────────────────────────────────────────
+  # Proxy
+  # ────────────────────────────────────────────────────────────────────
+  /v1/chat/completions:
+    post:
+      tags: [proxy]
+      summary: OpenAI-compatible chat completions (proxied + scanned)
+      description: |
+        Standart OpenAI formatı. Tamga istek gövdesini tarar; policy
+        sonucu `action=block` ise 403 döner, `redact` ise gövde maskelenir.
+      security: []
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-Tamga-Request-Id:
+              schema: { type: string }
+            X-Tamga-Scan-Ms:
+              schema: { type: integer }
+            X-Tamga-Tokens-In:
+              schema: { type: integer }
+            X-Tamga-Tokens-Out:
+              schema: { type: integer }
+            X-Tamga-Cost-USD:
+              schema: { type: number, format: float }
+            X-Tamga-Cache:
+              schema: { type: string, enum: [hit, miss] }
+        "402":
+          description: Budget exceeded
+        "403":
+          description: Blocked by policy
+
+  # ────────────────────────────────────────────────────────────────────
+  # SCIM
+  # ────────────────────────────────────────────────────────────────────
+  /api/v1/scim/v2/Users:
+    get:
+      tags: [scim]
+      summary: List SCIM users
+      responses:
+        "200":
+          description: OK
+
+    post:
+      tags: [scim]
+      summary: Create SCIM user
+      responses:
+        "201":
+          description: Created
+
+  /api/v1/scim/v2/Users/{id}:
+    get:
+      tags: [scim]
+      summary: Get SCIM user
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+
+    patch:
+      tags: [scim]
+      summary: Patch SCIM user
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+
+    delete:
+      tags: [scim]
+      summary: Delete SCIM user
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+
+# ══════════════════════════════════════════════════════════════════════
+# Components
+# ══════════════════════════════════════════════════════════════════════
+components:
+  securitySchemes:
+    AdminKey:
+      type: apiKey
+      in: header
+      name: X-Tamga-Admin-Key
+    ApiKey:
+      type: apiKey
+      in: header
+      name: X-Tamga-Admin-Key
+      description: Scoped API key (read/write/admin)
+
+  schemas:
+    # ── Shared ────────────────────────────────────────────────────────
+
+    ReportRange:
+      type: string
+      enum: [24h, 7d, 30d]
+      default: 7d
+      description: Time range window
+
+    # ── Health ────────────────────────────────────────────────────────
+
+    Health:
+      type: object
+      properties:
+        status: { type: string }
+        service: { type: string }
+
+    DashboardHealthProviderEndpoint:
+      type: object
+      properties:
+        name: { type: string }
+        state: { type: string }
+        success_rate_observed: { type: number }
+        p95_latency_ms: { type: number }
+        requests_in_window: { type: integer }
+        last_failure: { type: string }
+        failure_reason: { type: string }
+
+    DashboardHealthProviderPool:
+      type: object
+      properties:
+        pool: { type: string }
+        healthy_count: { type: integer }
+        total_count: { type: integer }
+        providers:
+          type: array
+          items:
+            $ref: "#/components/schemas/DashboardHealthProviderEndpoint"
+
+    DashboardHealthDetailed:
+      type: object
+      properties:
+        proxy: { type: string }
+        proxy_status:
+          type: object
+          properties:
+            up: { type: boolean }
+        database: { type: string }
+        redis: { type: string }
+        analyzer: { type: string }
+        scanner_count: { type: integer }
+        uptime_seconds: { type: integer }
+        policy_path: { type: string }
+        events_dropped: { type: integer }
+        scan_latency_ms_p50: { type: number }
+        scan_latency_ms_p95: { type: number }
+        scan_latency_ms_p99: { type: number }
+        providers:
+          type: array
+          items:
+            $ref: "#/components/schemas/DashboardHealthProviderPool"
+
+    DashboardHealthDetail:
+      allOf:
+        - $ref: "#/components/schemas/DashboardHealthDetailed"
+        - type: object
+          properties:
+            version: { type: string }
+            policy_name: { type: string }
+            tls_enabled: { type: boolean }
+            mtls_enabled: { type: boolean }
+            redis_enabled: { type: boolean }
+            timestamp: { type: string, format: date-time }
+            trace_ui_url: { type: string }
+            retention_enabled: { type: boolean }
+            retention_last_run: { type: string, format: date-time }
+            tier: { type: string }
+            tier_custom_entities: { type: boolean }
+
+    # ── Stats ─────────────────────────────────────────────────────────
+
+    DashboardStatsV2:
+      type: object
+      properties:
+        total_requests: { type: integer }
+        blocked_requests: { type: integer }
+        redacted_requests: { type: integer }
+        warned_requests: { type: integer }
+        passed_requests: { type: integer }
+        top_providers:
+          type: object
+          additionalProperties: { type: integer }
+        top_finding_types:
+          type: object
+          additionalProperties: { type: integer }
+        top_categories:
+          type: object
+          additionalProperties: { type: integer }
+        uptime: { type: string }
+        uptime_seconds: { type: integer }
+        scanner_latency_avg_ms: { type: number }
+        avg_input_risk_pct: { type: number }
+
+    ModelStatsResponse:
+      type: object
+      properties:
+        range: { type: string }
+        by_model:
+          type: object
+          additionalProperties: { type: integer }
+        by_family:
+          type: object
+          additionalProperties: { type: integer }
+
+    # ── Events ────────────────────────────────────────────────────────
+
+    SecurityFinding:
+      type: object
+      properties:
+        type: { type: string }
+        severity: { type: string }
+        match: { type: string }
+        category: { type: string }
+        start_pos: { type: integer }
+        end_pos: { type: integer }
+        confidence: { type: number }
+        action_taken: { type: string }
+        metadata:
+          type: object
+          additionalProperties: { type: string }
+        scanner_version: { type: string }
+        dataset_version: { type: string }
+
+    SecurityEvent:
+      type: object
+      properties:
+        request_id: { type: string }
+        provider: { type: string }
+        model: { type: string }
+        event_type: { type: string }
+        action: { type: string }
+        findings:
+          type: array
+          items:
+            $ref: "#/components/schemas/SecurityFinding"
+        findings_count: { type: integer }
+        endpoint: { type: string }
+        scan_latency_ms: { type: number }
+        total_latency_ms: { type: number }
+        content_type: { type: string }
+        timestamp: { type: string, format: date-time }
+        input_risk_pct: { type: integer }
+        risk_level: { type: string }
+
+    SecurityEventDetail:
+      type: object
+      properties:
+        request_id: { type: string }
+        timestamp: { type: string, format: date-time }
+        provider: { type: string }
+        model: { type: string }
+        action: { type: string }
+        event_type: { type: string }
+        findings:
+          type: array
+          items:
+            $ref: "#/components/schemas/SecurityFinding"
+        scan_latency_ms: { type: number }
+        total_latency_ms: { type: number }
+        policy_name: { type: string }
+        policy_version: { type: string }
+        input_tokens: { type: integer }
+        output_tokens: { type: integer }
+        endpoint: { type: string }
+
+    # ── Timeseries ────────────────────────────────────────────────────
+
+    TimeseriesPoint:
+      type: object
+      properties:
+        t: { type: string, format: date-time }
+        total: { type: integer }
+        blocked: { type: integer }
+        redacted: { type: integer }
+        warned: { type: integer }
+        scan_p95: { type: number }
+
+    TimeseriesResponse:
+      type: object
+      properties:
+        range: { type: string }
+        bucket: { type: string, enum: [hour, day] }
+        points:
+          type: array
+          items:
+            $ref: "#/components/schemas/TimeseriesPoint"
+
+    # ── Findings ──────────────────────────────────────────────────────
+
+    BreakdownResponse:
+      type: object
+      properties:
+        range: { type: string }
+        by_type:
+          type: object
+          additionalProperties: { type: integer }
+        by_category:
+          type: object
+          additionalProperties: { type: integer }
+        by_severity:
+          type: object
+          additionalProperties: { type: integer }
+        type_by_category:
+          type: object
+          additionalProperties:
+            type: object
+            additionalProperties: { type: integer }
+
+    # ── Incidents ─────────────────────────────────────────────────────
+
+    IncidentStatus:
+      type: string
+      enum: [Open, "In Progress", Closed, "False Positive"]
+
+    IncidentState:
+      type: object
+      properties:
+        request_id: { type: string }
+        status:
+          $ref: "#/components/schemas/IncidentStatus"
+        assignee: { type: string }
+        reason: { type: string }
+        tags:
+          type: array
+          items:
+            type: string
+        comments:
+          type: array
+          items:
+            type: object
+            properties:
+              author: { type: string }
+              text: { type: string }
+              created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+        triaged_at: { type: string, format: date-time }
+        resolved_at: { type: string, format: date-time }
+        resolution: { type: string }
+
+    IncidentPatch:
+      type: object
+      properties:
+        status:
+          $ref: "#/components/schemas/IncidentStatus"
+        assignee: { type: string }
+        reason: { type: string }
+        tags:
+          type: array
+          items:
+            type: string
+        add_comment:
+          type: object
+          properties:
+            author: { type: string }
+            text: { type: string }
+
+    # ── MTTR ──────────────────────────────────────────────────────────
+
+    MTTRStats:
+      type: object
+      properties:
+        overall_mttr_minutes: { type: number }
+        by_severity:
+          type: object
+          additionalProperties: { type: number }
+        trend:
+          type: string
+          enum: [improving, stable, worsening]
+        sla_compliance: { type: number }
+
+    # ── Audit ─────────────────────────────────────────────────────────
+
+    AuditEntry:
+      type: object
+      properties:
+        timestamp: { type: string, format: date-time }
+        actor: { type: string }
+        kind: { type: string }
+        target: { type: string }
+        detail:
+          type: object
+          additionalProperties: true
+
+    AuditChainResult:
+      type: object
+      properties:
+        chain_ok: { type: boolean }
+        entries: { type: integer }
+        broken_at:
+          type: integer
+          nullable: true
+
+    # ── Policies ──────────────────────────────────────────────────────
+
+    TamgaPolicy:
+      type: object
+      description: Active policy document
+      properties:
+        name: { type: string }
+        version: { type: string }
+        # Additional fields vary per policy definition
+
+    PolicyPutBody:
+      type: object
+      required: [yaml]
+      properties:
+        yaml:
+          type: string
+          description: Policy YAML veya JSON metni
+
+    PolicyValidateOK:
+      type: object
+      required: [valid]
+      properties:
+        valid: { type: boolean, enum: [true] }
+        warnings:
+          type: array
+          items:
+            $ref: "#/components/schemas/PolicyValidationIssue"
+
+    PolicyValidationIssue:
+      type: object
+      properties:
+        field: { type: string }
+        rule: { type: string }
+        message: { type: string }
+        severity: { type: string, enum: [error, warning] }
+
+    PolicyValidationError:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string, example: validation_failed }
+            message: { type: string }
+            details:
+              type: array
+              items:
+                $ref: "#/components/schemas/PolicyValidationIssue"
+
+    PolicySimulateFinding:
+      type: object
+      properties:
+        type: { type: string }
+        category: { type: string }
+        severity: { type: string }
+        match: { type: string }
+        confidence: { type: number }
+        action: { type: string }
+
+    PolicySimulateResult:
+      type: object
+      properties:
+        policy_name: { type: string }
+        policy_version: { type: string }
+        action: { type: string }
+        findings:
+          type: array
+          items:
+            $ref: "#/components/schemas/PolicySimulateFinding"
+
+    CustomEntity:
+      type: object
+      properties:
+        name: { type: string }
+        pattern: { type: string }
+        description: { type: string }
+        severity:
+          type: string
+          enum: [critical, high, medium, low]
+        action: { type: string }
+        confidence: { type: number }
+
+    PolicyRevision:
+      type: object
+      properties:
+        id: { type: string }
+        author: { type: string }
+        message: { type: string }
+        yaml: { type: string }
+        actor: { type: string }
+        created_at: { type: string, format: date-time }
+        summary: { type: string }
+        policy_yaml: { type: string }
+
+    PolicyProposal:
+      type: object
+      properties:
+        id: { type: string }
+        author: { type: string }
+        message: { type: string }
+        yaml: { type: string }
+        status:
+          type: string
+          enum: [pending, approved, rejected]
+        created_at: { type: string, format: date-time }
+        approved_by: { type: string }
+        approved_at: { type: string, format: date-time }
+        rejected_by: { type: string }
+        rejected_at: { type: string, format: date-time }
+
+    # ── API Keys ──────────────────────────────────────────────────────
+
+    ApiKey:
+      type: object
+      properties:
+        id: { type: string }
+        label: { type: string }
+        scope:
+          type: string
+          enum: [read, write, admin]
+        prefix: { type: string }
+        created_at: { type: string, format: date-time }
+        last_used: { type: string, format: date-time }
+
+    ApiKeyCreated:
+      allOf:
+        - $ref: "#/components/schemas/ApiKey"
+        - type: object
+          required: [raw_key]
+          properties:
+            raw_key: { type: string }
+
+    # ── Webhooks ──────────────────────────────────────────────────────
+
+    WebhookKind:
+      type: string
+      enum:
+        - slack
+        - teams
+        - splunk
+        - splunk_hec
+        - sentinel
+        - qradar
+        - datadog
+        - jira
+        - pagerduty
+        - opsgenie
+        - servicenow
+        - generic
+
+    Webhook:
+      type: object
+      properties:
+        id: { type: string }
+        label: { type: string }
+        kind:
+          $ref: "#/components/schemas/WebhookKind"
+        url: { type: string }
+        enabled: { type: boolean }
+        rule:
+          type: object
+          properties:
+            blocks_per_minute: { type: integer }
+            severity_at_least: { type: string }
+        headers:
+          type: object
+          additionalProperties: { type: string }
+        payload_template: { type: string }
+        project_key: { type: string }
+        issue_type: { type: string }
+        auth_token: { type: string }
+        created_at: { type: string, format: date-time }
+        last_fired: { type: string, format: date-time }
+
+    WebhookCreate:
+      type: object
+      required: [label, kind, url]
+      properties:
+        label: { type: string }
+        kind:
+          $ref: "#/components/schemas/WebhookKind"
+        url: { type: string }
+        enabled: { type: boolean }
+        rule:
+          type: object
+          properties:
+            blocks_per_minute: { type: integer }
+            severity_at_least: { type: string }
+        headers:
+          type: object
+          additionalProperties: { type: string }
+        payload_template: { type: string }
+        project_key: { type: string }
+        issue_type: { type: string }
+        auth_token: { type: string }
+
+    # ── Metrics ───────────────────────────────────────────────────────
+
+    HistogramBucket:
+      type: object
+      properties:
+        le: { type: number }
+        cumulative: { type: integer }
+
+    HistogramMetric:
+      type: object
+      properties:
+        name: { type: string }
+        help: { type: string }
+        labels:
+          type: object
+          additionalProperties: { type: string }
+        count: { type: integer }
+        sum: { type: number }
+        buckets:
+          type: array
+          items:
+            $ref: "#/components/schemas/HistogramBucket"
+
+    # ── Patterns ──────────────────────────────────────────────────────
+
+    PatternKind:
+      type: string
+      enum: [regex, literal]
+
+    PatternSeverity:
+      type: string
+      enum: [low, medium, high, critical]
+
+    CustomPattern:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        kind:
+          $ref: "#/components/schemas/PatternKind"
+        pattern: { type: string }
+        severity:
+          $ref: "#/components/schemas/PatternSeverity"
+        enabled: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    CustomPatternCreate:
+      type: object
+      required: [name, kind, pattern, severity]
+      properties:
+        name: { type: string }
+        kind:
+          $ref: "#/components/schemas/PatternKind"
+        pattern: { type: string }
+        severity:
+          $ref: "#/components/schemas/PatternSeverity"
+        enabled: { type: boolean }
+
+    CustomPatternUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        kind:
+          $ref: "#/components/schemas/PatternKind"
+        pattern: { type: string }
+        severity:
+          $ref: "#/components/schemas/PatternSeverity"
+        enabled: { type: boolean }
+
+    # ── Saved Hunts ───────────────────────────────────────────────────
+
+    SavedHunt:
+      type: object
+      properties:
+        id: { type: string }
+        org_id: { type: string }
+        name: { type: string }
+        query: { type: object }
+        created_by: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    # ── Team ──────────────────────────────────────────────────────────
+
+    TeamRole:
+      type: string
+      enum: [admin, analyst, viewer]
+
+    TeamMember:
+      type: object
+      properties:
+        user_id: { type: string }
+        email: { type: string, format: email }
+        name: { type: string }
+        image_url: { type: string }
+        role:
+          $ref: "#/components/schemas/TeamRole"
+        updated_at: { type: string, format: date-time }
+
+    # ── Billing ───────────────────────────────────────────────────────
+
+    ModelPricing:
+      type: object
+      properties:
+        id: { type: integer }
+        provider: { type: string }
+        model_family: { type: string }
+        model_version: { type: string }
+        input_per_1k: { type: number }
+        output_per_1k: { type: number }
+        currency: { type: string }
+        effective_from: { type: string, format: date-time }
+        effective_to: { type: string, format: date-time }
+        source: { type: string }
+        notes: { type: string }
+
+    CostBreakdownRow:
+      type: object
+      properties:
+        provider: { type: string }
+        model_family: { type: string }
+        model_version: { type: string }
+        input_tokens: { type: integer }
+        output_tokens: { type: integer }
+        input_cost: { type: number }
+        output_cost: { type: number }
+        total_cost: { type: number }
+        currency: { type: string }
+        pricing_id: { type: integer }
+
+    # ── Budget ────────────────────────────────────────────────────────
+
+    BudgetStats:
+      type: object
+      properties:
+        org_id: { type: string }
+        day: { type: string }
+        tokens_today: { type: integer }
+        cost_today_usd: { type: number }
+        limit_tokens: { type: integer }
+        limit_cost_usd: { type: number }
+        note: { type: string }
+
+    # ── Providers ─────────────────────────────────────────────────────
+
+    ProviderModelEntry:
+      type: object
+      properties:
+        id: { type: string }
+        family: { type: string }
+        input_usd: { type: number }
+        output_usd: { type: number }
+
+    ProviderCatalogEntry:
+      type: object
+      properties:
+        id: { type: string }
+        label: { type: string }
+        path: { type: string }
+        usage: { type: boolean }
+        streaming: { type: boolean }
+        models:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProviderModelEntry"

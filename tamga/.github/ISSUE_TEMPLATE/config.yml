@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security Vulnerability
+    url: https://github.com/tamga/tamga/security/advisories/new
+    about: Report a security vulnerability privately. DO NOT open a public issue.
+  - name: Discussions
+    url: https://github.com/tamga/tamga/discussions
+    about: Ask questions, share ideas, and discuss with the community.
+  - name: Documentation
+    url: https://github.com/tamga/tamga/tree/dev/docs
+    about: Read the docs before opening an issue.
