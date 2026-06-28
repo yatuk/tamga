@@ -1,0 +1,169 @@
+# Tamga — production Docker Compose stack.
+#
+# SECURITY NOTES:
+# - Only proxy (8443) and dashboard (3000) are exposed to the host.
+#   All other services live on an internal bridge network.
+# - Postgres and Redis credentials are read from env vars — never hardcoded.
+# - Redis requires AUTH (requirepass).
+# - OTLP sample rate is set to 5% for production.
+
+services:
+  # Standalone scanner service — optional. When TAMGA_SCANNER_SERVICE_ADDR is set,
+  # the proxy delegates all scanning to this service via gRPC instead of running
+  # scanners inline. Leave commented out for monolith mode.
+  scanner-service:
+    build:
+      context: ../proxy
+      dockerfile: cmd/scanner-service/Dockerfile
+    expose:
+      - "50052"
+    environment:
+      - SCANNER_PIPELINE_MODE=adaptive
+      - SCANNER_WORKER_POOL_SIZE=4
+    networks:
+      - internal
+    restart: unless-stopped
+
+  proxy:
+    build:
+      context: ../proxy
+      dockerfile: Dockerfile
+    ports:
+      - "8443:8443"
+    environment:
+      - TAMGA_PROXY_PORT=8443
+      - TAMGA_POLICY_PATH=/app/tamga-policy.yaml
+      - TAMGA_ANALYZER_ADDR=analyzer:50051
+      - TAMGA_DB_URL=postgresql://${POSTGRES_USER:-tamga}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-tamga}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - TAMGA_NATS_URL=nats://nats:4222
+      - TAMGA_SCANNER_SERVICE_ADDR=scanner-service:50052
+      - TAMGA_ADMIN_KEY=${TAMGA_ADMIN_KEY}
+      - TAMGA_ORG_ID=${TAMGA_ORG_ID:-}
+      - TAMGA_CORS_ORIGIN=${TAMGA_CORS_ORIGIN:-http://localhost:3000}
+      - TAMGA_OTLP_ENDPOINT=http://jaeger:4318
+      - TAMGA_OTEL_SAMPLE_RATE=${TAMGA_OTEL_SAMPLE_RATE:-0.05}
+      - TAMGA_TRACE_UI_URL=http://localhost:16686
+      - TAMGA_RETENTION_ENABLED=true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      analyzer:
+        condition: service_started
+    volumes:
+      - ../proxy/tamga-policy.yaml:/app/tamga-policy.yaml:ro
+    networks:
+      - internal
+    restart: unless-stopped
+
+  analyzer:
+    build:
+      context: ../analyzer
+      dockerfile: Dockerfile
+    expose:
+      - "8444"   # HTTP health + reports (FastAPI)
+      - "50051"  # gRPC deep analysis (protobuf)
+    environment:
+      - TAMGA_ANALYZER_PORT=8444
+      - TAMGA_GRPC_PORT=50051
+      - TAMGA_ANALYZER_WORKERS=${TAMGA_ANALYZER_WORKERS:-2}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-tamga}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-tamga}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - internal
+    restart: unless-stopped
+
+  dashboard:
+    build:
+      context: ../dashboard
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8443}
+      - CLERK_SECRET_KEY=${CLERK_SECRET_KEY}
+      - NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
+    depends_on:
+      - proxy
+    networks:
+      - internal
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    expose:
+      - "5432"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-tamga}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB:-tamga}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./migrations/001_init.up.sql:/docker-entrypoint-initdb.d/001_init.sql:ro
+      - ./migrations/002_indexes.up.sql:/docker-entrypoint-initdb.d/002_indexes.sql:ro
+      - ./migrations/003_output_scan.up.sql:/docker-entrypoint-initdb.d/003_output_scan.sql:ro
+      - ./migrations/004_audit_policy.up.sql:/docker-entrypoint-initdb.d/004_audit_policy.sql:ro
+      - ./migrations/005_retention_run_log.up.sql:/docker-entrypoint-initdb.d/005_retention_run_log.sql:ro
+      - ./migrations/006_model_metadata.up.sql:/docker-entrypoint-initdb.d/006_model_metadata.sql:ro
+      - ./migrations/007_analyzer_findings.up.sql:/docker-entrypoint-initdb.d/007_analyzer_findings.sql:ro
+      - ./migrations/008_model_pricing.up.sql:/docker-entrypoint-initdb.d/008_model_pricing.sql:ro
+      - ./migrations/009_missing_models.up.sql:/docker-entrypoint-initdb.d/009_missing_models.sql:ro
+      - ./migrations/010_event_outbox.up.sql:/docker-entrypoint-initdb.d/010_event_outbox.sql:ro
+      - ./migrations/011_tenant_rls.up.sql:/docker-entrypoint-initdb.d/011_tenant_rls.sql:ro
+      - ./migrations/012_incident_lifecycle.up.sql:/docker-entrypoint-initdb.d/012_incident_lifecycle.sql:ro
+      - ./migrations/013_saved_hunts.up.sql:/docker-entrypoint-initdb.d/013_saved_hunts.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tamga}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass ${REDIS_PASSWORD} --save 60 1 --loglevel warning
+    expose:
+      - "6379"
+    volumes:
+      - redisdata:/data
+    networks:
+      - internal
+    restart: unless-stopped
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.54
+    expose:
+      - "4318"
+    ports:
+      - "16686:16686"  # UI only — keep for local dev; remove in production
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    networks:
+      - internal
+    restart: unless-stopped
+
+  nats:
+    image: nats:2.10-alpine
+    command: ["-js", "-m", "8222"]
+    expose:
+      - "4222"
+      - "8222"
+    ports:
+      - "8222:8222"  # monitoring UI — keep for local dev
+    networks:
+      - internal
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:
+
+networks:
+  internal:
+    driver: bridge

@@ -1,63 +1,31 @@
-# Dependencies
-node_modules/
-.next/
-__pycache__/
-*.pyc
-.venv/
-venv/
-.pytest_cache/
-.mypy_cache/
+# Cursor IDE — paylaşılan kurallar `tamga/.cursor/rules/*.mdc` (commitlenir); diğer yerel durum ignore
+**/.cursor/*
+!**/.cursor/rules/
+!**/.cursor/rules/**
 
-# Build
-proxy/tamga
-*.exe
-dist/
-*.tsbuildinfo
-
-# Environment
+# Secrets and env (never commit real keys — root-level files are not covered by tamga/.gitignore)
 .env
 .env.local
-.env.production
 .env.*.local
+# Broad match for other variants; keep tracked templates
+.env.*
+!.env.example
+!**/.env.example
 
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
+# Terraform local state and providers
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
 
-# AI Agent / Internal tooling
-.claude/
-.cursor/
+# Python / test caches (also under tamga/ for tools that run from repo root)
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
 
 # OS
-.DS_Store
 Thumbs.db
-
-# Data
-pgdata/
-redisdata/
-*.db
-*.sqlite
-
-# Secrets (belt-and-suspenders)
-**/secrets/
-**/credentials/
-
-# Test artifacts
-tests/stress/results/
-dashboard/coverage/
-coverage/
-*.lcov
-*.out
-proxy/coverage_telemetry.html
-
-# Internal docs (belt-and-suspenders)
-docs/sprint*/
-docs/audit*/
-docs/internal/
-docs/walktrough.md
-docs/TAMGA_DASHBOARD_SOC_SPEC_V2.md
-docs/CURSOR_*.md
-docs/FAZ2_ENTERPRISE_PROMPTS.md
-docs/FAZ3_ADVANCED_PROMPTS.md
+.DS_Store
