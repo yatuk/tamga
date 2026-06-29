@@ -1,7 +1,0 @@
-{"ts": "2026-06-23T08:00:00+02:00", "action": "add", "note": "N-2026-06-23-001", "detail": "architecture"}
-{"ts": "2026-06-23T08:30:14+02:00", "action": "add", "note": "N-2026-06-23-002", "detail": "pattern"}
-{"ts": "2026-06-23T09:45:22+02:00", "action": "add", "note": "N-2026-06-23-003", "detail": "reflection"}
-{"ts": "2026-06-23T10:12:00+02:00", "action": "add", "note": "N-2026-06-23-004", "detail": "hypothesis"}
-{"ts": "2026-06-23T11:00:33+02:00", "action": "archive", "note": "N-2026-06-23-001", "detail": "superseded by post-publish receipt"}
-{"ts": "2026-06-23T11:30:18+02:00", "action": "add", "note": "N-2026-06-23-005", "detail": "anti-pattern"}
-{"ts": "2026-06-23T13:00:00+02:00", "action": "add", "note": "N-2026-06-23-006", "detail": "architecture"}

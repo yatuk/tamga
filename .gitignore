@@ -1,31 +1,63 @@
-# Cursor IDE — paylaşılan kurallar `tamga/.cursor/rules/*.mdc` (commitlenir); diğer yerel durum ignore
-**/.cursor/*
-!**/.cursor/rules/
-!**/.cursor/rules/**
-
-# Secrets and env (never commit real keys — root-level files are not covered by tamga/.gitignore)
-.env
-.env.local
-.env.*.local
-# Broad match for other variants; keep tracked templates
-.env.*
-!.env.example
-!**/.env.example
-
-# Terraform local state and providers
-.terraform/
-.terraform.lock.hcl
-*.tfstate
-*.tfstate.*
-crash.log
-crash.*.log
-
-# Python / test caches (also under tamga/ for tools that run from repo root)
+# Dependencies
+node_modules/
+.next/
+__pycache__/
+*.pyc
+.venv/
+venv/
 .pytest_cache/
 .mypy_cache/
-.coverage
-htmlcov/
+
+# Build
+proxy/tamga
+*.exe
+dist/
+*.tsbuildinfo
+
+# Environment
+.env
+.env.local
+.env.production
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# AI Agent / Internal tooling
+.claude/
+.cursor/
 
 # OS
-Thumbs.db
 .DS_Store
+Thumbs.db
+
+# Data
+pgdata/
+redisdata/
+*.db
+*.sqlite
+
+# Secrets (belt-and-suspenders)
+**/secrets/
+**/credentials/
+
+# Test artifacts
+tests/stress/results/
+dashboard/coverage/
+coverage/
+*.lcov
+*.out
+proxy/coverage_telemetry.html
+
+# Internal docs (belt-and-suspenders)
+docs/sprint*/
+docs/audit*/
+docs/internal/
+docs/walktrough.md
+docs/TAMGA_DASHBOARD_SOC_SPEC_V2.md
+docs/CURSOR_*.md
+docs/FAZ2_ENTERPRISE_PROMPTS.md
+docs/FAZ3_ADVANCED_PROMPTS.md
