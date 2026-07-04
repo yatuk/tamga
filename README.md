@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="docs/tamga_logo.png" alt="Tamga Logo" width="140" />
+  <img src="docs/glitch.gif" alt="Tamga Logo" width="140" />
 
   <h1>Tamga</h1>
 
