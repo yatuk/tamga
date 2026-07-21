@@ -374,21 +374,22 @@ func (p *Policy) EvaluateWithRole(findings []scanner.Finding, role string, stric
 }
 
 type Policy struct {
-	Version        string            `yaml:"version" json:"version"`
-	Name           string            `yaml:"name" json:"name"`
-	Rules          map[string]Rule   `yaml:"rules" json:"rules"`
-	OutputRules    *OutputRules      `yaml:"output_rules" json:"output_rules"`
-	RateLimit      *RateLimit        `yaml:"rate_limit" json:"rate_limit"`
-	Providers      *Providers        `yaml:"providers" json:"providers"`
-	CustomEntities []CustomEntity    `yaml:"custom_entities" json:"custom_entities"`
-	Competitors    []Competitor      `yaml:"competitors" json:"competitors"`
-	Governance     *Governance       `yaml:"governance" json:"governance"`
-	Data           *DataControl      `yaml:"data" json:"data"`
-	Pricing        *Pricing          `yaml:"pricing" json:"pricing"`
-	Cost           *CostControl      `yaml:"cost" json:"cost"`
-	Cache          *CacheConfig      `yaml:"cache" json:"cache"`
-	BodyLimits     *BodyLimitsConfig `yaml:"body_limits" json:"body_limits"`
-	Exceptions     []Exception       `yaml:"exceptions" json:"exceptions"`
+	Version        string               `yaml:"version" json:"version"`
+	Name           string               `yaml:"name" json:"name"`
+	Rules          map[string]Rule      `yaml:"rules" json:"rules"`
+	OutputRules    *OutputRules         `yaml:"output_rules" json:"output_rules"`
+	RateLimit      *RateLimit           `yaml:"rate_limit" json:"rate_limit"`
+	Providers      *Providers           `yaml:"providers" json:"providers"`
+	CustomEntities []CustomEntity       `yaml:"custom_entities" json:"custom_entities"`
+	Competitors    []Competitor         `yaml:"competitors" json:"competitors"`
+	Governance     *Governance          `yaml:"governance" json:"governance"`
+	Data           *DataControl         `yaml:"data" json:"data"`
+	Pricing        *Pricing             `yaml:"pricing" json:"pricing"`
+	Cost           *CostControl         `yaml:"cost" json:"cost"`
+	Cache          *CacheConfig         `yaml:"cache" json:"cache"`
+	BodyLimits     *BodyLimitsConfig    `yaml:"body_limits" json:"body_limits"`
+	Exceptions     []Exception          `yaml:"exceptions" json:"exceptions"`
+	OperatorState  *OperatorStateConfig `yaml:"operator_state" json:"operator_state"`
 }
 
 // ResolveMaxBodyBytes returns the maximum incoming request body size in bytes for provider.
@@ -639,6 +640,8 @@ func actionFromConfidenceFinding(f scanner.Finding) Action {
 			return ActionBlock
 		case scanner.ActionRedact:
 			return ActionRedact
+		case scanner.ActionWarn:
+			return ActionWarn
 		case scanner.ActionPassLog:
 			return ActionLog
 		default:

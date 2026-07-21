@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/jugeni/jugeni/contracts/audit-log-decisions-v1.schema.json",
+  "title": "jugeni decisions audit log entry (v1)",
+  "description": "Append-only audit log entry for decision lifecycle events. One JSON object per line in JSONL format. Location on disk: <repo>/.jugeni/decisions/audit.jsonl. Hash chain fields (prev_hash, entry_hash) are roadmap (v2); v1 entries omit them and consumers MUST tolerate their absence and their later presence as a forward-compatible addition.",
+  "type": "object",
+  "required": ["ts", "action", "decision", "detail"],
+  "additionalProperties": false,
+  "properties": {
+    "ts": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp with timezone offset, e.g. '2026-06-23T14:07:00+02:00'. Local time is preserved (NOT normalized to UTC) so the audit log surfaces the operator's wall-clock context.",
+      "examples": ["2026-06-23T14:07:00+02:00", "2026-06-23T12:07:00Z"]
+    },
+    "action": {
+      "type": "string",
+      "enum": ["propose", "accept", "reject", "lock", "reopen", "supersede"],
+      "description": "Lifecycle transition performed on the decision. The state machine: propose → accept → lock (forward), accept|lock → reject (terminal), accept|lock → supersede (replaced by another decision), reject → reopen → propose|accept (rescued). Each entry records ONE transition."
+    },
+    "decision": {
+      "type": "string",
+      "pattern": "^D-\\d{4}-\\d{2}-\\d{2}-\\d{3,}$",
+      "description": "Decision identifier. Format: D-YYYY-MM-DD-NNN where YYYY-MM-DD is creation date and NNN is monotonic counter within that day (zero-padded to at least 3 digits). Stable across the entry's lifetime.",
+      "examples": ["D-2026-06-23-001", "D-2026-06-23-042"]
+    },
+    "detail": {
+      "type": "string",
+      "description": "Free-form operator note attached to the transition. Often empty for routine transitions; populated when --reason flag is passed at CLI. NOT machine-parseable; treat as documentation. Encoding: UTF-8.",
+      "examples": ["", "supersedes due to schema change Y"]
+    }
+  }
+}

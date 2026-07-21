@@ -26,6 +26,12 @@ rules:
     action: WARN
     sensitivity: high
 
+  # Operator-state findings carry per-assertion actions via confidence scores
+  # (block/warn/log per rule below) — confidence_based mode honours them.
+  operator_state:
+    mode: confidence_based
+    minimum_confidence: 0
+
 custom_entities:
   - name: "musteri_no"
     pattern: "MN-\\d{8}"
@@ -63,6 +69,29 @@ body_limits:
       max_bytes: 2097152
     openai:
       max_bytes: 1048576
+
+# ---------------------------------------------------------------------------
+# Operator-state scanner (jugeni-contracts v1 audit-log integration)
+# ---------------------------------------------------------------------------
+# Consumes jugeni's append-only audit log (paths via TAMGA_OPERATOR_STATE_*
+# env vars) and asserts decision state before the LLM call. Request identity
+# comes from headers: X-Tamga-Operator-Id, X-Tamga-Active-Decisions (CSV),
+# X-Tamga-Last-Verifiable-By (RFC3339).
+operator_state:
+  enabled: true
+  # Unknown decision refs under a governed pattern: deny (default) | allow.
+  on_unknown_ref: deny
+  # Locked decisions whose diagnostic cadence lapsed longer ago than this are
+  # reported as stale_lock (warn). Overridable per request.
+  freshness_ttl: "168h"
+  assertions:
+    - decision_pattern: "D-.*"
+      required_state: locked
+      action_on_fail: block
+      severity: critical
+      description: "Referenced decisions must be locked before prompts may rely on them"
+  # Operator allowlists per decision pattern. Empty = no authorization checks.
+  authorization: []
 
 providers:
   allowed: [openai, anthropic, azure_openai, google_vertex]

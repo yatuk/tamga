@@ -430,10 +430,11 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 		),
 	)
 	pipelineCfg := scanner.PipelineConfig{
-		Mode:     scanner.PipelineMode(cfg.Config.ScannerPipelineMode),
-		Timeout:  time.Duration(cfg.Config.ScannerPipelineTimeoutMs) * time.Millisecond,
-		Pool:     cfg.ScannerPool,
-		LoadShed: cfg.Config.ScannerLoadShed,
+		Mode:       scanner.PipelineMode(cfg.Config.ScannerPipelineMode),
+		Timeout:    time.Duration(cfg.Config.ScannerPipelineTimeoutMs) * time.Millisecond,
+		Pool:       cfg.ScannerPool,
+		LoadShed:   cfg.Config.ScannerLoadShed,
+		RequestCtx: buildRequestContext(r, requestID, pol),
 	}
 	var findings []scanner.Finding
 	if cfg.ScannerClient != nil && cfg.ScannerClient.Enabled() {
@@ -1416,6 +1417,9 @@ func setConfidenceHeaders(h http.Header, findings []scanner.Finding) {
 	if h == nil || len(findings) == 0 {
 		return
 	}
+	// Consumed by the k6 workloads and adversarial suites to detect scans
+	// that fired without blocking (WARN/LOG actions forward the request).
+	h.Set("X-Tamga-Findings-Count", strconv.Itoa(len(findings)))
 	best := primaryFinding(findings)
 	if best.ConfidenceScore != nil {
 		h.Set("X-Tamga-Confidence-Score", strconv.Itoa(best.ConfidenceScore.Total))
@@ -1448,6 +1452,34 @@ func setConfidenceHeaders(h http.Header, findings []scanner.Finding) {
 		legacy = 100
 	}
 	h.Set("X-Tamga-Confidence-Score", strconv.Itoa(legacy))
+}
+
+// buildRequestContext assembles the per-request operator-state context from
+// request headers (jugeni-contracts v1) and the policy's freshness default.
+// Consumed by scanners implementing scanner.ContextualScanner.
+func buildRequestContext(r *http.Request, requestID string, pol *policy.Policy) *scanner.RequestContext {
+	reqCtx := &scanner.RequestContext{
+		RequestId:  requestID,
+		OperatorId: strings.TrimSpace(r.Header.Get("X-Tamga-Operator-Id")),
+	}
+	if v := r.Header.Get("X-Tamga-Active-Decisions"); v != "" {
+		for _, id := range strings.Split(v, ",") {
+			if id = strings.TrimSpace(id); id != "" {
+				reqCtx.ActiveDecisionIds = append(reqCtx.ActiveDecisionIds, id)
+			}
+		}
+	}
+	if v := r.Header.Get("X-Tamga-Last-Verifiable-By"); v != "" {
+		if t, err := time.Parse(time.RFC3339, v); err == nil {
+			reqCtx.LastVerifiableByFired = t
+		}
+	}
+	if pol != nil && pol.OperatorState != nil && pol.OperatorState.FreshnessTTL != "" {
+		if d, err := time.ParseDuration(pol.OperatorState.FreshnessTTL); err == nil {
+			reqCtx.FreshnessTTL = d
+		}
+	}
+	return reqCtx
 }
 
 func applyFindingActionTaken(findings []scanner.Finding, action policy.Action) {

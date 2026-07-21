@@ -469,7 +469,7 @@ const file_analyzer_v1_tamga_proto_rawDesc = "" +
 	"\aservice\x18\x02 \x01(\tR\aservice2\xc1\x01\n" +
 	"\x0fAnalyzerService\x12P\n" +
 	"\aAnalyze\x12!.proto.analyzer.v1.AnalyzeRequest\x1a\".proto.analyzer.v1.AnalyzeResponse\x12\\\n" +
-	"\vHealthCheck\x12%.proto.analyzer.v1.HealthCheckRequest\x1a&.proto.analyzer.v1.HealthCheckResponseB?Z=github.com/yatuk/tamga/proto/analyzer/v1;analyzerv1b\x06proto3"
+	"\vHealthCheck\x12%.proto.analyzer.v1.HealthCheckRequest\x1a&.proto.analyzer.v1.HealthCheckResponseB5Z3github.com/yatuk/tamga/proto/analyzer/v1;analyzerv1b\x06proto3"
 
 var (
 	file_analyzer_v1_tamga_proto_rawDescOnce sync.Once

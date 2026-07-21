@@ -18,6 +18,10 @@ const (
 	ActionPassLog = "PASS_LOG" // 40-69
 	ActionRedact  = "REDACT"   // 70-89
 	ActionBlock   = "BLOCK"    // 90-100
+	// ActionWarn is not produced by the confidence matrix; it is set
+	// explicitly by scanners whose rules carry a warn-on-fail action
+	// (e.g. operator_state assertions).
+	ActionWarn = "WARN"
 )
 
 // ConfidenceFactor stores the contributing points for a finding.

@@ -79,6 +79,9 @@ type PipelineConfig struct {
 	// Non-critical scanners are skipped when pool queue exceeds 80% capacity;
 	// all scanners are skipped above 95%. Default false.
 	LoadShed bool
+	// RequestCtx carries per-request operator-state context to scanners
+	// implementing ContextualScanner. Nil for context-free scans.
+	RequestCtx *RequestContext
 }
 
 // ScannerEntry pairs a Scanner with its speed classification.
@@ -158,7 +161,7 @@ func (p *Pipeline) scanSync(ctx context.Context, content []byte) ([]Finding, err
 		sctx, sp := telemetry.Tracer().Start(ctx, telemetry.SpanNameForScanner(entry.Scanner.Name()),
 			trace.WithAttributes(attribute.Int("content.size_bytes", len(content))),
 		)
-		findings, err := entry.Scanner.Scan(sctx, content)
+		findings, err := scanEntry(sctx, entry.Scanner, content, p.cfg.RequestCtx)
 		sp.SetAttributes(attribute.Int("findings.count", len(findings)))
 		if err != nil {
 			sp.RecordError(err)
@@ -203,7 +206,7 @@ func (p *Pipeline) scanAsync(ctx context.Context, content []byte) ([]Finding, er
 			sctx, sp := telemetry.Tracer().Start(ctx, telemetry.SpanNameForScanner(e.Scanner.Name()),
 				trace.WithAttributes(attribute.Int("content.size_bytes", len(content))),
 			)
-			findings, err := e.Scanner.Scan(sctx, content)
+			findings, err := scanEntry(sctx, e.Scanner, content, p.cfg.RequestCtx)
 			sp.SetAttributes(attribute.Int("findings.count", len(findings)))
 			if err != nil {
 				sp.RecordError(err)
@@ -240,7 +243,7 @@ func (p *Pipeline) scanAdaptive(ctx context.Context, content []byte) ([]Finding,
 		sctx, sp := telemetry.Tracer().Start(ctx, telemetry.SpanNameForScanner(entry.Scanner.Name()),
 			trace.WithAttributes(attribute.Int("content.size_bytes", len(content))),
 		)
-		findings, err := entry.Scanner.Scan(sctx, content)
+		findings, err := scanEntry(sctx, entry.Scanner, content, p.cfg.RequestCtx)
 		sp.SetAttributes(attribute.Int("findings.count", len(findings)))
 		if err != nil {
 			sp.RecordError(err)
@@ -270,7 +273,7 @@ func (p *Pipeline) scanAdaptive(ctx context.Context, content []byte) ([]Finding,
 			sctx, sp := telemetry.Tracer().Start(ctx, telemetry.SpanNameForScanner(e.Scanner.Name()),
 				trace.WithAttributes(attribute.Int("content.size_bytes", len(content))),
 			)
-			findings, err := e.Scanner.Scan(sctx, content)
+			findings, err := scanEntry(sctx, e.Scanner, content, p.cfg.RequestCtx)
 			sp.SetAttributes(attribute.Int("findings.count", len(findings)))
 			if err != nil {
 				sp.RecordError(err)
@@ -335,6 +338,7 @@ func (p *Pipeline) scanWorkerPool(ctx context.Context, content []byte) ([]Findin
 			Scanner:  entry.Scanner,
 			Content:  content,
 			Ctx:      ctx,
+			ReqCtx:   p.cfg.RequestCtx,
 			ResultCh: resultCh,
 		})
 		if err == ErrQueueFull {

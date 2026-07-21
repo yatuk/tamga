@@ -13,6 +13,7 @@ type Job struct {
 	Scanner  Scanner
 	Content  []byte
 	Ctx      context.Context
+	ReqCtx   *RequestContext
 	ResultCh chan ScanResult
 }
 
@@ -97,7 +98,7 @@ func (p *WorkerPool) process(job Job) {
 	}
 
 	start := time.Now()
-	findings, err := job.Scanner.Scan(job.Ctx, job.Content)
+	findings, err := scanEntry(job.Ctx, job.Scanner, job.Content, job.ReqCtx)
 	elapsed := time.Since(start)
 
 	if err != nil {
