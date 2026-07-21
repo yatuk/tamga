@@ -6,7 +6,7 @@
   <p><em>Enterprise LLM API Security, Policy-Based Guard for Every Prompt</em></p>
 
   <p>
-    <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-v0.7.0-blue?style=flat-square" alt="Version: v0.7.0" /></a>
+    <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-v0.8.0--rc1-blue?style=flat-square" alt="Version: v0.8.0-rc1" /></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-green?style=flat-square" alt="License: AGPL-3.0" /></a>
     <a href="https://pkg.go.dev/github.com/yatuk/tamga"><img src="https://img.shields.io/badge/go-reference-00ADD8?logo=go&style=flat-square" alt="Go Reference" /></a>
     <a href="proxy/go.mod"><img src="https://img.shields.io/badge/go-1.25+-00ADD8?logo=go&logoColor=white&style=flat-square" alt="Go 1.25+" /></a>
@@ -1130,6 +1130,14 @@ Tamga stands on the shoulders of open-source giants:
 | [NATS JetStream](https://nats.io) | Async event processing |
 | [PostgreSQL 16](https://www.postgresql.org) | Audit storage, policies, billing |
 | [Redis 7](https://redis.io) | Rate limiting, caching, counters |
+
+## Companion Projects
+
+Projects Tamga integrates with as an ecosystem peer rather than a dependency:
+
+| Project | Role |
+|---------|------|
+| [jugeni-contracts](https://github.com/jugeni/jugeni-contracts) | Operator decision/note audit-log contract (v1) consumed by the `operator_state` scanner — pre-call decision governance. See [docs/integrations/jugeni.md](docs/integrations/jugeni.md) |
 
 ---
 

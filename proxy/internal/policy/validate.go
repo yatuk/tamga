@@ -27,6 +27,7 @@ var knownScannerTypes = map[string]struct{}{
 	"content_moderation": {},
 	"competitor":         {},
 	"custom":             {},
+	"operator_state":     {},
 }
 
 // isValidSeverity returns true for the four canonical severity levels.
@@ -447,6 +448,78 @@ func ValidateSemantics(p *Policy) []ValidationIssue {
 						})
 					}
 				}
+			}
+		}
+	}
+
+	if os := p.OperatorState; os != nil {
+		switch strings.ToLower(strings.TrimSpace(os.OnUnknownRef)) {
+		case "", "deny", "allow":
+		default:
+			issues = append(issues, ValidationIssue{
+				Field:    "operator_state.on_unknown_ref",
+				Rule:     "enum",
+				Message:  fmt.Sprintf("unknown on_unknown_ref %q (use deny or allow)", os.OnUnknownRef),
+				Severity: "error",
+			})
+		}
+		if os.FreshnessTTL != "" {
+			if _, err := time.ParseDuration(os.FreshnessTTL); err != nil {
+				issues = append(issues, ValidationIssue{
+					Field:    "operator_state.freshness_ttl",
+					Rule:     "duration",
+					Message:  err.Error(),
+					Severity: "error",
+				})
+			}
+		}
+		for i, a := range os.Assertions {
+			prefix := fmt.Sprintf("operator_state.assertions[%d]", i)
+			if strings.TrimSpace(a.DecisionPattern) == "" {
+				issues = append(issues, ValidationIssue{Field: prefix + ".decision_pattern", Rule: "required", Message: "decision_pattern is empty", Severity: "error"})
+			} else if _, err := regexp.Compile(a.DecisionPattern); err != nil {
+				issues = append(issues, ValidationIssue{Field: prefix + ".decision_pattern", Rule: "regexp", Message: err.Error(), Severity: "error"})
+			} else if hint := reDosHeuristic(a.DecisionPattern); hint != "" {
+				issues = append(issues, ValidationIssue{Field: prefix + ".decision_pattern", Rule: "redos_risk", Message: hint, Severity: "warning"})
+			}
+			switch strings.ToLower(strings.TrimSpace(a.RequiredState)) {
+			case "proposed", "accepted", "locked", "rejected", "superseded":
+			default:
+				issues = append(issues, ValidationIssue{
+					Field:    prefix + ".required_state",
+					Rule:     "enum",
+					Message:  fmt.Sprintf("unknown required_state %q (use proposed, accepted, locked, rejected, or superseded)", a.RequiredState),
+					Severity: "error",
+				})
+			}
+			switch strings.ToLower(strings.TrimSpace(a.ActionOnFail)) {
+			case "", "block", "warn", "log":
+			default:
+				issues = append(issues, ValidationIssue{
+					Field:    prefix + ".action_on_fail",
+					Rule:     "enum",
+					Message:  fmt.Sprintf("unknown action_on_fail %q (use block, warn, or log)", a.ActionOnFail),
+					Severity: "error",
+				})
+			}
+			if a.Severity != "" && !isValidSeverity(a.Severity) {
+				issues = append(issues, ValidationIssue{
+					Field:    prefix + ".severity",
+					Rule:     "enum",
+					Message:  fmt.Sprintf("unknown severity %q (use critical, high, medium, or low)", a.Severity),
+					Severity: "warning",
+				})
+			}
+		}
+		for i, auth := range os.Authorization {
+			prefix := fmt.Sprintf("operator_state.authorization[%d]", i)
+			if strings.TrimSpace(auth.DecisionPattern) == "" {
+				issues = append(issues, ValidationIssue{Field: prefix + ".decision_pattern", Rule: "required", Message: "decision_pattern is empty", Severity: "error"})
+			} else if _, err := regexp.Compile(auth.DecisionPattern); err != nil {
+				issues = append(issues, ValidationIssue{Field: prefix + ".decision_pattern", Rule: "regexp", Message: err.Error(), Severity: "error"})
+			}
+			if len(auth.AllowedOperators) == 0 {
+				issues = append(issues, ValidationIssue{Field: prefix + ".allowed_operators", Rule: "required", Message: "allowed_operators must list at least one operator", Severity: "error"})
 			}
 		}
 	}

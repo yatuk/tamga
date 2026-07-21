@@ -2,14 +2,17 @@ package events
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync/atomic"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 
+	"github.com/yatuk/tamga/internal/scanner/operator_state"
 	"github.com/yatuk/tamga/internal/telemetry"
 	pb "github.com/yatuk/tamga/proto/analyzer/v1"
 )
@@ -176,4 +179,98 @@ func AnalyzerHandler(client AnalyzerClient) func(Event) {
 				Msg("analyzer: deep scan complete")
 		}
 	}
+}
+
+// EventOperatorStateDeepScan is published by the operator_state scanner when
+// fast-tier findings warrant slow-tier semantic comparison.
+const EventOperatorStateDeepScan = "operator_state_deep_scan"
+
+// operatorStateRequestKey is the Event.Metadata key holding the
+// *operator_state.AnalyzerRequest payload.
+const operatorStateRequestKey = "operator_state_request"
+
+// OperatorStateAnalyzerHandler routes operator-state deep-scan events to the
+// Python analyzer (fail-open) and logs the resulting advisory with provenance.
+//
+// Until the analyzer ships an operator-state judge endpoint, it returns no
+// findings for this scan type and the advisory verdict is "inconclusive" —
+// the deterministic tier's decision stands either way.
+func OperatorStateAnalyzerHandler(client AnalyzerClient) func(Event) {
+	return func(e Event) {
+		if e.EventType != EventOperatorStateDeepScan {
+			return
+		}
+		req, _ := e.Metadata[operatorStateRequestKey].(*operator_state.AnalyzerRequest)
+		if req == nil {
+			return
+		}
+		if client == nil || !client.Enabled() {
+			logAdvisory(operatorStateAdvisory(req, nil))
+			return
+		}
+
+		ctx := context.Background()
+		if len(e.TraceContext) > 0 {
+			ctx = otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier(e.TraceContext))
+		}
+		_, sp := telemetry.Tracer().Start(ctx, "analyzer.operator_state_semantic")
+		defer sp.End()
+
+		decisionRefs, _ := json.Marshal(req.DecisionRefs)
+		noteRefs, _ := json.Marshal(req.NoteRefs)
+		fastFindings, _ := json.Marshal(req.FastFindings)
+		resp, err := client.Analyze(ctx, &pb.AnalyzeRequest{
+			RequestId: req.RequestID,
+			Content:   req.Prompt,
+			ScanTypes: []string{"operator_state"},
+			Metadata: map[string]string{
+				"scan_type":     req.ScanType,
+				"decision_refs": string(decisionRefs),
+				"note_refs":     string(noteRefs),
+				"fast_findings": string(fastFindings),
+			},
+			PreScanned: true,
+		})
+		if err != nil {
+			log.Warn().Err(err).Str("component", "operator_state_handler").Str("request_id", req.RequestID).Msg("analyzer: operator-state semantic scan failed (fail-open)")
+			return
+		}
+		logAdvisory(operatorStateAdvisory(req, resp))
+	}
+}
+
+// operatorStateAdvisory synthesizes an Advisory from the analyzer response.
+func operatorStateAdvisory(req *operator_state.AnalyzerRequest, resp *pb.AnalyzeResponse) operator_state.Advisory {
+	adv := operator_state.Advisory{
+		RequestID: req.RequestID,
+		Verdict:   operator_state.VerdictInconclusive,
+		Provenance: operator_state.Provenance{
+			EvaluatedAt: time.Now().UTC(),
+		},
+	}
+	for _, dc := range req.DecisionRefs {
+		adv.Provenance.DecisionIDs = append(adv.Provenance.DecisionIDs, dc.ID)
+		adv.Provenance.LogTimestamps = append(adv.Provenance.LogTimestamps, dc.LastEventTS)
+	}
+	if resp != nil {
+		for _, f := range resp.Findings {
+			if f.Type == "operator_state" && f.Confidence >= 0.7 {
+				adv.Verdict = operator_state.VerdictContradictionConfirmed
+				adv.Confidence = f.Confidence
+				break
+			}
+		}
+	}
+	return adv
+}
+
+func logAdvisory(adv operator_state.Advisory) {
+	payload, _ := json.Marshal(adv)
+	log.Info().
+		Str("component", "operator_state_handler").
+		Str("event", "operator_state_advisory").
+		Str("request_id", adv.RequestID).
+		Str("verdict", adv.Verdict).
+		RawJSON("advisory", payload).
+		Msg("operator-state semantic advisory")
 }

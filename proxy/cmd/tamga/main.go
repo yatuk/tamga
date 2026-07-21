@@ -33,6 +33,7 @@ import (
 	"github.com/yatuk/tamga/internal/ratelimit"
 	"github.com/yatuk/tamga/internal/redisx"
 	"github.com/yatuk/tamga/internal/scanner"
+	"github.com/yatuk/tamga/internal/scanner/operator_state"
 	"github.com/yatuk/tamga/internal/secrets"
 	"github.com/yatuk/tamga/internal/store"
 	"github.com/yatuk/tamga/internal/telemetry"
@@ -109,6 +110,7 @@ func main() {
 	var customScanner *scanner.CustomScanner
 	var competitorScanner *scanner.CompetitorScanner
 	var tierEnforcer *tier.Enforcer
+	var opScanner *operator_state.OperatorStateScanner
 
 	var stopPolicyWatch func()
 	if sw, err := policy.WatchPolicy(cfg.PolicyPath, policyStore, func() {
@@ -121,6 +123,15 @@ func main() {
 		}
 		if tierEnforcer != nil {
 			tierEnforcer.Refresh()
+		}
+		if opScanner != nil {
+			if p := policyStore.GetPolicy(); p != nil {
+				if rules, err := operator_state.LoadRulesFromPolicy(p.OperatorState); err != nil {
+					log.Warn().Err(err).Msg("operator_state: policy reload rejected; keeping previous rules")
+				} else {
+					opScanner.UpdateRules(rules)
+				}
+			}
 		}
 	}); err != nil {
 		log.Warn().Err(err).Msg("policy file watcher disabled; restart required for policy changes")
@@ -325,6 +336,7 @@ func main() {
 		log.Warn().Err(err).Str("addr", cfg.AnalyzerAddr).Msg("analyzer gRPC client unavailable — running without deep NLP")
 	}
 	eventBus.Subscribe(events.AnalyzerHandler(analyzerClient))
+	eventBus.Subscribe(events.OperatorStateAnalyzerHandler(analyzerClient))
 	eventBus.Subscribe(events.RecentBufferHandler(recentBuf))
 	eventBus.Subscribe(liveBroker.Publish)
 	eventBus.Start()
@@ -427,6 +439,58 @@ func main() {
 	competitorScanner = scanner.NewCompetitorScanner(getCompetitorSpecs)
 	registry.Register(competitorScanner)
 	registry.SetSpeed("competitor", scanner.SpeedFast)
+
+	// Operator-state scanner (jugeni-contracts v1). Enabled when at least one
+	// audit-log path is configured via TAMGA_OPERATOR_STATE_* env vars.
+	if opCfg := operator_state.LoadConfig(); opCfg.Enabled {
+		opProjection := operator_state.NewProjection()
+		var opRedis *operator_state.RedisStore
+		if opCfg.RedisEnabled && rdx.Enabled() {
+			opRedis = operator_state.NewRedisStore(rdx)
+			opProjection.SetRedisStore(opRedis)
+		}
+
+		opRules, err := operator_state.LoadRulesFromPolicy(pol.OperatorState)
+		if err != nil {
+			log.Fatal().Err(err).Msg("operator_state: invalid policy assertions")
+		}
+		opScanner = operator_state.NewOperatorStateScannerWithRules(opProjection, opRules)
+		if opRedis != nil {
+			opScanner.SetRedisStore(opRedis)
+		}
+
+		opWatcher, err := operator_state.NewWatcher(opCfg,
+			func(ev operator_state.DecisionEvent) { opProjection.ApplyDecision(ev) },
+			func(ev operator_state.NoteEvent) { opProjection.ApplyNote(ev) })
+		if err != nil {
+			log.Fatal().Err(err).Msg("operator_state: watcher init failed")
+		}
+		if err := opWatcher.Start(context.Background()); err != nil {
+			log.Warn().Err(err).Msg("operator_state: initial audit-log replay incomplete (fail-open)")
+		}
+		defer opWatcher.Stop()
+		if opRedis != nil {
+			opRedis.SeedFromProjection(context.Background(), opProjection)
+		}
+
+		opScanner.SetDeepAnalysisPublisher(func(req *operator_state.AnalyzerRequest) {
+			eventBus.Publish(events.Event{
+				EventType: events.EventOperatorStateDeepScan,
+				RequestID: req.RequestID,
+				Metadata:  map[string]interface{}{"operator_state_request": req},
+			})
+		})
+
+		registry.Register(opScanner)
+		registry.SetSpeed("operator_state", scanner.SpeedFast)
+		decisions, notes := opProjection.Stats()
+		log.Info().
+			Int("decisions", decisions).
+			Int("notes", notes).
+			Bool("redis", opRedis != nil).
+			Msg("operator_state scanner registered")
+	}
+
 	log.Info().Int("count", registry.Count()).Msg("scanners registered")
 
 	// Output-only registry: scanners that should only run on response

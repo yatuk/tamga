@@ -137,7 +137,7 @@ if ! $SKIP_ADVERSARIAL; then
     log "Running adversarial bypass tests..."
     ADV_DIR="$SCRIPT_DIR/adversarial"
 
-    for script in pii_bypass.py injection_bypass.py secret_bypass.py policy_bypass.py; do
+    for script in pii_bypass.py injection_bypass.py secret_bypass.py policy_bypass.py operator_state_bypass.py; do
         script_path="$ADV_DIR/$script"
         if [ ! -f "$script_path" ]; then
             warn "Skipping $script (not found)"
