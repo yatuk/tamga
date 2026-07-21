@@ -17,12 +17,18 @@ const nextConfig = {
   },
 
   async redirects() {
+    // Marketing pages moved to tamgaproxy.com — forward legacy paths there.
+    const site = process.env.NEXT_PUBLIC_MARKETING_URL || "https://tamgaproxy.com";
     return [
-      { source: "/kvkk",              destination: "/trust/kvkk",        permanent: true },
-      { source: "/security",          destination: "/trust/security",    permanent: true },
-      { source: "/docs/architecture", destination: "/docs#architecture", permanent: true },
-      { source: "/docs/quickstart",   destination: "/docs#quickstart",   permanent: true },
-      { source: "/docs/owasp-llm",    destination: "/docs#owasp-llm",    permanent: true },
+      { source: "/kvkk",              destination: `${site}/trust/kvkk`,     permanent: true },
+      { source: "/security",          destination: `${site}/trust/security`, permanent: true },
+      { source: "/docs/architecture", destination: `${site}/docs`,           permanent: true },
+      { source: "/docs/quickstart",   destination: `${site}/docs`,           permanent: true },
+      { source: "/docs/owasp-llm",    destination: `${site}/docs`,           permanent: true },
+      { source: "/pricing",           destination: `${site}/pricing`,        permanent: true },
+      { source: "/docs",              destination: `${site}/docs`,           permanent: true },
+      { source: "/trust/:path*",      destination: `${site}/trust/:path*`,   permanent: true },
+      { source: "/contact",           destination: `${site}/contact`,        permanent: true },
     ];
   },
 

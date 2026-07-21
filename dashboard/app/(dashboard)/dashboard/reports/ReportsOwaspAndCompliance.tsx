@@ -86,7 +86,7 @@ export function ReportsOwaspAndCompliance({ owaspCoverageRows, range, adminKey }
             <p className="text-[10px] uppercase tracking-wide text-zinc-600 dark:text-zinc-400">KVKK / denetim kanıtı</p>
             <ul className="list-inside list-disc space-y-1">
               <li>
-                <Link className="text-zinc-400 hover:text-blue-400 hover:underline" href="/trust">
+                <Link className="text-zinc-400 hover:text-blue-400 hover:underline" href="https://tamgaproxy.com/trust">
                   Trust Center
                 </Link>{" "}
                 — veri yerleşimi ve alt işleyenler
