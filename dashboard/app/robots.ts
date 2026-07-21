@@ -1,13 +1,9 @@
 import type { MetadataRoute } from "next";
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://tamga.dev";
-
+// This app is the dashboard only (the marketing site lives at
+// tamgaproxy.com) — nothing here should be indexed.
 export default function robots(): MetadataRoute.Robots {
   return {
-    rules: [
-      { userAgent: "*", allow: "/", disallow: ["/dashboard/", "/api/"] },
-    ],
-    sitemap: `${SITE_URL}/sitemap.xml`,
-    host: SITE_URL,
+    rules: [{ userAgent: "*", disallow: "/" }],
   };
 }
