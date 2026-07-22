@@ -3,6 +3,7 @@
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { PatternFormPanel } from "./PatternFormPanel";
 import { PatternsTable } from "./PatternsTable";
+import { PolicyEntitiesPanel } from "./PolicyEntitiesPanel";
 import { usePatternsPage } from "./usePatternsPage";
 
 export default function PatternsPage() {
@@ -67,6 +68,13 @@ export default function PatternsPage() {
           onTest={onTest}
         />
       </div>
+
+      <PageHeader
+        eyebrow="PROTECTION // POLICY ENTITIES"
+        title="Policy Entities"
+        subtitle="Named PII entities with an enforcement action — define your own, test against the active policy"
+      />
+      <PolicyEntitiesPanel />
     </div>
   );
 }

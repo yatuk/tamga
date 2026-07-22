@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.9.0 (unreleased)
+
+### Dashboard
+- Custom Entity UI — a "Policy Entities" section on the Patterns page lets you
+  define named PII entities with an enforcement action (BLOCK/REDACT/WARN),
+  severity, and confidence, and test them against the active policy via the
+  simulate endpoint. Complements the existing runtime regex/literal patterns.
+
+### Core Proxy
+- Runtime patterns now activate immediately: the `/patterns` create/update/
+  delete handlers call `CustomScanner.Refresh()`, so a pattern created via the
+  API takes effect without waiting for a policy reload.
+
 ## v0.8.0-rc1 — 2026-07-21 — Operator-State Scanner (jugeni-contracts v1)
 
 ### Core Proxy
