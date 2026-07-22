@@ -97,6 +97,47 @@ func TestPG_SaveRequestLog_Flushes(t *testing.T) {
 	}
 }
 
+func TestPG_GetDailyTimeseries(t *testing.T) {
+	skipIfNoDB(t)
+	s := newTestPostgresStore(t)
+	defer func() { _ = s.Close() }()
+	pgCleanTruncate(t, s)
+
+	ctx := context.Background()
+	now := time.Now().UTC()
+	d1 := now.Add(-48 * time.Hour).Format("2006-01-02")
+	d2 := now.Add(-24 * time.Hour).Format("2006-01-02")
+	for _, row := range []struct {
+		date                    string
+		total, blk, red, warned int
+	}{
+		{d1, 100, 20, 10, 5},
+		{d2, 200, 40, 15, 8},
+	} {
+		_, err := s.pool.Exec(ctx, `
+			INSERT INTO daily_stats (org_id, stat_date, total_requests, blocked_requests, redacted_requests, warned_requests)
+			VALUES ($1, $2, $3, $4, $5, $6)`, testOrgID, row.date, row.total, row.blk, row.red, row.warned)
+		if err != nil {
+			t.Fatalf("daily_stats insert: %v", err)
+		}
+	}
+
+	pts, err := s.GetDailyTimeseries(ctx, testOrgID, now.Add(-72*time.Hour), now)
+	if err != nil {
+		t.Fatalf("GetDailyTimeseries: %v", err)
+	}
+	if len(pts) != 2 {
+		t.Fatalf("expected 2 daily points, got %d", len(pts))
+	}
+	// Ascending by date.
+	if pts[0].TotalRequests != 100 || pts[0].BlockedRequests != 20 {
+		t.Errorf("day 1 = %+v", pts[0])
+	}
+	if pts[1].TotalRequests != 200 || pts[1].WarnedRequests != 8 {
+		t.Errorf("day 2 = %+v", pts[1])
+	}
+}
+
 func TestPG_GetStats(t *testing.T) {
 	skipIfNoDB(t)
 	s := newTestPostgresStore(t)

@@ -101,6 +101,9 @@ func (s *spyStore) GetModelTokenUsage(_ context.Context, _ string, _, _ time.Tim
 func (s *spyStore) GetDailyTokenUsage(_ context.Context, _ string, _, _ time.Time) ([]DailyTokenUsage, error) {
 	return nil, nil
 }
+func (s *spyStore) GetDailyTimeseries(_ context.Context, _ string, _, _ time.Time) ([]DailyStatPoint, error) {
+	return nil, nil
+}
 func (s *spyStore) Ping(_ context.Context) error { return nil }
 func (s *spyStore) Close() error                 { return nil }
 

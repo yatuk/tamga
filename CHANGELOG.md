@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.9.0 (unreleased)
+
+### Dashboard
+- Trend graphs — a new Trends page (ANALYTICS nav) charts requests scanned vs
+  findings caught over 24h/7d/30d, with a catch-rate tile and a findings-by-type
+  breakdown.
+
+### Core Proxy
+- DB-backed timeseries — `GET /api/v1/timeseries` now serves the day bucket from
+  `daily_stats` (full history) instead of the in-memory recent buffer (≤1000
+  events), so long-window "this month" trends are accurate. Short windows and
+  no-DB deployments keep the in-memory path. New store method
+  `GetDailyTimeseries`.
+
 ## v0.8.0-rc1 — 2026-07-21 — Operator-State Scanner (jugeni-contracts v1)
 
 ### Core Proxy

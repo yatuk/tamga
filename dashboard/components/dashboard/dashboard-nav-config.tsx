@@ -16,6 +16,7 @@ import {
   Settings,
   Shield,
   Timer,
+  TrendingUp,
   Users,
 } from "lucide-react";
 
@@ -53,6 +54,7 @@ export const dashboardNavGroups: DashboardNavGroup[] = [
     label: "ANALYTICS",
     items: [
       { href: "/dashboard/traffic", label: "Traffic", icon: BarChart3 },
+      { href: "/dashboard/trends", label: "Trends", icon: TrendingUp },
       { href: "/dashboard/costs", label: "Token costs", icon: DollarSign },
       { href: "/dashboard/latency", label: "Latency", icon: Timer },
       { href: "/dashboard/reports", label: "Reports", icon: FileText },

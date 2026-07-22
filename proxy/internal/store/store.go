@@ -92,6 +92,18 @@ type Store interface {
 	GetModelTokenUsage(ctx context.Context, orgID string, from, to time.Time) ([]ModelTokenUsage, error)
 	// GetDailyTokenUsage returns daily token sums grouped by date+provider+model.
 	GetDailyTokenUsage(ctx context.Context, orgID string, from, to time.Time) ([]DailyTokenUsage, error)
+	// GetDailyTimeseries returns per-day request/action counts from daily_stats
+	// over [from, to], for long-window detection trends. Empty when no data.
+	GetDailyTimeseries(ctx context.Context, orgID string, from, to time.Time) ([]DailyStatPoint, error)
 	Ping(ctx context.Context) error
 	Close() error
+}
+
+// DailyStatPoint is one day of aggregated request counts (from daily_stats).
+type DailyStatPoint struct {
+	Date             time.Time `json:"date"`
+	TotalRequests    int64     `json:"total_requests"`
+	BlockedRequests  int64     `json:"blocked_requests"`
+	RedactedRequests int64     `json:"redacted_requests"`
+	WarnedRequests   int64     `json:"warned_requests"`
 }

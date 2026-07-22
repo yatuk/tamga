@@ -179,6 +179,43 @@ WHERE org_id = $1 AND stat_date >= $2::date AND stat_date <= $3::date`,
 	return &st, nil
 }
 
+// GetDailyTimeseries returns per-day request/action counts from daily_stats
+// over [from, to] (inclusive, date portion), ascending by date.
+func (s *PostgresStore) GetDailyTimeseries(ctx context.Context, orgID string, from, to time.Time) ([]DailyStatPoint, error) {
+	org, err := uuid.Parse(orgID)
+	if err != nil {
+		return nil, fmt.Errorf("org id: %w", err)
+	}
+	ctx2, cancel := context.WithTimeout(ctx, getStatsTimeout)
+	defer cancel()
+	rows, err := s.pool.Query(ctx2, `
+SELECT
+  stat_date,
+  COALESCE(total_requests, 0),
+  COALESCE(blocked_requests, 0),
+  COALESCE(redacted_requests, 0),
+  COALESCE(warned_requests, 0)
+FROM daily_stats
+WHERE org_id = $1 AND stat_date >= $2::date AND stat_date <= $3::date
+ORDER BY stat_date ASC`,
+		org, from.UTC(), to.UTC(),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []DailyStatPoint
+	for rows.Next() {
+		var p DailyStatPoint
+		if err := rows.Scan(&p.Date, &p.TotalRequests, &p.BlockedRequests, &p.RedactedRequests, &p.WarnedRequests); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
 // Ping checks database connectivity.
 func (s *PostgresStore) Ping(ctx context.Context) error {
 	return s.pool.Ping(ctx)

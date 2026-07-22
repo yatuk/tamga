@@ -39,11 +39,37 @@ func (cfg Config) handleTimeseries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Pull recent events (in-mem) — DB-backed version can replace this block.
 	points := map[int64]*tsPoint{}
 	nowMs := time.Now().UTC().UnixMilli()
 	threshold := nowMs - windowMs
-	if cfg.Recent != nil {
+
+	// Day-bucketed series: prefer Postgres daily_stats, which retains full
+	// history, over the in-memory RecentBuffer (capped ~1000 events). This is
+	// what makes long-window ("this month") trends accurate.
+	dbServed := false
+	if bucket == "day" && cfg.DatabaseURL != "" && cfg.DefaultOrgID != "" && cfg.Store != nil {
+		ctx := r.Context()
+		if err := cfg.Store.Ping(ctx); err == nil {
+			from := time.UnixMilli(threshold).UTC()
+			to := time.Now().UTC()
+			if rows, err := cfg.Store.GetDailyTimeseries(ctx, cfg.DefaultOrgID, from, to); err == nil {
+				for _, row := range rows {
+					key := (row.Date.UTC().UnixMilli() / bucketMs) * bucketMs
+					points[key] = &tsPoint{
+						T:        time.UnixMilli(key).UTC(),
+						Total:    int(row.TotalRequests),
+						Blocked:  int(row.BlockedRequests),
+						Redacted: int(row.RedactedRequests),
+						Warned:   int(row.WarnedRequests),
+					}
+				}
+				dbServed = true
+			}
+		}
+	}
+
+	// In-memory fallback (short windows, or no DB): recent events.
+	if !dbServed && cfg.Recent != nil {
 		evs, _ := cfg.Recent.Page(1, 1000)
 		for _, e := range evs {
 			if e.Timestamp.IsZero() {

@@ -834,14 +834,14 @@ func TestPostgresStore_Flush_WithExpiredContext(t *testing.T) {
 // Used to test error handling in callers of the Store interface.
 type errorStore struct {
 	*NoopStore
-	saveErr        error
-	statsErr       error
-	listErr        error
-	searchErr      error
-	modelUsageErr  error
-	dailyUsageErr  error
-	pingErr        error
-	closeErr       error
+	saveErr       error
+	statsErr      error
+	listErr       error
+	searchErr     error
+	modelUsageErr error
+	dailyUsageErr error
+	pingErr       error
+	closeErr      error
 }
 
 func (e *errorStore) SaveRequestLog(_ context.Context, _ RequestLog) error {
@@ -1197,4 +1197,3 @@ func TestNewSavedHuntStore_InterfaceReturn(t *testing.T) {
 	}
 	var _ SavedHuntStore = store
 }
-
