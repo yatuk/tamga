@@ -322,39 +322,8 @@ func (p *Policy) EvaluateWithRole(findings []scanner.Finding, role string, stric
 			if !ok {
 				continue
 			}
-
-			// Check if this specific category is covered by the rule's types
-			if len(rule.Types) > 0 && !containsType(rule.Types, f.Category) {
-				continue
-			}
-
-			if strings.EqualFold(strings.TrimSpace(rule.Mode), "confidence_based") {
-				confScore := 0
-				if f.ConfidenceScore != nil {
-					confScore = f.ConfidenceScore.Total
-				} else if f.Confidence > 0 {
-					confScore = int(f.Confidence * 100)
-				}
-				if rule.MinimumConfidence > 0 && confScore < rule.MinimumConfidence {
-					continue
-				}
-				nextAction := actionFromConfidenceFinding(f)
-				if rule.OverrideAction != nil {
-					nextAction = *rule.OverrideAction
-				}
-				if actionSeverity(nextAction) > actionSeverity(maxAction) {
-					maxAction = nextAction
-				}
-				continue
-			}
-
-			// Check sensitivity threshold
-			if !meetsThreshold(f.Severity, rule.Sensitivity) {
-				continue
-			}
-
-			if actionSeverity(rule.Action) > actionSeverity(maxAction) {
-				maxAction = rule.Action
+			if a, ok := evalRuleAction(rule, f); ok && actionSeverity(a) > actionSeverity(maxAction) {
+				maxAction = a
 			}
 		}
 	}
@@ -586,51 +555,53 @@ func (p *Policy) Evaluate(findings []scanner.Finding) Action {
 			continue
 		}
 
-		rule, ok := p.Rules[f.Type+"_detection"]
-		if !ok {
-			// Try without _detection suffix
-			rule, ok = p.Rules[f.Type]
-		}
-		if !ok {
-			continue
-		}
-
-		// Check if this specific category is covered by the rule's types
-		if len(rule.Types) > 0 && !containsType(rule.Types, f.Category) {
-			continue
-		}
-
-		if strings.EqualFold(strings.TrimSpace(rule.Mode), "confidence_based") {
-			confScore := 0
-			if f.ConfidenceScore != nil {
-				confScore = f.ConfidenceScore.Total
-			} else if f.Confidence > 0 {
-				confScore = int(f.Confidence * 100)
-			}
-			if rule.MinimumConfidence > 0 && confScore < rule.MinimumConfidence {
+		// A finding of type "pii" is scored against both the "pii_detection"
+		// and bare "pii" rule keys when both exist, and the strongest action
+		// wins. This lets one rule REDACT contact PII (email, phone) while a
+		// second BLOCKs critical identifiers (TC Kimlik, credit cards) by
+		// category, without over-blocking every finding of the type.
+		for _, key := range []string{f.Type + "_detection", f.Type} {
+			rule, ok := p.Rules[key]
+			if !ok {
 				continue
 			}
-			nextAction := actionFromConfidenceFinding(f)
-			if rule.OverrideAction != nil {
-				nextAction = *rule.OverrideAction
+			if a, ok := evalRuleAction(rule, f); ok && actionSeverity(a) > actionSeverity(maxAction) {
+				maxAction = a
 			}
-			if actionSeverity(nextAction) > actionSeverity(maxAction) {
-				maxAction = nextAction
-			}
-			continue
-		}
-
-		// Check sensitivity threshold
-		if !meetsThreshold(f.Severity, rule.Sensitivity) {
-			continue
-		}
-
-		if actionSeverity(rule.Action) > actionSeverity(maxAction) {
-			maxAction = rule.Action
 		}
 	}
 
 	return maxAction
+}
+
+// evalRuleAction returns the action a single rule assigns to a finding, and
+// whether the rule applies at all (category + sensitivity/confidence gates).
+func evalRuleAction(rule Rule, f scanner.Finding) (Action, bool) {
+	// Category filter: an empty Types list matches every category.
+	if len(rule.Types) > 0 && !containsType(rule.Types, f.Category) {
+		return ActionPass, false
+	}
+
+	if strings.EqualFold(strings.TrimSpace(rule.Mode), "confidence_based") {
+		confScore := 0
+		if f.ConfidenceScore != nil {
+			confScore = f.ConfidenceScore.Total
+		} else if f.Confidence > 0 {
+			confScore = int(f.Confidence * 100)
+		}
+		if rule.MinimumConfidence > 0 && confScore < rule.MinimumConfidence {
+			return ActionPass, false
+		}
+		if rule.OverrideAction != nil {
+			return *rule.OverrideAction, true
+		}
+		return actionFromConfidenceFinding(f), true
+	}
+
+	if !meetsThreshold(f.Severity, rule.Sensitivity) {
+		return ActionPass, false
+	}
+	return rule.Action, true
 }
 
 func actionFromConfidenceFinding(f scanner.Finding) Action {

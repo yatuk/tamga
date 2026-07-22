@@ -69,6 +69,45 @@ rules:
 	}
 }
 
+func TestEvaluateSplitPiiRules_BlockCriticalRedactContact(t *testing.T) {
+	// Mirrors the shipped default policy: a "pii_detection" rule REDACTs
+	// contact PII while a bare "pii" rule BLOCKs critical identifiers by
+	// category. Both keys are evaluated per finding; the stronger action wins.
+	raw := []byte(`
+version: "1.0"
+rules:
+  pii_detection:
+    action: REDACT
+    sensitivity: medium
+    types: [email, iban, phone_tr]
+  pii:
+    action: BLOCK
+    sensitivity: medium
+    types: [tc_kimlik, credit_card]
+`)
+	p, err := LoadFromBytes(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Critical identifier alone: hard block.
+	if got := p.Evaluate([]scanner.Finding{{Type: "pii", Category: "tc_kimlik", Severity: "high"}}); got != ActionBlock {
+		t.Fatalf("tc_kimlik: got %v want BLOCK", got)
+	}
+	// Contact PII alone: redact, not block.
+	if got := p.Evaluate([]scanner.Finding{{Type: "pii", Category: "email", Severity: "high"}}); got != ActionRedact {
+		t.Fatalf("email: got %v want REDACT", got)
+	}
+	// Mixed: the critical block dominates.
+	mixed := []scanner.Finding{
+		{Type: "pii", Category: "email", Severity: "high"},
+		{Type: "pii", Category: "credit_card", Severity: "high"},
+	}
+	if got := p.Evaluate(mixed); got != ActionBlock {
+		t.Fatalf("mixed: got %v want BLOCK", got)
+	}
+}
+
 func TestEvaluateRulePriority_RedactOverWarn(t *testing.T) {
 	raw := []byte(`
 version: "1.0"
