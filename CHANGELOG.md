@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.9.0 (unreleased)
+
+### Core Proxy
+- Vault — reversible PII tokenization. When `vault.enabled` is set in policy,
+  PII that would be REDACTed is replaced with numbered placeholders
+  (`[TAMGA_TC_KIMLIK_1]`) on the way to the provider and restored to the
+  original values in the response, so users keep full data instead of masked
+  output. Originals are held in-request and, when a key is configured, stored
+  AES-256-GCM-encrypted in Redis (`tamga:vault:*`, short TTL) via
+  `TAMGA_VAULT_KEY` / `TAMGA_VAULT_TTL_SECONDS`. Streaming responses buffer to
+  restore (boundary-safe streaming rewrite is a follow-up).
+
 ## v0.8.0-rc1 — 2026-07-21 — Operator-State Scanner (jugeni-contracts v1)
 
 ### Core Proxy

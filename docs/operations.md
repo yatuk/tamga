@@ -72,6 +72,35 @@ rate_limit:
 
 Full policy reference: [proxy/tamga-policy.yaml](../proxy/tamga-policy.yaml).
 
+### Vault — reversible PII tokenization
+
+By default REDACT masks PII irreversibly, so the user loses the original data.
+With the vault enabled, PII that would be REDACTed is instead replaced with
+numbered placeholders on the way to the provider and restored in the response:
+
+```
+prompt    "Ahmet için özet, TC 12345678950"
+forwarded "[TAMGA_PERSON_1] için özet, TC [TAMGA_TC_KIMLIK_1]"
+response  "[TAMGA_PERSON_1] için 3 aylık özet ..."
+client    "Ahmet için 3 aylık özet ..."
+```
+
+Enable it in policy and move the identifiers you want tokenized (rather than
+blocked) into the REDACT rule:
+
+```yaml
+vault:
+  enabled: true
+```
+
+Originals are held for the request lifetime and, when `TAMGA_VAULT_KEY` (a
+base64 32-byte AES key) is set, also stored AES-256-GCM-encrypted in Redis
+under `tamga:vault:<request-id>` with a short TTL (`TAMGA_VAULT_TTL_SECONDS`,
+default 300). Without a key an ephemeral single-instance key is minted at
+startup. The `X-Tamga-Vault: restored` response header marks a restored
+response. Streaming responses are buffered to restore; a boundary-safe
+streaming rewrite is a follow-up.
+
 ## Cost control and budget enforcement
 
 Track token spend per API key, team, and provider in real time. Set hard

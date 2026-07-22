@@ -14,6 +14,11 @@ import (
 // maxOutputScanBytes caps non-stream response bodies that will be scanned.
 const maxOutputScanBytes = 256 * 1024
 
+// vaultMaxRestoreBytes caps how much of a response the vault will buffer to
+// restore placeholders. Chat responses are far smaller; a response larger than
+// this is forwarded intact without restore (see wrapResponseForOutputScan).
+const vaultMaxRestoreBytes = 8 * 1024 * 1024
+
 // outputScanResult is what scanResponseBody hands back to ModifyResponse.
 type outputScanResult struct {
 	findings []scanner.Finding
@@ -69,14 +74,38 @@ func scanResponseBody(ctx context.Context, reg *scanner.Registry, outputReg *sca
 // (text/event-stream or application/x-ndjson) we fall through and let the
 // streaming transport flush as normal; a future revision can implement a
 // tee-reader with sliding-window scanning.
-func wrapResponseForOutputScan(resp *http.Response, pol *policy.Policy) ([]byte, bool, error) {
+// When forceBuffer is true (vault restore needs the full body), buffering
+// happens regardless of OutputRules/stream content type, and the body is never
+// truncated — if it exceeds vaultMaxRestoreBytes the original stream is
+// reconstructed (buffered prefix + remaining) and (false) is returned so the
+// caller forwards it intact without restore.
+func wrapResponseForOutputScan(resp *http.Response, pol *policy.Policy, forceBuffer bool) ([]byte, bool, error) {
 	if resp == nil || resp.Body == nil {
 		return nil, false, nil
 	}
+	ct := resp.Header.Get("Content-Type")
+
+	if forceBuffer {
+		body, err := io.ReadAll(io.LimitReader(resp.Body, int64(vaultMaxRestoreBytes)+1))
+		if err != nil {
+			return nil, false, err
+		}
+		if len(body) > vaultMaxRestoreBytes {
+			// Too large to restore safely — preserve the full body and skip.
+			resp.Body = struct {
+				io.Reader
+				io.Closer
+			}{io.MultiReader(bytes.NewReader(body), resp.Body), resp.Body}
+			return nil, false, nil
+		}
+		_ = resp.Body.Close()
+		resp.Body = io.NopCloser(bytes.NewReader(body))
+		return body, true, nil
+	}
+
 	if pol == nil || pol.OutputRules == nil || !pol.OutputRules.Enabled {
 		return nil, false, nil
 	}
-	ct := resp.Header.Get("Content-Type")
 	if isStreamContentType(ct) {
 		// Stream scanning is a best-effort "hint" for now; the body is still
 		// forwarded unchanged via FlushInterval.

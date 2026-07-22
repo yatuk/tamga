@@ -19,10 +19,10 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	pb "github.com/yatuk/tamga/proto/scanner/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	pb "github.com/yatuk/tamga/proto/scanner/v1"
 
 	"github.com/yatuk/tamga/internal/api"
 	"github.com/yatuk/tamga/internal/config"
@@ -31,7 +31,34 @@ import (
 	"github.com/yatuk/tamga/internal/ratelimit"
 	"github.com/yatuk/tamga/internal/scanner"
 	"github.com/yatuk/tamga/internal/store"
+	"github.com/yatuk/tamga/internal/vault"
 )
+
+// inMemVaultRedis is a map-backed vault.RedisClient for handler round-trip tests.
+type inMemVaultRedis struct {
+	mu   sync.Mutex
+	data map[string][]byte
+}
+
+func newInMemVaultRedis() *inMemVaultRedis { return &inMemVaultRedis{data: map[string][]byte{}} }
+func (m *inMemVaultRedis) Get(_ context.Context, k string) ([]byte, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	v, ok := m.data[k]
+	return v, ok, nil
+}
+func (m *inMemVaultRedis) Set(_ context.Context, k string, v []byte, _ time.Duration) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.data[k] = v
+	return nil
+}
+func (m *inMemVaultRedis) Del(_ context.Context, k string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.data, k)
+	return nil
+}
 
 func TestMain(m *testing.M) {
 	log.Logger = zerolog.Nop()
@@ -199,6 +226,74 @@ providers:
 	}
 	if strings.Contains(string(lastBody), "user@example.com") {
 		t.Fatal("raw email should not reach upstream")
+	}
+}
+
+func TestHandleProxy_VaultRoundTrip(t *testing.T) {
+	// Echo upstream: mirror the (tokenized) prompt content back inside an
+	// OpenAI-shaped response so the vault restore has placeholders to swap.
+	var lastBody []byte
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		lastBody, _ = io.ReadAll(r.Body)
+		// Echo the whole forwarded body as the assistant message content.
+		resp := `{"choices":[{"message":{"role":"assistant","content":` +
+			strconv.Quote(string(lastBody)) + `}}]}`
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(resp))
+	}))
+	defer upstream.Close()
+	u, _ := url.Parse(upstream.URL)
+
+	pol := mustPolicy(t, `
+version: "1.0"
+rules:
+  pii_detection:
+    action: REDACT
+    sensitivity: low
+    types: [email]
+vault:
+  enabled: true
+providers:
+  allowed: [openai]
+`)
+	keyB64, _ := vault.GenerateKey()
+	key, _ := vault.KeyFromBase64(keyB64)
+	cipher, _ := vault.NewCipher(key)
+	h := NewHandler(HandlerConfig{
+		Registry:     testRegistry(),
+		GetPolicy:    func() *policy.Policy { return pol },
+		UpstreamURLs: map[string]*url.URL{"openai": u},
+		Config:       &config.Config{},
+		VaultStore:   vault.NewStore(newInMemVaultRedis(), cipher, time.Minute),
+	})
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	body := []byte(`{"messages":[{"role":"user","content":"Mail me at user@example.com thanks"}]}`)
+	resp, err := http.Post(srv.URL+"/v1/chat/completions", "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	// Upstream must have seen placeholders, never the raw email.
+	if strings.Contains(string(lastBody), "user@example.com") {
+		t.Fatalf("raw email reached upstream: %s", lastBody)
+	}
+	if !strings.Contains(string(lastBody), "[TAMGA_EMAIL_1]") {
+		t.Fatalf("upstream should receive a vault placeholder, got %s", lastBody)
+	}
+	// Client must get the original email back (restored).
+	out, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(out), "user@example.com") {
+		t.Fatalf("response should be restored to the original email, got %s", out)
+	}
+	if strings.Contains(string(out), "[TAMGA_EMAIL_1]") {
+		t.Fatalf("placeholder leaked to client (not restored): %s", out)
+	}
+	if got := resp.Header.Get("X-Tamga-Vault"); got != "restored" {
+		t.Errorf("X-Tamga-Vault: got %q want restored", got)
 	}
 }
 

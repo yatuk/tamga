@@ -43,6 +43,14 @@ type Config struct {
 	// MockUpstream disables outbound network calls and returns a fixed fake response.
 	MockUpstream bool
 
+	// VaultKey is the standard-base64 32-byte AES key for reversible PII
+	// tokenization (TAMGA_VAULT_KEY). Empty mints an ephemeral single-instance
+	// key at startup (mappings do not survive restart / cross-instance).
+	VaultKey string
+	// VaultTTLSeconds is how long an encrypted vault mapping lives in the store
+	// (TAMGA_VAULT_TTL_SECONDS). Default 300.
+	VaultTTLSeconds int
+
 	// UpstreamMaxRetries controls retry attempts for retryable upstream errors.
 	UpstreamMaxRetries int
 	// BreakerFailureThreshold is the number of consecutive provider failures before opening circuit.
@@ -174,6 +182,8 @@ func Load() (*Config, error) {
 		CORSMaxAge:               envOrDefaultInt("TAMGA_CORS_MAX_AGE", 86400),
 		MaxBodyBytes:             envOrDefaultInt("TAMGA_MAX_BODY_BYTES", 1024*1024),
 		MockUpstream:             envOrDefaultBool("TAMGA_MOCK_UPSTREAM", false),
+		VaultKey:                 envOrDefault("TAMGA_VAULT_KEY", ""),
+		VaultTTLSeconds:          envOrDefaultInt("TAMGA_VAULT_TTL_SECONDS", 300),
 		UpstreamMaxRetries:       envOrDefaultInt("TAMGA_UPSTREAM_MAX_RETRIES", 1),
 		BreakerFailureThreshold:  envOrDefaultInt("TAMGA_BREAKER_FAILURE_THRESHOLD", 3),
 		BreakerCooldownMs:        envOrDefaultInt("TAMGA_BREAKER_COOLDOWN_MS", 10000),

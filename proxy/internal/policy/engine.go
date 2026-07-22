@@ -359,6 +359,17 @@ type Policy struct {
 	BodyLimits     *BodyLimitsConfig    `yaml:"body_limits" json:"body_limits"`
 	Exceptions     []Exception          `yaml:"exceptions" json:"exceptions"`
 	OperatorState  *OperatorStateConfig `yaml:"operator_state" json:"operator_state"`
+	Vault          *VaultConfig         `yaml:"vault" json:"vault"`
+}
+
+// VaultConfig enables reversible PII tokenization. When enabled, PII that would
+// be REDACTed is instead replaced with numbered placeholders on the way to the
+// provider and restored to the original values in the response (see
+// internal/vault). The at-rest encryption key comes from TAMGA_VAULT_KEY and
+// the store TTL from TAMGA_VAULT_TTL_SECONDS (proxy config), so this toggle is
+// just the hot-reloadable on/off switch.
+type VaultConfig struct {
+	Enabled bool `yaml:"enabled" json:"enabled"`
 }
 
 // ResolveMaxBodyBytes returns the maximum incoming request body size in bytes for provider.

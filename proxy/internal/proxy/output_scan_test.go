@@ -293,7 +293,7 @@ providers:
   allowed: [openai]
 `)
 
-	body, buffered, err := wrapResponseForOutputScan(resp, pol)
+	body, buffered, err := wrapResponseForOutputScan(resp, pol, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -314,7 +314,7 @@ providers:
   allowed: [openai]
 `)
 
-	body, buffered, err := wrapResponseForOutputScan(nil, pol)
+	body, buffered, err := wrapResponseForOutputScan(nil, pol, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -339,7 +339,7 @@ providers:
   allowed: [openai]
 `)
 
-	body, buffered, err := wrapResponseForOutputScan(resp, pol)
+	body, buffered, err := wrapResponseForOutputScan(resp, pol, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -364,7 +364,7 @@ providers:
   allowed: [openai]
 `)
 
-	body, buffered, err := wrapResponseForOutputScan(resp, pol)
+	body, buffered, err := wrapResponseForOutputScan(resp, pol, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -391,7 +391,7 @@ providers:
   allowed: [openai]
 `)
 
-	body, buffered, err := wrapResponseForOutputScan(resp, pol)
+	body, buffered, err := wrapResponseForOutputScan(resp, pol, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -427,7 +427,7 @@ providers:
 `)
 	// No output: block → OutputRules is nil
 
-	body, buffered, err := wrapResponseForOutputScan(resp, pol)
+	body, buffered, err := wrapResponseForOutputScan(resp, pol, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -452,7 +452,7 @@ providers:
   allowed: [openai]
 `)
 
-	body, buffered, err := wrapResponseForOutputScan(resp, pol)
+	body, buffered, err := wrapResponseForOutputScan(resp, pol, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -470,7 +470,7 @@ func TestWrapResponseForOutputScan_NilPolicy(t *testing.T) {
 		Body:   io.NopCloser(bytes.NewReader([]byte(`{"a":1}`))),
 	}
 
-	body, buffered, err := wrapResponseForOutputScan(resp, nil)
+	body, buffered, err := wrapResponseForOutputScan(resp, nil, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -498,7 +498,7 @@ providers:
   allowed: [openai]
 `)
 
-	body, buffered, err := wrapResponseForOutputScan(resp, pol)
+	body, buffered, err := wrapResponseForOutputScan(resp, pol, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -526,7 +526,7 @@ providers:
   allowed: [openai]
 `)
 
-	body, buffered, err := wrapResponseForOutputScan(resp, pol)
+	body, buffered, err := wrapResponseForOutputScan(resp, pol, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
