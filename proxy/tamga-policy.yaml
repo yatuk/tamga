@@ -2,10 +2,23 @@ version: "1.0"
 name: "default-policy"
 
 rules:
+  # Contact-style PII is redacted before the request is forwarded.
   pii_detection:
     action: REDACT
     sensitivity: medium
-    types: [credit_card, ssn, tc_kimlik, iban, email, phone_tr, ip_public, ip_private]
+    types: [iban, email, phone_tr, ip_public, ip_private]
+    notify:
+      - channel: slack
+        webhook: ${SLACK_WEBHOOK_URL}
+
+  # Critical identifiers (Turkish national ID, card numbers, SSN) are hard
+  # blocked — these must never reach an external model. Both this bare "pii"
+  # key and "pii_detection" above are evaluated per finding category; the
+  # stronger action wins.
+  pii:
+    action: BLOCK
+    sensitivity: medium
+    types: [tc_kimlik, credit_card, ssn]
     notify:
       - channel: slack
         webhook: ${SLACK_WEBHOOK_URL}

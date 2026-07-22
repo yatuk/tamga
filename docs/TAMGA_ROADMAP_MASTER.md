@@ -19,10 +19,20 @@ Public roadmap for the Tamga open-source LLM security proxy.
 - **Compliance**: KVKK, BDDK, GDPR, PCI-DSS control mappings
 - **Security**: mTLS, IP allowlists, hash-chain audit logs, Vault/KMS
 
-## Planned
+## Coming next (v0.8.0, Q3 2026)
 
-- Semantic caching with embedding-based similarity
-- MCP server security (tool parameter validation)
+- Operator-state scanner — [jugeni](https://github.com/jugeni/jugeni-contracts)
+  integration for pre-call decision governance
+- Encrypted vault for PII — redact-then-restore round-trip
+- Custom entity UI — define your own PII patterns via the dashboard
+- Trend graphs and incident analytics
+
+## Roadmap (v0.9+)
+
+- Semantic caching with embedding-based similarity (30-40% cost reduction target)
+- Multi-language expansion — Arabic and Persian PII patterns
+- Canary tokens for system prompt leak detection
+- MCP gateway integration (tool parameter validation)
 - Indirect injection defense (cross-request context)
 - Advanced multi-region active-active replication (Enterprise)
 - SSO / SAML / SCIM enterprise integration (Enterprise)
