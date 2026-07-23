@@ -28,6 +28,15 @@ rules:
     sensitivity: low
     types: [aws_access_key, aws_secret_key, github_token, openai_key, anthropic_key, private_key, stripe_key, connection_string, connection_string_password, jwt_token, dotenv_secret, slack_webhook, generic_api_key]
 
+# Canary tokens: inject a unique invisible token into the outgoing system prompt;
+# if it appears in the response, the system prompt has leaked (prompt-injection
+# exfiltration) — raise a system_prompt_leak finding, and block the response when
+# block_on_leak is set. Providers defaults to openai + anthropic.
+canary:
+  enabled: false
+  block_on_leak: true
+  providers: []
+
   injection:
     action: BLOCK
     sensitivity: medium

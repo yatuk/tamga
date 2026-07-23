@@ -72,6 +72,25 @@ rate_limit:
 
 Full policy reference: [proxy/tamga-policy.yaml](../proxy/tamga-policy.yaml).
 
+### Canary tokens (system-prompt leak detection)
+
+Prompt-injection attacks often try to exfiltrate the system prompt. With canary
+tokens enabled, the proxy injects a unique invisible token into the outgoing
+system prompt; if that token appears in the model's response, the system prompt
+has leaked and Tamga raises a `system_prompt_leak` finding (and blocks the
+response with `block_on_leak`).
+
+```yaml
+canary:
+  enabled: true
+  block_on_leak: true
+  providers: []   # empty = openai + anthropic
+```
+
+Injection happens before the request is signed, so Bedrock/SigV4 is unaffected.
+Detection runs on non-streaming responses (`X-Tamga-System-Prompt-Leak: true`
+header on a leak); streaming leak detection is a follow-up.
+
 ## Cost control and budget enforcement
 
 Track token spend per API key, team, and provider in real time. Set hard

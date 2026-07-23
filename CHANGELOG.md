@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.9.0 (unreleased)
+
+### Core Proxy
+- Canary tokens — system-prompt leak detection. When `canary.enabled` is set, a
+  unique invisible token is injected into the outgoing system prompt (OpenAI
+  `messages[]` system role; Anthropic top-level `system`, string or block array).
+  If the token appears in the response, the system prompt has leaked: a
+  `system_prompt_leak` finding is raised and the response is blocked (403) when
+  `block_on_leak` is set. Injection happens before signing, so Bedrock/SigV4 is
+  unaffected. Non-streaming responses; streaming leak scan is a follow-up.
+
 ## v0.8.0-rc1 — 2026-07-21 — Operator-State Scanner (jugeni-contracts v1)
 
 ### Core Proxy

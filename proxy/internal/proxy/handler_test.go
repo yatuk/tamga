@@ -19,10 +19,10 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	pb "github.com/yatuk/tamga/proto/scanner/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	pb "github.com/yatuk/tamga/proto/scanner/v1"
 
 	"github.com/yatuk/tamga/internal/api"
 	"github.com/yatuk/tamga/internal/config"
@@ -199,6 +199,97 @@ providers:
 	}
 	if strings.Contains(string(lastBody), "user@example.com") {
 		t.Fatal("raw email should not reach upstream")
+	}
+}
+
+func TestHandleProxy_CanaryLeakDetected(t *testing.T) {
+	// Leaky upstream: echoes the request body (which contains the injected
+	// canary) back inside the assistant message — simulating a system-prompt leak.
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reqBody, _ := io.ReadAll(r.Body)
+		resp := `{"choices":[{"message":{"role":"assistant","content":` + strconv.Quote(string(reqBody)) + `}}]}`
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(resp))
+	}))
+	defer upstream.Close()
+	u, _ := url.Parse(upstream.URL)
+
+	pol := mustPolicy(t, `
+version: "1.0"
+canary:
+  enabled: true
+  block_on_leak: true
+providers:
+  allowed: [openai]
+`)
+	h := NewHandler(HandlerConfig{
+		Registry:     testRegistry(),
+		GetPolicy:    func() *policy.Policy { return pol },
+		UpstreamURLs: map[string]*url.URL{"openai": u},
+		Config:       &config.Config{},
+	})
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	body := []byte(`{"model":"gpt-4o","messages":[{"role":"system","content":"secret instructions"},{"role":"user","content":"hi"}]}`)
+	resp, err := http.Post(srv.URL+"/v1/chat/completions", "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.Header.Get("X-Tamga-System-Prompt-Leak") != "true" {
+		t.Errorf("expected leak header, got %q", resp.Header.Get("X-Tamga-System-Prompt-Leak"))
+	}
+	if resp.StatusCode != http.StatusForbidden {
+		t.Errorf("block_on_leak: expected 403, got %d", resp.StatusCode)
+	}
+	out, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(out), "system_prompt_leak") {
+		t.Errorf("expected leak block body, got %s", out)
+	}
+}
+
+func TestHandleProxy_CanaryNoLeak(t *testing.T) {
+	// Clean upstream: fixed reply, no echo — canary token never appears.
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"Hello there."}}]}`))
+	}))
+	defer upstream.Close()
+	u, _ := url.Parse(upstream.URL)
+
+	pol := mustPolicy(t, `
+version: "1.0"
+canary:
+  enabled: true
+  block_on_leak: true
+providers:
+  allowed: [openai]
+`)
+	h := NewHandler(HandlerConfig{
+		Registry:     testRegistry(),
+		GetPolicy:    func() *policy.Policy { return pol },
+		UpstreamURLs: map[string]*url.URL{"openai": u},
+		Config:       &config.Config{},
+	})
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	body := []byte(`{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}]}`)
+	resp, err := http.Post(srv.URL+"/v1/chat/completions", "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("clean response should pass, got %d", resp.StatusCode)
+	}
+	if resp.Header.Get("X-Tamga-System-Prompt-Leak") == "true" {
+		t.Error("no leak expected on a clean response")
 	}
 }
 

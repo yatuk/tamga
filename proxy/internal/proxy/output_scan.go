@@ -14,6 +14,10 @@ import (
 // maxOutputScanBytes caps non-stream response bodies that will be scanned.
 const maxOutputScanBytes = 256 * 1024
 
+// canaryMaxScanBytes caps how much of a response the canary detector will
+// buffer. Responses larger than this are forwarded intact without a leak scan.
+const canaryMaxScanBytes = 4 * 1024 * 1024
+
 // outputScanResult is what scanResponseBody hands back to ModifyResponse.
 type outputScanResult struct {
 	findings []scanner.Finding

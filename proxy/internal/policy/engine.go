@@ -359,6 +359,34 @@ type Policy struct {
 	BodyLimits     *BodyLimitsConfig    `yaml:"body_limits" json:"body_limits"`
 	Exceptions     []Exception          `yaml:"exceptions" json:"exceptions"`
 	OperatorState  *OperatorStateConfig `yaml:"operator_state" json:"operator_state"`
+	Canary         *CanaryConfig        `yaml:"canary" json:"canary"`
+}
+
+// CanaryConfig enables system-prompt-leak detection via canary tokens. When
+// enabled, a unique token is injected into the outgoing system prompt; if it
+// appears in the response, a system_prompt_leak finding is raised (and the
+// response blocked when BlockOnLeak is set). Providers limits the feature to
+// specific providers (empty = openai + anthropic).
+type CanaryConfig struct {
+	Enabled     bool     `yaml:"enabled" json:"enabled"`
+	BlockOnLeak bool     `yaml:"block_on_leak" json:"block_on_leak"`
+	Providers   []string `yaml:"providers" json:"providers"`
+}
+
+// CanaryAppliesTo reports whether the canary should run for the given provider.
+func (c *CanaryConfig) CanaryAppliesTo(provider string) bool {
+	if c == nil || !c.Enabled {
+		return false
+	}
+	if len(c.Providers) == 0 {
+		return provider == "openai" || provider == "anthropic"
+	}
+	for _, p := range c.Providers {
+		if strings.EqualFold(strings.TrimSpace(p), provider) {
+			return true
+		}
+	}
+	return false
 }
 
 // ResolveMaxBodyBytes returns the maximum incoming request body size in bytes for provider.
