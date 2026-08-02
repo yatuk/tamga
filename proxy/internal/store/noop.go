@@ -45,6 +45,10 @@ func (n *NoopStore) GetDailyTokenUsage(_ context.Context, _ string, _, _ time.Ti
 	return nil, nil
 }
 
+func (n *NoopStore) GetDailyTimeseries(_ context.Context, _ string, _, _ time.Time) ([]DailyStatPoint, error) {
+	return nil, nil
+}
+
 func (n *NoopStore) Ping(_ context.Context) error {
 	return nil
 }

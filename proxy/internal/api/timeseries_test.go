@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -41,6 +42,61 @@ func TestTimeseries_EmptyRecent(t *testing.T) {
 	// Should have points for the 7-day window (1 per day)
 	if len(points) == 0 {
 		t.Error("expected at least some points in timeseries")
+	}
+}
+
+// dailyTSStore returns fixed daily_stats rows for the DB timeseries path.
+type dailyTSStore struct {
+	*store.NoopStore
+	rows []store.DailyStatPoint
+}
+
+func (d *dailyTSStore) GetDailyTimeseries(_ context.Context, _ string, _, _ time.Time) ([]store.DailyStatPoint, error) {
+	return d.rows, nil
+}
+
+func TestTimeseries_DBBackedDayBucket(t *testing.T) {
+	today := time.Now().UTC().Truncate(24 * time.Hour)
+	st := &dailyTSStore{
+		NoopStore: &store.NoopStore{},
+		rows: []store.DailyStatPoint{
+			{Date: today.Add(-48 * time.Hour), TotalRequests: 100, BlockedRequests: 20, RedactedRequests: 10, WarnedRequests: 5},
+			{Date: today.Add(-24 * time.Hour), TotalRequests: 200, BlockedRequests: 40, RedactedRequests: 15, WarnedRequests: 8},
+		},
+	}
+	cfg := Config{
+		AdminKey:     "test-key",
+		Recent:       events.NewRecentBuffer(10), // must be ignored in favour of DB
+		DefaultOrgID: "org-1",
+		DatabaseURL:  "postgres://fake", // gates the DB branch
+		Store:        st,
+	}
+	ts := httptest.NewServer(testMux(cfg))
+	defer ts.Close()
+
+	req, _ := http.NewRequest("GET", ts.URL+"/api/v1/timeseries?range=30d&bucket=day", nil)
+	adminHeaders(cfg.AdminKey)(req)
+	resp, _ := http.DefaultClient.Do(req)
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	var body struct {
+		Points []map[string]float64 `json:"points"`
+	}
+	_ = json.NewDecoder(resp.Body).Decode(&body)
+
+	var sawBlocked20, sawBlocked40 bool
+	for _, p := range body.Points {
+		if p["total"] == 100 && p["blocked"] == 20 {
+			sawBlocked20 = true
+		}
+		if p["total"] == 200 && p["blocked"] == 40 {
+			sawBlocked40 = true
+		}
+	}
+	if !sawBlocked20 || !sawBlocked40 {
+		t.Fatalf("DB daily_stats rows not reflected in timeseries points: %+v", body.Points)
 	}
 }
 
