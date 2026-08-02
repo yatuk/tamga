@@ -72,6 +72,17 @@ rate_limit:
 
 Full policy reference: [proxy/tamga-policy.yaml](../proxy/tamga-policy.yaml).
 
+### Custom entities
+
+Define your own PII patterns two ways:
+
+- **Runtime patterns** (regex/literal, no action) via `POST /api/v1/patterns`
+  or the dashboard Patterns page — activate immediately.
+- **Policy entities** (with a BLOCK/REDACT/WARN action, severity, confidence)
+  via `POST /api/v1/policies/custom-entities` or the dashboard "Policy Entities"
+  section — persisted in the policy. Test either against the active policy with
+  `POST /api/v1/policies/simulate` (empty `yaml` = active policy).
+
 ## Cost control and budget enforcement
 
 Track token spend per API key, team, and provider in real time. Set hard

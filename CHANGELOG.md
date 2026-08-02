@@ -6,6 +6,10 @@
 - Trend graphs — a new Trends page (ANALYTICS nav) charts requests scanned vs
   findings caught over 24h/7d/30d, with a catch-rate tile and a findings-by-type
   breakdown.
+- Custom Entity UI — a "Policy Entities" section on the Patterns page lets you
+  define named PII entities with an enforcement action (BLOCK/REDACT/WARN),
+  severity, and confidence, and test them against the active policy via the
+  simulate endpoint. Complements the existing runtime regex/literal patterns.
 
 ### Core Proxy
 - DB-backed timeseries — `GET /api/v1/timeseries` now serves the day bucket from
@@ -13,6 +17,9 @@
   events), so long-window "this month" trends are accurate. Short windows and
   no-DB deployments keep the in-memory path. New store method
   `GetDailyTimeseries`.
+- Runtime patterns now activate immediately: the `/patterns` create/update/
+  delete handlers call `CustomScanner.Refresh()`, so a pattern created via the
+  API takes effect without waiting for a policy reload.
 
 ## v0.8.0-rc1 — 2026-07-21 — Operator-State Scanner (jugeni-contracts v1)
 

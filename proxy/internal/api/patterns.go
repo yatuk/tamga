@@ -34,6 +34,12 @@ func (cfg Config) handlePatternCreate(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
+	// Activate the new pattern immediately: the custom scanner caches compiled
+	// specs and only recompiles on Refresh, so without this a created pattern
+	// would sit inactive until the next policy reload.
+	if cfg.CustomScanner != nil {
+		cfg.CustomScanner.Refresh()
+	}
 	if cfg.Audit != nil {
 		cfg.Audit.Append(incidents.AuditEntry{
 			Kind:   "pattern.create",
@@ -65,6 +71,9 @@ func (cfg Config) handlePatternUpdate(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
+	if cfg.CustomScanner != nil {
+		cfg.CustomScanner.Refresh()
+	}
 	if cfg.Audit != nil {
 		cfg.Audit.Append(incidents.AuditEntry{
 			Kind:   "pattern.update",
@@ -88,6 +97,9 @@ func (cfg Config) handlePatternDelete(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
+	}
+	if cfg.CustomScanner != nil {
+		cfg.CustomScanner.Refresh()
 	}
 	if cfg.Audit != nil {
 		cfg.Audit.Append(incidents.AuditEntry{Kind: "pattern.delete", Target: id})
