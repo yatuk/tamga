@@ -29,7 +29,7 @@
     <a href="https://tamgaproxy.com">Website</a>
   </p>
 
-  <img src="docs/incidents.png" alt="Tamga incident queue — a PII leak blocked in real time" width="850" />
+  <img src="docs/marketing.gif" alt="Tamga in action — prompts inspected inline, leaks blocked before model ingress" width="850" />
 
 </div>
 
@@ -57,6 +57,11 @@ time and enforcing your security policy before data leaves your network.
 **Latency.** Sub-millisecond static scanning via an Aho-Corasick DFA. Scan-stage
 p95 is **0.52 ms**; end-to-end proxy overhead p95 is **5.5 ms** at 100 RPS on
 consumer hardware. See [benchmarks](#benchmarks).
+
+<div align="center">
+  <img src="docs/incidents.png" alt="Tamga incident queue — a PII leak blocked in real time" width="850" />
+  <p><sub>The incident queue: every blocked prompt, with the rule that fired and the evidence behind it.</sub></p>
+</div>
 
 ---
 

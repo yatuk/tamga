@@ -13,7 +13,7 @@ lives in the [main README](../README.md#how-tamga-compares).
 | Hash-chain audit logs | Yes | No | Partial | Some |
 | Open source | Yes, AGPL-3.0 | No | Yes, MIT | Mostly no |
 | Custom regex / entity | Yes | No | Partial | Yes |
-| Adversarial test suite published | Yes — 62 vectors, 33 detected / 29 bypassed, published | No | No | No |
+| Adversarial test suite published | Yes — 69 vectors, 39 detected / 30 bypassed, published | No | No | No |
 | Stress test CI gate | Yes, PR-blocking | No | No | No |
 
 "Cloud Services" covers hosted LLM security gateways such as Lakera Guard

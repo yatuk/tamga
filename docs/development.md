@@ -50,10 +50,11 @@ resilience against adversarial bypass attempts and load thresholds. Every
 PR triggers a regression gate comparing current results to a known
 baseline.
 
-- **Adversarial tests** — 4 categories (PII, injection, secret, policy),
-  62 published bypass vectors (33 detected, 29 bypassed) covering Unicode
-  evasion, homoglyphs, base64 encoding, zero-width characters, and indirect
-  references. Numbers tracked in [tests/stress/baseline.json](../tests/stress/baseline.json).
+- **Adversarial tests** — 5 categories (PII, injection, secret, policy,
+  operator state), 69 published bypass vectors (39 detected, 30 bypassed)
+  covering Unicode evasion, homoglyphs, base64 encoding, zero-width
+  characters, and indirect references. Numbers tracked in
+  [tests/stress/baseline.json](../tests/stress/baseline.json).
 - **Load tests** — k6 benchmarks at 100/500/1000 RPS with P95 latency and
   error-rate thresholds.
 - **Regression gate** — CI blocks PRs that degrade detection or performance
