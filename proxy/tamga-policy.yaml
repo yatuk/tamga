@@ -37,6 +37,15 @@ rules:
 vault:
   enabled: false
 
+# Canary tokens: inject a unique invisible token into the outgoing system prompt;
+# if it appears in the response, the system prompt has leaked (prompt-injection
+# exfiltration) — raise a system_prompt_leak finding, and block the response when
+# block_on_leak is set. Providers defaults to openai + anthropic.
+canary:
+  enabled: false
+  block_on_leak: true
+  providers: []
+
   injection:
     action: BLOCK
     sensitivity: medium

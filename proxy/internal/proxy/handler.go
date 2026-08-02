@@ -592,6 +592,18 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 		// no-op
 	}
 
+	// Canary: inject a unique token into the outgoing system prompt so a later
+	// appearance in the response reveals a system-prompt leak. Must happen
+	// before forwarding/signing since it changes the body.
+	var canaryToken string
+	if pol != nil && pol.Canary.CanaryAppliesTo(provider) {
+		token := generateCanaryToken()
+		if newBody, ok := injectCanary(body, provider, token); ok {
+			body = newBody
+			canaryToken = token
+		}
+	}
+
 	// Demo-safe offline mode: never call real providers.
 	if cfg.Config != nil && cfg.Config.MockUpstream {
 		setRiskHeaders(w.Header(), inputRisk, outputRisk)
@@ -698,6 +710,46 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 			respBody, respBuffered, errWrap := wrapResponseForOutputScan(resp, pol, vaultActive)
 			if errWrap != nil {
 				return errWrap
+			}
+
+			// Canary: force-buffer (if needed) and scan the response for the
+			// injected token. Its presence means the system prompt leaked.
+			if canaryToken != "" {
+				if !respBuffered {
+					raw, rerr := io.ReadAll(io.LimitReader(resp.Body, int64(canaryMaxScanBytes)+1))
+					if rerr == nil {
+						if len(raw) > canaryMaxScanBytes {
+							// Too large to scan safely — forward intact, skip.
+							resp.Body = io.NopCloser(io.MultiReader(bytes.NewReader(raw), resp.Body))
+						} else {
+							_ = resp.Body.Close()
+							resp.Body = io.NopCloser(bytes.NewReader(raw))
+							respBody = raw
+							respBuffered = true
+						}
+					}
+				}
+				if respBuffered && detectCanary(string(respBody), canaryToken) {
+					leak := scanner.Finding{
+						Type:           "system_prompt_leak",
+						Category:       "system_prompt_leak",
+						Severity:       "critical",
+						Confidence:     1.0,
+						Match:          canaryToken,
+						ScannerVersion: scanner.ScannerVersion,
+					}
+					resp.Header.Set("X-Tamga-System-Prompt-Leak", "true")
+					go publishOutputEvent(ctx, cfg, requestID, provider, []scanner.Finding{leak}, policy.ActionBlock, 0)
+					if pol.Canary != nil && pol.Canary.BlockOnLeak {
+						resp.StatusCode = http.StatusForbidden
+						blockBody := []byte(`{"error":{"message":"Response blocked: system prompt leak detected","type":"system_prompt_leak","request_id":"` + requestID + `"}}`)
+						resp.Body = io.NopCloser(bytes.NewReader(blockBody))
+						resp.ContentLength = int64(len(blockBody))
+						resp.Header.Set("Content-Type", "application/json")
+						resp.Header.Set("Content-Length", strconv.Itoa(len(blockBody)))
+						return nil
+					}
+				}
 			}
 			// Streaming budget estimate: when the response isn't buffered
 			// (SSE / NDJSON), real usage extraction isn't possible. Record
