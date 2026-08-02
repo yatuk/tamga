@@ -28,6 +28,15 @@ rules:
     sensitivity: low
     types: [aws_access_key, aws_secret_key, github_token, openai_key, anthropic_key, private_key, stripe_key, connection_string, connection_string_password, jwt_token, dotenv_secret, slack_webhook, generic_api_key]
 
+# Vault: reversible PII tokenization. When enabled, PII that would be REDACTed is
+# replaced with numbered placeholders on the way to the provider and restored to
+# the original values in the response — so the user keeps full data instead of
+# masked output. Requires TAMGA_VAULT_KEY (base64 32-byte) for at-rest encryption.
+# To vault (rather than block) TC Kimlik, move tc_kimlik/credit_card into the
+# REDACT rule above and enable this.
+vault:
+  enabled: false
+
   injection:
     action: BLOCK
     sensitivity: medium

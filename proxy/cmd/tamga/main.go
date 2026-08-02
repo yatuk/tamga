@@ -40,6 +40,7 @@ import (
 	"github.com/yatuk/tamga/internal/tier"
 	"github.com/yatuk/tamga/internal/upstream"
 	"github.com/yatuk/tamga/internal/users"
+	"github.com/yatuk/tamga/internal/vault"
 	"github.com/yatuk/tamga/internal/webhooks"
 )
 
@@ -170,6 +171,27 @@ func main() {
 
 	}
 	defer func() { _ = rdx.Close() }()
+
+	// Vault: reversible PII tokenization store (AES-256-GCM at rest, Redis or
+	// in-memory fallback). Enabled per-request by policy.Vault; here we just
+	// build the cipher + store so the feature is available when toggled on.
+	var vaultStore *vault.Store
+	{
+		keyB64 := cfg.VaultKey
+		if keyB64 == "" {
+			if gen, err := vault.GenerateKey(); err == nil {
+				keyB64 = gen
+				log.Warn().Msg("vault: TAMGA_VAULT_KEY unset — using an ephemeral key (mappings do not survive restart or cross-instance)")
+			}
+		}
+		if key, err := vault.KeyFromBase64(keyB64); err != nil {
+			log.Warn().Err(err).Msg("vault: invalid TAMGA_VAULT_KEY — vault disabled")
+		} else if cipher, err := vault.NewCipher(key); err != nil {
+			log.Warn().Err(err).Msg("vault: cipher init failed — vault disabled")
+		} else {
+			vaultStore = vault.NewStore(rdx, cipher, time.Duration(cfg.VaultTTLSeconds)*time.Second)
+		}
+	}
 
 	var requestStore store.Store
 	var pgStore *store.PostgresStore
@@ -658,6 +680,7 @@ func main() {
 		TierEnforcer:       tierEnforcer, // nil-safe — falls back to hardcoded map
 		ScannerPool:        scannerPool,
 		ScannerClient:      scannerClient,
+		VaultStore:         vaultStore,
 	})
 
 	// HTTP server

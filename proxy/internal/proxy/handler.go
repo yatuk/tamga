@@ -32,6 +32,7 @@ import (
 	"github.com/yatuk/tamga/internal/scanner/proximity"
 	"github.com/yatuk/tamga/internal/telemetry"
 	"github.com/yatuk/tamga/internal/upstream"
+	"github.com/yatuk/tamga/internal/vault"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -143,6 +144,11 @@ type HandlerConfig struct {
 	// false, the local Registry is used instead — this is the default and
 	// preserves backward compatibility.
 	ScannerClient *scanner.GRPCScannerClient
+	// VaultStore persists reversible PII tokenization mappings (encrypted at
+	// rest). Nil when the vault feature is not configured; the handler also
+	// keeps the mapping in a request-scoped variable, so same-process
+	// round-trips work even when this is nil.
+	VaultStore *vault.Store
 }
 
 // RegisterRoutes registers proxy routes on mux (health + provider prefixes).
@@ -506,6 +512,11 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 	}
 	redactedCount := 0
 	var redactedTypes []string
+	// vaultMapping holds placeholder->original for reversible tokenization when
+	// the vault feature is on. Kept in this request scope (the ModifyResponse
+	// closure reads it) so same-process round-trips restore without Redis.
+	var vaultMapping map[string]string
+	vaultActive := false
 
 	switch action {
 	case policy.ActionBlock:
@@ -536,11 +547,24 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 		redactFindings := filterRedactFindings(findings)
 		redactedCount = len(redactFindings)
 		redactedTypes = uniqueRedactCategoriesInOrder(redactFindings)
-		body = scanner.RedactContent(body, findings)
+		if pol != nil && pol.Vault != nil && pol.Vault.Enabled {
+			// Reversible tokenization: forward numbered placeholders, restore
+			// the originals in the response (ModifyResponse / mock path).
+			body, vaultMapping = vault.Tokenize(body, findings)
+			vaultActive = len(vaultMapping) > 0
+			if vaultActive && cfg.VaultStore != nil && cfg.VaultStore.Enabled() {
+				if err := cfg.VaultStore.Save(scanCtx, requestID, vaultMapping); err != nil {
+					logger.Warn().Err(err).Msg("vault: encrypted store save failed; using in-memory mapping")
+				}
+			}
+		} else {
+			body = scanner.RedactContent(body, findings)
+		}
 		logger.Info().
 			Int("findings", len(findings)).
 			Int64("total_ms", time.Since(start).Milliseconds()).
 			Str("action", "REDACT").
+			Bool("vault", vaultActive).
 			Str("model", model).
 			Strs("types", redactedTypes).
 			Int("input_risk", inputRisk.Percentage).
@@ -572,7 +596,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 	if cfg.Config != nil && cfg.Config.MockUpstream {
 		setRiskHeaders(w.Header(), inputRisk, outputRisk)
 		setConfidenceHeaders(w.Header(), findings)
-		mockWriteResponse(w, r, requestID, requestIDShort, provider, action, redactedCount, redactedTypes, body)
+		mockWriteResponse(w, r, requestID, requestIDShort, provider, action, redactedCount, redactedTypes, body, vaultMapping)
 		publishEvent(ctx, cfg, r, requestID, provider, body, findings, action, "request_scanned",
 			float64(scanDuration.Milliseconds()), float64(time.Since(start).Milliseconds()), inputRisk, outputRisk)
 		return
@@ -671,7 +695,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 			go publishOutputScanHint(ctx, cfg, requestID, provider, ct)
 
 			prov := ProviderFor(provider)
-			respBody, respBuffered, errWrap := wrapResponseForOutputScan(resp, pol)
+			respBody, respBuffered, errWrap := wrapResponseForOutputScan(resp, pol, vaultActive)
 			if errWrap != nil {
 				return errWrap
 			}
@@ -696,7 +720,9 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 				return nil
 			}
 			// Phase 3C — cache successful responses for later exact-match hits.
-			if respBuffered && cfg.Cache != nil && pol != nil && pol.Cache != nil && pol.Cache.Enabled &&
+			// Never cache while vaulting: respBody still holds placeholders, and
+			// caching them would serve tokenized bodies on later hits.
+			if respBuffered && !vaultActive && cfg.Cache != nil && pol != nil && pol.Cache != nil && pol.Cache.Enabled &&
 				resp.StatusCode == http.StatusOK {
 				ttl := time.Duration(pol.Cache.TTLSeconds) * time.Second
 				if ttl <= 0 {
@@ -759,6 +785,27 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 					}
 					// Publish the output scan finding into the event bus.
 					go publishOutputEvent(ctx, cfg, requestID, provider, res.findings, res.action, res.elapsed)
+				}
+			}
+			// Vault restore: swap placeholders back to originals before the
+			// response reaches the client. Skipped when an output-policy block
+			// already replaced the body with a 403.
+			if vaultActive && respBuffered && resp.StatusCode != http.StatusForbidden {
+				mapping := vaultMapping
+				if len(mapping) == 0 && cfg.VaultStore != nil && cfg.VaultStore.Enabled() {
+					if loaded, lerr := cfg.VaultStore.Load(ctx, requestID); lerr == nil {
+						mapping = loaded
+					}
+				}
+				if len(mapping) > 0 {
+					restored := vault.Restore(respBody, mapping)
+					resp.Body = io.NopCloser(bytes.NewReader(restored))
+					resp.ContentLength = int64(len(restored))
+					resp.Header.Set("Content-Length", strconv.Itoa(len(restored)))
+					resp.Header.Set("X-Tamga-Vault", "restored")
+				}
+				if cfg.VaultStore != nil {
+					cfg.VaultStore.Delete(ctx, requestID)
 				}
 			}
 			return nil
@@ -1158,7 +1205,7 @@ func uniqueRedactCategoriesInOrder(redactFindings []scanner.Finding) []string {
 	return out
 }
 
-func mockWriteResponse(w http.ResponseWriter, r *http.Request, requestID, requestIDShort, provider string, action policy.Action, redactedCount int, redactedTypes []string, body []byte) {
+func mockWriteResponse(w http.ResponseWriter, r *http.Request, requestID, requestIDShort, provider string, action policy.Action, redactedCount int, redactedTypes []string, body []byte, vaultMapping map[string]string) {
 	// Make sure clients still receive a syntactically correct response format.
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("X-Tamga-Request-Id", requestID)
@@ -1166,6 +1213,15 @@ func mockWriteResponse(w http.ResponseWriter, r *http.Request, requestID, reques
 	w.Header().Set("X-Tamga-Scan-Latency-Ms", "0")
 	if action == policy.ActionRedact && redactedCount > 0 {
 		w.Header().Set("X-Tamga-Redacted-Count", strconv.Itoa(redactedCount))
+	}
+
+	// When the vault is active, the assistant text echoes the placeholders the
+	// provider would have seen; restore then swaps them back so the caller
+	// observes the full round-trip (placeholder out, original in).
+	assistantText := "Bu bir test yanıtıdır."
+	if len(vaultMapping) > 0 {
+		assistantText = "Alınan referanslar: " + mockVaultEcho(vaultMapping)
+		w.Header().Set("X-Tamga-Vault", "restored")
 	}
 
 	// Anthropic-compatible response for /anthropic/v1/messages demo.
@@ -1182,10 +1238,10 @@ func mockWriteResponse(w http.ResponseWriter, r *http.Request, requestID, reques
 			"model":       model,
 			"stop_reason": "end_turn",
 			"content": []map[string]interface{}{
-				{"type": "text", "text": "Bu bir test yanıtıdır."},
+				{"type": "text", "text": assistantText},
 			},
 		}
-		_ = json.NewEncoder(w).Encode(resp)
+		mockEncode(w, resp, vaultMapping)
 		return
 	}
 
@@ -1195,8 +1251,35 @@ func mockWriteResponse(w http.ResponseWriter, r *http.Request, requestID, reques
 	resp := map[string]interface{}{
 		"mock":       true,
 		"request_id": requestID,
+		"choices": []map[string]interface{}{
+			{"message": map[string]interface{}{"role": "assistant", "content": assistantText}},
+		},
 	}
-	_ = json.NewEncoder(w).Encode(resp)
+	mockEncode(w, resp, vaultMapping)
+}
+
+// mockEncode marshals resp, restores any vault placeholders, and writes it.
+func mockEncode(w http.ResponseWriter, resp map[string]interface{}, vaultMapping map[string]string) {
+	data, err := json.Marshal(resp)
+	if err != nil {
+		_ = json.NewEncoder(w).Encode(resp)
+		return
+	}
+	if len(vaultMapping) > 0 {
+		data = vault.Restore(data, vaultMapping)
+	}
+	_, _ = w.Write(data)
+}
+
+// mockVaultEcho renders the placeholder tokens in a stable order so the demo
+// output is deterministic.
+func mockVaultEcho(vaultMapping map[string]string) string {
+	tokens := make([]string, 0, len(vaultMapping))
+	for tok := range vaultMapping {
+		tokens = append(tokens, tok)
+	}
+	sort.Strings(tokens)
+	return strings.Join(tokens, ", ")
 }
 
 func writePolicyError(w http.ResponseWriter, requestID string, code int, typ, msg string) {
