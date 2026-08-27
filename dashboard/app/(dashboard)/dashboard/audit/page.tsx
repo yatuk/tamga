@@ -15,33 +15,33 @@ import { TerminalFrame } from "@/components/dashboard/TerminalFrame";
 import { useAdminKey } from "@/hooks/useAdminKey";
 
 function kindClass(k: string) {
-  if (k.startsWith("policy.")) return "border-amber-500/40 bg-amber-500/10 text-amber-300";
-  if (k.startsWith("incident.")) return "border-sky-500/40 bg-sky-500/10 text-sky-300";
-  if (k.startsWith("apikey.")) return "border-zinc-400/40 bg-zinc-400/10 text-zinc-300";
-  if (k.startsWith("webhook.")) return "border-zinc-500/40 bg-zinc-500/10 text-zinc-300";
-  if (k.startsWith("pattern.")) return "border-emerald-500/40 bg-emerald-500/10 text-emerald-300";
-  if (k.startsWith("team.")) return "border-red-500/40 bg-red-500/10 text-red-300";
-  return "border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300";
+  if (k.startsWith("policy.")) return "border-status-medium/40 bg-status-medium/10 text-status-medium";
+  if (k.startsWith("incident.")) return "border-status-low/40 bg-status-low/10 text-status-low";
+  if (k.startsWith("apikey.")) return "border-border/40 bg-surface-subtle text-fg-subtle";
+  if (k.startsWith("webhook.")) return "border-border-strong/40 bg-surface-subtle0/10 text-fg-subtle";
+  if (k.startsWith("pattern.")) return "border-status-pass/40 bg-status-pass/10 text-status-pass";
+  if (k.startsWith("team.")) return "border-status-critical/40 bg-status-critical/10 text-status-critical";
+  return "border-border-strong bg-surface-subtle text-fg-muted";
 }
 
 function kindBorderColor(k: string) {
-  if (k.startsWith("policy.")) return "border-l-amber-500";
-  if (k.startsWith("incident.")) return "border-l-sky-500";
-  if (k.startsWith("apikey.")) return "border-l-zinc-400";
-  if (k.startsWith("webhook.")) return "border-l-zinc-500";
-  if (k.startsWith("pattern.")) return "border-l-emerald-500";
-  if (k.startsWith("team.")) return "border-l-red-500";
-  return "border-l-zinc-300 dark:border-l-zinc-700";
+  if (k.startsWith("policy.")) return "border-l-status-medium";
+  if (k.startsWith("incident.")) return "border-l-status-low";
+  if (k.startsWith("apikey.")) return "border-l-border";
+  if (k.startsWith("webhook.")) return "border-l-border-strong";
+  if (k.startsWith("pattern.")) return "border-l-status-pass";
+  if (k.startsWith("team.")) return "border-l-status-critical";
+  return "border-l-border";
 }
 
 function kindBarColor(k: string) {
-  if (k.startsWith("policy.")) return "bg-amber-500";
-  if (k.startsWith("incident.")) return "bg-red-500";
-  if (k.startsWith("pattern.")) return "bg-emerald-500";
-  if (k.startsWith("apikey.")) return "bg-sky-500";
-  if (k.startsWith("webhook.")) return "bg-zinc-500";
-  if (k.startsWith("team.")) return "bg-red-500";
-  if (k.startsWith("auth.")) return "bg-sky-500";
+  if (k.startsWith("policy.")) return "bg-status-medium";
+  if (k.startsWith("incident.")) return "bg-status-critical";
+  if (k.startsWith("pattern.")) return "bg-status-pass";
+  if (k.startsWith("apikey.")) return "bg-status-low";
+  if (k.startsWith("webhook.")) return "bg-surface-subtle0";
+  if (k.startsWith("team.")) return "bg-status-critical";
+  if (k.startsWith("auth.")) return "bg-status-low";
   return "bg-zinc-400";
 }
 
@@ -79,8 +79,8 @@ export default function AuditPage() {
 
   const chainOk = chain?.chain_ok !== false;
   const chainBadge = chainOk
-    ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
-    : "border-red-500/40 bg-red-500/10 text-red-300";
+    ? "border-status-pass/40 bg-status-pass/10 text-status-pass"
+    : "border-status-critical/40 bg-status-critical/10 text-status-critical";
 
   const kinds = useMemo(() => {
     const set = new Set<string>();
@@ -150,7 +150,7 @@ export default function AuditPage() {
             <Button
               size="sm"
               variant="secondary"
-              className="h-7 cursor-pointer rounded-sm border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-2 text-[11px] text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900"
+              className="h-7 cursor-pointer rounded-sm border border-border-strong bg-surface-card px-2 text-[11px] text-fg-muted hover:bg-surface-subtle"
               onClick={() => {
                 refetchChain();
                 queryClient.invalidateQueries({ queryKey: ["tamga-audit", adminKey] });
@@ -167,17 +167,17 @@ export default function AuditPage() {
       />
 
       <div>
-        <div className="flex flex-wrap items-center gap-2 rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-2">
+        <div className="flex flex-wrap items-center gap-2 rounded-sm border border-border bg-surface-card p-2">
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="actor, target, kind…"
-            className="h-8 w-64 rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-2 text-xs text-zinc-900 dark:text-zinc-100 focus:border-red-500/40 focus:outline-none"
+            className="h-8 w-64 rounded-sm border border-border bg-surface-card px-2 text-xs text-fg focus:border-status-critical/40 focus:outline-none"
           />
           <select
             value={kind}
             onChange={(e) => setKind(e.target.value)}
-            className="h-8 cursor-pointer rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-2 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none"
+            className="h-8 cursor-pointer rounded-sm border border-border bg-surface-card px-2 text-xs text-fg focus:outline-none"
           >
             <option value="">all kinds</option>
             {kinds.map((k) => (
@@ -189,7 +189,7 @@ export default function AuditPage() {
           <select
             value={actor}
             onChange={(e) => setActor(e.target.value)}
-            className="h-8 cursor-pointer rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-2 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none"
+            className="h-8 cursor-pointer rounded-sm border border-border bg-surface-card px-2 text-xs text-fg focus:outline-none"
           >
             <option value="">all actors</option>
             {actors.map((a) => (
@@ -198,7 +198,7 @@ export default function AuditPage() {
               </option>
             ))}
           </select>
-          <Badge className="rounded-sm border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 text-[10px] text-zinc-700 dark:text-zinc-300">
+          <Badge className="rounded-sm border-border-strong bg-surface-subtle text-[10px] text-fg-muted">
             {filtered.length} / {data?.total ?? 0}
           </Badge>
         </div>
@@ -213,8 +213,8 @@ export default function AuditPage() {
 
       {/* Kind distribution bar chart */}
       {Object.keys(kindCounts).length > 0 && (
-        <div className="rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-3">
-          <div className="mb-2 text-[10px] uppercase tracking-[0.14em] text-zinc-600 dark:text-zinc-400">
+        <div className="rounded-sm border border-border bg-surface-card p-3">
+          <div className="mb-2 text-[10px] uppercase tracking-[0.14em] text-fg-muted">
             Kind Distribution
           </div>
           <div className="space-y-1.5">
@@ -223,16 +223,16 @@ export default function AuditPage() {
               .slice(0, 12)
               .map(([k, count]) => (
                 <div key={k} className="flex items-center gap-2">
-                  <span className="w-36 truncate text-[10px] text-zinc-600 dark:text-zinc-400">
+                  <span className="w-36 truncate text-[10px] text-fg-muted">
                     {humanizeAuditKind(k)}
                   </span>
-                  <div className="h-3 flex-1 rounded-sm bg-zinc-100 dark:bg-zinc-800">
+                  <div className="h-3 flex-1 rounded-sm bg-surface-subtle dark:bg-surface-elevated">
                     <div
                       className={`h-full rounded-sm ${kindBarColor(k)}`}
                       style={{ width: `${Math.max((count / maxKindCount) * 100, 2)}%` }}
                     />
                   </div>
-                  <span className="w-8 text-right text-[10px] tabular-nums text-zinc-600 dark:text-zinc-400">
+                  <span className="w-8 text-right text-[10px] tabular-nums text-fg-muted">
                     {count}
                   </span>
                 </div>
@@ -246,7 +246,7 @@ export default function AuditPage() {
           <TerminalFrame
             title="Denetim Kaydı"
             status={
-              <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-zinc-600 dark:text-zinc-400">
+              <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
                 {filtered.length} rows
               </span>
             }
@@ -255,17 +255,17 @@ export default function AuditPage() {
             {isLoading ? (
               <SkeletonTable rows={8} cols={4} />
             ) : error ? (
-              <div className="p-6 text-xs text-red-400" role="alert">
+              <div className="p-6 text-xs text-status-critical" role="alert">
                 audit log failed: {(error as Error).message}
               </div>
             ) : filtered.length === 0 ? (
-              <div className="flex h-[300px] items-center justify-center rounded-sm border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 text-xs text-zinc-600 dark:text-zinc-400">
+              <div className="flex h-[300px] items-center justify-center rounded-sm border border-border bg-surface-subtle/50 text-xs text-fg-muted">
                 denetim kaydı yok
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full table-fixed text-left text-xs">
-                  <thead className="bg-zinc-100 dark:bg-zinc-900 text-[10px] uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
+                  <thead className="bg-surface-subtle text-[10px] uppercase tracking-wide text-fg-muted">
                     <tr>
                       <th className="px-3 py-2">Time</th>
                       <th className="px-3 py-2">Kind</th>
@@ -278,11 +278,11 @@ export default function AuditPage() {
                       <tr
                         key={`${it.timestamp}-${idx}`}
                         onClick={() => setSelected(it)}
-                        className={`cursor-pointer border-t border-l-2 border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-900/60 ${kindBorderColor(it.kind)} ${
-                          selected === it ? "bg-zinc-100 dark:bg-zinc-900/60" : ""
+                        className={`cursor-pointer border-t border-l-2 border-border text-fg hover:bg-surface-subtle/60 ${kindBorderColor(it.kind)} ${
+                          selected === it ? "bg-surface-subtle" : ""
                         }`}
                       >
-                        <td className="px-3 py-1.5 text-[10px] text-zinc-600 dark:text-zinc-400 whitespace-nowrap">
+                        <td className="px-3 py-1.5 text-[10px] text-fg-muted whitespace-nowrap">
                           {new Date(it.timestamp).toLocaleString("tr-TR")}
                         </td>
                         <td className="px-3 py-1.5 whitespace-nowrap">
@@ -290,8 +290,8 @@ export default function AuditPage() {
                             {humanizeAuditKind(it.kind)}
                           </Badge>
                         </td>
-                        <td className="px-3 py-1.5 text-zinc-600 dark:text-zinc-400">{it.actor || "—"}</td>
-                        <td className="max-w-[260px] truncate px-3 py-1.5 text-zinc-700 dark:text-zinc-300">
+                        <td className="px-3 py-1.5 text-fg-muted">{it.actor || "—"}</td>
+                        <td className="max-w-[260px] truncate px-3 py-1.5 text-fg-muted">
                           {it.target || "—"}
                         </td>
                       </tr>
@@ -306,30 +306,30 @@ export default function AuditPage() {
         <div>
           <TerminalFrame filename={selected ? humanizeAuditKind(selected.kind) : "Denetim Detayı"}>
             {!selected ? (
-              <div className="p-6 text-center text-xs text-zinc-600 dark:text-zinc-400">
+              <div className="p-6 text-center text-xs text-fg-muted">
                 Detay için bir satır seçin…
               </div>
             ) : (
-              <div className="space-y-2 p-3 text-xs text-zinc-700 dark:text-zinc-300">
+              <div className="space-y-2 p-3 text-xs text-fg-muted">
                 <div className="flex items-center justify-between gap-2">
                   <Badge className={`rounded-sm border text-[10px] ${kindClass(selected.kind)}`}>
                     {selected.kind}
                   </Badge>
-                  <span className="text-[10px] text-zinc-600 dark:text-zinc-400">
+                  <span className="text-[10px] text-fg-muted">
                     {new Date(selected.timestamp).toLocaleString("tr-TR")}
                   </span>
                 </div>
                 <div>
-                  <span className="text-zinc-600 dark:text-zinc-400">actor: </span>
-                  <span className="text-zinc-900 dark:text-zinc-100">{selected.actor || "—"}</span>
+                  <span className="text-fg-muted">actor: </span>
+                  <span className="text-fg">{selected.actor || "—"}</span>
                 </div>
                 <div>
-                  <span className="text-zinc-600 dark:text-zinc-400">target: </span>
-                  <span className="text-zinc-900 dark:text-zinc-100">{selected.target || "—"}</span>
+                  <span className="text-fg-muted">target: </span>
+                  <span className="text-fg">{selected.target || "—"}</span>
                 </div>
                 <div>
-                  <div className="mb-1 text-[10px] uppercase tracking-wide text-zinc-600 dark:text-zinc-400">DETAIL</div>
-                  <pre className="max-h-[360px] overflow-auto rounded-sm border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900 p-2 text-[10px] leading-4 text-zinc-700 dark:text-zinc-300">
+                  <div className="mb-1 text-[10px] uppercase tracking-wide text-fg-muted">DETAIL</div>
+                  <pre className="max-h-[360px] overflow-auto rounded-sm border border-border bg-surface-subtle p-2 text-[10px] leading-4 text-fg-muted">
                     {selected.detail ? JSON.stringify(selected.detail, null, 2) : "—"}
                   </pre>
                 </div>

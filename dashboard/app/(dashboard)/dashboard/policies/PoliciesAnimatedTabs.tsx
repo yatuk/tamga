@@ -40,7 +40,7 @@ export function PoliciesAnimatedTabs({
 }: Props) {
   return (
     <Tabs value={tab} onValueChange={(v) => onTabChange(v as TabKey)}>
-      <TabsList className="grid w-full max-w-3xl grid-cols-6 rounded-sm border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900/60">
+      <TabsList className="grid w-full max-w-3xl grid-cols-6 rounded-sm border border-border bg-surface-subtle">
         <TabsTrigger value="editor">Editor</TabsTrigger>
         <TabsTrigger value="diff">Diff vs disk</TabsTrigger>
         <TabsTrigger value="simulate">Simulate</TabsTrigger>

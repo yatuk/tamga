@@ -15,21 +15,21 @@ export function KeyRevealDialog({ revealed, onDismiss, onCopy }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-md rounded-sm border border-amber-500/20 bg-white dark:bg-zinc-950 p-5 shadow-lg">
+      <div className="w-full max-w-md rounded-sm border border-status-medium/20 bg-surface-card p-5 shadow-lg">
         <div className="mb-4 flex items-start gap-3">
           <span className="mt-0.5 text-lg">⚠</span>
           <div>
-            <h2 className="text-sm font-semibold text-amber-400">
+            <h2 className="text-sm font-semibold text-status-medium">
               Copy this key now — it will not be shown again
             </h2>
-            <p className="mt-1 text-[11px] text-zinc-500">
-              Key name: <span className="font-mono text-zinc-700 dark:text-zinc-300">{revealed.label}</span>
+            <p className="mt-1 text-[11px] text-fg-subtle">
+              Key name: <span className="font-mono text-fg-muted">{revealed.label}</span>
             </p>
           </div>
         </div>
 
-        <div className="rounded-sm border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900 p-3">
-          <code className="break-all text-xs font-mono text-zinc-800 dark:text-zinc-200 select-all">
+        <div className="rounded-sm border border-border bg-surface-subtle p-3">
+          <code className="break-all text-xs font-mono text-fg select-all">
             {revealed.rawKey}
           </code>
         </div>
@@ -45,7 +45,7 @@ export function KeyRevealDialog({ revealed, onDismiss, onCopy }: Props) {
           </Button>
           <Button
             size="sm"
-            className="cursor-pointer rounded-sm bg-emerald-600 text-white hover:bg-emerald-700"
+            className="cursor-pointer rounded-sm bg-status-pass text-white hover:bg-status-pass"
             onClick={onDismiss}
           >
             <Check className="mr-1 h-3.5 w-3.5" /> I have saved this key

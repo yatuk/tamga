@@ -36,14 +36,14 @@ export default function LoginPage() {
 
   if (!configured) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950">
-        <div className="w-full max-w-md rounded-lg border border-zinc-200 bg-white p-8 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <h1 className="mb-2 text-2xl font-bold text-zinc-900 dark:text-zinc-100">Tamga</h1>
-          <p className="text-sm text-zinc-500">
-            GitHub OAuth is not configured. Set <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">NEXT_PUBLIC_GITHUB_CLIENT_ID</code> and{" "}
-            <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">TAMGA_GITHUB_CLIENT_SECRET</code>.
+      <div className="flex min-h-screen items-center justify-center bg-surface-subtle dark:bg-surface-base">
+        <div className="w-full max-w-md rounded-lg border border-border bg-white p-8 text-center shadow-sm dark:border-border dark:bg-surface-subtle">
+          <h1 className="mb-2 text-2xl font-bold text-fg">Tamga</h1>
+          <p className="text-sm text-fg-subtle">
+            GitHub OAuth is not configured. Set <code className="rounded bg-surface-subtle px-1 dark:bg-surface-elevated">NEXT_PUBLIC_GITHUB_CLIENT_ID</code> and{" "}
+            <code className="rounded bg-surface-subtle px-1 dark:bg-surface-elevated">TAMGA_GITHUB_CLIENT_SECRET</code>.
           </p>
-          <p className="mt-4 text-xs text-zinc-400">
+          <p className="mt-4 text-xs text-fg-subtle">
             Use admin key to access the dashboard in the meantime.
           </p>
         </div>
@@ -52,16 +52,16 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950">
-      <div className="w-full max-w-md rounded-lg border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="flex min-h-screen items-center justify-center bg-surface-subtle dark:bg-surface-base">
+      <div className="w-full max-w-md rounded-lg border border-border bg-white p-8 shadow-sm dark:border-border dark:bg-surface-subtle">
         <div className="mb-6 text-center">
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Tamga</h1>
-          <p className="mt-1 text-sm text-zinc-500">AI Security Proxy</p>
+          <h1 className="text-2xl font-bold text-fg">Tamga</h1>
+          <p className="mt-1 text-sm text-fg-subtle">AI Security Proxy</p>
         </div>
 
         <button
           onClick={handleGitHubLogin}
-          className="flex w-full items-center justify-center gap-3 rounded-lg border border-zinc-300 bg-zinc-900 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-zinc-800 dark:border-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+          className="flex w-full items-center justify-center gap-3 rounded-lg border border-border-strong bg-surface-subtle px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-surface-elevated dark:border-border-strong dark:bg-surface-subtle dark:text-fg dark:hover:bg-surface-subtle"
           aria-label="Sign in with GitHub"
         >
           <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -74,7 +74,7 @@ export default function LoginPage() {
           Sign in with GitHub
         </button>
 
-        <p className="mt-4 text-center text-xs text-zinc-400">
+        <p className="mt-4 text-center text-xs text-fg-subtle">
           Authenticate with your GitHub account to access the Tamga dashboard.
         </p>
       </div>

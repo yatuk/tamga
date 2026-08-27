@@ -198,8 +198,8 @@ export function useDashboardLayoutState() {
 
   const navLinkBase =
     "relative flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 pl-2 text-xs font-mono transition-colors duration-150 ";
-  const navLinkInactive = "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900/70 hover:text-zinc-900 dark:hover:text-zinc-200";
-  const navLinkActive = "bg-zinc-100 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100";
+  const navLinkInactive = "text-fg-muted hover:bg-surface-subtle hover:text-fg";
+  const navLinkActive = "bg-surface-subtle text-fg";
 
   return {
     router,

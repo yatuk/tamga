@@ -10,15 +10,15 @@ import { Badge } from "@/components/ui/badge";
 import type { ScannerPoolPageData } from "./useScannerPoolPage";
 
 function scannerDotColor(ms: number): string {
-  if (ms < 500) return "bg-emerald-500";
-  if (ms < 2000) return "bg-amber-500";
-  return "bg-red-500";
+  if (ms < 500) return "bg-status-pass";
+  if (ms < 2000) return "bg-status-medium";
+  return "bg-status-critical";
 }
 
 function throughputColor(utilization: number): string {
-  if (utilization > 0.5) return "bg-emerald-500";
-  if (utilization > 0.2) return "bg-amber-500";
-  return "bg-zinc-500";
+  if (utilization > 0.5) return "bg-status-pass";
+  if (utilization > 0.2) return "bg-status-medium";
+  return "bg-surface-subtle0";
 }
 
 const BAR_HEIGHTS = [0.4, 0.65, 0.5, 0.8, 0.7, 0.55];
@@ -51,15 +51,15 @@ export function ScannerPoolBody({
   }, [pool]);
 
   const queueColor = useMemo(() => {
-    if (queueFillPct >= 80) return "bg-red-500";
-    if (queueFillPct >= 50) return "bg-amber-500";
-    return "bg-emerald-500";
+    if (queueFillPct >= 80) return "bg-status-critical";
+    if (queueFillPct >= 50) return "bg-status-medium";
+    return "bg-status-pass";
   }, [queueFillPct]);
 
   const shedColor = useMemo(() => {
-    if (shedRate >= 15) return "text-red-400";
-    if (shedRate >= 5) return "text-amber-400";
-    return "text-emerald-400";
+    if (shedRate >= 15) return "text-status-critical";
+    if (shedRate >= 5) return "text-status-medium";
+    return "text-status-pass";
   }, [shedRate]);
 
   const scannerNames = useMemo(() => {
@@ -81,7 +81,7 @@ export function ScannerPoolBody({
       />
 
       {error && (
-        <div className="rounded-lg border border-red-800/50 bg-red-950/30 px-4 py-3 text-sm text-red-300 mb-6">
+        <div className="rounded-lg border border-status-critical/50 bg-status-critical/30 px-4 py-3 text-sm text-status-critical mb-6">
           {error}
         </div>
       )}
@@ -91,7 +91,7 @@ export function ScannerPoolBody({
           {Array.from({ length: 4 }).map((_, i) => (
             <div
               key={i}
-              className="h-24 animate-pulse rounded-xl bg-zinc-800/50"
+              className="h-24 animate-pulse rounded-xl bg-surface-elevated/50"
             />
           ))}
         </div>
@@ -174,8 +174,8 @@ export function ScannerPoolBody({
           {/* Throughput sparkline + shed gauge + queue bar + scanner dots */}
           <div className="grid gap-4 sm:grid-cols-2 mb-6">
             {/* Throughput sparkline */}
-            <div className="rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-3">
-              <div className="text-[10px] uppercase tracking-[0.12em] text-zinc-500 mb-2">
+            <div className="rounded-sm border border-border bg-surface-card p-3">
+              <div className="text-[10px] uppercase tracking-[0.12em] text-fg-subtle mb-2">
                 Throughput Trend
               </div>
               <div className="flex items-end gap-1 h-10">
@@ -188,54 +188,54 @@ export function ScannerPoolBody({
                   />
                 ))}
               </div>
-              <div className="mt-1 text-[10px] text-zinc-500 text-right">
+              <div className="mt-1 text-[10px] text-fg-subtle text-right">
                 {pool.jobsCompleted > 0 ? `${pool.jobsCompleted.toLocaleString()} completed` : "no data yet"}
               </div>
             </div>
 
             {/* Shed rate gauge */}
-            <div className="rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-3">
+            <div className="rounded-sm border border-border bg-surface-card p-3">
               <div className="flex items-center justify-between mb-2">
-                <div className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">
+                <div className="text-[10px] uppercase tracking-[0.12em] text-fg-subtle">
                   Shed Rate
                 </div>
                 <span className={`font-mono text-lg font-semibold ${shedColor}`}>
                   {shedRate.toFixed(1)}%
                 </span>
               </div>
-              <div className="h-1.5 rounded-sm bg-zinc-100 dark:bg-zinc-900 overflow-hidden">
+              <div className="h-1.5 rounded-sm bg-surface-subtle overflow-hidden">
                 <div
                   className="h-full rounded-sm transition-all"
                   style={{
                     width: `${Math.min(100, shedRate)}%`,
                     backgroundColor:
-                      shedRate >= 15 ? "#ef4444" : shedRate >= 5 ? "#f59e0b" : "#10b981",
+                      shedRate >= 15 ? "var(--status-critical)" : shedRate >= 5 ? "var(--status-medium)" : "var(--status-pass)",
                   }}
                 />
               </div>
-              <div className="mt-1 text-[10px] text-zinc-500">
+              <div className="mt-1 text-[10px] text-fg-subtle">
                 {shedRate < 5 ? "healthy" : shedRate < 15 ? "elevated" : "critical"}
               </div>
             </div>
           </div>
 
           {/* Queue depth bar */}
-          <div className="rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-3 mb-6">
+          <div className="rounded-sm border border-border bg-surface-card p-3 mb-6">
             <div className="flex items-center justify-between mb-2">
-              <div className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">
+              <div className="text-[10px] uppercase tracking-[0.12em] text-fg-subtle">
                 Queue Depth
               </div>
-              <span className="font-mono text-xs text-zinc-700 dark:text-zinc-300">
+              <span className="font-mono text-xs text-fg-muted">
                 {pool.queueDepth} / {pool.queueSize}
               </span>
             </div>
-            <div className="h-2 rounded-sm bg-zinc-100 dark:bg-zinc-900 overflow-hidden">
+            <div className="h-2 rounded-sm bg-surface-subtle overflow-hidden">
               <div
                 className={`h-full rounded-sm transition-all ${queueColor}`}
                 style={{ width: `${queueFillPct}%` }}
               />
             </div>
-            <div className="mt-1 flex justify-between text-[10px] text-zinc-500">
+            <div className="mt-1 flex justify-between text-[10px] text-fg-subtle">
               <span>0</span>
               <span>{pool.queueSize}</span>
             </div>
@@ -243,8 +243,8 @@ export function ScannerPoolBody({
 
           {/* Scanner instance status dots */}
           {scannerNames.length > 0 && (
-            <div className="rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-3 mb-6">
-              <div className="text-[10px] uppercase tracking-[0.12em] text-zinc-500 mb-3">
+            <div className="rounded-sm border border-border bg-surface-card p-3 mb-6">
+              <div className="text-[10px] uppercase tracking-[0.12em] text-fg-subtle mb-3">
                 Scanner Instances
               </div>
               <div className="flex flex-wrap items-center gap-3">
@@ -256,10 +256,10 @@ export function ScannerPoolBody({
                         className={`inline-block h-2.5 w-2.5 rounded-full ${scannerDotColor(ms)}`}
                         title={`${name}: ${ms.toFixed(2)} ms`}
                       />
-                      <span className="font-mono text-[11px] text-zinc-700 dark:text-zinc-300">
+                      <span className="font-mono text-[11px] text-fg-muted">
                         {name}
                       </span>
-                      <Badge className="rounded-sm border border-zinc-500/30 bg-zinc-500/10 text-[10px] text-zinc-500">
+                      <Badge className="rounded-sm border border-border-strong/30 bg-surface-subtle0/10 text-[10px] text-fg-subtle">
                         {ms.toFixed(0)}ms
                       </Badge>
                     </div>
@@ -277,7 +277,7 @@ export function ScannerPoolBody({
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-zinc-800 text-zinc-400">
+                    <tr className="border-b border-border text-fg-subtle">
                       <th className="px-4 py-2 text-left">Scanner</th>
                       <th className="px-4 py-2 text-right">Mean Latency</th>
                     </tr>
@@ -288,7 +288,7 @@ export function ScannerPoolBody({
                       .map(([name, ms]) => (
                         <tr
                           key={name}
-                          className="border-b border-zinc-800/50 text-zinc-300"
+                          className="border-b border-border/50 text-fg-subtle"
                         >
                           <td className="px-4 py-2 font-mono text-xs">{name}</td>
                           <td className="px-4 py-2 text-right font-mono text-xs">
@@ -305,7 +305,7 @@ export function ScannerPoolBody({
           {/* All-clear when no per-scanner data yet */}
           {Object.keys(pool.perScannerDurationMs).length === 0 && (
             <TerminalFrame title="Per-Scanner Mean Latency">
-              <div className="px-4 py-8 text-center text-sm text-zinc-500">
+              <div className="px-4 py-8 text-center text-sm text-fg-subtle">
                 No scan jobs completed yet. Per-scanner latency will appear here
                 once the pool processes requests.
               </div>

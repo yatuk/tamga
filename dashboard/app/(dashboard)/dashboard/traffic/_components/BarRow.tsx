@@ -19,14 +19,14 @@ export function BarRow({
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between text-[11px]">
-        <span className="truncate font-mono text-zinc-700 dark:text-zinc-300">{label}</span>
-        <span className="ml-2 shrink-0 tabular-nums text-zinc-600 dark:text-zinc-400">
-          {formatInt(value)} <span className="text-zinc-500">({pct}%)</span>
+        <span className="truncate font-mono text-fg-muted">{label}</span>
+        <span className="ml-2 shrink-0 tabular-nums text-fg-muted">
+          {formatInt(value)} <span className="text-fg-subtle">({pct}%)</span>
         </span>
       </div>
-      <div className="h-1.5 w-full overflow-hidden rounded-sm bg-zinc-100 dark:bg-zinc-900">
+      <div className="h-1.5 w-full overflow-hidden rounded-sm bg-surface-subtle">
         <div
-          className={cn("h-full rounded-sm", className || "bg-zinc-500")}
+          className={cn("h-full rounded-sm", className || "bg-surface-subtle0")}
           style={{ width: `${Math.max(pct, 1)}%` }}
         />
       </div>
@@ -56,8 +56,8 @@ export function DonutCard({
     .join(", ");
 
   return (
-    <div className="rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4">
-      <h3 className="mb-3 text-[10px] uppercase tracking-[0.14em] text-zinc-600 dark:text-zinc-400">
+    <div className="rounded-sm border border-border bg-surface-card p-4">
+      <h3 className="mb-3 text-[10px] uppercase tracking-[0.14em] text-fg-muted">
         {title}
       </h3>
       <div className="flex items-center gap-4">
@@ -72,10 +72,10 @@ export function DonutCard({
                 className="h-2 w-2 shrink-0 rounded-sm"
                 style={{ backgroundColor: s.color }}
               />
-              <span className="truncate font-mono text-zinc-700 dark:text-zinc-300">
+              <span className="truncate font-mono text-fg-muted">
                 {s.name}
               </span>
-              <span className="ml-auto tabular-nums text-zinc-500">
+              <span className="ml-auto tabular-nums text-fg-subtle">
                 {formatInt(s.value)}
               </span>
             </div>

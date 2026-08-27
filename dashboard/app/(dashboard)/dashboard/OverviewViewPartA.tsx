@@ -13,6 +13,10 @@ import { PageHeader } from "@/components/dashboard/PageHeader";
 import { MetricStat } from "@/components/dashboard/MetricStat";
 import { BudgetBurnCard } from "@/components/dashboard/BudgetBurnCard";
 import { ActiveModelsCard } from "@/components/dashboard/ActiveModelsCard";
+import PostureScore, { DEMO_POSTURE } from "@/components/dashboard/PostureScore";
+import TopFindings, { DEMO_FINDINGS } from "@/components/dashboard/TopFindings";
+import SeverityBreakdown, { DEMO_COUNTS, DEMO_TOTAL } from "@/components/dashboard/SeverityBreakdown";
+import ComplianceReadiness, { DEMO_FRAMEWORKS } from "@/components/dashboard/ComplianceReadiness";
 import type { RangeMode } from "./overviewConstants";
 import { formatInt } from "./overviewHelpers";
 import { OverviewUserAvatar } from "./OverviewUserAvatar";
@@ -42,11 +46,12 @@ export function OverviewViewPartA() {
     cBlocked,
     cRedacted,
     cRisk,
+    health,
   } = useOverviewContext();
 
   const { totals, kpiSeries, incidentsDrill, openIncidents, p95LatencyMs, shadowAIDetected, mttrHours, mttrData } = derived;
 
-  const mttrDisplay = mttrHours !== undefined ? `${mttrHours}h` : "--";
+  const mttrDisplay = mttrHours !== undefined ? `${mttrHours}h` : "—";
   const mttrTrendBadge = mttrData
     ? mttrData.trend === "improving"
       ? ("improving" as const)
@@ -72,7 +77,7 @@ export function OverviewViewPartA() {
           <>
             <GlossaryToggle onClick={() => setGlossaryOpen(true)} />
             <Button
-              className="cursor-pointer rounded-sm border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800"
+              className="cursor-pointer rounded-sm border border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card"
               onClick={refreshAll}
             >
               <RefreshCw className="mr-1 h-4 w-4" />
@@ -102,20 +107,21 @@ export function OverviewViewPartA() {
             redactedPct={redPct}
             openIncidents={openIncidents}
             mttrHours={mttrHours}
+            scannerCount={health?.scanner_count}
             trendDirection={adminKey ? trend : "stable"}
           />
         );
       })()}
 
-      <Card className="rounded-sm border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950">
+      <Card className="rounded-sm border-border bg-surface-card">
         <CardContent className="pt-6">
           <div className="mb-3 flex flex-wrap items-center gap-2">
-            <Badge className="rounded-sm border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300">Time Range</Badge>
-            <div className="inline-flex overflow-hidden rounded-sm border border-zinc-300 dark:border-zinc-700">
+            <Badge className="rounded-sm border-border-strong bg-surface-subtle text-fg-muted">Time Range</Badge>
+            <div className="inline-flex overflow-hidden rounded-sm border border-border-strong">
               {(["24h", "7d", "30d"] as RangeMode[]).map((r) => (
                 <button
                   key={r}
-                  className={`px-3 py-1 text-xs ${range === r ? "bg-emerald-600 text-white" : "bg-white dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300"}`}
+                  className={`px-3 py-1 text-xs ${range === r ? "bg-status-pass text-white" : "bg-surface-card text-fg-muted"}`}
                   onClick={() => setRange(r)}
                   type="button"
                 >
@@ -152,15 +158,25 @@ export function OverviewViewPartA() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
+      {/* Row 1 — Hero grid: Posture Score | Top Findings | Severity Breakdown */}
+      <div className="grid gap-3 lg:grid-cols-3">
+        <PostureScore {...DEMO_POSTURE} />
+        <TopFindings findings={DEMO_FINDINGS} href="/dashboard/events" />
+        <SeverityBreakdown counts={DEMO_COUNTS} total={DEMO_TOTAL} />
+      </div>
+
+      {/* Row 2 — Compliance readiness: KVKK / BDDK / GDPR / OWASP LLM */}
+      <ComplianceReadiness frameworks={DEMO_FRAMEWORKS} />
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[
           {
             label: `TOTAL REQUESTS // ${toUpperLocale(range)}`,
-            value: formatInt(animateStats ? cTotal : totals.total),
+            value: animateStats ? formatInt(cTotal) : "—",
             href: incidentsDrill.traffic,
             spark: kpiSeries.total.series,
             delta: kpiSeries.total.delta,
-            sparkColor: "#60a5fa",
+            sparkColor: "var(--chart-1)",
             source: "Proxy",
             accent: "default" as const,
             live: true,
@@ -168,11 +184,11 @@ export function OverviewViewPartA() {
           },
           {
             label: "BLOCKED",
-            value: formatInt(animateStats ? cBlocked : totals.blocked),
+            value: animateStats ? formatInt(cBlocked) : "—",
             href: incidentsDrill.blocked,
             spark: kpiSeries.blocked.series,
             delta: kpiSeries.blocked.delta,
-            sparkColor: "#f87171",
+            sparkColor: "var(--chart-2)",
             source: "Politika Engelleme",
             accent: "red" as const,
             live: true,
@@ -180,18 +196,18 @@ export function OverviewViewPartA() {
           },
           {
             label: "REDACTED",
-            value: formatInt(animateStats ? cRedacted : totals.redacted),
+            value: animateStats ? formatInt(cRedacted) : "—",
             href: incidentsDrill.redacted,
             spark: kpiSeries.redacted.series,
             delta: kpiSeries.redacted.delta,
-            sparkColor: "#fbbf24",
+            sparkColor: "var(--chart-4)",
             source: "Politika Gizleme",
             accent: "amber" as const,
             tooltip: "Requests where sensitive data (PII, secrets, credentials) was redacted before forwarding to the LLM provider.",
           },
           {
             label: "OPEN INCIDENTS",
-            value: formatInt(openIncidents),
+            value: animateStats ? formatInt(openIncidents) : "—",
             href: incidentsDrill.openIncidents,
             source: "Önceliklendirme",
             accent: "amber" as const,
@@ -200,7 +216,7 @@ export function OverviewViewPartA() {
           },
           {
             label: "AVG INPUT RISK",
-            value: `${formatInt(animateStats ? cRisk : totals.avgInputRiskPct)}%`,
+            value: animateStats ? `${formatInt(cRisk)}%` : "—",
             href: incidentsDrill.highRisk,
             source: "Tarayıcı",
             accent: "default" as const,
@@ -208,18 +224,18 @@ export function OverviewViewPartA() {
           },
           {
             label: "P95 SCAN LATENCY",
-            value: `${p95LatencyMs}ms`,
+            value: animateStats ? `${p95LatencyMs}ms` : "—",
             href: incidentsDrill.latency,
             spark: kpiSeries.scanP95.series,
             delta: kpiSeries.scanP95.delta,
-            sparkColor: "#fb7185",
+            sparkColor: "var(--chart-3)",
             source: "Proxy P95",
             accent: "default" as const,
             tooltip: "95th percentile of end-to-end scan latency across all scanners. 95% of requests complete faster than this value.",
           },
           {
             label: "SHADOW AI",
-            value: formatInt(shadowAIDetected),
+            value: animateStats ? formatInt(shadowAIDetected) : "—",
             href: incidentsDrill.shadowAi,
             source: "Bilinmeyen Sağlayıcı",
             accent: "default" as const,
@@ -246,7 +262,7 @@ export function OverviewViewPartA() {
               tooltip={"tooltip" in card ? (card as { tooltip: string }).tooltip : undefined}
               sparkline={
                 card.spark && card.spark.length > 1 ? (
-                  <Sparkline data={card.spark} stroke={card.sparkColor || "#a1a1aa"} width={64} height={22} />
+                  <Sparkline data={card.spark} stroke={card.sparkColor || "var(--chart-6)"} width={64} height={22} />
                 ) : undefined
               }
             />
@@ -259,7 +275,7 @@ export function OverviewViewPartA() {
         <ActiveModelsCard adminKey={adminKey} range={range} />
         <Card className="lg:col-span-2">
           <CardHeader className="pb-3">
-            <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-600 dark:text-zinc-400">COST</div>
+            <div className="text-[10px] uppercase tracking-[0.18em] text-fg-muted">COST</div>
             <CardTitle>Günlük maliyet limiti</CardTitle>
             <CardDescription>
               Token ve USD bazlı günlük bütçe takibi. Limit aşımında proxy 402 hatası döner ve ilgili aksiyon event akışına kaydedilir.
@@ -267,17 +283,17 @@ export function OverviewViewPartA() {
           </CardHeader>
           <CardContent className="space-y-3 text-xs">
             <div className="flex items-start gap-2">
-              <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-zinc-400 dark:bg-zinc-500" />
+              <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-fg-subtle" />
               <div>
-                <span className="font-medium text-zinc-800 dark:text-zinc-200">Günlük Token Limiti</span>
-                <p className="text-zinc-500 dark:text-zinc-500">Her istek, model fiyatlandırmasına göre token bazında hesaplanır ve günlik kotaya eklenir.</p>
+                <span className="font-medium text-fg">Günlük Token Limiti</span>
+                <p className="text-fg-subtle dark:text-fg-subtle">Her istek, model fiyatlandırmasına göre token bazında hesaplanır ve günlik kotaya eklenir.</p>
               </div>
             </div>
             <div className="flex items-start gap-2">
-              <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-zinc-400 dark:bg-zinc-500" />
+              <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-fg-subtle" />
               <div>
-                <span className="font-medium text-zinc-800 dark:text-zinc-200">Günlük USD Bütçesi</span>
-                <p className="text-zinc-500 dark:text-zinc-500">Token tüketiminin USD karşılığı izlenir. Günlük sayaç her gece 00:00 UTC&apos;de sıfırlanır.</p>
+                <span className="font-medium text-fg">Günlük USD Bütçesi</span>
+                <p className="text-fg-subtle dark:text-fg-subtle">Token tüketiminin USD karşılığı izlenir. Günlük sayaç her gece 00:00 UTC&apos;de sıfırlanır.</p>
               </div>
             </div>
           </CardContent>

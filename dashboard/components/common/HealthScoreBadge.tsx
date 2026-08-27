@@ -15,10 +15,10 @@ interface HealthScoreBadgeProps {
 
 const COLOR_MAP = {
   green:
-    "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 border-emerald-500/40",
+    "bg-status-pass text-status-pass dark:bg-status-pass/30 dark:text-status-pass border-status-pass/40",
   yellow:
-    "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 border-amber-500/40",
-  red: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 border-red-500/40",
+    "bg-status-medium text-status-medium dark:bg-status-medium/30 dark:text-status-medium border-status-medium/40",
+  red: "bg-status-critical text-status-critical dark:bg-status-critical/30 dark:text-status-critical border-status-critical/40",
 } as const;
 
 function scoreColor(score: number): keyof typeof COLOR_MAP {

@@ -18,11 +18,11 @@ function sseStatusIndicator(status: SSEStatus): { color: string; label: string }
     case "connecting":
       return { color: "bg-zinc-400 animate-pulse", label: "Connecting..." };
     case "open":
-      return { color: "bg-emerald-500", label: "" };
+      return { color: "bg-status-pass", label: "" };
     case "error":
-      return { color: "bg-amber-500", label: "Reconnecting..." };
+      return { color: "bg-status-medium", label: "Reconnecting..." };
     case "closed":
-      return { color: "bg-red-500", label: "Disconnected" };
+      return { color: "bg-status-critical", label: "Disconnected" };
   }
 }
 
@@ -58,14 +58,14 @@ export function EventsBody({
         actions={
           <div className="flex items-center gap-2">
             {/* SSE status badge */}
-            <div className="flex items-center gap-1.5 text-[10px] text-zinc-500">
+            <div className="flex items-center gap-1.5 text-[10px] text-fg-subtle">
               <span
                 className={`inline-block h-2 w-2 rounded-full ${sse.color}`}
               />
               {sse.label || (
                 <button
                   type="button"
-                  className="cursor-pointer font-mono text-emerald-400 hover:text-emerald-300"
+                  className="cursor-pointer font-mono text-status-pass hover:text-status-pass"
                   onClick={resetCounter}
                   title="Click to reset counter"
                 >
@@ -78,7 +78,7 @@ export function EventsBody({
       />
 
       {hasError ? (
-        <div className="rounded-sm border border-red-500/30 bg-red-500/10 p-4 text-xs text-red-400">
+        <div className="rounded-sm border border-status-critical/30 bg-status-critical/10 p-4 text-xs text-status-critical">
           Failed to load events. Check your admin key and proxy connection.
         </div>
       ) : null}
@@ -87,7 +87,7 @@ export function EventsBody({
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         {isLoading ? (
           Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-[88px] animate-pulse rounded-sm bg-zinc-100 dark:bg-zinc-900/40" />
+            <div key={i} className="h-[88px] animate-pulse rounded-sm bg-surface-subtle" />
           ))
         ) : (
           <>
@@ -103,7 +103,7 @@ export function EventsBody({
       {timeseriesData.length > 0 && !isLoading ? (
         <TerminalFrame
           title="Event Volume by Hour"
-          status={<span className="px-2 text-[10px] uppercase tracking-[0.18em] text-zinc-600 dark:text-zinc-400">{timeseriesData.length} buckets</span>}
+          status={<span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">{timeseriesData.length} buckets</span>}
         >
           <div className="p-3">
             <div className="flex items-end gap-px h-[80px]">
@@ -113,14 +113,14 @@ export function EventsBody({
                 return (
                   <div key={i} className="group relative flex-1 min-w-[4px]" title={`${d.time}: ${d.count} events`}>
                     <div
-                      className="absolute bottom-0 left-0 right-0 rounded-t-sm bg-emerald-500/70 hover:bg-emerald-400/80"
+                      className="absolute bottom-0 left-0 right-0 rounded-t-sm bg-status-pass/70 hover:bg-status-pass/80"
                       style={{ height: `${h}%` }}
                     />
                   </div>
                 );
               })}
             </div>
-            <div className="mt-2 flex justify-between text-[10px] text-zinc-500">
+            <div className="mt-2 flex justify-between text-[10px] text-fg-subtle">
               {timeseriesData.length > 0 ? (
                 <>
                   <span>{timeseriesData[0]?.time ?? ""}</span>
@@ -153,7 +153,7 @@ export function EventsBody({
           <TerminalFrame
             filename={`Olaylar · ${filters.range === "24h" ? "24 Saat" : filters.range === "7d" ? "7 Gün" : "30 Gün"}`}
             status={
-              <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-zinc-600 dark:text-zinc-400">
+              <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
                 {events.length} shown {total > events.length ? `/ ${total} total` : ""}
               </span>
             }
@@ -166,11 +166,11 @@ export function EventsBody({
             />
 
             {events.length > 0 && events.length < total ? (
-              <div className="border-t border-zinc-200 dark:border-zinc-800 px-3 py-2">
+              <div className="border-t border-border px-3 py-2">
                 <Button
                   size="sm"
                   variant="outline"
-                  className="w-full cursor-pointer rounded-sm border-zinc-300 dark:border-zinc-700 text-[10px] uppercase"
+                  className="w-full cursor-pointer rounded-sm border-border-strong text-[10px] uppercase"
                   onClick={loadMore}
                 >
                   Load more ({total - events.length} remaining)

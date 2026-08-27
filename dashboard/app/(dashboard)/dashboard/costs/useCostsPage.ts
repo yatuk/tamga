@@ -148,10 +148,10 @@ export function useCostsPage() {
     }
     const total = [...familyMap.values()].reduce((s, v) => s + v, 0);
     const colorMap: Record<string, string> = {
-      openai: "bg-emerald-500",
-      anthropic: "bg-amber-500",
-      gemini: "bg-sky-500",
-      mistral: "bg-orange-500",
+      openai: "bg-status-pass",
+      anthropic: "bg-status-medium",
+      gemini: "bg-status-low",
+      mistral: "bg-status-high",
       bedrock: "bg-purple-500",
     };
     return [...familyMap.entries()]
@@ -159,7 +159,7 @@ export function useCostsPage() {
         family,
         cost: Math.round(cost * 10000) / 10000,
         pct: total > 0 ? Math.round((cost / total) * 100) : 0,
-        color: colorMap[family.toLowerCase()] ?? "bg-zinc-500",
+        color: colorMap[family.toLowerCase()] ?? "bg-surface-subtle0",
       }))
       .sort((a, b) => b.cost - a.cost);
   }, [costBreakdown]);

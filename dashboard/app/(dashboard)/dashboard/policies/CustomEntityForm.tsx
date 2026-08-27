@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Badge } from "@/components/ui/badge";
+import { SeverityBadge } from "@/components/common/badges";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -15,7 +15,6 @@ import {
 } from "@/components/ui/select";
 import { api } from "@/lib/api/client";
 import type { CustomEntity } from "@/lib/api/types-core";
-import { cn } from "@/lib/utils";
 
 function isValidRegex(pattern: string): boolean {
   try {
@@ -92,45 +91,45 @@ export function CustomEntityForm({ adminKey }: { adminKey: string }) {
   return (
     <div className="space-y-6">
       {/* Entity list */}
-      <div className="rounded-sm border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900/50">
-        <div className="border-b border-zinc-200 dark:border-zinc-800 px-4 py-2">
-          <span className="text-[11px] uppercase tracking-widest text-zinc-600 dark:text-zinc-400">
+      <div className="rounded-sm border border-border bg-surface-subtle/50">
+        <div className="border-b border-border px-4 py-2">
+          <span className="text-[11px] uppercase tracking-widest text-fg-muted">
             Custom Entities ({items.length})
           </span>
         </div>
         {isLoading ? (
-          <div className="px-4 py-3 text-xs text-zinc-600 dark:text-zinc-400">Yükleniyor…</div>
+          <div className="px-4 py-3 text-xs text-fg-muted">Yükleniyor…</div>
         ) : items.length === 0 ? (
-          <div className="px-4 py-3 text-xs text-zinc-600 dark:text-zinc-400">
+          <div className="px-4 py-3 text-xs text-fg-muted">
             Henüz custom entity yok. Aşağıdan ekle.
           </div>
         ) : (
           <table className="w-full text-xs">
             <thead>
-              <tr className="border-b border-zinc-200 dark:border-zinc-800">
-                <th className="px-4 py-2 text-left font-normal text-zinc-600 dark:text-zinc-400">Name</th>
-                <th className="px-4 py-2 text-left font-normal text-zinc-600 dark:text-zinc-400">Pattern</th>
-                <th className="px-4 py-2 text-left font-normal text-zinc-600 dark:text-zinc-400">Severity</th>
-                <th className="px-4 py-2 text-left font-normal text-zinc-600 dark:text-zinc-400">Action</th>
+              <tr className="border-b border-border">
+                <th className="px-4 py-2 text-left font-normal text-fg-muted">Name</th>
+                <th className="px-4 py-2 text-left font-normal text-fg-muted">Pattern</th>
+                <th className="px-4 py-2 text-left font-normal text-fg-muted">Severity</th>
+                <th className="px-4 py-2 text-left font-normal text-fg-muted">Action</th>
                 <th className="px-4 py-2" />
               </tr>
             </thead>
             <tbody>
               {items.map((ce) => (
-                <tr key={ce.name} className="border-b border-zinc-200 dark:border-zinc-800/50 last:border-0">
-                  <td className="px-4 py-2 text-zinc-800 dark:text-zinc-200">{ce.name}</td>
-                  <td className="px-4 py-2 max-w-[200px] truncate text-zinc-600 dark:text-zinc-400">
+                <tr key={ce.name} className="border-b border-border/50 last:border-0">
+                  <td className="px-4 py-2 text-fg">{ce.name}</td>
+                  <td className="px-4 py-2 max-w-[200px] truncate text-fg-muted">
                     {ce.pattern}
                   </td>
                   <td className="px-4 py-2">
                     <SeverityBadge severity={ce.severity} />
                   </td>
-                  <td className="px-4 py-2 uppercase text-zinc-600 dark:text-zinc-400">{ce.action}</td>
+                  <td className="px-4 py-2 uppercase text-fg-muted">{ce.action}</td>
                   <td className="px-4 py-2 text-right">
                     <Button
                       size="sm"
                       variant="ghost"
-                      className="h-6 cursor-pointer rounded-sm px-2 text-[10px] text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                      className="h-6 cursor-pointer rounded-sm px-2 text-[10px] text-status-critical hover:bg-status-critical/10 hover:text-status-critical"
                       onClick={() => deleteMut.mutate(ce.name)}
                       disabled={deleteMut.isPending}
                     >
@@ -145,36 +144,36 @@ export function CustomEntityForm({ adminKey }: { adminKey: string }) {
       </div>
 
       {/* Add form */}
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 rounded-sm border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900/50 p-4">
-        <span className="text-[11px] uppercase tracking-widest text-zinc-600 dark:text-zinc-400">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 rounded-sm border border-border bg-surface-subtle/50 p-4">
+        <span className="text-[11px] uppercase tracking-widest text-fg-muted">
           Yeni Custom Entity
         </span>
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
-            <label className="block text-[10px] uppercase tracking-widest text-zinc-600 dark:text-zinc-400">Name *</label>
+            <label className="block text-[10px] uppercase tracking-widest text-fg-muted">Name *</label>
             <input
               {...register("name")}
-              className="w-full rounded-sm border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-2 py-1.5 text-xs text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-600 dark:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-600"
+              className="w-full rounded-sm border border-border-strong bg-surface-card px-2 py-1.5 text-xs text-fg placeholder:text-fg-muted focus:outline-none focus:ring-1 focus:ring-ring"
               placeholder="ProjectMercury"
             />
-            {errors.name && <p className="text-[10px] text-red-400">{errors.name.message}</p>}
+            {errors.name && <p className="text-[10px] text-status-critical">{errors.name.message}</p>}
           </div>
           <div className="space-y-1">
-            <label className="block text-[10px] uppercase tracking-widest text-zinc-600 dark:text-zinc-400">Pattern (regex) *</label>
+            <label className="block text-[10px] uppercase tracking-widest text-fg-muted">Pattern (regex) *</label>
             <input
               {...register("pattern")}
-              className="w-full rounded-sm border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-2 py-1.5 text-xs text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-600 dark:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-600"
+              className="w-full rounded-sm border border-border-strong bg-surface-card px-2 py-1.5 text-xs text-fg placeholder:text-fg-muted focus:outline-none focus:ring-1 focus:ring-ring"
               placeholder="Project[ -]?Mercury"
             />
-            {errors.pattern && <p className="text-[10px] text-red-400">{errors.pattern.message}</p>}
+            {errors.pattern && <p className="text-[10px] text-status-critical">{errors.pattern.message}</p>}
           </div>
           <div className="space-y-1">
-            <label className="block text-[10px] uppercase tracking-widest text-zinc-600 dark:text-zinc-400">Severity</label>
+            <label className="block text-[10px] uppercase tracking-widest text-fg-muted">Severity</label>
             <Select value={watchedSeverity} onValueChange={(v) => setValue("severity", v as CustomEntityFormValues["severity"])}>
-              <SelectTrigger className="rounded-sm border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-xs text-zinc-800 dark:text-zinc-200">
+              <SelectTrigger className="rounded-sm border-border-strong bg-surface-card text-xs text-fg">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="rounded-sm border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950">
+              <SelectContent className="rounded-sm border-border bg-surface-card">
                 {["critical", "high", "medium", "low"].map((s) => (
                   <SelectItem key={s} value={s} className="text-xs uppercase">{s}</SelectItem>
                 ))}
@@ -182,12 +181,12 @@ export function CustomEntityForm({ adminKey }: { adminKey: string }) {
             </Select>
           </div>
           <div className="space-y-1">
-            <label className="block text-[10px] uppercase tracking-widest text-zinc-600 dark:text-zinc-400">Action</label>
+            <label className="block text-[10px] uppercase tracking-widest text-fg-muted">Action</label>
             <Select value={watchedAction} onValueChange={(v) => setValue("action", v as "block" | "redact" | "warn" | "log")}>
-              <SelectTrigger className="rounded-sm border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-xs text-zinc-800 dark:text-zinc-200">
+              <SelectTrigger className="rounded-sm border-border-strong bg-surface-card text-xs text-fg">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="rounded-sm border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950">
+              <SelectContent className="rounded-sm border-border bg-surface-card">
                 {["block", "redact", "warn", "log"].map((a) => (
                   <SelectItem key={a} value={a} className="text-xs uppercase">{a}</SelectItem>
                 ))}
@@ -196,19 +195,19 @@ export function CustomEntityForm({ adminKey }: { adminKey: string }) {
           </div>
         </div>
         <div className="space-y-1">
-          <label className="block text-[10px] uppercase tracking-widest text-zinc-600 dark:text-zinc-400">Description (opsiyonel)</label>
+          <label className="block text-[10px] uppercase tracking-widest text-fg-muted">Description (opsiyonel)</label>
           <input
             {...register("description")}
-            className="w-full rounded-sm border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-2 py-1.5 text-xs text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-600 dark:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-600"
+            className="w-full rounded-sm border border-border-strong bg-surface-card px-2 py-1.5 text-xs text-fg placeholder:text-fg-muted focus:outline-none focus:ring-1 focus:ring-ring"
             placeholder="Confidential project code name"
           />
         </div>
         {createMut.error && (
-          <p className="text-[11px] text-red-400">{createMut.error.message}</p>
+          <p className="text-[11px] text-status-critical">{createMut.error.message}</p>
         )}
         <Button
           type="submit"
-          className="cursor-pointer rounded-sm bg-red-600 text-white hover:bg-red-700"
+          className="cursor-pointer rounded-sm bg-status-critical text-white hover:bg-status-critical"
           disabled={createMut.isPending}
         >
           {createMut.isPending ? "Ekleniyor…" : "Entity Ekle"}
@@ -218,16 +217,3 @@ export function CustomEntityForm({ adminKey }: { adminKey: string }) {
   );
 }
 
-function SeverityBadge({ severity }: { severity: string }) {
-  const map: Record<string, string> = {
-    critical: "border-red-500/40 bg-red-500/10 text-red-400",
-    high: "border-orange-500/40 bg-orange-500/10 text-orange-400",
-    medium: "border-amber-500/40 bg-amber-500/10 text-amber-400",
-    low: "border-zinc-600 bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400",
-  };
-  return (
-    <Badge className={cn("rounded-sm border text-[9px] uppercase tracking-widest", map[severity] ?? map.low)}>
-      {severity}
-    </Badge>
-  );
-}

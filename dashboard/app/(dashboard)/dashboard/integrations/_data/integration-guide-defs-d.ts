@@ -4,7 +4,7 @@ import { LAST_VERIFIED } from "@/app/(dashboard)/dashboard/integrations/_data/in
 export const GENERIC: IntegrationGuide = {
   kind: "generic",
   name: "Generic Webhook",
-  badge: "border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300",
+  badge: "border-border-strong bg-surface-subtle text-fg-muted",
   overview:
     "POST Tamga events to any HTTPS endpoint as raw JSON. Use this when no named preset fits — it forwards the Tamga event body unmodified.",
   lastVerified: LAST_VERIFIED,

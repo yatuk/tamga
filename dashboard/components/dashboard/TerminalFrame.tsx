@@ -30,14 +30,14 @@ export function TerminalFrame({
   return (
     <div
       className={cn(
-        "overflow-hidden rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950",
+        "overflow-hidden rounded-sm border border-border bg-surface-card",
         className,
       )}
     >
       {label || status ? (
-        <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 px-3 py-1.5">
+        <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
           {label ? (
-            <span className="font-mono text-[11px] text-zinc-600 dark:text-zinc-400">{label}</span>
+            <span className="font-mono text-[11px] text-fg-muted">{label}</span>
           ) : <span />}
           {status ? <div className="shrink-0">{status}</div> : null}
         </div>

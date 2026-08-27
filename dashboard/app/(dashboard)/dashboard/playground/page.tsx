@@ -20,19 +20,19 @@ export default function PlaygroundPage() {
         actions={
           <>
             <Button
-              className="cursor-pointer rounded-sm border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800"
+              className="cursor-pointer rounded-sm border border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card"
               onClick={p.copyCurl}
             >
               <Copy className="mr-1 h-4 w-4" /> COPY CURL
             </Button>
             <Button
-              className="cursor-pointer rounded-sm border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800"
+              className="cursor-pointer rounded-sm border border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card"
               onClick={p.copyJson}
             >
               <Copy className="mr-1 h-4 w-4" /> COPY JSON
             </Button>
             <Button
-              className="cursor-pointer rounded-sm bg-red-600 text-white hover:bg-red-700"
+              className="cursor-pointer rounded-sm bg-status-critical text-white hover:bg-status-critical"
               onClick={p.runSimulate}
               disabled={p.running}
             >

@@ -17,7 +17,7 @@ export function OverviewViewPartB() {
     <div className="grid gap-4 lg:grid-cols-3">
       <Card className="lg:col-span-2">
         <CardHeader>
-          <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-600 dark:text-zinc-400">TRAFFIC // {toUpperLocale(range)}</div>
+          <div className="text-[10px] uppercase tracking-[0.18em] text-fg-muted">TRAFFIC // {toUpperLocale(range)}</div>
           <CardTitle>Trafik trendi</CardTitle>
           <CardDescription>İstek, engellenen ve maskelenen trendi</CardDescription>
         </CardHeader>
@@ -57,10 +57,10 @@ export function OverviewViewPartB() {
               {topFindingTypes.map((item) => (
                 <div
                   key={item.name}
-                  className="flex items-center justify-between rounded-md border border-slate-200 px-3 py-2 text-sm dark:border-slate-800"
+                  className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm dark:border-border"
                 >
                   <span>{humanizeFindingType(item.name)}</span>
-                  <Badge className="border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+                  <Badge className="border-border-strong bg-surface-subtle text-fg-muted dark:border-border dark:bg-surface-subtle dark:text-fg">
                     {item.value}
                   </Badge>
                 </div>

@@ -10,6 +10,7 @@ venv/
 
 # Build
 proxy/tamga
+proxy/bin/
 *.exe
 dist/
 *.tsbuildinfo
@@ -29,6 +30,11 @@ dist/
 # AI Agent / Internal tooling
 .claude/
 .cursor/
+.codex/
+.agents/
+.github/agents/
+.github/hooks/
+.github/skills/
 
 # OS
 .DS_Store
@@ -39,6 +45,14 @@ pgdata/
 redisdata/
 *.db
 *.sqlite
+
+# Local output / artifacts
+outputs/
+.pnpm-store/
+
+# Nested copies / separate demos
+tamga/
+qalqan-jury-demo/
 
 # Secrets (belt-and-suspenders)
 **/secrets/
@@ -53,6 +67,7 @@ coverage/
 proxy/coverage_telemetry.html
 
 # Internal docs (belt-and-suspenders)
+audit/
 docs/sprint*/
 docs/audit*/
 docs/internal/

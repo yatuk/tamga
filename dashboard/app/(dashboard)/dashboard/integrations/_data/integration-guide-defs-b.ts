@@ -4,7 +4,7 @@ import { LAST_VERIFIED } from "@/app/(dashboard)/dashboard/integrations/_data/in
 export const SENTINEL: IntegrationGuide = {
   kind: "sentinel",
   name: "Microsoft Sentinel",
-  badge: "border-blue-700/60 bg-blue-900/20 text-blue-300",
+  badge: "border-status-low/60 bg-status-low/20 text-status-low",
   overview:
     "Send Tamga events to Microsoft Sentinel. There are three paths — the Logs Ingestion API (modern, recommended), the legacy HTTP Data Collector API (deprecated 14 Sep 2026), and the CEF-over-Syslog AMA bridge.",
   lastVerified: LAST_VERIFIED,
@@ -84,7 +84,7 @@ export const SENTINEL: IntegrationGuide = {
 export const QRADAR: IntegrationGuide = {
   kind: "qradar",
   name: "IBM QRadar",
-  badge: "border-amber-700/60 bg-amber-900/20 text-amber-300",
+  badge: "border-status-medium/60 bg-status-medium/20 text-status-medium",
   overview:
     "Stream Tamga events to QRadar as LEEF 2.0 lines via the HTTP Receiver protocol. Works with QRadar 7.5+ and the Universal DSM.",
   lastVerified: LAST_VERIFIED,

@@ -18,21 +18,21 @@ export function DeleteKeyDialog({ target, onClose, onDelete, isPending }: Props)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-sm rounded-sm border border-red-500/20 bg-white dark:bg-zinc-950 p-5 shadow-lg">
+      <div className="w-full max-w-sm rounded-sm border border-status-critical/20 bg-surface-card p-5 shadow-lg">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-semibold text-red-400">Revoke API Key</h2>
+          <h2 className="text-sm font-semibold text-status-critical">Revoke API Key</h2>
           <button
             aria-label="Close dialog"
             onClick={onClose}
-            className="cursor-pointer rounded-sm p-1 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            className="cursor-pointer rounded-sm p-1 text-fg-subtle hover:bg-surface-subtle"
             type="button"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        <p className="mb-3 text-[11px] text-zinc-500">
-          This action is permanent. Type the key name <span className="font-mono text-zinc-700 dark:text-zinc-300">{target.label}</span> to confirm.
+        <p className="mb-3 text-[11px] text-fg-subtle">
+          This action is permanent. Type the key name <span className="font-mono text-fg-muted">{target.label}</span> to confirm.
         </p>
 
         <Input
@@ -55,7 +55,7 @@ export function DeleteKeyDialog({ target, onClose, onDelete, isPending }: Props)
           <Button
             size="sm"
             disabled={!confirmed || isPending}
-            className="cursor-pointer rounded-sm bg-red-600 text-white hover:bg-red-700"
+            className="cursor-pointer rounded-sm bg-status-critical text-white hover:bg-status-critical"
             onClick={() => onDelete(target.id)}
           >
             {isPending ? "Revoking..." : "Revoke Key"}

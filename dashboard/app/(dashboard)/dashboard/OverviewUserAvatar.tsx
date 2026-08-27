@@ -7,7 +7,7 @@ export function OverviewUserAvatar() {
   const clerkEnabled = pk && !toLowerEn(pk).includes("placeholder");
   if (!clerkEnabled) {
     return (
-      <div className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-slate-100 text-xs font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+      <div className="flex h-8 w-8 items-center justify-center rounded-full border border-border-strong bg-surface-subtle text-xs font-semibold text-fg-muted dark:border-border dark:bg-surface-subtle dark:text-fg">
         T
       </div>
     );

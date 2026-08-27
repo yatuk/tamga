@@ -18,14 +18,14 @@ export function PoliciesSimulatePanel({ sample, onSampleChange, simulating, onSi
     <div className="space-y-3">
       <TerminalFrame title="Simülasyon Girdisi">
         <textarea
-          className="block min-h-[120px] w-full resize-y bg-white dark:bg-zinc-950 p-3 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none"
+          className="block min-h-[120px] w-full resize-y bg-surface-card p-3 text-xs text-fg focus:outline-none"
           value={sample}
           onChange={(e) => onSampleChange(e.target.value)}
           placeholder="Sample prompt…"
         />
       </TerminalFrame>
       <Button
-        className="cursor-pointer rounded-sm bg-red-600 text-white hover:bg-red-700"
+        className="cursor-pointer rounded-sm bg-status-critical text-white hover:bg-status-critical"
         onClick={onSimulate}
         disabled={simulating}
       >
@@ -39,10 +39,10 @@ export function PoliciesSimulatePanel({ sample, onSampleChange, simulating, onSi
               <Badge
                 className={`rounded-sm border text-[10px] uppercase tracking-[0.18em] ${
                   simResult.action === "BLOCK"
-                    ? "border-red-500/40 bg-red-500/10 text-red-400"
+                    ? "border-status-critical/40 bg-status-critical/10 text-status-critical"
                     : simResult.action === "REDACT"
-                      ? "border-amber-500/40 bg-amber-500/10 text-amber-300"
-                      : "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
+                      ? "border-status-medium/40 bg-status-medium/10 text-status-medium"
+                      : "border-status-pass/40 bg-status-pass/10 text-status-pass"
                 }`}
               >
                 {simResult.action || "PASS"}
@@ -50,21 +50,21 @@ export function PoliciesSimulatePanel({ sample, onSampleChange, simulating, onSi
             }
 
           >
-            <div className="space-y-2 p-3 text-xs text-zinc-800 dark:text-zinc-200">
-              <div className="text-[10px] uppercase tracking-[0.14em] text-zinc-600 dark:text-zinc-400">
+            <div className="space-y-2 p-3 text-xs text-fg">
+              <div className="text-[10px] uppercase tracking-[0.14em] text-fg-muted">
                 policy: {simResult.policy_name} @ {simResult.policy_version}
               </div>
               {simResult.findings.length === 0 ? (
-                <div className="text-zinc-600 dark:text-zinc-400">Finding bulunamadı.</div>
+                <div className="text-fg-muted">Finding bulunamadı.</div>
               ) : (
                 <div className="space-y-1">
                   {simResult.findings.map((f, i) => (
                     <div key={i}>
-                      <div className="flex items-center gap-2 border-b border-zinc-200 dark:border-zinc-800 py-1">
-                        <span className="text-zinc-800 dark:text-zinc-200">{f.type}</span>
-                        <span className="text-zinc-600 dark:text-zinc-400">{f.category}</span>
-                        <span className="text-zinc-600 dark:text-zinc-400">{f.severity}</span>
-                        <span className="ml-auto text-zinc-700 dark:text-zinc-300">{f.action}</span>
+                      <div className="flex items-center gap-2 border-b border-border py-1">
+                        <span className="text-fg">{f.type}</span>
+                        <span className="text-fg-muted">{f.category}</span>
+                        <span className="text-fg-muted">{f.severity}</span>
+                        <span className="ml-auto text-fg-muted">{f.action}</span>
                       </div>
                     </div>
                   ))}

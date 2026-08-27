@@ -22,7 +22,7 @@ export function Sparkline({
 }: SparklineProps) {
   const gid = useId();
   if (!data || data.length === 0) {
-    return <svg aria-hidden className={cn("text-zinc-500 dark:text-zinc-400", className)} width={width} height={height} />;
+    return <svg aria-hidden className={cn("text-fg-subtle", className)} width={width} height={height} />;
   }
   const max = Math.max(...data, 1);
   const min = Math.min(...data, 0);

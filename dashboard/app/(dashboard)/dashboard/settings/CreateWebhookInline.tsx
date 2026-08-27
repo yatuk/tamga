@@ -17,18 +17,18 @@ export function CreateWebhookInline({ onCreate }: { onCreate: (payload: Omit<Web
         value={label}
         onChange={(e) => setLabel(e.target.value)}
         id="webhook-label-input" placeholder="label"
-        className="h-8 w-24 rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-2 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none"
+        className="h-8 w-24 rounded-sm border border-border bg-surface-card px-2 text-xs text-fg focus:outline-none"
       />
       <input
         value={url}
         onChange={(e) => setUrl(e.target.value)}
         id="webhook-url-input" placeholder="https://…"
-        className="h-8 w-72 rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-2 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none"
+        className="h-8 w-72 rounded-sm border border-border bg-surface-card px-2 text-xs text-fg focus:outline-none"
       />
       <select
         value={kind}
         onChange={(e) => setKind(e.target.value as Webhook["kind"])}
-        className="h-8 cursor-pointer rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-2 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none"
+        className="h-8 cursor-pointer rounded-sm border border-border bg-surface-card px-2 text-xs text-fg focus:outline-none"
       >
         <option value="generic">generic</option>
         <option value="slack">slack</option>
@@ -45,11 +45,11 @@ export function CreateWebhookInline({ onCreate }: { onCreate: (payload: Omit<Web
       <input
         value={blocksPerMin}
         onChange={(e) => setBlocksPerMin(e.target.value)}
-        className="h-8 w-16 rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-2 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none"
+        className="h-8 w-16 rounded-sm border border-border bg-surface-card px-2 text-xs text-fg focus:outline-none"
       />
-      <span className="text-[10px] uppercase tracking-wide text-zinc-600 dark:text-zinc-400">blocks/min</span>
+      <span className="text-[10px] uppercase tracking-wide text-fg-muted">blocks/min</span>
       <Button
-        className="h-8 cursor-pointer rounded-sm bg-red-600 px-3 text-white hover:bg-red-700"
+        className="h-8 cursor-pointer rounded-sm bg-status-critical px-3 text-white hover:bg-status-critical"
         onClick={() => {
           if (!label.trim() || !url.trim()) {
             toast.error("Label ve URL gerekli");

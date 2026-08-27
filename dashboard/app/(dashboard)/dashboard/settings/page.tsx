@@ -59,14 +59,14 @@ export default function SettingsPage() {
         }
       />
 
-      <div className="inline-flex overflow-hidden rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950">
+      <div className="inline-flex overflow-hidden rounded-sm border border-border bg-surface-card">
         {SETTINGS_TABS.map((t) => (
           <button
             key={t.id}
             type="button"
             onClick={() => setTab(t.id)}
             className={`cursor-pointer px-3 py-1.5 text-xs uppercase tracking-wide ${
-              tab === t.id ? "bg-emerald-600 text-white" : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900 hover:text-zinc-200"
+              tab === t.id ? "bg-status-pass text-white" : "text-fg-muted hover:bg-surface-subtle hover:text-fg"
             }`}
           >
             {t.label}

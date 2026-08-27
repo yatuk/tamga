@@ -48,22 +48,22 @@ export function TrafficAreaChart({
         <Area
           dataKey="total"
           type="monotone"
-          stroke="hsl(var(--chart-1))"
-          fill="hsl(var(--chart-1) / 0.18)"
+          stroke="var(--chart-1)"
+          fill="color-mix(in oklab, var(--chart-1) 18%, transparent)"
           strokeWidth={1.5}
         />
         <Area
           dataKey="passed"
           type="monotone"
-          stroke="hsl(var(--status-emerald))"
-          fill="hsl(var(--status-emerald) / 0.12)"
+          stroke="var(--status-pass)"
+          fill="color-mix(in oklab, var(--status-pass) 12%, transparent)"
           strokeWidth={1.5}
         />
         <Area
           dataKey="blocked"
           type="monotone"
-          stroke="hsl(var(--status-red))"
-          fill="hsl(var(--status-red) / 0.12)"
+          stroke="var(--status-critical)"
+          fill="color-mix(in oklab, var(--status-critical) 12%, transparent)"
           strokeWidth={1.5}
         />
       </AreaChart>

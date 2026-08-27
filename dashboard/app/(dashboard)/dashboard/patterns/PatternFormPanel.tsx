@@ -39,9 +39,9 @@ export function PatternFormPanel({
       <TerminalFrame filename={draft.id ? `Pattern Düzenle: ${draft.id}` : "Yeni Pattern"}>
         <div className="space-y-3 p-3">
           <div>
-            <label className="text-[10px] uppercase tracking-[0.16em] text-zinc-600 dark:text-zinc-400">Name</label>
+            <label className="text-[10px] uppercase tracking-[0.16em] text-fg-muted">Name</label>
             <input
-              className="mt-1 w-full rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-2 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-red-500/40 focus:outline-none"
+              className="mt-1 w-full rounded-sm border border-border bg-surface-card px-2 py-1.5 text-xs text-fg focus:border-status-critical/40 focus:outline-none"
               value={draft.name}
               onChange={(e) => setDraft({ ...draft, name: e.target.value })}
               placeholder="project-codename"
@@ -49,9 +49,9 @@ export function PatternFormPanel({
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-[10px] uppercase tracking-[0.16em] text-zinc-600 dark:text-zinc-400">Kind</label>
+              <label className="text-[10px] uppercase tracking-[0.16em] text-fg-muted">Kind</label>
               <select
-                className="mt-1 w-full cursor-pointer rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-2 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none"
+                className="mt-1 w-full cursor-pointer rounded-sm border border-border bg-surface-card px-2 py-1.5 text-xs text-fg focus:outline-none"
                 value={draft.kind}
                 onChange={(e) => setDraftKind(e.target.value as Draft["kind"])}
               >
@@ -60,9 +60,9 @@ export function PatternFormPanel({
               </select>
             </div>
             <div>
-              <label className="text-[10px] uppercase tracking-[0.16em] text-zinc-600 dark:text-zinc-400">Severity</label>
+              <label className="text-[10px] uppercase tracking-[0.16em] text-fg-muted">Severity</label>
               <select
-                className="mt-1 w-full cursor-pointer rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-2 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none"
+                className="mt-1 w-full cursor-pointer rounded-sm border border-border bg-surface-card px-2 py-1.5 text-xs text-fg focus:outline-none"
                 value={draft.severity}
                 onChange={(e) => setDraft({ ...draft, severity: e.target.value as PatternSeverity })}
               >
@@ -74,44 +74,44 @@ export function PatternFormPanel({
             </div>
           </div>
           <div>
-            <label className="text-[10px] uppercase tracking-[0.16em] text-zinc-600 dark:text-zinc-400">Pattern</label>
+            <label className="text-[10px] uppercase tracking-[0.16em] text-fg-muted">Pattern</label>
             <textarea
-              className="mt-1 block min-h-[70px] w-full resize-y rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-2 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-red-500/40 focus:outline-none"
+              className="mt-1 block min-h-[70px] w-full resize-y rounded-sm border border-border bg-surface-card px-2 py-1.5 text-xs text-fg focus:border-status-critical/40 focus:outline-none"
               value={draft.pattern}
               onChange={(e) => setDraft({ ...draft, pattern: e.target.value })}
               placeholder={draft.kind === "regex" ? "(?i)project-\\w+" : "ACME-SECRET"}
             />
             {compiledRegex === "invalid" ? (
-              <div className="mt-1 text-[10px] text-red-400">invalid regex</div>
+              <div className="mt-1 text-[10px] text-status-critical">invalid regex</div>
             ) : null}
           </div>
-          <label className="flex cursor-pointer items-center gap-2 text-[11px] text-zinc-700 dark:text-zinc-300">
+          <label className="flex cursor-pointer items-center gap-2 text-[11px] text-fg-muted">
             <input
               type="checkbox"
               checked={draft.enabled}
               onChange={(e) => setDraft({ ...draft, enabled: e.target.checked })}
-              className="h-3.5 w-3.5 cursor-pointer accent-red-600"
+              className="h-3.5 w-3.5 cursor-pointer accent-status-critical"
             />
             enabled
           </label>
 
-          <div className="rounded-sm border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900/40 p-2">
-            <div className="text-[10px] uppercase tracking-[0.16em] text-zinc-600 dark:text-zinc-400">INLINE TESTER</div>
+          <div className="rounded-sm border border-border bg-surface-subtle p-2">
+            <div className="text-[10px] uppercase tracking-[0.16em] text-fg-muted">INLINE TESTER</div>
             <textarea
-              className="mt-1 block min-h-[60px] w-full resize-y rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-2 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none"
+              className="mt-1 block min-h-[60px] w-full resize-y rounded-sm border border-border bg-surface-card px-2 py-1.5 text-xs text-fg focus:outline-none"
               value={testInput}
               onChange={(e) => setTestInput(e.target.value)}
               placeholder="paste sample text…"
             />
             <div className="mt-1 flex items-center justify-between">
               <Button
-                className="cursor-pointer rounded-sm border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 px-2 py-1 text-[11px] text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800"
+                className="cursor-pointer rounded-sm border border-border-strong bg-surface-subtle px-2 py-1 text-[11px] text-fg-muted hover:bg-surface-card"
                 onClick={onTest}
               >
                 Test
               </Button>
               {testMatch ? (
-                <span className="inline-flex items-center gap-1 text-[11px] text-zinc-600 dark:text-zinc-400">
+                <span className="inline-flex items-center gap-1 text-[11px] text-fg-muted">
                   <ArrowRight className="h-3 w-3" aria-hidden />
                   {testMatch}
                 </span>
@@ -122,14 +122,14 @@ export function PatternFormPanel({
           <div className="flex items-center justify-end gap-2 pt-1">
             {draft.id ? (
               <Button
-                className="cursor-pointer rounded-sm border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800"
+                className="cursor-pointer rounded-sm border border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card"
                 onClick={() => setDraft(EMPTY_DRAFT)}
               >
                 Cancel
               </Button>
             ) : null}
             <Button
-              className="cursor-pointer rounded-sm bg-red-600 text-white hover:bg-red-700"
+              className="cursor-pointer rounded-sm bg-status-critical text-white hover:bg-status-critical"
               onClick={onSubmit}
               disabled={createPending || updatePending}
             >

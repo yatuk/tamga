@@ -16,7 +16,7 @@ export function SkeletonRow({
       {Array.from({ length: cols }).map((_, i) => (
         <div
           key={i}
-          className="h-3 animate-pulse rounded bg-zinc-100 dark:bg-zinc-900/40"
+          className="h-3 animate-pulse rounded bg-surface-subtle"
           style={{ width: `${40 + Math.floor(Math.random() * 40)}%` }}
         />
       ))}

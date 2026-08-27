@@ -65,10 +65,10 @@ export function CostsBody({
             d.cost > 0 ? Math.max(2, (d.cost / dailySparkline.maxCost) * 20) : 2;
           const color =
             limitCost > 0 && d.cost > limitCost * 0.8
-              ? "bg-red-500"
+              ? "bg-status-critical"
               : limitCost > 0 && d.cost > limitCost * 0.5
-                ? "bg-amber-500"
-                : "bg-emerald-500";
+                ? "bg-status-medium"
+                : "bg-status-pass";
           return (
             <div
               key={i}
@@ -88,14 +88,14 @@ export function CostsBody({
         subtitle="daily spend · per-model billing · budget tracking"
         actions={
           <>
-            <div className="inline-flex overflow-hidden rounded-sm border border-zinc-300 dark:border-zinc-700">
+            <div className="inline-flex overflow-hidden rounded-sm border border-border-strong">
               {(["24h", "7d", "30d"] as TimeRange[]).map((r) => (
                 <button
                   key={r}
                   className={`cursor-pointer px-3 py-1 text-xs ${
                     range === r
-                      ? "bg-emerald-600 text-white"
-                      : "bg-white dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                      ? "bg-status-pass text-white"
+                      : "bg-surface-card text-fg-muted hover:bg-surface-subtle"
                   }`}
                   onClick={() => setRange(r)}
                   type="button"
@@ -105,7 +105,7 @@ export function CostsBody({
               ))}
             </div>
             <Button
-              className="cursor-pointer rounded-sm border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800"
+              className="cursor-pointer rounded-sm border border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card"
               onClick={exportCsv}
             >
               <Download className="mr-1 h-4 w-4" /> CSV
@@ -130,7 +130,7 @@ export function CostsBody({
           Array.from({ length: 4 }).map((_, i) => (
             <div
               key={i}
-              className="h-[88px] animate-pulse rounded-sm bg-zinc-100 dark:bg-zinc-900/40"
+              className="h-[88px] animate-pulse rounded-sm bg-surface-subtle"
             />
           ))
         ) : (
@@ -183,16 +183,16 @@ export function CostsBody({
       <TerminalFrame
         title="Token Consumption"
         status={
-          <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-zinc-600 dark:text-zinc-400">
+          <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
             {chartData.length} pts
           </span>
         }
       >
         <div className="p-3">
           {isLoading ? (
-            <div className="h-[200px] w-full animate-pulse rounded-sm bg-zinc-100 dark:bg-zinc-900/40" />
+            <div className="h-[200px] w-full animate-pulse rounded-sm bg-surface-subtle" />
           ) : chartData.length === 0 ? (
-            <div className="py-16 text-center text-xs text-zinc-600 dark:text-zinc-400">
+            <div className="py-16 text-center text-xs text-fg-muted">
               No usage data for this period
             </div>
           ) : (
@@ -205,7 +205,7 @@ export function CostsBody({
       <TerminalFrame
         title="Model Costs"
         status={
-          <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
+          <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-subtle">
             est. total: {formatCost(totalCostEstimate)}
           </span>
         }
@@ -214,17 +214,17 @@ export function CostsBody({
           {isLoading ? (
             <div className="p-3 space-y-2">
               {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="h-[28px] animate-pulse rounded-sm bg-zinc-100 dark:bg-zinc-900/40" />
+                <div key={i} className="h-[28px] animate-pulse rounded-sm bg-surface-subtle" />
               ))}
             </div>
           ) : modelCostRows.length === 0 ? (
-            <div className="py-12 text-center text-xs text-zinc-600 dark:text-zinc-400">
+            <div className="py-12 text-center text-xs text-fg-muted">
               No usage data for this period
             </div>
           ) : (
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400">
+                <tr className="border-b border-border text-fg-muted">
                   <th className="px-3 py-2 text-left font-medium text-[10px] uppercase tracking-[0.12em]">
                     Model
                   </th>
@@ -239,7 +239,7 @@ export function CostsBody({
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-900">
+              <tbody className="divide-y divide-border">
                 {modelCostRows.map((r) => {
                   const pct =
                     totalCostEstimate > 0
@@ -248,7 +248,7 @@ export function CostsBody({
                   return (
                     <tr
                       key={r.model}
-                      className="text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900/60"
+                      className="text-fg-muted hover:bg-surface-subtle"
                     >
                       <td className="px-3 py-2 font-mono">{r.model}</td>
                       <td className="px-3 py-2 text-right tabular-nums font-mono">
@@ -257,7 +257,7 @@ export function CostsBody({
                       <td className="px-3 py-2 text-right tabular-nums font-mono">
                         {formatCost(r.cost)}
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums text-zinc-500">
+                      <td className="px-3 py-2 text-right tabular-nums text-fg-subtle">
                         {pct}%
                       </td>
                     </tr>
@@ -267,7 +267,7 @@ export function CostsBody({
             </table>
           )}
         </div>
-        <div className="border-t border-zinc-200 dark:border-zinc-800 px-3 py-2 text-[10px] text-zinc-500">
+        <div className="border-t border-border px-3 py-2 text-[10px] text-fg-subtle">
           Pricing as of June 2026. Costs are server-side estimates — verify with provider invoices.
         </div>
       </TerminalFrame>
@@ -277,7 +277,7 @@ export function CostsBody({
         <TerminalFrame
           title="Model Family Distribution"
           status={
-            <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-zinc-600 dark:text-zinc-400">
+            <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
               {modelFamilyBars.length} families
             </span>
           }
@@ -299,8 +299,8 @@ export function CostsBody({
               {modelFamilyBars.map((f) => (
                 <div key={f.family} className="flex items-center gap-1.5 text-[10px]">
                   <span className={`h-2 w-2 shrink-0 rounded-sm ${f.color}`} />
-                  <span className="text-zinc-600 dark:text-zinc-400">{f.family}</span>
-                  <span className="font-mono tabular-nums text-zinc-500">{f.pct}%</span>
+                  <span className="text-fg-muted">{f.family}</span>
+                  <span className="font-mono tabular-nums text-fg-subtle">{f.pct}%</span>
                 </div>
               ))}
             </div>
@@ -313,7 +313,7 @@ export function CostsBody({
         <TerminalFrame
           title="Daily Breakdown"
           status={
-            <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
+            <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-subtle">
               {dailyRows.length} rows
             </span>
           }
@@ -321,7 +321,7 @@ export function CostsBody({
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400">
+                <tr className="border-b border-border text-fg-muted">
                   <th className="px-3 py-2 text-left font-medium text-[10px] uppercase tracking-[0.12em]">
                     Date
                   </th>
@@ -342,13 +342,13 @@ export function CostsBody({
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-900">
+              <tbody className="divide-y divide-border">
                 {dailyRows.map((r, i) => (
                   <tr
                     key={`${r.date}-${r.provider}-${r.model}-${i}`}
-                    className="text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900/60"
+                    className="text-fg-muted hover:bg-surface-subtle"
                   >
-                    <td className="px-3 py-2 font-mono text-zinc-500">
+                    <td className="px-3 py-2 font-mono text-fg-subtle">
                       {r.date}
                     </td>
                     <td className="px-3 py-2 font-mono">{r.provider}</td>
@@ -392,11 +392,11 @@ function SimpleTokenChart({
             title={`${d.time}: ${formatInt(d.total)} total, ${d.blocked.toLocaleString()} blocked`}
           >
             <div
-              className="absolute bottom-0 left-0 right-0 rounded-t-sm bg-zinc-200 dark:bg-zinc-700"
+              className="absolute bottom-0 left-0 right-0 rounded-t-sm bg-surface-subtle"
               style={{ height: `${h}%` }}
             >
               <div
-                className="absolute bottom-0 left-0 right-0 rounded-t-sm bg-red-500/70"
+                className="absolute bottom-0 left-0 right-0 rounded-t-sm bg-status-critical/70"
                 style={{ height: `${blockedH}%` }}
               />
             </div>

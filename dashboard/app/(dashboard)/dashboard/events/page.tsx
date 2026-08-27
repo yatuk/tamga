@@ -14,8 +14,8 @@ export default function EventsPage() {
     <Suspense
       fallback={
         <div className="space-y-2">
-          <div className="h-[40px] animate-pulse rounded-sm bg-zinc-100 dark:bg-zinc-900/40" />
-          <div className="h-[600px] animate-pulse rounded-sm bg-zinc-100 dark:bg-zinc-900/40" />
+          <div className="h-[40px] animate-pulse rounded-sm bg-surface-subtle" />
+          <div className="h-[600px] animate-pulse rounded-sm bg-surface-subtle" />
         </div>
       }
     >

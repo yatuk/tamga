@@ -10,16 +10,16 @@ export function SettingsStatusChip({
   neutral?: boolean;
 }) {
   const cls = neutral
-    ? "border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400"
+    ? "border-border-strong bg-surface-subtle text-fg-muted"
     : good
-      ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
-      : "border-red-500/40 bg-red-500/10 text-red-400";
+      ? "border-status-pass/40 bg-status-pass/10 text-status-pass"
+      : "border-status-critical/40 bg-status-critical/10 text-status-critical";
   return (
     <span
       className={`inline-flex items-center gap-1 rounded-sm border px-2 py-1 text-[10px] uppercase tracking-wide ${cls}`}
     >
       {label}
-      <span className="text-zinc-600 dark:text-zinc-400">·</span>
+      <span className="text-fg-muted">·</span>
       <span>{value}</span>
     </span>
   );

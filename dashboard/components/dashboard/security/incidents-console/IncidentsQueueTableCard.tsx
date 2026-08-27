@@ -21,7 +21,8 @@ import { TerminalFrame } from "@/components/dashboard/TerminalFrame";
 import type { SecurityEvent } from "@/lib/api";
 import type { IncidentsConsoleModel } from "@/hooks/security/useSecurityIncidentsConsole";
 import { toUpperLocale } from "@/lib/utils/tr-string";
-import { getActionBadge, getSeverityBadge, primarySeverity, relativeTime } from "@/lib/security/security-events-model";
+import { primarySeverity, relativeTime } from "@/lib/security/security-events-model";
+import { actionClass, severityClass } from "@/lib/badges";
 
 // ── Grid constants — MUST stay in sync between header and every row ──────
 const ROW_HEIGHT_PX = 48;
@@ -41,11 +42,11 @@ function GridHeader({
   toggleSelectAllVisible: () => void;
 }) {
   const th = (label: string, extra = "") =>
-    `h-full flex items-center px-2 text-[10px] uppercase tracking-wide text-zinc-600 dark:text-zinc-400 ${extra}`;
+    `h-full flex items-center px-2 text-[10px] uppercase tracking-wide text-fg-muted ${extra}`;
 
   return (
     <div
-      className={`grid ${GRID_COLS} ${GRID_MIN_W} h-[${HEADER_HEIGHT_PX}px] sticky top-0 z-20 bg-zinc-100 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800`}
+      className={`grid ${GRID_COLS} ${GRID_MIN_W} h-[${HEADER_HEIGHT_PX}px] sticky top-0 z-20 bg-surface-subtle border-b border-border`}
     >
       <div className="flex items-center justify-center h-full px-3">
         <Checkbox
@@ -100,7 +101,7 @@ function GridRow({
   return (
     <div
       style={rowStyle}
-      className={`grid ${GRID_COLS} ${GRID_MIN_W} h-[${ROW_HEIGHT_PX}px] max-h-[${ROW_HEIGHT_PX}px] min-h-[${ROW_HEIGHT_PX}px] overflow-hidden border-t border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 cursor-pointer ${isSelected ? "bg-zinc-100 dark:bg-zinc-900/80 border-l-2 border-l-red-500" : ""}`}
+      className={`grid ${GRID_COLS} ${GRID_MIN_W} h-[${ROW_HEIGHT_PX}px] max-h-[${ROW_HEIGHT_PX}px] min-h-[${ROW_HEIGHT_PX}px] overflow-hidden border-t border-border hover:bg-surface-subtle cursor-pointer ${isSelected ? "bg-surface-subtle/80 border-l-2 border-l-status-critical" : ""}`}
       onClick={() => m.setSelectedRow(idx)}
       role="row"
     >
@@ -116,12 +117,12 @@ function GridRow({
 
       {/* Severity */}
       <div className={cell("")}>
-        <Badge className={getSeverityBadge(sev)}>{toUpperLocale(sev)}</Badge>
+        <Badge className={severityClass(sev)}>{toUpperLocale(sev)}</Badge>
       </div>
 
       {/* Action */}
       <div className={cell("")}>
-        <Badge className={getActionBadge(event.action)}>{toUpperLocale(event.action || "—")}</Badge>
+        <Badge className={actionClass(event.action)}>{toUpperLocale(event.action || "—")}</Badge>
       </div>
 
       {/* Entity — stacked provider/model + request_id */}
@@ -134,32 +135,32 @@ function GridRow({
 
       {/* Finding — inline badges, never wrap */}
       <div className="h-full flex flex-row items-center px-2 gap-1.5 overflow-hidden whitespace-nowrap">
-        <span className="font-mono text-xs text-zinc-700 dark:text-zinc-300 truncate">{findingSummary}</span>
+        <span className="font-mono text-xs text-fg-muted truncate">{findingSummary}</span>
         {owasp && (
           <span
-            className="inline-flex shrink-0 items-center rounded-sm border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-zinc-700 dark:text-zinc-300"
+            className="inline-flex shrink-0 items-center rounded-sm border border-border-strong bg-surface-subtle px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-fg-muted"
             title={`OWASP LLM Top 10 · ${owasp.label}`}
           >
             {owasp.code}
           </span>
         )}
         {highConfidence && (
-          <span className="shrink-0 h-2 w-2 rounded-full bg-emerald-500" title={`High confidence · ${Math.round(maxConfidencePct)}%`} aria-label={`High confidence (${Math.round(maxConfidencePct)}%)`} />
+          <span className="shrink-0 h-2 w-2 rounded-full bg-status-pass" title={`High confidence · ${Math.round(maxConfidencePct)}%`} aria-label={`High confidence (${Math.round(maxConfidencePct)}%)`} />
         )}
       </div>
 
       {/* Status */}
       <div className={cell("")}>
-        <Badge className="rounded-sm border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300">
+        <Badge className="rounded-sm border border-border-strong bg-surface-subtle text-fg-muted">
           {opState.status}
         </Badge>
       </div>
 
       {/* Assignee */}
-      <div className={cell("text-xs text-zinc-600 dark:text-zinc-400")}>{opState.assignee}</div>
+      <div className={cell("text-xs text-fg-muted")}>{opState.assignee}</div>
 
       {/* Time */}
-      <div className="h-full flex flex-row items-center px-2 font-mono text-xs text-zinc-600 dark:text-zinc-400 whitespace-nowrap">
+      <div className="h-full flex flex-row items-center px-2 font-mono text-xs text-fg-muted whitespace-nowrap">
         {relativeTime(event.timestamp)}
       </div>
 
@@ -284,8 +285,8 @@ export function IncidentsQueueTableCard({ m, onFpClick }: { m: IncidentsConsoleM
 
   return (
     <Card
-      className={`rounded-sm border bg-white dark:bg-zinc-950 ${
-        paused ? "border-amber-500/40" : "border-zinc-200 dark:border-zinc-800"
+      className={`rounded-sm border bg-surface-card ${
+        paused ? "border-status-medium/40" : "border-border"
       }`}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
@@ -294,12 +295,12 @@ export function IncidentsQueueTableCard({ m, onFpClick }: { m: IncidentsConsoleM
         <div className="flex items-center justify-between">
           <CardTitle className="text-base">Incident Queue</CardTitle>
           {paused && (
-            <span className="inline-flex items-center gap-1 rounded-sm border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-amber-400">
+            <span className="inline-flex items-center gap-1 rounded-sm border border-status-medium/30 bg-status-medium/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-status-medium">
               PAUSED
             </span>
           )}
         </div>
-        <CardDescription className="text-zinc-700 dark:text-zinc-300">
+        <CardDescription className="text-fg-muted">
           Severity ve aksiyona gore onceliklendirilmis son olaylar.
         </CardDescription>
       </CardHeader>
@@ -318,15 +319,15 @@ export function IncidentsQueueTableCard({ m, onFpClick }: { m: IncidentsConsoleM
             Events alinamadi: {(m.error as Error).message}
           </div>
         ) : m.filtered.length === 0 ? (
-          <div className="rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-6 text-center text-sm text-zinc-600 dark:text-zinc-400">
-            <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-600 dark:text-zinc-400">no incident matches</div>
-            <div className="mt-2 text-zinc-600 dark:text-zinc-400">Filtreye uygun olay yok.</div>
+          <div className="rounded-sm border border-border bg-surface-card p-6 text-center text-sm text-fg-muted">
+            <div className="text-[11px] uppercase tracking-[0.18em] text-fg-muted">no incident matches</div>
+            <div className="mt-2 text-fg-muted">Filtreye uygun olay yok.</div>
           </div>
         ) : (
           <>
             {m.selectedIds.length > 0 && (
-              <div className="mb-2 flex flex-wrap items-center gap-2 rounded-sm border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 p-2 text-xs">
-                <span className="text-zinc-700 dark:text-zinc-300">{m.selectedIds.length} selected</span>
+              <div className="mb-2 flex flex-wrap items-center gap-2 rounded-sm border border-border-strong bg-surface-subtle p-2 text-xs">
+                <span className="text-fg-muted">{m.selectedIds.length} selected</span>
                 <Button variant="outline" size="sm" onClick={() => m.applyBulkStatus("Closed")}>Close Selected</Button>
                 <Button variant="accent" size="sm" onClick={() => { if (m.selectedIds.length > 0) onFpClick(m.selectedIds[0]); }}>Mark FP</Button>
                 <Button variant="outline" size="sm" onClick={m.bulkAssignMe}>Assign to me</Button>
@@ -337,7 +338,7 @@ export function IncidentsQueueTableCard({ m, onFpClick }: { m: IncidentsConsoleM
             <TerminalFrame
               title="Incidents"
               status={
-                <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-zinc-600 dark:text-zinc-400">
+                <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
                   {rows.length} visible · {m.eventsFeed.length} loaded / {m.total} total
                   {m.isFetchingNextPage ? " · loading…" : ""}
                 </span>
@@ -390,14 +391,14 @@ export function IncidentsQueueTableCard({ m, onFpClick }: { m: IncidentsConsoleM
 
               {/* Keyboard shortcuts footer — solid bg, sits below scroll area */}
               {rows.length > 0 && (
-                <div className="sticky bottom-0 z-10 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900 px-3 py-1.5 text-[10px] text-zinc-600 dark:text-zinc-400 flex flex-wrap gap-x-3 gap-y-0.5">
-                  <span><kbd className="rounded-sm border border-zinc-300 dark:border-zinc-700 px-1 py-px text-[9px]">j</kbd>/<kbd className="rounded-sm border border-zinc-300 dark:border-zinc-700 px-1 py-px text-[9px]">k</kbd> navigate</span>
-                  <span><kbd className="rounded-sm border border-zinc-300 dark:border-zinc-700 px-1 py-px text-[9px]">Enter</kbd> detail</span>
-                  <span><kbd className="rounded-sm border border-zinc-300 dark:border-zinc-700 px-1 py-px text-[9px]">x</kbd> select</span>
-                  <span><kbd className="rounded-sm border border-zinc-300 dark:border-zinc-700 px-1 py-px text-[9px]">Shift+A</kbd> assign</span>
-                  <span><kbd className="rounded-sm border border-zinc-300 dark:border-zinc-700 px-1 py-px text-[9px]">Shift+C</kbd> close</span>
-                  <span><kbd className="rounded-sm border border-zinc-300 dark:border-zinc-700 px-1 py-px text-[9px]">Shift+F</kbd> false positive</span>
-                  <span><kbd className="rounded-sm border border-zinc-300 dark:border-zinc-700 px-1 py-px text-[9px]">Esc</kbd> clear</span>
+                <div className="sticky bottom-0 z-10 border-t border-border bg-surface-subtle px-3 py-1.5 text-[10px] text-fg-muted flex flex-wrap gap-x-3 gap-y-0.5">
+                  <span><kbd className="rounded-sm border border-border-strong px-1 py-px text-[9px]">j</kbd>/<kbd className="rounded-sm border border-border-strong px-1 py-px text-[9px]">k</kbd> navigate</span>
+                  <span><kbd className="rounded-sm border border-border-strong px-1 py-px text-[9px]">Enter</kbd> detail</span>
+                  <span><kbd className="rounded-sm border border-border-strong px-1 py-px text-[9px]">x</kbd> select</span>
+                  <span><kbd className="rounded-sm border border-border-strong px-1 py-px text-[9px]">Shift+A</kbd> assign</span>
+                  <span><kbd className="rounded-sm border border-border-strong px-1 py-px text-[9px]">Shift+C</kbd> close</span>
+                  <span><kbd className="rounded-sm border border-border-strong px-1 py-px text-[9px]">Shift+F</kbd> false positive</span>
+                  <span><kbd className="rounded-sm border border-border-strong px-1 py-px text-[9px]">Esc</kbd> clear</span>
                 </div>
               )}
             </TerminalFrame>

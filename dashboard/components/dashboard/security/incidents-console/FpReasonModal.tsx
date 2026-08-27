@@ -63,14 +63,14 @@ export function FpReasonModal({
       aria-label={title}
     >
       <div
-        className="relative w-full max-w-md rounded-sm border border-zinc-800 bg-zinc-950 p-6 shadow-2xl"
+        className="relative w-full max-w-md rounded-sm border border-border bg-surface-base p-6 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Title */}
-        <h2 className="text-lg font-semibold text-zinc-100">{title}</h2>
+        <h2 className="text-lg font-semibold text-fg">{title}</h2>
 
         {/* Description */}
-        <p className="mt-1 text-sm text-zinc-400">{description}</p>
+        <p className="mt-1 text-sm text-fg-subtle">{description}</p>
 
         {/* Input */}
         <form onSubmit={handleSubmit}>
@@ -80,7 +80,7 @@ export function FpReasonModal({
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             placeholder={placeholder}
-            className="mt-4 w-full rounded-sm border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-zinc-600 focus:outline-none"
+            className="mt-4 w-full rounded-sm border border-border bg-surface-subtle px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus:border-border-strong focus:outline-none"
           />
 
           {/* Footer */}
@@ -90,14 +90,14 @@ export function FpReasonModal({
               variant="outline"
               size="sm"
               onClick={onClose}
-              className="h-8 cursor-pointer rounded-sm border-zinc-700 bg-transparent px-3 text-xs text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
+              className="h-8 cursor-pointer rounded-sm border-border-strong bg-transparent px-3 text-xs text-fg-subtle hover:bg-surface-subtle hover:text-fg"
             >
               Cancel
             </Button>
             <Button
               type="submit"
               size="sm"
-              className="h-8 cursor-pointer rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 text-xs text-amber-400 hover:bg-amber-500/20"
+              className="h-8 cursor-pointer rounded-sm border border-status-medium/40 bg-status-medium/10 px-3 text-xs text-status-medium hover:bg-status-medium/20"
             >
               {confirmLabel}
             </Button>

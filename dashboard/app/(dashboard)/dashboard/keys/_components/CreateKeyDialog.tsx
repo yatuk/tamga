@@ -35,15 +35,15 @@ export function CreateKeyDialog({ open, onClose, onCreate, isPending }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-sm rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-5 shadow-lg">
+      <div className="w-full max-w-sm rounded-sm border border-border bg-surface-card p-5 shadow-lg">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+          <h2 className="text-sm font-semibold text-fg">
             Create API Key
           </h2>
           <button
             aria-label="Close dialog"
             onClick={onClose}
-            className="cursor-pointer rounded-sm p-1 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            className="cursor-pointer rounded-sm p-1 text-fg-subtle hover:bg-surface-subtle"
             type="button"
           >
             <X className="h-4 w-4" />
@@ -52,7 +52,7 @@ export function CreateKeyDialog({ open, onClose, onCreate, isPending }: Props) {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-[11px] font-medium text-zinc-600 dark:text-zinc-400 mb-1">
+            <label className="block text-[11px] font-medium text-fg-muted mb-1">
               Name
             </label>
             <Input
@@ -66,7 +66,7 @@ export function CreateKeyDialog({ open, onClose, onCreate, isPending }: Props) {
           </div>
 
           <div>
-            <label className="block text-[11px] font-medium text-zinc-600 dark:text-zinc-400 mb-2">
+            <label className="block text-[11px] font-medium text-fg-muted mb-2">
               Scope
             </label>
             <div className="space-y-1.5">
@@ -75,8 +75,8 @@ export function CreateKeyDialog({ open, onClose, onCreate, isPending }: Props) {
                   key={s.value}
                   className={`flex cursor-pointer items-start gap-2 rounded-sm border p-2 text-xs ${
                     scope === s.value
-                      ? "border-emerald-500/40 bg-emerald-500/5"
-                      : "border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900/60"
+                      ? "border-status-pass/40 bg-status-pass/5"
+                      : "border-border hover:bg-surface-subtle"
                   }`}
                 >
                   <input
@@ -88,8 +88,8 @@ export function CreateKeyDialog({ open, onClose, onCreate, isPending }: Props) {
                     className="mt-0.5"
                   />
                   <div>
-                    <div className="font-mono text-zinc-800 dark:text-zinc-200">{s.label}</div>
-                    <div className="text-zinc-500">{s.desc}</div>
+                    <div className="font-mono text-fg">{s.label}</div>
+                    <div className="text-fg-subtle">{s.desc}</div>
                   </div>
                 </label>
               ))}
@@ -110,7 +110,7 @@ export function CreateKeyDialog({ open, onClose, onCreate, isPending }: Props) {
               type="submit"
               size="sm"
               disabled={!label.trim() || isPending}
-              className="cursor-pointer rounded-sm bg-emerald-600 text-white hover:bg-emerald-700"
+              className="cursor-pointer rounded-sm bg-status-pass text-white hover:bg-status-pass"
             >
               {isPending ? "Creating..." : "Create"}
             </Button>

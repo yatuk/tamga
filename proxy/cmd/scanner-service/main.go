@@ -15,11 +15,12 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
-
-	"github.com/yatuk/tamga/internal/telemetry"
+	"google.golang.org/grpc/health"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/keepalive"
 
 	"github.com/yatuk/tamga/internal/scanner"
+	"github.com/yatuk/tamga/internal/telemetry"
 	pb "github.com/yatuk/tamga/proto/scanner/v1"
 )
 
@@ -156,6 +157,9 @@ func main() {
 		mode:     mode,
 		pool:     pool,
 	})
+	healthServer := health.NewServer()
+	healthpb.RegisterHealthServer(server, healthServer)
+	healthServer.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
 
 	log.Info().
 		Str("port", port).

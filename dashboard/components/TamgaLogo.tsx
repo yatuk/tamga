@@ -35,7 +35,7 @@ export function TamgaLogo({ size = 32, className, contained = false, priority = 
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center justify-center rounded-md bg-white p-1 shadow-sm ring-1 ring-slate-200 dark:ring-slate-600",
+        "inline-flex shrink-0 items-center justify-center rounded-md bg-white p-1 shadow-sm ring-1 ring-ring dark:ring-ring",
         className
       )}
     >

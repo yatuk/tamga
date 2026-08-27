@@ -17,20 +17,20 @@ export function PageHeader({ eyebrow, title, subtitle, actions, className }: Pag
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
           {eyebrow ? (
-            <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-600 dark:text-zinc-400">
+            <div className="text-[10px] uppercase tracking-[0.18em] text-fg-muted">
               {eyebrow}
             </div>
           ) : null}
-          <h1 className="truncate text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100 sm:text-2xl">
+          <h1 className="truncate text-xl font-semibold tracking-tight text-fg sm:text-2xl">
             {title}
           </h1>
           {subtitle ? (
-            <div className="text-[11px] text-zinc-600 dark:text-zinc-400">{subtitle}</div>
+            <div className="text-[11px] text-fg-muted">{subtitle}</div>
           ) : null}
         </div>
         {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
       </div>
-      <div className="h-px w-full bg-zinc-200 dark:bg-zinc-800" />
+      <div className="h-px w-full bg-surface-subtle" />
     </div>
   );
 }

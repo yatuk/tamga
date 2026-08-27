@@ -8,15 +8,15 @@ export function integrationKindBadge(k: WebhookKind) {
       return "border-[#6264A7]/60 bg-[#6264A7]/20 text-[#a5a8ff]";
     case "splunk":
     case "splunk_hec":
-      return "border-emerald-700/60 bg-emerald-900/20 text-emerald-300";
+      return "border-status-pass/60 bg-status-pass/20 text-status-pass";
     case "sentinel":
-      return "border-blue-700/60 bg-blue-900/20 text-blue-300";
+      return "border-status-low/60 bg-status-low/20 text-status-low";
     case "qradar":
-      return "border-amber-700/60 bg-amber-900/20 text-amber-300";
+      return "border-status-medium/60 bg-status-medium/20 text-status-medium";
     case "datadog":
-      return "border-zinc-500/60 bg-zinc-500/10 text-zinc-300";
+      return "border-border-strong/60 bg-surface-subtle text-fg-muted";
     case "jira":
-      return "border-sky-700/60 bg-sky-900/20 text-sky-300";
+      return "border-status-low/60 bg-status-low/20 text-status-low";
     case "pagerduty":
       return "border-[#06A94D]/60 bg-[#06A94D]/20 text-[#06A94D]";
     case "opsgenie":
@@ -24,7 +24,7 @@ export function integrationKindBadge(k: WebhookKind) {
     case "servicenow":
       return "border-[#81B5A1]/60 bg-[#81B5A1]/20 text-[#81B5A1]";
     default:
-      return "border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300";
+      return "border-border-strong bg-surface-subtle text-fg-muted";
   }
 }
 

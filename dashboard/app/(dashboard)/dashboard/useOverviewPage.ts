@@ -16,7 +16,9 @@ export function useOverviewPage() {
   const queryClient = useQueryClient();
   const pk = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || "";
   const localDemo = !pk || toLowerEn(pk).includes("placeholder");
-  const [adminKey, setAdminKey] = useAdminKey(localDemo ? "test-admin-key" : "");
+  const [adminKey, setAdminKey] = useAdminKey(
+    localDemo ? (process.env.NEXT_PUBLIC_ADMIN_KEY || "test-admin-key") : ""
+  );
   const [adminKeyDraft, setAdminKeyDraft] = useState(adminKey);
   const [range, setRange] = useState<RangeMode>("7d");
   const [tickerPaused, setTickerPaused] = useState(false);

@@ -1,46 +1,47 @@
 import { describe, it, expect } from "vitest";
-import { getSeverityBadge, getActionBadge, severityRank } from "../badges";
+import {
+  getSeverityBadge,
+  getActionBadge,
+  severityClass,
+  actionClass,
+  severityRank,
+} from "../badges";
 
 describe("getSeverityBadge", () => {
   it("returns icon and cls for critical", () => {
     const result = getSeverityBadge("critical");
     expect(result).toHaveProperty("icon");
     expect(result).toHaveProperty("cls");
-    expect(result.cls).toContain("text-red-400");
-    expect(result.cls).toContain("bg-red-500/10");
-    expect(result.cls).toContain("border-red-500/30");
+    expect(result.cls).toContain("text-status-critical");
+    expect(result.cls).toContain("bg-status-critical-bg");
+    expect(result.cls).toContain("border-status-critical/40");
   });
 
   it("returns icon and cls for high", () => {
     const result = getSeverityBadge("high");
-    expect(result.cls).toContain("text-orange-400");
-    expect(result.cls).toContain("bg-orange-500/10");
-    expect(result.cls).toContain("border-orange-500/30");
+    expect(result.cls).toContain("text-status-high");
+    expect(result.cls).toContain("bg-status-high-bg");
   });
 
   it("returns icon and cls for medium", () => {
     const result = getSeverityBadge("medium");
-    expect(result.cls).toContain("text-amber-300");
-    expect(result.cls).toContain("bg-amber-500/10");
-    expect(result.cls).toContain("border-amber-500/30");
+    expect(result.cls).toContain("text-status-medium");
+    expect(result.cls).toContain("bg-status-medium-bg");
   });
 
-  it("returns icon and cls for low (default)", () => {
+  it("returns icon and cls for low", () => {
     const result = getSeverityBadge("low");
-    expect(result.cls).toContain("text-zinc-400");
-    expect(result.cls).toContain("bg-zinc-500/10");
-    expect(result.cls).toContain("border-zinc-500/30");
+    expect(result.cls).toContain("text-status-low");
+    expect(result.cls).toContain("bg-status-low-bg");
     expect(result.icon).toBeTruthy();
   });
 
-  it("returns default for unknown severity", () => {
-    const result = getSeverityBadge("unknown");
-    expect(result.cls).toContain("text-zinc-400");
+  it("returns neutral for unknown severity", () => {
+    expect(severityClass("unknown")).toContain("text-fg-muted");
   });
 
-  it("returns default for empty string", () => {
-    const result = getSeverityBadge("");
-    expect(result.cls).toContain("text-zinc-400");
+  it("returns neutral for empty string", () => {
+    expect(severityClass("")).toContain("text-fg-muted");
   });
 });
 
@@ -49,32 +50,31 @@ describe("getActionBadge", () => {
     const result = getActionBadge("block");
     expect(result).toHaveProperty("icon");
     expect(result).toHaveProperty("cls");
-    expect(result.cls).toContain("bg-red-500/10");
-    expect(result.cls).toContain("text-red-400");
+    expect(result.cls).toContain("bg-status-block-bg");
+    expect(result.cls).toContain("text-status-block");
   });
 
   it("returns icon and cls for warn", () => {
     const result = getActionBadge("warn");
-    expect(result.cls).toContain("bg-orange-500/10");
-    expect(result.cls).toContain("text-orange-400");
+    expect(result.cls).toContain("bg-status-warn-bg");
+    expect(result.cls).toContain("text-status-warn");
   });
 
   it("returns icon and cls for redact", () => {
     const result = getActionBadge("redact");
-    expect(result.cls).toContain("bg-amber-500/10");
-    expect(result.cls).toContain("text-amber-300");
+    expect(result.cls).toContain("bg-status-redact-bg");
+    expect(result.cls).toContain("text-status-redact");
   });
 
-  it("returns icon and cls for log (default)", () => {
+  it("returns icon and cls for log", () => {
     const result = getActionBadge("log");
-    expect(result.cls).toContain("bg-zinc-500/10");
-    expect(result.cls).toContain("text-zinc-400");
+    expect(result.cls).toContain("bg-status-pass-bg");
+    expect(result.cls).toContain("text-status-pass");
     expect(result.icon).toBeTruthy();
   });
 
-  it("returns default for unknown action", () => {
-    const result = getActionBadge("unknown");
-    expect(result.cls).toContain("bg-zinc-500/10");
+  it("returns neutral for unknown action", () => {
+    expect(actionClass("unknown")).toContain("bg-surface-subtle");
   });
 });
 

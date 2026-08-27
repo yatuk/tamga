@@ -48,12 +48,12 @@ export function OverviewViewPartC() {
                 value={quickSearch}
                 onChange={(e) => setQuickSearch(e.target.value)}
                 placeholder="Search recent incidents... (/)"
-                className="h-8 w-full rounded-sm border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 px-2 text-xs text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-600 dark:text-zinc-400"
+                className="h-8 w-full rounded-sm border border-border-strong bg-surface-subtle px-2 text-xs text-fg placeholder:text-fg-muted"
               />
             </div>
             <div className="mb-3 flex justify-end">
               <Button
-                className="cursor-pointer border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                className="cursor-pointer border border-border-strong bg-white text-fg-muted hover:bg-surface-subtle dark:border-border dark:bg-surface-subtle dark:text-fg dark:hover:bg-surface-elevated"
                 onClick={exportRecentCsv}
               >
                 <Download className="mr-1 h-4 w-4" />
@@ -73,7 +73,7 @@ export function OverviewViewPartC() {
               <TableBody>
                 {searchedRecentEvents.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-slate-500 dark:text-slate-400">
+                    <TableCell colSpan={5} className="text-fg-subtle dark:text-fg-subtle">
                       Veri yok.
                     </TableCell>
                   </TableRow>
@@ -84,10 +84,10 @@ export function OverviewViewPartC() {
                     return (
                       <TableRow
                         key={e.request_id}
-                        className="group transition-colors hover:bg-slate-50 dark:hover:bg-slate-900/40"
+                        className="group transition-colors hover:bg-surface-subtle dark:hover:bg-surface-subtle/40"
                       >
                         <TableCell className="relative text-xs">
-                          <span className="absolute left-0 top-1/2 hidden h-8 w-0.5 -translate-y-1/2 rounded-full bg-sky-600 opacity-0 transition-opacity group-hover:opacity-100 dark:bg-sky-400 md:block" />
+                          <span className="absolute left-0 top-1/2 hidden h-8 w-0.5 -translate-y-1/2 rounded-full bg-status-low opacity-0 transition-opacity group-hover:opacity-100 dark:bg-status-low md:block" />
                           {e.request_id.slice(0, 12)}
                         </TableCell>
                         <TableCell>{e.timestamp ? new Date(e.timestamp).toLocaleString("tr-TR") : "—"}</TableCell>
@@ -99,16 +99,16 @@ export function OverviewViewPartC() {
                           <span className="inline-flex flex-wrap items-center gap-1.5">
                             {isCrit && !reduce ? (
                               <motion.span className="inline-flex" animate={{ opacity: [1, 0.75, 1] }} transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}>
-                                <Badge className="border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">{findingType}</Badge>
+                                <Badge className="border-status-critical bg-status-critical text-status-critical dark:border-status-critical dark:bg-status-critical/40 dark:text-status-critical">{findingType}</Badge>
                               </motion.span>
                             ) : (
-                              <Badge className="border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">{findingType}</Badge>
+                              <Badge className="border-border bg-surface-subtle text-fg-muted dark:border-border dark:bg-surface-elevated dark:text-fg">{findingType}</Badge>
                             )}
                             {(() => {
                               const owasp = primaryOwasp(e.findings || []);
                               return owasp ? (
                                 <span
-                                  className="inline-flex items-center rounded-sm border border-zinc-300 bg-zinc-100 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+                                  className="inline-flex items-center rounded-sm border border-border-strong bg-surface-subtle px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-fg-muted dark:border-border-strong dark:bg-surface-subtle dark:text-fg-subtle"
                                   title={`OWASP LLM Top 10 · ${owasp.label}`}
                                 >
                                   {owasp.code}
@@ -131,9 +131,9 @@ export function OverviewViewPartC() {
         <TerminalFrame
           title="Tamga Proxy"
           status={
-            <span className="inline-flex items-center gap-1.5 px-2 text-[10px] uppercase tracking-[0.18em] text-emerald-400">
+            <span className="inline-flex items-center gap-1.5 px-2 text-[10px] uppercase tracking-[0.18em] text-status-pass">
               <span
-                className={reduce ? "h-1.5 w-1.5 rounded-full bg-emerald-500" : "h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500"}
+                className={reduce ? "h-1.5 w-1.5 rounded-full bg-status-pass" : "h-1.5 w-1.5 animate-pulse rounded-full bg-status-pass"}
                 aria-hidden
               />
               LIVE
@@ -143,7 +143,7 @@ export function OverviewViewPartC() {
           <div className="flex items-center gap-3 px-3 py-2 text-xs">
             <Button
               type="button"
-              className="h-7 rounded-sm border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 px-2 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800"
+              className="h-7 rounded-sm border border-border-strong bg-surface-subtle px-2 text-fg-muted hover:bg-surface-card"
               onClick={() => setTickerPaused((v) => !v)}
             >
               {tickerPaused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
@@ -151,14 +151,14 @@ export function OverviewViewPartC() {
             </Button>
             <div className="min-w-0 flex-1 overflow-hidden">
               {tickerEvents.length === 0 ? (
-                <span className="text-zinc-600 dark:text-zinc-400">LIVE · no incident stream yet</span>
+                <span className="text-fg-muted">LIVE · no incident stream yet</span>
               ) : (
                 <div className="space-y-0.5">
                   {[tickerEvents[tickerIndex], tickerEvents[(tickerIndex + 1) % tickerEvents.length]].map((e, i) => (
                     <a
                       key={`${i}-${e.request_id}-${e.timestamp}`}
                       href={buildIncidentsHref({ range, request_id: e.request_id })}
-                      className="block truncate text-zinc-700 dark:text-zinc-300 hover:text-zinc-100"
+                      className="block truncate text-fg-muted hover:text-fg"
                     >
                       {new Date(e.timestamp).toLocaleTimeString("tr-TR", { hour12: false })} {e.request_id.slice(0, 10)}{" "}
                       {toUpperLocale(e.provider || "unknown")} {(e.model || "n/a").slice(0, 16)} {toUpperLocale(e.action || "PASS")}{" "}
@@ -172,27 +172,27 @@ export function OverviewViewPartC() {
         </TerminalFrame>
       </div>
 
-      <div className="text-xs text-slate-500 dark:text-slate-400">
+      <div className="text-xs text-fg-subtle dark:text-fg-subtle">
         Uptime: {healthLoading ? "..." : `${health?.uptime_seconds ?? 0}s`} • Ortalama tarama:{" "}
         {typeof derived.totals.avgLatencyMs === "number" ? `${derived.totals.avgLatencyMs.toFixed(2)}ms` : "—"}
       </div>
 
       {showShortcuts && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setShowShortcuts(false)}>
-          <div className="w-full max-w-md rounded-sm border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 p-4" onClick={(e) => e.stopPropagation()}>
-            <h3 className="mb-2 text-sm text-zinc-900 dark:text-zinc-100">Overview Shortcuts</h3>
-            <div className="space-y-1 text-xs text-zinc-700 dark:text-zinc-300">
+          <div className="w-full max-w-md rounded-sm border border-border-strong bg-surface-card p-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="mb-2 text-sm text-fg">Overview Shortcuts</h3>
+            <div className="space-y-1 text-xs text-fg-muted">
               <div>
-                <span className="text-zinc-900 dark:text-zinc-100">/</span> focus recent search
+                <span className="text-fg">/</span> focus recent search
               </div>
               <div>
-                <span className="text-zinc-900 dark:text-zinc-100">?</span> toggle shortcut help
+                <span className="text-fg">?</span> toggle shortcut help
               </div>
               <div>
-                <span className="text-zinc-900 dark:text-zinc-100">i</span> go to incidents console
+                <span className="text-fg">i</span> go to incidents console
               </div>
               <div>
-                <span className="text-zinc-900 dark:text-zinc-100">Esc</span> close this panel
+                <span className="text-fg">Esc</span> close this panel
               </div>
             </div>
           </div>

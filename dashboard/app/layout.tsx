@@ -75,17 +75,14 @@ export default async function RootLayout({
 }) {
   const cookieStore = await cookies();
   const themeCookie = cookieStore.get("tamga-theme")?.value;
-  const defaultTheme =
-    themeCookie === "light" || themeCookie === "dark" ? themeCookie : "system";
-  const htmlClassName =
-    themeCookie === "dark" ? "dark" : themeCookie === "light" ? "" : undefined;
+  const defaultTheme = themeCookie === "light" ? "light" : "dark";
+  const htmlClassName = defaultTheme === "dark" ? "dark" : undefined;
   const pk = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || "";
   const clerkEnabled = pk && !toLowerEn(pk).includes("placeholder");
 
-  // The body background/text cascades to the entire app.
-  // Components override these with their own surface classes, but this
-  // prevents the "transparent gap" flash when no surface is set.
-  const bodyClass = `${inter.variable} ${firaCode.variable} ${inter.className} bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100`;
+  // Body background/text come from globals.css tokens (--surface-base / --fg);
+  // here we only carry the font variables + Inter so the shell stays token-driven.
+  const bodyClass = `${inter.variable} ${firaCode.variable} ${inter.className} bg-surface-base text-fg`;
 
   if (!clerkEnabled) {
     return (

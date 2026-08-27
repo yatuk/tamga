@@ -17,7 +17,7 @@ type Props = {
 
 function highlightMatches(text: string, findings: PolicySimulateResult["findings"]): React.ReactNode {
   if (!text || findings.length === 0) {
-    return <span className="text-zinc-300">{text || "—"}</span>;
+    return <span className="text-fg-subtle">{text || "—"}</span>;
   }
 
   // Collect all match positions
@@ -40,7 +40,7 @@ function highlightMatches(text: string, findings: PolicySimulateResult["findings
   }
 
   if (spans.length === 0) {
-    return <span className="text-zinc-300">{text}</span>;
+    return <span className="text-fg-subtle">{text}</span>;
   }
 
   // Sort and merge overlapping spans
@@ -62,7 +62,7 @@ function highlightMatches(text: string, findings: PolicySimulateResult["findings
     // Text before match
     if (span.start > cursor) {
       parts.push(
-        <span key={`txt-${i}`} className="text-zinc-300">
+        <span key={`txt-${i}`} className="text-fg-subtle">
           {text.slice(cursor, span.start)}
         </span>,
       );
@@ -74,8 +74,8 @@ function highlightMatches(text: string, findings: PolicySimulateResult["findings
         key={`match-${i}`}
         className={`rounded-sm px-0.5 text-xs ${
           isBlock
-            ? "bg-red-500/25 text-red-200 line-through"
-            : "bg-amber-500/20 text-amber-200"
+            ? "bg-status-critical/25 text-status-critical line-through"
+            : "bg-status-medium/20 text-status-medium"
         }`}
         title={`${span.finding.type}:${span.finding.category} → ${span.finding.action}`}
       >
@@ -87,7 +87,7 @@ function highlightMatches(text: string, findings: PolicySimulateResult["findings
   // Remaining text
   if (cursor < text.length) {
     parts.push(
-      <span key="txt-end" className="text-zinc-300">
+      <span key="txt-end" className="text-fg-subtle">
         {text.slice(cursor)}
       </span>,
     );
@@ -118,39 +118,39 @@ export function PlaygroundSimulateResult({ result, originalPrompt, loading = fal
       >
         {loading ? (
           <div className="p-6 space-y-2" role="status" aria-label="Running simulation">
-            <div className="h-4 w-48 animate-pulse rounded bg-zinc-100 dark:bg-zinc-900/40" />
-            <div className="h-[160px] animate-pulse rounded bg-zinc-100 dark:bg-zinc-900/40" />
+            <div className="h-4 w-48 animate-pulse rounded bg-surface-subtle" />
+            <div className="h-[160px] animate-pulse rounded bg-surface-subtle" />
             <span className="sr-only">Running simulation...</span>
           </div>
         ) : !result ? (
-          <div className="p-6 text-center text-xs text-zinc-600 dark:text-zinc-400">
+          <div className="p-6 text-center text-xs text-fg-muted">
             Run simulate to see findings…
           </div>
         ) : (
           <div className="space-y-4 p-3">
             {/* Policy info */}
-            <div className="text-[10px] uppercase tracking-[0.14em] text-zinc-600 dark:text-zinc-400">
+            <div className="text-[10px] uppercase tracking-[0.14em] text-fg-muted">
               policy: {result.policy_name} @ {result.policy_version} · findings {result.findings.length}
             </div>
 
             {/* ── Diff view: original text with highlighted matches ── */}
             {originalPrompt && actionableFindings.length > 0 && (
               <div className="space-y-1.5">
-                <div className="text-[9px] uppercase tracking-[0.14em] text-zinc-600 dark:text-zinc-400">
+                <div className="text-[9px] uppercase tracking-[0.14em] text-fg-muted">
                   Content Analysis
                 </div>
-                <div className="relative rounded-sm border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900/60 p-3">
+                <div className="relative rounded-sm border border-border bg-surface-subtle p-3">
                   {/* Legend */}
                   <div className="mb-2 flex items-center gap-3 text-[9px]">
                     <span className="inline-flex items-center gap-1">
-                      <span className="h-2 w-2 rounded-sm bg-red-500/50" />
-                      <span className="text-zinc-600 dark:text-zinc-400">Blocked</span>
+                      <span className="h-2 w-2 rounded-sm bg-status-critical/50" />
+                      <span className="text-fg-muted">Blocked</span>
                     </span>
                     <span className="inline-flex items-center gap-1">
-                      <span className="h-2 w-2 rounded-sm bg-amber-500/50" />
-                      <span className="text-zinc-600 dark:text-zinc-400">Redacted</span>
+                      <span className="h-2 w-2 rounded-sm bg-status-medium/50" />
+                      <span className="text-fg-muted">Redacted</span>
                     </span>
-                    <span className="text-zinc-600 dark:text-zinc-400 text-[8px]">
+                    <span className="text-fg-muted text-[8px]">
                       — original text with matches highlighted
                     </span>
                   </div>
@@ -164,11 +164,11 @@ export function PlaygroundSimulateResult({ result, originalPrompt, loading = fal
 
             {/* Findings table */}
             {result.findings.length === 0 ? (
-              <div className="text-xs text-zinc-600 dark:text-zinc-400">no findings</div>
+              <div className="text-xs text-fg-muted">no findings</div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-zinc-100 dark:bg-zinc-900 text-[10px] uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
+                  <thead className="bg-surface-subtle text-[10px] uppercase tracking-wide text-fg-muted">
                     <tr>
                       <th className="px-2 py-1">Type</th>
                       <th className="px-2 py-1">Category</th>
@@ -180,15 +180,15 @@ export function PlaygroundSimulateResult({ result, originalPrompt, loading = fal
                   </thead>
                   <tbody>
                     {result.findings.map((f, i) => (
-                      <tr key={i} className="border-t border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900/60">
-                        <td className="px-2 py-1 text-zinc-800 dark:text-zinc-200">{f.type}</td>
-                        <td className="px-2 py-1 text-zinc-600 dark:text-zinc-400">{f.category}</td>
+                      <tr key={i} className="border-t border-border hover:bg-surface-subtle/60">
+                        <td className="px-2 py-1 text-fg">{f.type}</td>
+                        <td className="px-2 py-1 text-fg-muted">{f.category}</td>
                         <td className="px-2 py-1">
                           <Badge className={`rounded-sm border text-[10px] ${playgroundSeverityClass(f.severity)}`}>
                             {toUpperLocale(f.severity || "—")}
                           </Badge>
                         </td>
-                        <td className="px-2 py-1 tabular-nums text-zinc-700 dark:text-zinc-300">
+                        <td className="px-2 py-1 tabular-nums text-fg-muted">
                           {Math.round((f.confidence || 0) * 100)}%
                         </td>
                         <td className="px-2 py-1">
@@ -196,7 +196,7 @@ export function PlaygroundSimulateResult({ result, originalPrompt, loading = fal
                             {toUpperLocale(f.action || "—")}
                           </Badge>
                         </td>
-                        <td className="px-2 py-1 text-zinc-600 dark:text-zinc-400">
+                        <td className="px-2 py-1 text-fg-muted">
                           {f.match ? f.match.slice(0, 40) : "—"}
                         </td>
                       </tr>

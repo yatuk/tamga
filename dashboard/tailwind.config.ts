@@ -55,11 +55,43 @@ module.exports = {
         },
 
         status: {
-          critical: "var(--status-critical)",
-          high: "var(--status-high)",
-          medium: "var(--status-medium)",
-          low: "var(--status-low)",
-          pass: "var(--status-pass)",
+          // DEFAULT uses `oklch(var(--x-ch) / <alpha-value>)` so opacity
+          // modifiers (`bg-status-critical/10`, `border-status-high/40`) work.
+          // A bare `var(--status-*)` cannot take an opacity suffix — Tailwind
+          // silently drops the rule — so the raw channels are supplied via
+          // `--status-*-ch` in globals.css.
+          critical: {
+            DEFAULT: "oklch(var(--status-critical-ch) / <alpha-value>)",
+            bg: "var(--status-critical-bg)",
+          },
+          high: {
+            DEFAULT: "oklch(var(--status-high-ch) / <alpha-value>)",
+            bg: "var(--status-high-bg)",
+          },
+          medium: {
+            DEFAULT: "oklch(var(--status-medium-ch) / <alpha-value>)",
+            bg: "var(--status-medium-bg)",
+          },
+          low: {
+            DEFAULT: "oklch(var(--status-low-ch) / <alpha-value>)",
+            bg: "var(--status-low-bg)",
+          },
+          pass: {
+            DEFAULT: "oklch(var(--status-pass-ch) / <alpha-value>)",
+            bg: "var(--status-pass-bg)",
+          },
+          block: {
+            DEFAULT: "oklch(var(--status-block-ch) / <alpha-value>)",
+            bg: "var(--status-block-bg)",
+          },
+          redact: {
+            DEFAULT: "oklch(var(--status-redact-ch) / <alpha-value>)",
+            bg: "var(--status-redact-bg)",
+          },
+          warn: {
+            DEFAULT: "oklch(var(--status-warn-ch) / <alpha-value>)",
+            bg: "var(--status-warn-bg)",
+          },
         },
 
         // Retained for any lingering `bg-security-*` usages.

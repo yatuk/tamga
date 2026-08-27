@@ -29,20 +29,20 @@ const Toaster = ({ ...props }: ToasterProps) => {
       toastOptions={{
         classNames: {
           toast:
-            "group toast rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100",
+            "group toast rounded-sm border border-border bg-surface-card text-fg",
           title: "text-[11px] font-semibold",
-          description: "group-[.toast]:text-zinc-500 dark:text-zinc-400 text-[10px]",
+          description: "group-[.toast]:text-fg-muted text-[10px]",
           actionButton:
-            "group-[.toast]:rounded-sm group-[.toast]:bg-red-600 group-[.toast]:text-white group-[.toast]:text-[10px] group-[.toast]:px-3 group-[.toast]:py-1",
+            "group-[.toast]:rounded-sm group-[.toast]:bg-status-critical group-[.toast]:text-accent-foreground group-[.toast]:text-[10px] group-[.toast]:px-3 group-[.toast]:py-1",
           cancelButton:
-            "group-[.toast]:rounded-sm group-[.toast]:bg-zinc-800 group-[.toast]:text-zinc-300 group-[.toast]:text-[10px] group-[.toast]:px-3 group-[.toast]:py-1",
+            "group-[.toast]:rounded-sm group-[.toast]:bg-surface-subtle group-[.toast]:text-fg-muted group-[.toast]:text-[10px] group-[.toast]:px-3 group-[.toast]:py-1",
           success:
-            "!border-emerald-500/20 !bg-emerald-500/[0.04] [&_svg]:text-emerald-400",
+            "!border-status-pass/30 !bg-status-pass-bg [&_svg]:text-status-pass",
           error:
-            "!border-red-500/20 !bg-red-500/[0.04] [&_svg]:text-red-400",
+            "!border-status-critical/30 !bg-status-critical-bg [&_svg]:text-status-critical",
           warning:
-            "!border-amber-500/20 !bg-amber-500/[0.04] [&_svg]:text-amber-400",
-          info: "!border-blue-500/20 !bg-blue-500/[0.04] [&_svg]:text-blue-400",
+            "!border-status-warn/30 !bg-status-warn-bg [&_svg]:text-status-warn",
+          info: "!border-status-low/30 !bg-status-low-bg [&_svg]:text-status-low",
         },
       }}
       {...props}

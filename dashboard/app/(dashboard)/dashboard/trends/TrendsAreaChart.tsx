@@ -11,8 +11,8 @@ import {
 type TrendPoint = { time: string; attempted: number; caught: number };
 
 const config: ChartConfig = {
-  attempted: { label: "Attempted", color: "var(--chart-2, #3b82f6)" },
-  caught: { label: "Caught", color: "var(--chart-1, #ef4444)" },
+  attempted: { label: "Attempted", color: "var(--chart-2)" },
+  caught: { label: "Caught", color: "var(--chart-1)" },
 };
 
 export function TrendsAreaChart({ data }: { data: TrendPoint[] }) {

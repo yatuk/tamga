@@ -31,25 +31,25 @@ const severityConfig: Record<AlertSeverity, {
   dot: string;
 }> = {
   critical: {
-    bg: "bg-red-600/10 dark:bg-red-600/15",
-    border: "border-red-500/40",
-    text: "text-red-200 dark:text-red-300",
+    bg: "bg-status-critical/10 dark:bg-status-critical/15",
+    border: "border-status-critical/40",
+    text: "text-status-critical dark:text-status-critical",
     icon: ServerCrash,
-    dot: "bg-red-500",
+    dot: "bg-status-critical",
   },
   warning: {
-    bg: "bg-amber-600/10 dark:bg-amber-600/15",
-    border: "border-amber-500/40",
-    text: "text-amber-200 dark:text-amber-300",
+    bg: "bg-status-medium/10 dark:bg-status-medium/15",
+    border: "border-status-medium/40",
+    text: "text-status-medium dark:text-status-medium",
     icon: AlertTriangle,
-    dot: "bg-amber-500",
+    dot: "bg-status-medium",
   },
   info: {
-    bg: "bg-blue-600/10 dark:bg-blue-600/15",
-    border: "border-blue-500/40",
-    text: "text-blue-200 dark:text-blue-300",
+    bg: "bg-status-low/10 dark:bg-status-low/15",
+    border: "border-status-low/40",
+    text: "text-status-low dark:text-status-low",
     icon: Wifi,
-    dot: "bg-blue-500",
+    dot: "bg-status-low",
   },
 };
 
@@ -129,7 +129,7 @@ export function GlobalAlertBanner({
               </span>
 
               {/* Message */}
-              <span className="min-w-0 flex-1 truncate text-[10px] text-zinc-600 dark:text-zinc-400">
+              <span className="min-w-0 flex-1 truncate text-[10px] text-fg-muted">
                 {alert.message}
               </span>
 
@@ -138,7 +138,7 @@ export function GlobalAlertBanner({
                 <button
                   type="button"
                   onClick={() => setDismissed((prev) => new Set([...prev, alert.id]))}
-                  className="shrink-0 rounded-sm p-0.5 text-zinc-600 dark:text-zinc-400 transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-700 dark:hover:text-zinc-300"
+                  className="shrink-0 rounded-sm p-0.5 text-fg-muted transition-colors hover:bg-surface-subtle dark:hover:bg-surface-elevated hover:text-fg-muted dark:hover:text-fg-subtle"
                   aria-label={`Dismiss: ${alert.title}`}
                 >
                   <X className="h-3 w-3" />

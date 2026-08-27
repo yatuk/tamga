@@ -11,27 +11,27 @@ describe("integrationKindBadge", () => {
   });
 
   it("returns splunk style for splunk", () => {
-    expect(integrationKindBadge("splunk")).toContain("emerald");
+    expect(integrationKindBadge("splunk")).toContain("status-pass");
   });
 
   it("returns splunk style for splunk_hec", () => {
-    expect(integrationKindBadge("splunk_hec")).toContain("emerald");
+    expect(integrationKindBadge("splunk_hec")).toContain("status-pass");
   });
 
   it("returns sentinel style for sentinel", () => {
-    expect(integrationKindBadge("sentinel")).toContain("blue");
+    expect(integrationKindBadge("sentinel")).toContain("status-low");
   });
 
   it("returns qradar style for qradar", () => {
-    expect(integrationKindBadge("qradar")).toContain("amber");
+    expect(integrationKindBadge("qradar")).toContain("status-medium");
   });
 
   it("returns datadog style for datadog", () => {
-    expect(integrationKindBadge("datadog")).toContain("zinc");
+    expect(integrationKindBadge("datadog")).toContain("fg-muted");
   });
 
   it("returns jira style for jira", () => {
-    expect(integrationKindBadge("jira")).toContain("sky");
+    expect(integrationKindBadge("jira")).toContain("status-low");
   });
 
   it("returns pagerduty style for pagerduty", () => {
@@ -49,7 +49,7 @@ describe("integrationKindBadge", () => {
   it("returns default style for unknown", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- intentional cast for testing edge case with unrecognized kind
     const cls = integrationKindBadge("unknown" as any);
-    expect(cls).toContain("border-zinc");
+    expect(cls).toContain("border-border");
   });
 });
 

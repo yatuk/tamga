@@ -41,13 +41,13 @@ function parseValue(val: unknown): JsonNode {
 // ── Color tokens (OKLCH, dark-first) ───────────────────────────────────────────
 
 const COLOR: Record<string, string> = {
-  key: "text-[oklch(0.72_0.12_230)]",        // blue
-  string: "text-[oklch(0.72_0.13_150)]",     // green
-  number: "text-[oklch(0.74_0.13_55)]",      // amber
-  boolean: "text-[oklch(0.64_0.16_22)]",     // red
-  null: "text-zinc-500",                      // muted grey
-  bracket: "text-zinc-500",                   // faint grey
-  linenum: "text-zinc-600 dark:text-zinc-500", // line numbers
+  key: "text-status-low",        // blue
+  string: "text-status-pass",    // green
+  number: "text-status-high",    // amber
+  boolean: "text-status-critical", // red
+  null: "text-fg-subtle",        // muted grey
+  bracket: "text-fg-subtle",     // faint grey
+  linenum: "text-fg-faint",      // line numbers
 };
 
 // ── Line renderer ──────────────────────────────────────────────────────────────
@@ -67,7 +67,7 @@ function JsonLine({
 
   return (
     <div
-      className={`pl-[calc(1.5rem*${depth}+2.5rem)] pr-2 py-px text-[11px] leading-relaxed whitespace-pre-wrap break-all font-mono ${COLOR[kind || "null"]} ${highlight ? "bg-amber-500/20" : ""}`}
+      className={`pl-[calc(1.5rem*${depth}+2.5rem)] pr-2 py-px text-[11px] leading-relaxed whitespace-pre-wrap break-all font-mono ${COLOR[kind || "null"]} ${highlight ? "bg-status-medium/20" : ""}`}
     >
       {text}
     </div>
@@ -110,14 +110,14 @@ function JsonNodeView({
 
     return (
       <div
-        className="group flex items-center hover:bg-zinc-100 dark:hover:bg-zinc-900/50"
+        className="group flex items-center hover:bg-surface-subtle/50"
         onDoubleClick={copyPath}
         title={`${path}\nDouble-click to copy path`}
       >
         <JsonLine text={display} depth={depth} kind={node.kind} searchTerm={searchTerm} />
         {node.kind === "string" && node.value.length > maxStringLen && (
           <button
-            className="shrink-0 text-[10px] text-zinc-500 hover:text-zinc-300 ml-1"
+            className="shrink-0 text-[10px] text-fg-subtle hover:text-fg-subtle ml-1"
             onClick={() => setTruncated((v) => !v)}
           >
             {truncated ? "more…" : "less"}
@@ -133,7 +133,7 @@ function JsonNodeView({
           }}
           title="Copy value"
         >
-          <Copy className="h-3 w-3 text-zinc-500 hover:text-zinc-300" />
+          <Copy className="h-3 w-3 text-fg-subtle hover:text-fg-subtle" />
         </button>
       </div>
     );
@@ -150,17 +150,17 @@ function JsonNodeView({
     const count = isArray ? node.items.length : node.entries.length;
     return (
       <div
-        className="group flex items-center hover:bg-zinc-100 dark:hover:bg-zinc-900/50 cursor-pointer"
+        className="group flex items-center hover:bg-surface-subtle/50 cursor-pointer"
         onClick={toggleCollapse}
         onDoubleClick={copyPath}
         title={`${path}\nClick to expand · Double-click to copy path`}
       >
         <span className="shrink-0 inline-block w-[2.5rem] text-right pr-1">
-          <ChevronRight className="inline h-3 w-3 text-zinc-500" />
+          <ChevronRight className="inline h-3 w-3 text-fg-subtle" />
         </span>
         <span className="font-mono text-[11px]">
           <span className={COLOR.bracket}>{openBracket}</span>
-          <span className="text-zinc-500 ml-1">{count} item{count !== 1 ? "s" : ""}</span>
+          <span className="text-fg-subtle ml-1">{count} item{count !== 1 ? "s" : ""}</span>
           <span className={COLOR.bracket}>{closeBracket}</span>
         </span>
       </div>
@@ -171,12 +171,12 @@ function JsonNodeView({
     <div>
       {/* Open bracket */}
       <div
-        className="group flex items-center hover:bg-zinc-100 dark:hover:bg-zinc-900/50 cursor-pointer"
+        className="group flex items-center hover:bg-surface-subtle/50 cursor-pointer"
         onClick={toggleCollapse}
         onDoubleClick={copyPath}
       >
         <span className="shrink-0 inline-block w-[2.5rem] text-right pr-1">
-          <ChevronDown className="inline h-3 w-3 text-zinc-500" />
+          <ChevronDown className="inline h-3 w-3 text-fg-subtle" />
         </span>
         <span className={`font-mono text-[11px] ${COLOR.bracket}`}>{openBracket}</span>
       </div>
@@ -184,8 +184,8 @@ function JsonNodeView({
       {/* Entries */}
       {entries.map((entry, i) => (
         <div key={i}>
-          <div className="flex items-center hover:bg-zinc-100 dark:hover:bg-zinc-900/50">
-            <span className="shrink-0 w-[2.5rem] text-right pr-2 text-[10px] text-zinc-600 dark:text-zinc-500 tabular-nums font-mono">
+          <div className="flex items-center hover:bg-surface-subtle/50">
+            <span className="shrink-0 w-[2.5rem] text-right pr-2 text-[10px] text-fg-muted dark:text-fg-subtle tabular-nums font-mono">
               {/* line numbers every 5th */}
               {(i + 1) % 5 === 0 ? i + 1 : ""}
             </span>
@@ -245,24 +245,24 @@ export function JsonInspector({
   return (
     <div className={`flex flex-col ${className}`}>
       {/* Toolbar */}
-      <div className="flex items-center gap-2 border-b border-zinc-200 dark:border-zinc-800 px-2 py-1">
+      <div className="flex items-center gap-2 border-b border-border px-2 py-1">
         <div className="relative flex-1">
-          <Search className="absolute left-1.5 top-1/2 h-3 w-3 -translate-y-1/2 text-zinc-500" />
+          <Search className="absolute left-1.5 top-1/2 h-3 w-3 -translate-y-1/2 text-fg-subtle" />
           <input
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search payload…"
-            className="h-7 w-full rounded-sm border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900 pl-6 pr-2 text-[11px] font-mono text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500"
+            className="h-7 w-full rounded-sm border border-border bg-surface-subtle pl-6 pr-2 text-[11px] font-mono text-fg placeholder:text-fg-subtle"
           />
         </div>
         <button
-          className="text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors"
+          className="text-[10px] text-fg-subtle hover:text-fg-subtle transition-colors"
           onClick={() => setExpandAll((v) => !v)}
         >
           {expandAll ? "Collapse all" : "Expand all"}
         </button>
         <button
-          className="text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors flex items-center gap-1"
+          className="text-[10px] text-fg-subtle hover:text-fg-subtle transition-colors flex items-center gap-1"
           onClick={copyAll}
         >
           <Copy className="h-3 w-3" />

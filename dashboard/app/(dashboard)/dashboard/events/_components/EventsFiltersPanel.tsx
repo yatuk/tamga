@@ -18,10 +18,10 @@ interface Props {
 }
 
 const ACTIONS: { value: ActionFilter; label: string; color: string }[] = [
-  { value: "block", label: "Block", color: "bg-red-500" },
-  { value: "redact", label: "Redact", color: "bg-amber-500" },
-  { value: "warn", label: "Warn", color: "bg-yellow-500" },
-  { value: "pass", label: "Pass", color: "bg-emerald-500" },
+  { value: "block", label: "Block", color: "bg-status-critical" },
+  { value: "redact", label: "Redact", color: "bg-status-medium" },
+  { value: "warn", label: "Warn", color: "bg-status-medium" },
+  { value: "pass", label: "Pass", color: "bg-status-pass" },
 ];
 
 const PROVIDERS = [
@@ -43,17 +43,17 @@ export function EventsFiltersPanel({
   onClearAll,
 }: Props) {
   return (
-    <div className="rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-3 space-y-4">
+    <div className="rounded-sm border border-border bg-surface-card p-3 space-y-4">
       {/* Action checkboxes */}
       <div>
-        <h4 className="mb-2 text-[10px] uppercase tracking-[0.14em] text-zinc-600 dark:text-zinc-400">
+        <h4 className="mb-2 text-[10px] uppercase tracking-[0.14em] text-fg-muted">
           Action
         </h4>
         <div className="space-y-1.5">
           {ACTIONS.map((a) => (
             <label
               key={a.value}
-              className="flex cursor-pointer items-center gap-2 text-xs text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100"
+              className="flex cursor-pointer items-center gap-2 text-xs text-fg-muted hover:text-fg"
             >
               <Checkbox
                 checked={actions.includes(a.value)}
@@ -69,13 +69,13 @@ export function EventsFiltersPanel({
 
       {/* Provider select */}
       <div>
-        <h4 className="mb-2 text-[10px] uppercase tracking-[0.14em] text-zinc-600 dark:text-zinc-400">
+        <h4 className="mb-2 text-[10px] uppercase tracking-[0.14em] text-fg-muted">
           Provider
         </h4>
         <select
           value={provider}
           onChange={(e) => onProviderChange(e.target.value)}
-          className="w-full rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-2 py-1.5 text-xs text-zinc-700 dark:text-zinc-300"
+          className="w-full rounded-sm border border-border bg-surface-card px-2 py-1.5 text-xs text-fg-muted"
         >
           <option value="">All providers</option>
           {PROVIDERS.filter(Boolean).map((p) => (
@@ -88,18 +88,18 @@ export function EventsFiltersPanel({
 
       {/* Time range */}
       <div>
-        <h4 className="mb-2 text-[10px] uppercase tracking-[0.14em] text-zinc-600 dark:text-zinc-400">
+        <h4 className="mb-2 text-[10px] uppercase tracking-[0.14em] text-fg-muted">
           Range
         </h4>
-        <div className="inline-flex overflow-hidden rounded-sm border border-zinc-200 dark:border-zinc-800">
+        <div className="inline-flex overflow-hidden rounded-sm border border-border">
           {RANGES.map((r) => (
             <button
               key={r}
               type="button"
               className={`cursor-pointer px-2.5 py-1 text-xs ${
                 range === r
-                  ? "bg-emerald-600 text-white"
-                  : "bg-white dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                  ? "bg-status-pass text-white"
+                  : "bg-surface-card text-fg-muted hover:bg-surface-subtle"
               }`}
               onClick={() => onRangeChange(r)}
             >
@@ -114,7 +114,7 @@ export function EventsFiltersPanel({
         <Button
           size="sm"
           variant="outline"
-          className="w-full cursor-pointer rounded-sm border-zinc-300 dark:border-zinc-700 text-[10px] uppercase"
+          className="w-full cursor-pointer rounded-sm border-border-strong text-[10px] uppercase"
           onClick={onClearAll}
         >
           <X className="mr-1 h-3 w-3" /> Clear all

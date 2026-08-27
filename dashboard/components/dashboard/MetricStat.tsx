@@ -24,10 +24,10 @@ interface MetricStatProps {
 }
 
 const accentClass: Record<NonNullable<MetricStatProps["accent"]>, string> = {
-  default: "text-zinc-900 dark:text-zinc-100",
-  red: "text-red-400",
-  amber: "text-amber-400",
-  emerald: "text-emerald-400",
+  default: "text-fg",
+  red: "text-status-critical",
+  amber: "text-status-medium",
+  emerald: "text-status-pass",
 };
 
 function formatDelta(d: number): string {
@@ -54,8 +54,8 @@ export function MetricStat({
   const body = (
     <div
       className={cn(
-        "group relative flex h-full flex-col justify-between rounded-sm border bg-white dark:bg-zinc-950 p-3 hover:border-zinc-300 dark:hover:border-zinc-700",
-        paused ? "border-amber-500/40" : "border-zinc-200 dark:border-zinc-800",
+        "group relative flex h-full flex-col justify-between rounded-sm border bg-surface-card p-3 hover:border-border-strong",
+        paused ? "border-status-medium/40" : "border-border",
         (onClick || href) && "cursor-pointer",
         className,
       )}
@@ -70,22 +70,22 @@ export function MetricStat({
               <span className="relative flex h-1.5 w-1.5" aria-label={paused ? "Paused" : "Live"}>
                 {!reduce && !paused ? (
                   <motion.span
-                    className="absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75"
+                    className="absolute inline-flex h-full w-full rounded-full bg-status-critical opacity-75"
                     animate={{ scale: [1, 2, 1], opacity: [0.6, 0, 0.6] }}
                     transition={{ duration: 2, repeat: Infinity, ease: "easeOut" }}
                   />
                 ) : null}
-                <span className={`relative inline-flex h-1.5 w-1.5 rounded-full ${paused ? "bg-amber-500" : "bg-red-500"}`} />
+                <span className={`relative inline-flex h-1.5 w-1.5 rounded-full ${paused ? "bg-status-medium" : "bg-status-critical"}`} />
               </span>
             )}
-            <div className="text-[10px] uppercase tracking-[0.14em] text-zinc-600 dark:text-zinc-400">
+            <div className="text-[10px] uppercase tracking-[0.14em] text-fg-muted">
               {label}
             </div>
             {tooltip ? (
               <span title={tooltip} aria-label={tooltip}>
                 <Info
                   size={14}
-                  className="ml-1.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 cursor-help shrink-0"
+                  className="ml-1.5 text-fg-subtle hover:text-fg-muted dark:hover:text-fg-subtle cursor-help shrink-0"
                 />
               </span>
             ) : null}
@@ -96,7 +96,7 @@ export function MetricStat({
             </span>
           </div>
         </div>
-        {sparkline ? <div className="shrink-0 text-zinc-600 dark:text-zinc-400">{sparkline}</div> : null}
+        {sparkline ? <div className="shrink-0 text-fg-muted">{sparkline}</div> : null}
       </div>
 
       {/* Bottom row: delta + source */}
@@ -105,9 +105,9 @@ export function MetricStat({
           <span
             className={cn(
               "inline-flex items-center gap-1 text-[10px]",
-              delta > 0 && "text-red-400",
-              delta < 0 && "text-emerald-400",
-              delta === 0 && "text-zinc-600 dark:text-zinc-400",
+              delta > 0 && "text-status-critical",
+              delta < 0 && "text-status-pass",
+              delta === 0 && "text-fg-muted",
             )}
           >
             {delta > 0 ? (
@@ -118,13 +118,13 @@ export function MetricStat({
               <Minus className="h-3 w-3" />
             )}
             {formatDelta(delta)}
-            {deltaLabel ? <span className="text-zinc-600 dark:text-zinc-400">· {deltaLabel}</span> : null}
+            {deltaLabel ? <span className="text-fg-muted">· {deltaLabel}</span> : null}
           </span>
         ) : (
-          <span className="text-[10px] text-zinc-600 dark:text-zinc-400">&nbsp;</span>
+          <span className="text-[10px] text-fg-muted">&nbsp;</span>
         )}
         {source ? (
-          <span className="truncate text-[10px] text-zinc-600 dark:text-zinc-400">SRC: {source}</span>
+          <span className="truncate text-[10px] text-fg-muted">SRC: {source}</span>
         ) : null}
       </div>
     </div>

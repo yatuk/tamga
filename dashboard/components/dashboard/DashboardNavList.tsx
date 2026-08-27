@@ -104,7 +104,7 @@ export function DashboardNavList({
               <button
                 type="button"
                 onClick={() => toggle(group.label!)}
-                className={`w-full flex items-center gap-1 px-2 pb-1 pt-2 text-[9px] uppercase tracking-[0.18em] text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors ${
+                className={`w-full flex items-center gap-1 px-2 pb-1 pt-2 text-[9px] uppercase tracking-[0.18em] text-fg-muted hover:text-fg transition-colors ${
                   desktopCollapsed ? "hidden" : "hidden lg:flex"
                 }`}
               >
@@ -114,7 +114,7 @@ export function DashboardNavList({
                 {group.label}
               </button>
             ) : null}
-            {group.label && desktopCollapsed ? <div className="mx-2 my-1 h-px bg-zinc-100 dark:bg-zinc-900" aria-hidden /> : null}
+            {group.label && desktopCollapsed ? <div className="mx-2 my-1 h-px bg-surface-subtle" aria-hidden /> : null}
             {!isCollapsed && group.items.map((item) => {
               const active = isActive(item.href);
               return (
@@ -132,12 +132,12 @@ export function DashboardNavList({
                     (useLayoutId ? (
                       <motion.span
                         layoutId="sidebar-active-rail"
-                        className="absolute left-0 top-1 h-[calc(100%-8px)] w-0.5 bg-emerald-500"
+                        className="absolute left-0 top-1 h-[calc(100%-8px)] w-0.5 bg-status-pass"
                         transition={{ duration: 0.2, type: "spring", bounce: 0.2 }}
                       />
                     ) : (
                       <span
-                        className="absolute left-0 top-1.5 h-[calc(100%-12px)] w-0.5 bg-emerald-500"
+                        className="absolute left-0 top-1.5 h-[calc(100%-12px)] w-0.5 bg-status-pass"
                         aria-hidden
                       />
                     ))}

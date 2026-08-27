@@ -21,16 +21,16 @@ type Props = {
 export function IntegrationConnectModal({ draft, setDraft, createMut }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-md rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4 shadow-xl">
+      <div className="w-full max-w-md rounded-sm border border-border bg-surface-card p-4 shadow-xl">
         <div className="mb-3 flex items-center justify-between">
           <div>
-            <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-600 dark:text-zinc-400">CONNECT</div>
-            <div className="text-sm text-zinc-900 dark:text-zinc-100">{draft.kind}</div>
+            <div className="text-[10px] uppercase tracking-[0.18em] text-fg-muted">CONNECT</div>
+            <div className="text-sm text-fg">{draft.kind}</div>
           </div>
           <div className="flex items-center gap-2">
             <Link
               href={`/dashboard/integrations/${draft.kind}`}
-              className="inline-flex items-center gap-1 rounded-sm border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 px-2 py-1 text-[10px] uppercase tracking-wide text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800"
+              className="inline-flex items-center gap-1 rounded-sm border border-border-strong bg-surface-subtle px-2 py-1 text-[10px] uppercase tracking-wide text-fg-muted hover:bg-surface-card"
             >
               <BookOpen className="h-3 w-3" /> Guide
             </Link>
@@ -41,17 +41,17 @@ export function IntegrationConnectModal({ draft, setDraft, createMut }: Props) {
         </div>
         <div className="space-y-3">
           <div>
-            <label className="text-[10px] uppercase tracking-[0.16em] text-zinc-600 dark:text-zinc-400">Label</label>
+            <label className="text-[10px] uppercase tracking-[0.16em] text-fg-muted">Label</label>
             <input
-              className="mt-1 w-full rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-2 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-red-500/40 focus:outline-none"
+              className="mt-1 w-full rounded-sm border border-border bg-surface-card px-2 py-1.5 text-xs text-fg focus:border-status-critical/40 focus:outline-none"
               value={draft.label}
               onChange={(e) => setDraft({ ...draft, label: e.target.value })}
             />
           </div>
           <div>
-            <label className="text-[10px] uppercase tracking-[0.16em] text-zinc-600 dark:text-zinc-400">URL</label>
+            <label className="text-[10px] uppercase tracking-[0.16em] text-fg-muted">URL</label>
             <input
-              className="mt-1 w-full rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-2 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-red-500/40 focus:outline-none"
+              className="mt-1 w-full rounded-sm border border-border bg-surface-card px-2 py-1.5 text-xs text-fg focus:border-status-critical/40 focus:outline-none"
               value={draft.url}
               onChange={(e) => setDraft({ ...draft, url: e.target.value })}
               placeholder={INTEGRATION_PRESETS.find((p) => p.kind === draft.kind)?.urlHint}
@@ -60,18 +60,18 @@ export function IntegrationConnectModal({ draft, setDraft, createMut }: Props) {
           {draft.kind === "jira" ? (
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-[10px] uppercase tracking-[0.16em] text-zinc-600 dark:text-zinc-400">Project key</label>
+                <label className="text-[10px] uppercase tracking-[0.16em] text-fg-muted">Project key</label>
                 <input
-                  className="mt-1 w-full rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-2 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-red-500/40 focus:outline-none"
+                  className="mt-1 w-full rounded-sm border border-border bg-surface-card px-2 py-1.5 text-xs text-fg focus:border-status-critical/40 focus:outline-none"
                   value={draft.projectKey}
                   onChange={(e) => setDraft({ ...draft, projectKey: toUpperEn(e.target.value) })}
                   placeholder="SEC"
                 />
               </div>
               <div>
-                <label className="text-[10px] uppercase tracking-[0.16em] text-zinc-600 dark:text-zinc-400">Issue type</label>
+                <label className="text-[10px] uppercase tracking-[0.16em] text-fg-muted">Issue type</label>
                 <input
-                  className="mt-1 w-full rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-2 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-red-500/40 focus:outline-none"
+                  className="mt-1 w-full rounded-sm border border-border bg-surface-card px-2 py-1.5 text-xs text-fg focus:border-status-critical/40 focus:outline-none"
                   value={draft.issueType}
                   onChange={(e) => setDraft({ ...draft, issueType: e.target.value })}
                   placeholder="Task"
@@ -81,12 +81,12 @@ export function IntegrationConnectModal({ draft, setDraft, createMut }: Props) {
           ) : null}
           {draft.kind === "pagerduty" || draft.kind === "opsgenie" ? (
             <div>
-              <label className="text-[10px] uppercase tracking-[0.16em] text-zinc-600 dark:text-zinc-400">
+              <label className="text-[10px] uppercase tracking-[0.16em] text-fg-muted">
                 {draft.kind === "pagerduty" ? "Routing key (integration key)" : "API key (GenieKey)"}
               </label>
               <input
                 type="password"
-                className="mt-1 w-full rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-2 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-red-500/40 focus:outline-none"
+                className="mt-1 w-full rounded-sm border border-border bg-surface-card px-2 py-1.5 text-xs text-fg focus:border-status-critical/40 focus:outline-none"
                 value={draft.authToken}
                 onChange={(e) => setDraft({ ...draft, authToken: e.target.value })}
                 placeholder={
@@ -94,7 +94,7 @@ export function IntegrationConnectModal({ draft, setDraft, createMut }: Props) {
                 }
                 autoComplete="off"
               />
-              <p className="mt-1 text-[10px] text-zinc-600 dark:text-zinc-400">
+              <p className="mt-1 text-[10px] text-fg-muted">
                 {draft.kind === "pagerduty"
                   ? "Injected into the JSON body as routing_key (Events API v2 requirement)."
                   : "Injected as Authorization: GenieKey <token> at request time."}
@@ -102,34 +102,34 @@ export function IntegrationConnectModal({ draft, setDraft, createMut }: Props) {
             </div>
           ) : null}
           <div>
-            <label className="text-[10px] uppercase tracking-[0.16em] text-zinc-600 dark:text-zinc-400">
+            <label className="text-[10px] uppercase tracking-[0.16em] text-fg-muted">
               Extra Headers (one per line, &ldquo;Key: Value&rdquo;)
             </label>
             <textarea
-              className="mt-1 block min-h-[70px] w-full resize-y rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-2 py-1.5 text-[11px] text-zinc-900 dark:text-zinc-100 focus:outline-none"
+              className="mt-1 block min-h-[70px] w-full resize-y rounded-sm border border-border bg-surface-card px-2 py-1.5 text-[11px] text-fg focus:outline-none"
               value={draft.headers}
               onChange={(e) => setDraft({ ...draft, headers: e.target.value })}
             />
           </div>
-          <label className="flex cursor-pointer items-center gap-2 text-[11px] text-zinc-700 dark:text-zinc-300">
+          <label className="flex cursor-pointer items-center gap-2 text-[11px] text-fg-muted">
             <input
               type="checkbox"
               checked={draft.enabled}
               onChange={(e) => setDraft({ ...draft, enabled: e.target.checked })}
-              className="h-3.5 w-3.5 cursor-pointer accent-red-600"
+              className="h-3.5 w-3.5 cursor-pointer accent-status-critical"
             />
             enabled
           </label>
         </div>
         <div className="mt-4 flex items-center justify-end gap-2">
           <Button
-            className="cursor-pointer rounded-sm border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800"
+            className="cursor-pointer rounded-sm border border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card"
             onClick={() => setDraft(null)}
           >
             Cancel
           </Button>
           <Button
-            className="cursor-pointer rounded-sm bg-red-600 text-white hover:bg-red-700"
+            className="cursor-pointer rounded-sm bg-status-critical text-white hover:bg-status-critical"
             onClick={() => {
               if (!draft.url.trim()) {
                 toast.error("URL required");

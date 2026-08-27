@@ -21,12 +21,14 @@ export const EMPTY_DRAFT: Draft = {
 export function sevClass(s: string) {
   switch (s) {
     case "critical":
-      return "border-red-500/40 bg-red-500/10 text-red-400";
+      return "border-status-critical/40 bg-status-critical/10 text-status-critical";
     case "high":
-      return "border-orange-500/40 bg-orange-500/10 text-orange-400";
+      return "border-status-high/40 bg-status-high/10 text-status-high";
     case "medium":
-      return "border-amber-500/40 bg-amber-500/10 text-amber-300";
+      return "border-status-medium/40 bg-status-medium/10 text-status-medium";
+    case "low":
+      return "border-status-low/40 bg-status-low/10 text-status-low";
     default:
-      return "border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300";
+      return "border-border-strong bg-surface-subtle text-fg-muted";
   }
 }

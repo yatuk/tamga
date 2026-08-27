@@ -39,21 +39,21 @@ export function SettingsRuntimeSection({ health, runtime }: Props) {
         </div>
 
         <TerminalFrame title="Çalışma Durumu">
-          <div className="space-y-1 p-3 text-xs text-zinc-700 dark:text-zinc-300">
+          <div className="space-y-1 p-3 text-xs text-fg-muted">
             <div>
-              version: <span className="text-zinc-900 dark:text-zinc-100">{runtime?.version || "—"}</span>
+              version: <span className="text-fg">{runtime?.version || "—"}</span>
             </div>
             <div>
-              policy_name: <span className="text-zinc-900 dark:text-zinc-100">{runtime?.policy_name || "—"}</span>
+              policy_name: <span className="text-fg">{runtime?.policy_name || "—"}</span>
             </div>
             <div>
-              scanner_count: <span className="text-zinc-900 dark:text-zinc-100">{runtime?.scanner_count ?? health?.scanner_count ?? 0}</span>
+              scanner_count: <span className="text-fg">{runtime?.scanner_count ?? health?.scanner_count ?? 0}</span>
             </div>
             <div>
-              uptime: <span className="text-zinc-900 dark:text-zinc-100">{runtime?.uptime_seconds ?? health?.uptime_seconds ?? 0}s</span>
+              uptime: <span className="text-fg">{runtime?.uptime_seconds ?? health?.uptime_seconds ?? 0}s</span>
             </div>
-            <div className="text-[11px] text-zinc-600 dark:text-zinc-400">policy_path: {runtime?.policy_path ?? health?.policy_path ?? "—"}</div>
-            <div className="text-[11px] text-zinc-600 dark:text-zinc-400">
+            <div className="text-[11px] text-fg-muted">policy_path: {runtime?.policy_path ?? health?.policy_path ?? "—"}</div>
+            <div className="text-[11px] text-fg-muted">
               endpoint: <code>/api/v1/health/detail</code>
             </div>
           </div>

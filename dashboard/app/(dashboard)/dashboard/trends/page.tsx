@@ -28,8 +28,8 @@ export default function TrendsPage() {
               onClick={() => setRange(r)}
               className={`rounded-sm border px-2 py-1 text-xs ${
                 range === r
-                  ? "border-red-500/50 bg-red-500/10 text-red-500"
-                  : "border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-400"
+                  ? "border-status-critical/50 bg-status-critical/10 text-status-critical"
+                  : "border-border text-fg-muted hover:border-border"
               }`}
             >
               {r}
@@ -47,9 +47,9 @@ export default function TrendsPage() {
       <TerminalFrame filename={`trend · ${range}`}>
         <div className="p-3">
           {isLoading ? (
-            <p className="py-16 text-center text-xs text-zinc-500">Loading…</p>
+            <p className="py-16 text-center text-xs text-fg-subtle">Loading…</p>
           ) : chartData.length === 0 ? (
-            <p className="py-16 text-center text-xs text-zinc-500">
+            <p className="py-16 text-center text-xs text-fg-subtle">
               No data for this window yet.
             </p>
           ) : (
@@ -61,18 +61,18 @@ export default function TrendsPage() {
       <TerminalFrame filename="findings by type">
         <div className="space-y-2 p-3">
           {byType.length === 0 ? (
-            <p className="py-6 text-center text-xs text-zinc-500">No findings in this window.</p>
+            <p className="py-6 text-center text-xs text-fg-subtle">No findings in this window.</p>
           ) : (
             byType.map(([type, count]) => (
               <div key={type} className="flex items-center gap-2 text-xs">
-                <span className="w-32 shrink-0 truncate text-zinc-700 dark:text-zinc-300">{type}</span>
-                <div className="h-2 flex-1 overflow-hidden rounded-sm bg-zinc-100 dark:bg-zinc-900">
+                <span className="w-32 shrink-0 truncate text-fg-muted">{type}</span>
+                <div className="h-2 flex-1 overflow-hidden rounded-sm bg-surface-subtle">
                   <div
-                    className="h-full bg-red-500/60"
+                    className="h-full bg-status-critical/60"
                     style={{ width: `${Math.max(3, (count / maxType) * 100)}%` }}
                   />
                 </div>
-                <span className="w-12 shrink-0 text-right tabular-nums text-zinc-500">{count}</span>
+                <span className="w-12 shrink-0 text-right tabular-nums text-fg-subtle">{count}</span>
               </div>
             ))
           )}

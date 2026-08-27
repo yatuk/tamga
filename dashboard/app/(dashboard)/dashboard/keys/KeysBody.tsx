@@ -17,15 +17,15 @@ import type { useKeysPage } from "./useKeysPage";
 type Props = ReturnType<typeof useKeysPage>;
 
 const SCOPE_BADGE: Record<string, string> = {
-  read: "border-zinc-500/40 bg-zinc-500/10 text-zinc-400",
-  write: "border-sky-500/40 bg-sky-500/10 text-sky-400",
-  admin: "border-emerald-500/40 bg-emerald-500/10 text-emerald-400",
+  read: "border-border-strong/40 bg-surface-subtle0/10 text-fg-subtle",
+  write: "border-status-low/40 bg-status-low/10 text-status-low",
+  admin: "border-status-pass/40 bg-status-pass/10 text-status-pass",
 };
 
 const SCOPE_SUMMARY_CLASS: Record<string, string> = {
-  admin: "border-red-500/40 bg-red-500/10 text-red-400",
-  write: "border-amber-500/40 bg-amber-500/10 text-amber-400",
-  read: "border-emerald-500/40 bg-emerald-500/10 text-emerald-400",
+  admin: "border-status-critical/40 bg-status-critical/10 text-status-critical",
+  write: "border-status-medium/40 bg-status-medium/10 text-status-medium",
+  read: "border-status-pass/40 bg-status-pass/10 text-status-pass",
 };
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
@@ -35,9 +35,9 @@ function daysAgo(ts: string): number {
 }
 
 function ageColor(days: number): string {
-  if (days < 30) return "text-emerald-400";
-  if (days <= 90) return "text-amber-400";
-  return "text-zinc-500";
+  if (days < 30) return "text-status-pass";
+  if (days <= 90) return "text-status-medium";
+  return "text-fg-subtle";
 }
 
 export function KeysBody({
@@ -81,7 +81,7 @@ export function KeysBody({
         subtitle={`${total} key${total !== 1 ? "s" : ""} · admin · write · read-only`}
         actions={
           <Button
-            className="cursor-pointer rounded-sm bg-emerald-600 text-white hover:bg-emerald-700"
+            className="cursor-pointer rounded-sm bg-status-pass text-white hover:bg-status-pass"
             onClick={() => setCreateOpen(true)}
           >
             <Plus className="mr-1 h-4 w-4" /> New API Key
@@ -90,7 +90,7 @@ export function KeysBody({
       />
 
       {hasError ? (
-        <div className="rounded-sm border border-red-500/30 bg-red-500/10 p-4 text-xs text-red-400" role="alert">
+        <div className="rounded-sm border border-status-critical/30 bg-status-critical/10 p-4 text-xs text-status-critical" role="alert">
           Failed to load API keys. Check your admin key and proxy connection.
         </div>
       ) : null}
@@ -98,7 +98,7 @@ export function KeysBody({
       {/* Scope distribution summary */}
       {!isLoading && apiKeys.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[10px] uppercase tracking-[0.12em] text-zinc-500 mr-1">
+          <span className="text-[10px] uppercase tracking-[0.12em] text-fg-subtle mr-1">
             Scope Distribution
           </span>
           {(["admin", "write", "read"] as const).map((scope) => (
@@ -114,7 +114,7 @@ export function KeysBody({
 
       {/* Unused keys warning */}
       {!isLoading && unusedCount > 0 && (
-        <div className="flex items-center gap-2 rounded-sm border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
+        <div className="flex items-center gap-2 rounded-sm border border-status-medium/30 bg-status-medium/10 px-3 py-2 text-xs text-status-medium">
           <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
           <span>
             {unusedCount} unused key{unusedCount !== 1 ? "s" : ""} (30+ days inactive)
@@ -125,7 +125,7 @@ export function KeysBody({
       <TerminalFrame
         title="API Keys"
         status={
-          <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-zinc-600 dark:text-zinc-400">
+          <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
             {total} keys
           </span>
         }
@@ -147,7 +147,7 @@ export function KeysBody({
           ) : (
             <table className="w-full table-fixed text-xs">
               <thead>
-                <tr className="border-b border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400">
+                <tr className="border-b border-border text-fg-muted">
                   <th className="px-3 py-2 text-left font-medium text-[10px] uppercase tracking-[0.12em] w-[15%]">
                     Name
                   </th>
@@ -171,15 +171,15 @@ export function KeysBody({
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-900">
+              <tbody className="divide-y divide-border">
                 {apiKeys.map((key) => {
                   const age = daysAgo(key.created_at);
                   return (
                     <tr
                       key={key.id}
-                      className="text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900/60"
+                      className="text-fg-muted hover:bg-surface-subtle"
                     >
-                      <td className="px-3 py-2 font-mono text-zinc-800 dark:text-zinc-200 truncate whitespace-nowrap">
+                      <td className="px-3 py-2 font-mono text-fg truncate whitespace-nowrap">
                         {key.label}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap">
@@ -191,7 +191,7 @@ export function KeysBody({
                       </td>
                       <td className="px-3 py-2">
                         <div className="flex items-center gap-1.5 min-w-0">
-                          <code className="font-mono text-zinc-500 truncate">{key.prefix}••••</code>
+                          <code className="font-mono text-fg-subtle truncate">{key.prefix}••••</code>
                           <button
                             type="button"
                             className="cursor-pointer rounded-sm p-0.5 shrink-0 relative"
@@ -199,13 +199,13 @@ export function KeysBody({
                             title="Copy prefix" aria-label="Copy key prefix"
                           >
                             {copiedId === key.id ? (
-                              <Check className="h-3 w-3 text-emerald-400" />
+                              <Check className="h-3 w-3 text-status-pass" />
                             ) : (
-                              <Copy className="h-3 w-3 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300" />
+                              <Copy className="h-3 w-3 text-fg-subtle hover:text-fg-muted dark:hover:text-fg-subtle" />
                             )}
                           </button>
                           {copiedId === key.id && (
-                            <span className="text-[10px] text-emerald-400 animate-in fade-in">
+                            <span className="text-[10px] text-status-pass animate-in fade-in">
                               Copied!
                             </span>
                           )}
@@ -214,17 +214,17 @@ export function KeysBody({
                       <td className={`px-3 py-2 text-right font-mono whitespace-nowrap ${ageColor(age)}`}>
                         {age < 1 ? "today" : `${age}d`}
                       </td>
-                      <td className="px-3 py-2 text-right text-zinc-500 whitespace-nowrap">
+                      <td className="px-3 py-2 text-right text-fg-subtle whitespace-nowrap">
                         {formatSince(key.created_at)}
                       </td>
-                      <td className="px-3 py-2 text-right text-zinc-500 whitespace-nowrap">
+                      <td className="px-3 py-2 text-right text-fg-subtle whitespace-nowrap">
                         {formatSince(key.last_used)}
                       </td>
                       <td className="px-3 py-2 text-center whitespace-nowrap">
                         <Button
                           size="sm"
                           variant="outline"
-                          className="h-6 cursor-pointer rounded-sm border-red-500/30 bg-red-500/5 text-[10px] uppercase text-red-400 hover:bg-red-500/10"
+                          className="h-6 cursor-pointer rounded-sm border-status-critical/30 bg-status-critical/5 text-[10px] uppercase text-status-critical hover:bg-status-critical/10"
                           onClick={() => setDeleteTarget({ id: key.id, label: key.label })}
                         >
                           <Trash2 className="mr-1 h-3 w-3" /> Revoke

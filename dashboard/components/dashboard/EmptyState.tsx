@@ -58,23 +58,23 @@ export function EmptyState({
       role="status"
     >
       {/* Icon in bordered box */}
-      <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-sm border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900/60">
-        {customIcon ?? (Icon ? <Icon className="h-5 w-5 text-zinc-600 dark:text-zinc-400" /> : null)}
+      <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-sm border border-border bg-surface-subtle">
+        {customIcon ?? (Icon ? <Icon className="h-5 w-5 text-fg-muted" /> : null)}
       </div>
 
       {/* Title */}
-      <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">{title}</h3>
+      <h3 className="text-sm font-semibold text-fg-muted">{title}</h3>
 
       {/* Description */}
       {description && (
-        <p className="mt-1.5 max-w-sm text-[11px] leading-relaxed text-zinc-600 dark:text-zinc-400">
+        <p className="mt-1.5 max-w-sm text-[11px] leading-relaxed text-fg-muted">
           {description}
         </p>
       )}
 
       {/* Suggestion — contextual next step */}
       {suggestion && (
-        <p className="mt-1.5 max-w-sm text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-500">
+        <p className="mt-1.5 max-w-sm text-[11px] leading-relaxed text-fg-subtle dark:text-fg-subtle">
           {suggestion}
         </p>
       )}
@@ -84,7 +84,7 @@ export function EmptyState({
         <button
           type="button"
           onClick={onAction}
-          className="mt-4 inline-flex cursor-pointer items-center gap-1.5 rounded-sm border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 px-3 py-1.5 text-[11px] text-zinc-700 dark:text-zinc-300 transition-colors duration-150 hover:border-zinc-600 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-100"
+          className="mt-4 inline-flex cursor-pointer items-center gap-1.5 rounded-sm border border-border-strong bg-surface-subtle px-3 py-1.5 text-[11px] text-fg-muted transition-colors duration-150 hover:border-border-strong hover:bg-surface-card hover:text-fg"
         >
           {actionLabel}
         </button>
@@ -95,7 +95,7 @@ export function EmptyState({
         <button
           type="button"
           onClick={action.onClick}
-          className="mt-4 inline-flex cursor-pointer items-center gap-1.5 rounded-sm bg-emerald-600 px-3 py-1.5 text-[11px] text-white transition-colors duration-150 hover:bg-emerald-700"
+          className="mt-4 inline-flex cursor-pointer items-center gap-1.5 rounded-sm bg-status-pass px-3 py-1.5 text-[11px] text-white transition-colors duration-150 hover:bg-status-pass"
         >
           {action.label}
         </button>

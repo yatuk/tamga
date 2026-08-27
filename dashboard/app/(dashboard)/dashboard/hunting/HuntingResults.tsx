@@ -9,6 +9,7 @@ import { humanizeFindingType } from "@/lib/humanize";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SeverityBadge } from "@/components/common/badges";
+import { severityClass } from "@/lib/badges";
 import { EmptyState } from "@/components/dashboard/EmptyState";
 import { MetricStat } from "@/components/dashboard/MetricStat";
 import { SkeletonTable } from "@/components/common/SkeletonRow";
@@ -26,21 +27,6 @@ type Props = {
 
 const MAX_EXPANDED_CHARS = 120;
 const MAX_COLSPAN = 7;
-
-function severityChipClass(severity: string): string {
-  switch (severity.toLowerCase()) {
-    case "critical":
-      return "border-red-500/40 bg-red-500/10 text-red-400";
-    case "high":
-      return "border-amber-500/40 bg-amber-500/10 text-amber-400";
-    case "medium":
-      return "border-yellow-500/40 bg-yellow-500/10 text-yellow-400";
-    case "low":
-      return "border-zinc-500/40 bg-zinc-500/10 text-zinc-400";
-    default:
-      return "border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 text-zinc-600";
-  }
-}
 
 function truncateMatch(match: string, maxLen: number): string {
   if (!match) return "—";
@@ -134,36 +120,36 @@ export function HuntingResults({ events, total, page, setPage, isLoading, error 
   return (
     <>
       {error ? (
-        <div className="rounded-sm border border-red-800/50 bg-red-950/20 p-3 text-sm text-red-300">{error.message}</div>
+        <div className="rounded-sm border border-status-critical/50 bg-status-critical/20 p-3 text-sm text-status-critical">{error.message}</div>
       ) : null}
 
       {/* Results summary bar */}
       {hasResults && !isLoading && (
-        <div className="flex flex-wrap items-center gap-2 rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-2">
-          <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
+        <div className="flex flex-wrap items-center gap-2 rounded-sm border border-border bg-surface-card p-2">
+          <span className="text-xs font-semibold text-fg">
             {total} results found
           </span>
-          <span className="text-[10px] text-zinc-600 dark:text-zinc-400">·</span>
-          <Badge className="rounded-sm border border-red-500/40 bg-red-500/10 text-[10px] text-red-400">
+          <span className="text-[10px] text-fg-muted">·</span>
+          <Badge className="rounded-sm border border-status-critical/40 bg-status-critical/10 text-[10px] text-status-critical">
             {severityCounts.critical} Critical
           </Badge>
-          <Badge className="rounded-sm border border-amber-500/40 bg-amber-500/10 text-[10px] text-amber-400">
+          <Badge className="rounded-sm border border-status-medium/40 bg-status-medium/10 text-[10px] text-status-medium">
             {severityCounts.high} High
           </Badge>
-          <Badge className="rounded-sm border border-yellow-500/40 bg-yellow-500/10 text-[10px] text-yellow-400">
+          <Badge className="rounded-sm border border-status-medium/40 bg-status-medium/10 text-[10px] text-status-medium">
             {severityCounts.medium} Medium
           </Badge>
-          <Badge className="rounded-sm border border-zinc-500/40 bg-zinc-500/10 text-[10px] text-zinc-400">
+          <Badge className="rounded-sm border border-border-strong/40 bg-surface-subtle0/10 text-[10px] text-fg-subtle">
             {severityCounts.low} Low
           </Badge>
           {lastRunMeta && (
             <>
-              <span className="text-[10px] text-zinc-600 dark:text-zinc-400">·</span>
-              <span className="flex items-center gap-1 text-[10px] text-zinc-600 dark:text-zinc-400">
+              <span className="text-[10px] text-fg-muted">·</span>
+              <span className="flex items-center gap-1 text-[10px] text-fg-muted">
                 <Clock className="h-3 w-3" />
                 {lastRunMeta.latest.toLocaleString("tr-TR")}
               </span>
-              <span className="text-[10px] text-zinc-600 dark:text-zinc-400">
+              <span className="text-[10px] text-fg-muted">
                 {totalFindings} findings in {lastRunMeta.totalLatencyMs} ms
               </span>
             </>
@@ -187,14 +173,14 @@ export function HuntingResults({ events, total, page, setPage, isLoading, error 
 
       {/* Bulk-action toolbar */}
       {selectedRows.size > 0 && (
-        <div className="flex items-center gap-2 rounded-sm border border-emerald-500/30 bg-emerald-500/5 px-3 py-2">
-          <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+        <div className="flex items-center gap-2 rounded-sm border border-status-pass/30 bg-status-pass/5 px-3 py-2">
+          <span className="text-xs font-semibold text-status-pass dark:text-status-pass">
             {selectedRows.size} selected
           </span>
           <Button
             size="sm"
             variant="outline"
-            className="rounded-sm border-zinc-300 dark:border-zinc-700 text-[10px] h-7"
+            className="rounded-sm border-border-strong text-[10px] h-7"
             disabled
             title="Bulk tagging will be available in a future release"
           >
@@ -204,7 +190,7 @@ export function HuntingResults({ events, total, page, setPage, isLoading, error 
           <Button
             size="sm"
             variant="outline"
-            className="rounded-sm border-zinc-300 dark:border-zinc-700 text-[10px] h-7 opacity-50"
+            className="rounded-sm border-border-strong text-[10px] h-7 opacity-50"
             disabled
             title="Bulk status change will be available in a future release"
           >
@@ -212,7 +198,7 @@ export function HuntingResults({ events, total, page, setPage, isLoading, error 
           </Button>
           <button
             type="button"
-            className="ml-auto text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+            className="ml-auto text-fg-subtle hover:text-fg-muted dark:hover:text-fg-subtle"
             onClick={clearSelection}
             aria-label="Clear selection"
           >
@@ -235,13 +221,13 @@ export function HuntingResults({ events, total, page, setPage, isLoading, error 
             ) : (
               <table className="w-full table-fixed border-collapse text-left text-xs">
                 <thead>
-                  <tr className="border-b border-zinc-200 dark:border-zinc-800 text-[10px] uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
+                  <tr className="border-b border-border text-[10px] uppercase tracking-wide text-fg-muted">
                     <th className="px-2 py-2 w-8">
                       <input
                         type="checkbox"
                         checked={selectedRows.size === events.length && events.length > 0}
                         onChange={toggleSelectAll}
-                        className="rounded-sm border-zinc-400 dark:border-zinc-600"
+                        className="rounded-sm border-border dark:border-border-strong"
                         aria-label="Select all"
                       />
                     </th>
@@ -261,20 +247,20 @@ export function HuntingResults({ events, total, page, setPage, isLoading, error 
 
                     return (
                       <Fragment key={ev.request_id}>
-                        <tr className={`border-b border-zinc-900 ${isSelected ? "bg-emerald-500/5" : "hover:bg-zinc-100 dark:hover:bg-zinc-900/30"}`}>
+                        <tr className={`border-b border-border ${isSelected ? "bg-status-pass/5" : "hover:bg-surface-subtle/30"}`}>
                           <td className="px-2 py-1.5">
                             <input
                               type="checkbox"
                               checked={isSelected}
                               onChange={() => toggleSelect(ev.request_id)}
-                              className="rounded-sm border-zinc-400 dark:border-zinc-600"
+                              className="rounded-sm border-border dark:border-border-strong"
                               aria-label={`Select ${ev.request_id.slice(0, 10)}`}
                             />
                           </td>
                           <td className="px-0 py-1.5">
                             <button
                               type="button"
-                              className="flex items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+                              className="flex items-center justify-center text-fg-subtle hover:text-fg-muted dark:hover:text-fg-subtle"
                               onClick={() => toggleExpand(ev.request_id)}
                               aria-label={isExpanded ? "Collapse row" : "Expand row"}
                             >
@@ -285,9 +271,9 @@ export function HuntingResults({ events, total, page, setPage, isLoading, error 
                               )}
                             </button>
                           </td>
-                          <td className="px-2 py-1.5 font-mono text-zinc-800 dark:text-zinc-200 min-w-[120px] max-w-[150px] truncate whitespace-nowrap">{ev.request_id}</td>
+                          <td className="px-2 py-1.5 font-mono text-fg min-w-[120px] max-w-[150px] truncate whitespace-nowrap">{ev.request_id}</td>
                           <td className="px-2 py-1.5 whitespace-nowrap">
-                            <Badge className="rounded-sm border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[10px] text-zinc-700 dark:text-zinc-300">
+                            <Badge className="rounded-sm border border-border-strong bg-surface-card text-[10px] text-fg-muted">
                               {toUpperLocale(ev.action || "—")}
                             </Badge>
                           </td>
@@ -297,21 +283,21 @@ export function HuntingResults({ events, total, page, setPage, isLoading, error 
                                 sevs.map((s) => (
                                   <span
                                     key={s}
-                                    className={`inline-flex items-center rounded-sm border px-1.5 py-0.5 text-[9px] uppercase tracking-wide ${severityChipClass(s)}`}
+                                    className={`inline-flex items-center rounded-sm border px-1.5 py-0.5 text-[9px] uppercase tracking-wide ${severityClass(s)}`}
                                   >
                                     {s}
                                   </span>
                                 ))
                               ) : (
-                                <span className="text-zinc-500">—</span>
+                                <span className="text-fg-subtle">—</span>
                               )}
                             </div>
                           </td>
-                          <td className="px-2 py-1.5 text-zinc-600 dark:text-zinc-400 whitespace-nowrap">{ev.findings_count ?? ev.findings?.length ?? 0}</td>
+                          <td className="px-2 py-1.5 text-fg-muted whitespace-nowrap">{ev.findings_count ?? ev.findings?.length ?? 0}</td>
                           <td className="px-2 py-1.5 whitespace-nowrap">
                             <Link
                               href={`/dashboard/security?request_id=${encodeURIComponent(ev.request_id)}`}
-                              className="inline-flex items-center gap-1 text-[10px] text-red-400 hover:underline"
+                              className="inline-flex items-center gap-1 text-[10px] text-status-critical hover:underline"
                             >
                               Incidents
                               <ExternalLink className="h-3 w-3" />
@@ -320,13 +306,13 @@ export function HuntingResults({ events, total, page, setPage, isLoading, error 
                         </tr>
                         {/* Expanded row — shown as a separate row below the main row */}
                         {isExpanded && (
-                          <tr className="bg-zinc-50 dark:bg-zinc-900/30 border-l-2 border-emerald-500">
+                          <tr className="bg-surface-subtle/30 border-l-2 border-status-pass">
                             <td colSpan={MAX_COLSPAN} className="px-3 py-2">
-                              <div className="text-[10px] uppercase tracking-wide text-zinc-500 dark:text-zinc-400 mb-1.5">
+                              <div className="text-[10px] uppercase tracking-wide text-fg-subtle mb-1.5">
                                 Findings ({(ev.findings || []).length})
                               </div>
                               {(ev.findings || []).length === 0 ? (
-                                <div className="text-zinc-500 dark:text-zinc-400 py-1 text-[11px]">
+                                <div className="text-fg-subtle py-1 text-[11px]">
                                   No findings in this event.
                                 </div>
                               ) : (
@@ -336,18 +322,18 @@ export function HuntingResults({ events, total, page, setPage, isLoading, error 
                                     return (
                                       <div
                                         key={fi}
-                                        className="flex items-center gap-2 py-1 border-b border-zinc-100 dark:border-zinc-800 last:border-0 text-[11px]"
+                                        className="flex items-center gap-2 py-1 border-b border-border-subtle dark:border-border last:border-0 text-[11px]"
                                       >
-                                        <span className="w-20 shrink-0 text-zinc-600 dark:text-zinc-400">
+                                        <span className="w-20 shrink-0 text-fg-muted">
                                           {f.type || "—"}
                                         </span>
                                         <SeverityBadge severity={f.severity} />
                                         {confPct && (
-                                          <span className="text-[10px] tabular-nums text-zinc-500 dark:text-zinc-400 w-10 shrink-0">
+                                          <span className="text-[10px] tabular-nums text-fg-subtle w-10 shrink-0">
                                             {confPct}
                                           </span>
                                         )}
-                                        <span className="flex-1 truncate font-mono text-[10px] text-zinc-500 dark:text-zinc-400">
+                                        <span className="flex-1 truncate font-mono text-[10px] text-fg-subtle">
                                           {truncateMatch(f.match, MAX_EXPANDED_CHARS)}
                                         </span>
                                       </div>
@@ -366,7 +352,7 @@ export function HuntingResults({ events, total, page, setPage, isLoading, error 
             )}
           </div>
         )}
-        <div className="flex items-center justify-between border-t border-zinc-200 dark:border-zinc-800 px-3 py-2 text-[10px] text-zinc-600 dark:text-zinc-400">
+        <div className="flex items-center justify-between border-t border-border px-3 py-2 text-[10px] text-fg-muted">
           <span>
             Toplam {total} · sayfa {page} / {Math.max(1, Math.ceil(total / PAGE_SIZE))}
           </span>

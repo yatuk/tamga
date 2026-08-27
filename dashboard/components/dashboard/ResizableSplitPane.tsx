@@ -73,7 +73,7 @@ export function ResizableSplitPane({
   return (
     <div
       ref={containerRef}
-      className="flex overflow-hidden rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950"
+      className="flex overflow-hidden rounded-sm border border-border bg-surface-card"
       style={{ height: "calc(100vh - 140px)", minHeight: "480px" }}
     >
       {/* Left panel */}
@@ -83,7 +83,7 @@ export function ResizableSplitPane({
 
       {/* Drag handle */}
       <div
-        className="shrink-0 w-1 cursor-col-resize bg-zinc-200 dark:bg-zinc-800 hover:bg-red-500/60 dark:hover:bg-red-500/60 transition-colors duration-150"
+        className="shrink-0 w-1 cursor-col-resize bg-surface-subtle hover:bg-status-critical/60 dark:hover:bg-status-critical/60 transition-colors duration-150"
         onMouseDown={onMouseDown}
         role="separator"
         aria-orientation="vertical"

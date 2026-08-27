@@ -20,10 +20,10 @@ type Props = ReturnType<typeof useLatencyPage>;
 function stateBadge(state: string) {
   const cls =
     state === "OPEN" || state === "connected" || state === "healthy"
-      ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
+      ? "border-status-pass/40 bg-status-pass/10 text-status-pass"
       : state === "HALF" || state === "degraded"
-        ? "border-amber-500/40 bg-amber-500/10 text-amber-400"
-        : "border-red-500/40 bg-red-500/10 text-red-400";
+        ? "border-status-medium/40 bg-status-medium/10 text-status-medium"
+        : "border-status-critical/40 bg-status-critical/10 text-status-critical";
   return (
     <Badge className={`rounded-sm border text-[10px] uppercase ${cls}`}>
       {state}
@@ -68,14 +68,14 @@ export function LatencyBody({
           <>
             <GlossaryToggle onClick={() => setGlossaryOpen(true)} />
             <HealthScoreBadge score={latencyHealthScore} label="P95" size="sm" showScore />
-            <div className="inline-flex overflow-hidden rounded-sm border border-zinc-300 dark:border-zinc-700">
+            <div className="inline-flex overflow-hidden rounded-sm border border-border-strong">
               {(["24h", "7d", "30d"] as TimeRange[]).map((r) => (
                 <button
                   key={r}
                   className={`cursor-pointer px-3 py-1 text-xs ${
                     range === r
-                      ? "bg-emerald-600 text-white"
-                      : "bg-white dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                      ? "bg-status-pass text-white"
+                      : "bg-surface-card text-fg-muted hover:bg-surface-subtle"
                   }`}
                   onClick={() => setRange(r)}
                   type="button"
@@ -89,7 +89,7 @@ export function LatencyBody({
       />
 
       {hasError ? (
-        <div className="rounded-sm border border-red-500/30 bg-red-500/10 p-4 text-xs text-red-400" role="alert">
+        <div className="rounded-sm border border-status-critical/30 bg-status-critical/10 p-4 text-xs text-status-critical" role="alert">
           Failed to load latency data. Check your admin key and proxy connection.
         </div>
       ) : null}
@@ -100,7 +100,7 @@ export function LatencyBody({
           Array.from({ length: 3 }).map((_, i) => (
             <div
               key={i}
-              className="h-[88px] animate-pulse rounded-sm bg-zinc-100 dark:bg-zinc-900/40"
+              className="h-[88px] animate-pulse rounded-sm bg-surface-subtle"
             role="status" />
           ))
         ) : (
@@ -132,7 +132,7 @@ export function LatencyBody({
         <TerminalFrame
           title="Latency Percentiles"
           status={
-            <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-zinc-600 dark:text-zinc-400">
+            <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
               P50→P99
             </span>
           }
@@ -141,12 +141,12 @@ export function LatencyBody({
             {histogramBars.map((bar) => (
               <div key={bar.label} className="space-y-1">
                 <div className="flex items-center justify-between text-[11px]">
-                  <span className="font-mono text-zinc-700 dark:text-zinc-300">{bar.label}</span>
-                  <span className="ml-2 shrink-0 tabular-nums text-zinc-500 font-mono">
+                  <span className="font-mono text-fg-muted">{bar.label}</span>
+                  <span className="ml-2 shrink-0 tabular-nums text-fg-subtle font-mono">
                     {formatMs(bar.ms)}
                   </span>
                 </div>
-                <div className="h-2.5 w-full overflow-hidden rounded-sm bg-zinc-100 dark:bg-zinc-900">
+                <div className="h-2.5 w-full overflow-hidden rounded-sm bg-surface-subtle">
                   <div
                     className={`h-full rounded-sm ${bar.color}`}
                     style={{ width: `${Math.max(bar.pct, 2)}%` }}
@@ -163,7 +163,7 @@ export function LatencyBody({
         <TerminalFrame
           title="SLOWEST TIME BUCKETS"
           status={
-            <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-zinc-600 dark:text-zinc-400">
+            <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
               top 5 by P95 latency
             </span>
           }
@@ -171,7 +171,7 @@ export function LatencyBody({
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400">
+                <tr className="border-b border-border text-fg-muted">
                   <th className="px-3 py-2 text-left font-medium text-[10px] uppercase tracking-[0.12em]">
                     Time
                   </th>
@@ -183,17 +183,17 @@ export function LatencyBody({
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-900">
+              <tbody className="divide-y divide-border">
                 {slowestEndpoints.map((ep, i) => (
                   <tr
                     key={i}
-                    className="text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900/60"
+                    className="text-fg-muted hover:bg-surface-subtle"
                   >
                     <td className="px-3 py-2 font-mono">{ep.time}</td>
-                    <td className="px-3 py-2 text-right tabular-nums font-mono text-amber-400">
+                    <td className="px-3 py-2 text-right tabular-nums font-mono text-status-medium">
                       {formatMs(ep.p95)}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums text-zinc-500">
+                    <td className="px-3 py-2 text-right tabular-nums text-fg-subtle">
                       {ep.requests}
                     </td>
                   </tr>
@@ -206,12 +206,12 @@ export function LatencyBody({
 
       {/* Scanner impact note */}
       {scannerCount > 0 && !isLoading ? (
-        <div className="flex items-center gap-2 rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-2 text-[10px] text-zinc-600 dark:text-zinc-400">
+        <div className="flex items-center gap-2 rounded-sm border border-border bg-surface-card px-3 py-2 text-[10px] text-fg-muted">
           <span className="uppercase tracking-[0.12em]">Scanner Impact</span>
-          <span className="font-mono text-zinc-700 dark:text-zinc-300">
+          <span className="font-mono text-fg-muted">
             {scannerCount} active scanner{scannerCount !== 1 ? "s" : ""}
           </span>
-          <span className="font-mono text-zinc-500">
+          <span className="font-mono text-fg-subtle">
             · P95 latency: {formatMs(p95)}
           </span>
         </div>
@@ -221,16 +221,16 @@ export function LatencyBody({
       <TerminalFrame
         filename={`Gecikme · ${range === "24h" ? "24 Saat" : range === "7d" ? "7 Gün" : "30 Gün"}`}
         status={
-          <span className="flex items-center gap-1 px-2 text-[10px] uppercase tracking-[0.18em] text-zinc-600 dark:text-zinc-400">
+          <span className="flex items-center gap-1 px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
             <RefreshCw className="h-3 w-3" /> 10s
           </span>
         }
       >
         <div className="p-3">
           {isLoading ? (
-            <div className="h-[200px] w-full animate-pulse rounded-sm bg-zinc-100 dark:bg-zinc-900/40" />
+            <div className="h-[200px] w-full animate-pulse rounded-sm bg-surface-subtle" />
           ) : chartData.length === 0 ? (
-            <div className="py-16 text-center text-xs text-zinc-600 dark:text-zinc-400">
+            <div className="py-16 text-center text-xs text-fg-muted">
               no data for selected range
             </div>
           ) : (
@@ -243,7 +243,7 @@ export function LatencyBody({
       <TerminalFrame
         title="Sağlayıcı Havuz Durumu"
         status={
-          <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-zinc-600 dark:text-zinc-400">
+          <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
             {providerPools.length} providers
           </span>
         }
@@ -252,17 +252,17 @@ export function LatencyBody({
           {isLoading ? (
             <div className="p-3 space-y-2">
               {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="h-[28px] animate-pulse rounded-sm bg-zinc-100 dark:bg-zinc-900/40" />
+                <div key={i} className="h-[28px] animate-pulse rounded-sm bg-surface-subtle" />
               ))}
             </div>
           ) : providerPools.length === 0 ? (
-            <div className="py-12 text-center text-xs text-zinc-600 dark:text-zinc-400">
+            <div className="py-12 text-center text-xs text-fg-muted">
               no provider pool data available
             </div>
           ) : (
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400">
+                <tr className="border-b border-border text-fg-muted">
                   <th className="px-3 py-2 text-left font-medium text-[10px] uppercase tracking-[0.12em]">
                     Provider
                   </th>
@@ -286,15 +286,15 @@ export function LatencyBody({
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-900">
+              <tbody className="divide-y divide-border">
                 {providerPools.map((p) => (
                   <tr
                     key={`${p.pool}-${p.name}`}
-                    className="text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900/60"
+                    className="text-fg-muted hover:bg-surface-subtle"
                   >
                     <td className="px-3 py-2 font-mono">
                       {p.name}
-                      <span className="ml-1 text-zinc-500">({p.pool})</span>
+                      <span className="ml-1 text-fg-subtle">({p.pool})</span>
                     </td>
                     <td className="px-3 py-2">{stateBadge(p.state)}</td>
                     <td className="px-3 py-2 text-right tabular-nums font-mono">
@@ -303,13 +303,13 @@ export function LatencyBody({
                     <td className="px-3 py-2 text-right tabular-nums font-mono">
                       {formatRate(p.successRate)}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums text-zinc-500">
+                    <td className="px-3 py-2 text-right tabular-nums text-fg-subtle">
                       {p.requestsInWindow ?? "—"}
                     </td>
-                    <td className="px-3 py-2 text-right text-zinc-500">
+                    <td className="px-3 py-2 text-right text-fg-subtle">
                       {formatSince(p.lastFailure)}
                       {p.failureReason ? (
-                        <span className="ml-1 text-red-400">· {p.failureReason}</span>
+                        <span className="ml-1 text-status-critical">· {p.failureReason}</span>
                       ) : null}
                     </td>
                     <td className="px-3 py-2 text-center">
@@ -317,7 +317,7 @@ export function LatencyBody({
                         <Button
                           size="sm"
                           variant="outline"
-                          className="h-6 cursor-pointer rounded-sm border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 text-[10px] uppercase text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800"
+                          className="h-6 cursor-pointer rounded-sm border-border-strong bg-surface-subtle text-[10px] uppercase text-fg-muted hover:bg-surface-card"
                           onClick={() =>
                             circuitReset.mutate({ pool: p.pool, endpoint: p.name })
                           }
@@ -380,13 +380,13 @@ function LatencyLineChart({
       {/* Area fill */}
       <polygon
         points={`0,100 ${points} 100,100`}
-        fill="hsl(var(--status-amber) / 0.15)"
+        fill="color-mix(in oklab, var(--status-high) 15%, transparent)"
       />
       {/* Line */}
       <polyline
         points={points}
         fill="none"
-        stroke="hsl(var(--status-amber))"
+        stroke="var(--status-high)"
         strokeWidth="1.5"
         vectorEffect="non-scaling-stroke"
       />

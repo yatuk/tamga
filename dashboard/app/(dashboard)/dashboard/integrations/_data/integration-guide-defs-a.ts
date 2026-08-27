@@ -125,7 +125,7 @@ export const TEAMS: IntegrationGuide = {
 export const SPLUNK: IntegrationGuide = {
   kind: "splunk",
   name: "Splunk HEC (JSON)",
-  badge: "border-emerald-700/60 bg-emerald-900/20 text-emerald-300",
+  badge: "border-status-pass/60 bg-status-pass/20 text-status-pass",
   overview:
     "Ship Tamga events as JSON to Splunk’s HTTP Event Collector. Easiest path for Splunk Enterprise / Cloud when you want the Splunk field extractor to auto-parse.",
   lastVerified: LAST_VERIFIED,
@@ -188,7 +188,7 @@ export const SPLUNK: IntegrationGuide = {
 export const SPLUNK_HEC: IntegrationGuide = {
   kind: "splunk_hec",
   name: "Splunk HEC (CEF)",
-  badge: "border-emerald-700/60 bg-emerald-900/20 text-emerald-300",
+  badge: "border-status-pass/60 bg-status-pass/20 text-status-pass",
   overview:
     "Ship Tamga events as ArcSight CEF 0.1 lines to Splunk’s HEC /raw endpoint. Use this when your SOC has standardized on CEF across multiple vendors.",
   lastVerified: LAST_VERIFIED,

@@ -9,14 +9,14 @@ export function OverviewActionBadge({ action }: { action?: string }) {
   const a = toUpperEn(action || "");
   const className =
     a === "BLOCK"
-      ? "rounded-sm border border-red-500/30 bg-red-500/10 text-red-500"
+      ? "rounded-sm border border-status-critical/30 bg-status-critical/10 text-status-critical"
       : a === "REDACT"
-        ? "rounded-sm border border-amber-500/30 bg-amber-500/10 text-amber-500"
+        ? "rounded-sm border border-status-medium/30 bg-status-medium/10 text-status-medium"
         : a === "WARN"
-          ? "rounded-sm border border-orange-500/30 bg-orange-500/10 text-orange-500"
+          ? "rounded-sm border border-status-high/30 bg-status-high/10 text-status-high"
           : a === "PASS"
-            ? "rounded-sm border border-emerald-500/30 bg-emerald-500/10 text-emerald-500"
-            : "rounded-sm border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300";
+            ? "rounded-sm border border-status-pass/30 bg-status-pass/10 text-status-pass"
+            : "rounded-sm border border-border-strong bg-surface-subtle text-fg-muted";
   const badge = <Badge className={className}>{a || "—"}</Badge>;
   if (a === "BLOCK" && !reduce) {
     return (

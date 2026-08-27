@@ -6,20 +6,20 @@ import { TerminalFrame } from "@/components/dashboard/TerminalFrame";
 import { usePolicyEntities } from "./usePolicyEntities";
 
 const inputCls =
-  "mt-1 w-full rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-2 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-red-500/40 focus:outline-none";
+  "mt-1 w-full rounded-sm border border-border bg-surface-card px-2 py-1.5 text-xs text-fg focus:border-status-critical/40 focus:outline-none";
 const labelCls =
-  "text-[10px] uppercase tracking-[0.16em] text-zinc-600 dark:text-zinc-400";
+  "text-[10px] uppercase tracking-[0.16em] text-fg-muted";
 
 function actionClass(action: string) {
   switch (action.toUpperCase()) {
     case "BLOCK":
-      return "text-red-500";
+      return "text-status-critical";
     case "REDACT":
-      return "text-amber-500";
+      return "text-status-medium";
     case "WARN":
-      return "text-yellow-500";
+      return "text-status-medium";
     default:
-      return "text-zinc-500";
+      return "text-fg-subtle";
   }
 }
 
@@ -48,21 +48,21 @@ export function PolicyEntitiesPanel() {
       {/* Existing policy entities */}
       <TerminalFrame filename="Policy Entities">
         <div className="p-3">
-          <p className="mb-2 text-[11px] text-zinc-600 dark:text-zinc-400">
+          <p className="mb-2 text-[11px] text-fg-muted">
             User-defined PII entities with an enforcement action. Applied by the
             custom scanner and persisted in the active policy.
           </p>
           {isLoading ? (
-            <p className="py-6 text-center text-xs text-zinc-500">Loading…</p>
+            <p className="py-6 text-center text-xs text-fg-subtle">Loading…</p>
           ) : items.length === 0 ? (
-            <p className="py-6 text-center text-xs text-zinc-500">
+            <p className="py-6 text-center text-xs text-fg-subtle">
               No policy entities yet. Define one on the right.
             </p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-[11px]">
                 <thead>
-                  <tr className="border-b border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400">
+                  <tr className="border-b border-border text-fg-muted">
                     <th className="py-1 pr-2">Name</th>
                     <th className="py-1 pr-2">Pattern</th>
                     <th className="py-1 pr-2">Action</th>
@@ -75,10 +75,10 @@ export function PolicyEntitiesPanel() {
                   {items.map((e) => (
                     <tr
                       key={e.name}
-                      className="border-b border-zinc-100 dark:border-zinc-900 text-zinc-700 dark:text-zinc-300"
+                      className="border-b border-border-subtle dark:border-border text-fg-muted"
                     >
                       <td className="py-1 pr-2 font-medium">{e.name}</td>
-                      <td className="py-1 pr-2 font-mono text-[10px] text-zinc-500">{e.pattern}</td>
+                      <td className="py-1 pr-2 font-mono text-[10px] text-fg-subtle">{e.pattern}</td>
                       <td className={`py-1 pr-2 font-medium ${actionClass(e.action)}`}>
                         {e.action.toUpperCase()}
                       </td>
@@ -87,7 +87,7 @@ export function PolicyEntitiesPanel() {
                       <td className="py-1">
                         <button
                           aria-label={`delete ${e.name}`}
-                          className="text-zinc-400 hover:text-red-500"
+                          className="text-fg-subtle hover:text-status-critical"
                           onClick={() => deleteMut.mutate(e.name)}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -101,7 +101,7 @@ export function PolicyEntitiesPanel() {
           )}
 
           {/* Test against active policy */}
-          <div className="mt-4 border-t border-zinc-200 dark:border-zinc-800 pt-3">
+          <div className="mt-4 border-t border-border pt-3">
             <label className={labelCls}>Test against active policy</label>
             <textarea
               className={`${inputCls} h-16 font-mono`}
@@ -120,15 +120,15 @@ export function PolicyEntitiesPanel() {
               {simulating ? "Running…" : "Simulate"}
             </Button>
             {simResult && (
-              <div className="mt-2 rounded-sm border border-zinc-200 dark:border-zinc-800 p-2 text-[11px]">
-                <div className="text-zinc-600 dark:text-zinc-400">
+              <div className="mt-2 rounded-sm border border-border p-2 text-[11px]">
+                <div className="text-fg-muted">
                   action: <span className={actionClass(simResult.action)}>{simResult.action}</span> ·{" "}
                   {simResult.findings.length} finding(s)
                 </div>
                 {simResult.findings.map((f, i) => (
-                  <div key={i} className="mt-1 text-zinc-700 dark:text-zinc-300">
-                    <span className="font-mono text-amber-500">{f.category}</span> — {f.match}{" "}
-                    <span className="text-zinc-500">({f.action})</span>
+                  <div key={i} className="mt-1 text-fg-muted">
+                    <span className="font-mono text-status-medium">{f.category}</span> — {f.match}{" "}
+                    <span className="text-fg-subtle">({f.action})</span>
                   </div>
                 ))}
               </div>

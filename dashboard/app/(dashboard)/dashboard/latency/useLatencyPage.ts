@@ -43,11 +43,11 @@ export function useLatencyPage() {
 
   const histogramBars = useMemo(() => {
     const bars = [
-      { label: "P50", ms: p50, color: "bg-emerald-500" },
+      { label: "P50", ms: p50, color: "bg-status-pass" },
       { label: "P75", ms: p75, color: "bg-lime-500" },
-      { label: "P90", ms: p90, color: "bg-amber-500" },
-      { label: "P95", ms: p95, color: "bg-orange-500" },
-      { label: "P99", ms: p99, color: "bg-red-500" },
+      { label: "P90", ms: p90, color: "bg-status-medium" },
+      { label: "P95", ms: p95, color: "bg-status-high" },
+      { label: "P99", ms: p99, color: "bg-status-critical" },
     ];
     const maxMs = Math.max(...bars.map((b) => b.ms), 1);
     return bars.map((b) => ({ ...b, pct: Math.round((b.ms / maxMs) * 100) }));

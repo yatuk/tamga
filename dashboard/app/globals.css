@@ -21,10 +21,10 @@
    they don't bloom when stacked (critical red, high amber, emerald success).
 ---------------------------------------------------------------------------- */
 
-:root {
+html.dark {
   color-scheme: dark;
 
-  /* --- Surfaces (dark by default; Tamga is a SOC tool) --- */
+  /* --- Surfaces (dark theme; Tamga is a SOC tool) --- */
   --surface-base: oklch(0.18 0.008 260);
   --surface-subtle: oklch(0.205 0.008 260);
   --surface-card: oklch(0.225 0.009 260);
@@ -61,12 +61,25 @@
   --status-pass: oklch(0.72 0.13 150);
   --status-pass-bg: oklch(0.72 0.13 150 / 0.1);
 
+  /* Raw OKLCH channels so Tailwind can emit `oklch(var(--x) / <alpha-value>)`.
+     A bare `var(--status-*)` token cannot take an opacity modifier (the `/10`,
+     `/40` suffix compiles to zero CSS), so severity/action badges rely on these
+     channel tokens for translucent borders and fills. */
+  --status-critical-ch: 0.64 0.16 22;
+  --status-high-ch: 0.74 0.13 55;
+  --status-medium-ch: 0.78 0.12 90;
+  --status-low-ch: 0.72 0.12 230;
+  --status-pass-ch: 0.72 0.13 150;
+
   --status-block: var(--status-critical);
   --status-block-bg: var(--status-critical-bg);
+  --status-block-ch: var(--status-critical-ch);
   --status-redact: var(--status-medium);
   --status-redact-bg: var(--status-medium-bg);
+  --status-redact-ch: var(--status-medium-ch);
   --status-warn: var(--status-high);
   --status-warn-bg: var(--status-high-bg);
+  --status-warn-ch: var(--status-high-ch);
 
   /* --- Chart tokens (Recharts / Tremor read these) --- */
   --chart-1: oklch(0.72 0.12 230);
@@ -88,9 +101,10 @@
   --border-default: var(--border);
 }
 
-/* Light theme — toggled manually via ThemeToggle (2-state: dark | light).
-   Dark is the product default; light is polished but secondary. */
-html.light {
+/* Light theme — the :root default. next-themes toggles the `dark` class on
+   <html>; when it is absent these light tokens apply. Dark is the product
+   default, so the server emits class="dark" unless the cookie says "light". */
+:root {
   color-scheme: light;
 
   --surface-base: oklch(0.99 0.002 260);
@@ -125,6 +139,24 @@ html.light {
   --status-pass: oklch(0.54 0.14 150);
   --status-pass-bg: oklch(0.54 0.14 150 / 0.1);
 
+  /* Raw OKLCH channels for `oklch(var(--x) / <alpha-value>)` opacity support
+     (see the dark-theme block for rationale). */
+  --status-critical-ch: 0.53 0.18 22;
+  --status-high-ch: 0.62 0.14 55;
+  --status-medium-ch: 0.65 0.13 90;
+  --status-low-ch: 0.55 0.14 230;
+  --status-pass-ch: 0.54 0.14 150;
+
+  --status-block: var(--status-critical);
+  --status-block-bg: var(--status-critical-bg);
+  --status-block-ch: var(--status-critical-ch);
+  --status-redact: var(--status-medium);
+  --status-redact-bg: var(--status-medium-bg);
+  --status-redact-ch: var(--status-medium-ch);
+  --status-warn: var(--status-high);
+  --status-warn-bg: var(--status-high-bg);
+  --status-warn-ch: var(--status-high-ch);
+
   --bg-primary: var(--surface-base);
   --bg-secondary: var(--surface-base);
   --bg-tertiary: var(--surface-subtle);
@@ -134,15 +166,6 @@ html.light {
   --text-secondary: var(--fg-muted);
   --text-muted: var(--fg-subtle);
   --border-default: var(--border);
-}
-
-/* Respect `prefers-color-scheme: light` at first paint when the user has
-   *not* explicitly chosen a theme (ThemeToggle adds either `.light` or
-   `.dark` on <html> once they pick). Avoid FOUC on land. */
-@media (prefers-color-scheme: light) {
-  html:not(.light):not(.dark) {
-    color-scheme: light;
-  }
 }
 
 html,
@@ -286,103 +309,6 @@ body {
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-old(root),
   ::view-transition-new(root) {
-    animation: none;
-  }
-}
-
-/* ---------------- Hero keyframes ---------------- */
-@keyframes gradient-shift {
-  0%,
-  100% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-}
-
-@keyframes scan-line {
-  0% {
-    transform: translateY(0);
-  }
-  100% {
-    transform: translateY(4px);
-  }
-}
-
-@keyframes glow-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 4px 0 oklch(0.64 0.16 22 / 0.3),
-                0 0 8px 0 oklch(0.64 0.16 22 / 0.1);
-  }
-  50% {
-    box-shadow: 0 0 8px 0 oklch(0.64 0.16 22 / 0.5),
-                0 0 16px 0 oklch(0.64 0.16 22 / 0.2);
-  }
-}
-
-@keyframes fade-slide-up {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes shimmer {
-  0% {
-    transform: translateX(-100%);
-  }
-  100% {
-    transform: translateX(100%);
-  }
-}
-
-.animate-shimmer {
-  animation: shimmer 1.8s ease-in-out infinite;
-}
-
-.hero-gradient-text {
-  background: linear-gradient(
-    135deg,
-    oklch(0.96 0.002 260) 0%,
-    oklch(0.85 0.02 260) 30%,
-    oklch(0.62 0.16 22) 60%,
-    oklch(0.96 0.002 260) 100%
-  );
-  background-size: 200% 200%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: gradient-shift 6s ease infinite;
-}
-
-.hero-scan-overlay {
-  background: repeating-linear-gradient(
-    0deg,
-    transparent,
-    transparent 2px,
-    oklch(0 0 0 / 0.015) 2px,
-    oklch(0 0 0 / 0.015) 4px
-  );
-  pointer-events: none;
-}
-
-.hero-grid-bg {
-  background-image: radial-gradient(
-    circle at 1px 1px,
-    oklch(1 0 0 / 0.04) 1px,
-    transparent 0
-  );
-  background-size: 32px 32px;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .hero-gradient-text {
     animation: none;
   }
 }

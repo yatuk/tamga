@@ -6,48 +6,48 @@ import type { IncidentsConsoleModel } from "@/hooks/security/useSecurityIncident
 
 export function IncidentsSavedViewsColumn({ m }: { m: IncidentsConsoleModel }) {
   return (
-    <Card className="h-full rounded-sm border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950">
+    <Card className="h-full rounded-sm border-border bg-surface-card">
       <CardHeader className="pb-2">
         <CardTitle className="text-sm">Saved Views</CardTitle>
-        <CardDescription className="text-zinc-600 dark:text-zinc-400">Hızlı triage filtre setleri</CardDescription>
+        <CardDescription className="text-fg-muted">Hızlı triage filtre setleri</CardDescription>
       </CardHeader>
       <CardContent className="space-y-2">
         <Button
           type="button"
-          className="h-8 w-full cursor-pointer rounded-sm border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 px-2 text-xs text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800"
+          className="h-8 w-full cursor-pointer rounded-sm border border-border-strong bg-surface-subtle px-2 text-xs text-fg-muted hover:bg-surface-card"
           onClick={() => m.saveCurrentView()}
         >
           Save current view
         </Button>
         {m.savedViews.length === 0 ? (
-          <div className="text-xs text-zinc-600 dark:text-zinc-400">Henüz kayıtlı görünüm yok.</div>
+          <div className="text-xs text-fg-muted">Henüz kayıtlı görünüm yok.</div>
         ) : (
           m.savedViews.map((v) => (
-            <div key={v.id} className="rounded-sm border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900 p-2">
+            <div key={v.id} className="rounded-sm border border-border bg-surface-subtle p-2">
               <div className="flex items-center gap-1">
                 <button
                   type="button"
                   onClick={() => m.applySavedView(v)}
-                  className="flex-1 cursor-pointer text-left text-xs text-zinc-800 dark:text-zinc-200 hover:text-zinc-100"
+                  className="flex-1 cursor-pointer text-left text-xs text-fg hover:text-fg"
                 >
                   {v.name}
                 </button>
                 <button
                   type="button"
                   onClick={() => m.renameSavedView(v.id)}
-                  className="text-[10px] text-zinc-600 dark:text-zinc-400 hover:text-zinc-200"
+                  className="text-[10px] text-fg-muted hover:text-fg"
                 >
                   edit
                 </button>
                 <button
                   type="button"
                   onClick={() => m.deleteSavedView(v.id)}
-                  className="text-[10px] text-zinc-600 dark:text-zinc-400 hover:text-red-400"
+                  className="text-[10px] text-fg-muted hover:text-status-critical"
                 >
                   del
                 </button>
               </div>
-              <div className="mt-1 text-[10px] text-zinc-600 dark:text-zinc-400">
+              <div className="mt-1 text-[10px] text-fg-muted">
                 {v.action}/{v.type}/{v.severity}/{v.range}/{v.triage}/{v.assignee}
               </div>
             </div>

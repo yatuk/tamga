@@ -19,37 +19,37 @@ import type {
 
 export function IncidentsFiltersCard({ m }: { m: IncidentsConsoleModel }) {
   return (
-    <Card className="rounded-sm border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950">
+    <Card className="rounded-sm border-border bg-surface-card">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Shield className="h-4 w-4 text-red-500" />
+          <Shield className="h-4 w-4 text-status-critical" />
           Incidents Console
         </CardTitle>
-        <CardDescription className="text-zinc-700 dark:text-zinc-300">
+        <CardDescription className="text-fg-muted">
           Triage odakli olay kuyrugu, filtreleme ve detay inceleme.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          <Badge className="rounded-sm border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300">Presets</Badge>
+          <Badge className="rounded-sm border-border-strong bg-surface-subtle text-fg-muted">Presets</Badge>
           <Button
-            className="h-8 cursor-pointer rounded-sm border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 px-2 text-xs text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800"
+            className="h-8 cursor-pointer rounded-sm border border-border-strong bg-surface-subtle px-2 text-xs text-fg-muted hover:bg-surface-card"
             onClick={() => m.applyPreset("critical-now")}
           >
             Critical Now
           </Button>
           <Button
-            className="h-8 cursor-pointer rounded-sm border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 px-2 text-xs text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800"
+            className="h-8 cursor-pointer rounded-sm border border-border-strong bg-surface-subtle px-2 text-xs text-fg-muted hover:bg-surface-card"
             onClick={() => m.applyPreset("block-focused")}
           >
             Block Focused
           </Button>
-          <Badge className="rounded-sm border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300">Density</Badge>
-          <div className="inline-flex overflow-hidden rounded-sm border border-zinc-300 dark:border-zinc-700">
+          <Badge className="rounded-sm border-border-strong bg-surface-subtle text-fg-muted">Density</Badge>
+          <div className="inline-flex overflow-hidden rounded-sm border border-border-strong">
             {(["comfortable", "compact"] as DensityMode[]).map((d) => (
               <button
                 key={d}
-                className={`px-3 py-1 text-xs capitalize ${m.density === d ? "bg-emerald-600 text-white" : "bg-white dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300"}`}
+                className={`px-3 py-1 text-xs capitalize ${m.density === d ? "bg-status-pass text-white" : "bg-surface-card text-fg-muted"}`}
                 onClick={() => m.setDensity(d)}
                 type="button"
               >
@@ -62,7 +62,7 @@ export function IncidentsFiltersCard({ m }: { m: IncidentsConsoleModel }) {
             value={m.searchText}
             onChange={(e) => m.setSearchText(e.target.value)}
             placeholder="Search request/provider/model... (/)"
-            className="h-8 min-w-[240px] rounded-sm border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 px-2 text-xs text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-600 dark:text-zinc-400"
+            className="h-8 min-w-[240px] rounded-sm border border-border-strong bg-surface-subtle px-2 text-xs text-fg placeholder:text-fg-muted"
           />
         </div>
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-8">
@@ -182,7 +182,7 @@ export function IncidentsFiltersCard({ m }: { m: IncidentsConsoleModel }) {
             value={m.requestIdFilter}
             onChange={(e) => m.setRequestIdFilter(e.target.value.trim())}
             placeholder="İstek Kodu filtresi"
-            className="h-10 rounded-sm border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 px-3 text-xs text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-600 dark:text-zinc-400"
+            className="h-10 rounded-sm border border-border-strong bg-surface-subtle px-3 text-xs text-fg placeholder:text-fg-muted"
           />
         </div>
       </CardContent>

@@ -23,22 +23,22 @@ export function ReportsOwaspAndCompliance({ owaspCoverageRows, range, adminKey }
         <TerminalFrame
           title="OWASP LLM Coverage"
           status={
-            <Badge className="rounded-sm border border-zinc-600 bg-zinc-100 dark:bg-zinc-900 text-[10px] uppercase text-zinc-600 dark:text-zinc-400">
+            <Badge className="rounded-sm border border-border-strong bg-surface-subtle text-[10px] uppercase text-fg-muted">
               heuristic map
             </Badge>
           }
 
         >
           <div className="space-y-2 p-3">
-            <p className="text-xs text-zinc-600 dark:text-zinc-400">
+            <p className="text-xs text-fg-muted">
               Bulgu aileleri (findings/breakdown) üzerinden OWASP LLM Top 10 ile{" "}
-              <span className="text-zinc-600 dark:text-zinc-400">kaba</span> eşleme — denetim kanıtı için Incidents satırındaki teknik chip ve
+              <span className="text-fg-muted">kaba</span> eşleme — denetim kanıtı için Incidents satırındaki teknik chip ve
               Audit export birlikte kullanılmalıdır.
             </p>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-[11px]">
                 <thead>
-                  <tr className="border-b border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400">
+                  <tr className="border-b border-border text-fg-muted">
                     <th className="py-1 pr-2">Finding type</th>
                     <th className="py-1 pr-2">Count</th>
                     <th className="py-1 pr-2">OWASP hint</th>
@@ -58,20 +58,20 @@ export function ReportsOwaspAndCompliance({ owaspCoverageRows, range, adminKey }
                     </tr>
                   ) : (
                     owaspCoverageRows.map((row) => (
-                      <tr key={row.type} className="border-b border-zinc-900 text-zinc-700 dark:text-zinc-300">
+                      <tr key={row.type} className="border-b border-border text-fg-muted">
                         <td className="py-1 pr-2">{row.type}</td>
                         <td className="py-1 pr-2">
-                          {row.count} <span className="text-zinc-600 dark:text-zinc-400">({row.pct}%)</span>
+                          {row.count} <span className="text-fg-muted">({row.pct}%)</span>
                         </td>
-                        <td className="py-1 pr-2 text-amber-300">{row.code}</td>
-                        <td className="py-1 text-zinc-600 dark:text-zinc-400">{row.note}</td>
+                        <td className="py-1 pr-2 text-status-medium">{row.code}</td>
+                        <td className="py-1 text-fg-muted">{row.note}</td>
                       </tr>
                     ))
                   )}
                 </tbody>
               </table>
             </div>
-            <Link href="/docs/owasp-llm" className="inline-block text-[10px] text-zinc-400 hover:text-blue-400 hover:underline">
+            <Link href="/docs/owasp-llm" className="inline-block text-[10px] text-fg-subtle hover:text-status-low hover:underline">
               OWASP LLM Top 10 dokümanı →
             </Link>
           </div>
@@ -79,27 +79,27 @@ export function ReportsOwaspAndCompliance({ owaspCoverageRows, range, adminKey }
 
         <TerminalFrame
           title="Compliance Evidence"
-          status={<ShieldCheck className="h-3.5 w-3.5 text-emerald-500" aria-hidden />}
+          status={<ShieldCheck className="h-3.5 w-3.5 text-status-pass" aria-hidden />}
 
         >
-          <div className="space-y-3 p-3 text-xs text-zinc-600 dark:text-zinc-400">
-            <p className="text-[10px] uppercase tracking-wide text-zinc-600 dark:text-zinc-400">KVKK / denetim kanıtı</p>
+          <div className="space-y-3 p-3 text-xs text-fg-muted">
+            <p className="text-[10px] uppercase tracking-wide text-fg-muted">KVKK / denetim kanıtı</p>
             <ul className="list-inside list-disc space-y-1">
               <li>
-                <Link className="text-zinc-400 hover:text-blue-400 hover:underline" href="https://tamgaproxy.com/trust">
+                <Link className="text-fg-subtle hover:text-status-low hover:underline" href="https://tamgaproxy.com/trust">
                   Trust Center
                 </Link>{" "}
                 — veri yerleşimi ve alt işleyenler
               </li>
               <li>
-                <Link className="text-zinc-400 hover:text-blue-400 hover:underline" href="/dashboard/audit">
+                <Link className="text-fg-subtle hover:text-status-low hover:underline" href="/dashboard/audit">
                   Audit Logs
                 </Link>{" "}
                 — hash-chain doğrulama ve yönetişim olayları
               </li>
               <li>
                 <a
-                  className="text-zinc-400 hover:text-blue-400 hover:underline"
+                  className="text-fg-subtle hover:text-status-low hover:underline"
                   href={(() => {
                     const r = range === "24h" ? "24h" : range === "30d" ? "30d" : "7d";
                     const base = `${API_BASE}/api/v1/events/export?range=${r}&format=csv`;
@@ -111,12 +111,12 @@ export function ReportsOwaspAndCompliance({ owaspCoverageRows, range, adminKey }
                   CSV export (events)
                 </a>
                 {adminKey ? (
-                  <span className="ml-1 text-[10px] text-zinc-600 dark:text-zinc-400">(admin key query ile)</span>
+                  <span className="ml-1 text-[10px] text-fg-muted">(admin key query ile)</span>
                 ) : null}
               </li>
               <li>
                 <a
-                  className="text-zinc-400 hover:text-blue-400 hover:underline"
+                  className="text-fg-subtle hover:text-status-low hover:underline"
                   href="https://github.com/yatuk/tamga/blob/dev/tamga/docs/siem-json-export.md"
                   target="_blank"
                   rel="noreferrer"

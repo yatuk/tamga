@@ -27,10 +27,10 @@ export function SettingsSSOSection({ config, loading, error, onSave }: Props) {
       <div>
         <TerminalFrame title="Enterprise SSO">
           <div className="space-y-3 p-3 animate-pulse">
-            <div className="h-4 w-2/3 rounded-sm bg-zinc-200 dark:bg-zinc-800" />
-            <div className="h-10 w-full rounded-sm bg-zinc-200 dark:bg-zinc-800" />
-            <div className="h-10 w-full rounded-sm bg-zinc-200 dark:bg-zinc-800" />
-            <div className="h-10 w-full rounded-sm bg-zinc-200 dark:bg-zinc-800" />
+            <div className="h-4 w-2/3 rounded-sm bg-surface-subtle" />
+            <div className="h-10 w-full rounded-sm bg-surface-subtle" />
+            <div className="h-10 w-full rounded-sm bg-surface-subtle" />
+            <div className="h-10 w-full rounded-sm bg-surface-subtle" />
           </div>
         </TerminalFrame>
       </div>
@@ -42,10 +42,10 @@ export function SettingsSSOSection({ config, loading, error, onSave }: Props) {
       <div>
         <TerminalFrame title="Enterprise SSO">
           <div className="space-y-3 p-3">
-            <Badge className="rounded-sm border-red-500/30 bg-red-500/10 text-[10px] text-red-400">
+            <Badge className="rounded-sm border-status-critical/30 bg-status-critical/10 text-[10px] text-status-critical">
               LOAD ERROR
             </Badge>
-            <div className="text-xs text-zinc-600 dark:text-zinc-400">{error}</div>
+            <div className="text-xs text-fg-muted">{error}</div>
           </div>
         </TerminalFrame>
       </div>
@@ -75,26 +75,26 @@ export function SettingsSSOSection({ config, loading, error, onSave }: Props) {
       <TerminalFrame
         title="Enterprise SSO"
         status={
-          <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-zinc-600 dark:text-zinc-400">
+          <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
             <Globe className="mr-1 inline h-3 w-3" />
             {enabled ? providerType.toUpperCase() : "DISABLED"}
           </span>
         }
       >
         <div className="space-y-3 p-3">
-          <div className="text-[11px] text-zinc-600 dark:text-zinc-400">
+          <div className="text-[11px] text-fg-muted">
             SAML 2.0 or OpenID Connect (OIDC) enterprise SSO. Requires Clerk Enterprise plan.
           </div>
 
           {/* Provider Type */}
           <div>
-            <label className="mb-1 block text-[10px] uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
+            <label className="mb-1 block text-[10px] uppercase tracking-wide text-fg-muted">
               Provider Type
             </label>
             <select
               value={providerType}
               onChange={(e) => setProviderType(e.target.value)}
-              className="h-10 w-full rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 text-sm text-zinc-900 dark:text-zinc-100 focus:border-emerald-500/40 focus:outline-none"
+              className="h-10 w-full rounded-sm border border-border bg-surface-card px-3 text-sm text-fg focus:border-status-pass/40 focus:outline-none"
             >
               <option value="">None (Disabled)</option>
               <option value="saml">SAML 2.0</option>
@@ -104,7 +104,7 @@ export function SettingsSSOSection({ config, loading, error, onSave }: Props) {
 
           {/* Metadata URL */}
           <div>
-            <label className="mb-1 block text-[10px] uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
+            <label className="mb-1 block text-[10px] uppercase tracking-wide text-fg-muted">
               Metadata URL
             </label>
             <input
@@ -112,13 +112,13 @@ export function SettingsSSOSection({ config, loading, error, onSave }: Props) {
               value={metadataUrl}
               onChange={(e) => setMetadataUrl(e.target.value)}
               placeholder="https://idp.example.com/metadata"
-              className="h-10 w-full rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 text-sm text-zinc-900 dark:text-zinc-100 focus:border-emerald-500/40 focus:outline-none"
+              className="h-10 w-full rounded-sm border border-border bg-surface-card px-3 text-sm text-fg focus:border-status-pass/40 focus:outline-none"
             />
           </div>
 
           {/* Domain */}
           <div>
-            <label className="mb-1 block text-[10px] uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
+            <label className="mb-1 block text-[10px] uppercase tracking-wide text-fg-muted">
               Domain
             </label>
             <input
@@ -126,7 +126,7 @@ export function SettingsSSOSection({ config, loading, error, onSave }: Props) {
               value={domain}
               onChange={(e) => setDomain(e.target.value)}
               placeholder="example.com"
-              className="h-10 w-full rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 text-sm text-zinc-900 dark:text-zinc-100 focus:border-emerald-500/40 focus:outline-none"
+              className="h-10 w-full rounded-sm border border-border bg-surface-card px-3 text-sm text-fg focus:border-status-pass/40 focus:outline-none"
             />
           </div>
 
@@ -137,9 +137,9 @@ export function SettingsSSOSection({ config, loading, error, onSave }: Props) {
               id="sso-enabled"
               checked={enabled}
               onChange={(e) => setEnabled(e.target.checked)}
-              className="h-4 w-4 rounded-sm border-zinc-300 dark:border-zinc-700"
+              className="h-4 w-4 rounded-sm border-border-strong"
             />
-            <label htmlFor="sso-enabled" className="text-xs text-zinc-700 dark:text-zinc-300">
+            <label htmlFor="sso-enabled" className="text-xs text-fg-muted">
               Enable SSO for this domain
             </label>
           </div>
@@ -149,20 +149,20 @@ export function SettingsSSOSection({ config, loading, error, onSave }: Props) {
             <Badge
               className={`rounded-sm border text-[10px] ${
                 enabled
-                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
-                  : "border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400"
+                  ? "border-status-pass/30 bg-status-pass/10 text-status-pass"
+                  : "border-border-strong bg-surface-subtle text-fg-muted"
               }`}
             >
               {enabled ? "ENABLED" : "DISABLED"}
             </Badge>
-            <Badge className="rounded-sm border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 text-[10px] text-zinc-700 dark:text-zinc-300">
+            <Badge className="rounded-sm border-border-strong bg-surface-subtle text-[10px] text-fg-muted">
               {providerType ? providerType.toUpperCase() : "NONE"}
             </Badge>
           </div>
 
           {/* Save Button */}
           <Button
-            className="h-9 cursor-pointer rounded-sm bg-emerald-600 text-white hover:bg-emerald-700"
+            className="h-9 cursor-pointer rounded-sm bg-status-pass text-white hover:bg-status-pass"
             onClick={handleSave}
             disabled={saving}
           >

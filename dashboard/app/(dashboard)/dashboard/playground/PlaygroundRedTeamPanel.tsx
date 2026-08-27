@@ -54,14 +54,14 @@ export function PlaygroundRedTeamPanel({
             <button
               type="button"
               onClick={loadBundledSamples}
-              className="cursor-pointer rounded-sm border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800"
+              className="cursor-pointer rounded-sm border border-border-strong bg-surface-subtle px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-fg-muted hover:bg-surface-card"
             >
               Load sample
             </button>
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="cursor-pointer rounded-sm border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800"
+              className="cursor-pointer rounded-sm border border-border-strong bg-surface-subtle px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-fg-muted hover:bg-surface-card"
             >
               <Upload className="mr-1 inline h-3 w-3" /> CSV
             </button>
@@ -69,7 +69,7 @@ export function PlaygroundRedTeamPanel({
               type="button"
               onClick={runBatch}
               disabled={batchRunning || batchSamples.length === 0}
-              className="cursor-pointer rounded-sm bg-red-600 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="cursor-pointer rounded-sm bg-status-critical px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-white hover:bg-status-critical disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Play className="mr-1 inline h-3 w-3" />
               {batchRunning ? `Running ${batchProgress.done}/${batchProgress.total}` : `Run ${batchSamples.length || ""}`}
@@ -79,41 +79,41 @@ export function PlaygroundRedTeamPanel({
 
       >
         <div className="space-y-3 p-3">
-          <div className="text-[10px] uppercase tracking-[0.14em] text-zinc-600 dark:text-zinc-400">
+          <div className="text-[10px] uppercase tracking-[0.14em] text-fg-muted">
             RED TEAM // EXPECTED vs ACTUAL · policy source: {policySource}
           </div>
           {batchSummary && (
-            <div className="grid grid-cols-2 gap-2 rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-2 md:grid-cols-5">
-              <div className="text-[11px] text-zinc-600 dark:text-zinc-400">
-                <span className="text-zinc-600 dark:text-zinc-400">precision</span>{" "}
-                <span className="tabular-nums text-emerald-300">{(batchSummary.precision * 100).toFixed(1)}%</span>
+            <div className="grid grid-cols-2 gap-2 rounded-sm border border-border bg-surface-card p-2 md:grid-cols-5">
+              <div className="text-[11px] text-fg-muted">
+                <span className="text-fg-muted">precision</span>{" "}
+                <span className="tabular-nums text-status-pass">{(batchSummary.precision * 100).toFixed(1)}%</span>
               </div>
-              <div className="text-[11px] text-zinc-600 dark:text-zinc-400">
-                <span className="text-zinc-600 dark:text-zinc-400">recall</span>{" "}
-                <span className="tabular-nums text-amber-300">{(batchSummary.recall * 100).toFixed(1)}%</span>
+              <div className="text-[11px] text-fg-muted">
+                <span className="text-fg-muted">recall</span>{" "}
+                <span className="tabular-nums text-status-medium">{(batchSummary.recall * 100).toFixed(1)}%</span>
               </div>
-              <div className="text-[11px] text-zinc-600 dark:text-zinc-400">
-                <span className="text-zinc-600 dark:text-zinc-400">f1</span>{" "}
-                <span className="tabular-nums text-zinc-900 dark:text-zinc-100">{(batchSummary.f1 * 100).toFixed(1)}%</span>
+              <div className="text-[11px] text-fg-muted">
+                <span className="text-fg-muted">f1</span>{" "}
+                <span className="tabular-nums text-fg">{(batchSummary.f1 * 100).toFixed(1)}%</span>
               </div>
-              <div className="text-[11px] text-zinc-600 dark:text-zinc-400">
-                <span className="text-zinc-600 dark:text-zinc-400">miss</span>{" "}
-                <span className="tabular-nums text-red-400">{batchSummary.fn}</span>
-                <span className="mx-1 text-zinc-700">·</span>
-                <span className="text-zinc-600 dark:text-zinc-400">fp</span>{" "}
-                <span className="tabular-nums text-orange-400">{batchSummary.fp}</span>
+              <div className="text-[11px] text-fg-muted">
+                <span className="text-fg-muted">miss</span>{" "}
+                <span className="tabular-nums text-status-critical">{batchSummary.fn}</span>
+                <span className="mx-1 text-fg-muted">·</span>
+                <span className="text-fg-muted">fp</span>{" "}
+                <span className="tabular-nums text-status-high">{batchSummary.fp}</span>
               </div>
-              <div className="text-[11px] text-zinc-600 dark:text-zinc-400">
-                <span className="text-zinc-600 dark:text-zinc-400">match</span>{" "}
-                <span className="tabular-nums text-emerald-300">{batchSummary.tp}</span>
-                <span className="mx-1 text-zinc-700">·</span>
-                <span className="text-zinc-600 dark:text-zinc-400">tn</span>{" "}
-                <span className="tabular-nums text-zinc-700 dark:text-zinc-300">{batchSummary.tn}</span>
+              <div className="text-[11px] text-fg-muted">
+                <span className="text-fg-muted">match</span>{" "}
+                <span className="tabular-nums text-status-pass">{batchSummary.tp}</span>
+                <span className="mx-1 text-fg-muted">·</span>
+                <span className="text-fg-muted">tn</span>{" "}
+                <span className="tabular-nums text-fg-muted">{batchSummary.tn}</span>
                 {batchSummary.err > 0 && (
                   <>
-                    <span className="mx-1 text-zinc-700">·</span>
-                    <span className="text-zinc-600 dark:text-zinc-400">err</span>{" "}
-                    <span className="tabular-nums text-red-400">{batchSummary.err}</span>
+                    <span className="mx-1 text-fg-muted">·</span>
+                    <span className="text-fg-muted">err</span>{" "}
+                    <span className="tabular-nums text-status-critical">{batchSummary.err}</span>
                   </>
                 )}
               </div>
@@ -121,18 +121,18 @@ export function PlaygroundRedTeamPanel({
           )}
 
           {batchSamples.length === 0 ? (
-            <div className="rounded-sm border border-dashed border-zinc-200 dark:border-zinc-800 p-6 text-center text-xs text-zinc-600 dark:text-zinc-400">
-              Load the bundled sample or upload a red-team CSV (id,category,expected_action,prompt) to start.
+            <div className="rounded-sm border border-dashed border-border p-6 text-center text-xs text-fg-muted">
+              Load the bundled sample or upload a status-criticalteam CSV (id,category,expected_action,prompt) to start.
             </div>
           ) : batchRows.length === 0 ? (
-            <div className="rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-3 text-[11px] text-zinc-600 dark:text-zinc-400">
-              {batchSamples.length} sample ready. Hit <span className="text-zinc-800 dark:text-zinc-200">Run</span> to evaluate against the selected
+            <div className="rounded-sm border border-border bg-surface-card p-3 text-[11px] text-fg-muted">
+              {batchSamples.length} sample ready. Hit <span className="text-fg">Run</span> to evaluate against the selected
               policy source.
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-[11px]">
-                <thead className="bg-zinc-100 dark:bg-zinc-900 text-[10px] uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
+                <thead className="bg-surface-subtle text-[10px] uppercase tracking-wide text-fg-muted">
                   <tr>
                     <th className="px-2 py-1">#</th>
                     <th className="px-2 py-1">id</th>
@@ -146,35 +146,35 @@ export function PlaygroundRedTeamPanel({
                 </thead>
                 <tbody>
                   {batchRows.map((r, i) => (
-                    <tr key={`${r.id}-${i}`} className="border-t border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900/60">
-                      <td className="px-2 py-1 tabular-nums text-zinc-600 dark:text-zinc-400">{i + 1}</td>
-                      <td className="px-2 py-1 text-zinc-700 dark:text-zinc-300">{r.id}</td>
-                      <td className="px-2 py-1 text-zinc-600 dark:text-zinc-400">{r.category}</td>
+                    <tr key={`${r.id}-${i}`} className="border-t border-border hover:bg-surface-subtle/60">
+                      <td className="px-2 py-1 tabular-nums text-fg-muted">{i + 1}</td>
+                      <td className="px-2 py-1 text-fg-muted">{r.id}</td>
+                      <td className="px-2 py-1 text-fg-muted">{r.category}</td>
                       <td className="px-2 py-1">
                         <Badge className={`rounded-sm border text-[10px] ${playgroundActionClass(r.expected)}`}>{r.expected}</Badge>
                       </td>
                       <td className="px-2 py-1">
                         <Badge className={`rounded-sm border text-[10px] ${playgroundActionClass(r.actual)}`}>{r.actual}</Badge>
                       </td>
-                      <td className="px-2 py-1 tabular-nums text-zinc-700 dark:text-zinc-300">{Math.round(r.confidence * 100)}%</td>
+                      <td className="px-2 py-1 tabular-nums text-fg-muted">{Math.round(r.confidence * 100)}%</td>
                       <td className="px-2 py-1">
                         <Badge
                           className={`rounded-sm border text-[10px] uppercase ${
                             r.outcome === "match"
-                              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+                              ? "border-status-pass/40 bg-status-pass/10 text-status-pass"
                               : r.outcome === "tn"
-                                ? "border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300"
+                                ? "border-border-strong bg-surface-subtle text-fg-muted"
                                 : r.outcome === "fp"
-                                  ? "border-orange-500/40 bg-orange-500/10 text-orange-300"
+                                  ? "border-status-high/40 bg-status-high/10 text-status-high"
                                   : r.outcome === "miss"
-                                    ? "border-red-500/40 bg-red-500/10 text-red-400"
-                                    : "border-red-500/40 bg-red-500/10 text-red-400"
+                                    ? "border-status-critical/40 bg-status-critical/10 text-status-critical"
+                                    : "border-status-critical/40 bg-status-critical/10 text-status-critical"
                           }`}
                         >
                           {r.outcome}
                         </Badge>
                       </td>
-                      <td className="max-w-[360px] truncate px-2 py-1 text-zinc-600 dark:text-zinc-400" title={r.prompt}>
+                      <td className="max-w-[360px] truncate px-2 py-1 text-fg-muted" title={r.prompt}>
                         {r.prompt.length > 80 ? `${r.prompt.slice(0, 80)}…` : r.prompt}
                       </td>
                     </tr>

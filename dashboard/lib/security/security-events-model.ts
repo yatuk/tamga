@@ -1,5 +1,5 @@
 import type { SecurityEvent } from "@/lib/api";
-import { toUpperEn, toLowerEn } from "@/lib/utils/tr-string";
+import { toLowerEn } from "@/lib/utils/tr-string";
 import { severityRank as _severityRank } from "@/lib/badges";
 
 import type { TimeRange } from "@/lib/types";
@@ -69,41 +69,6 @@ export function validateParam<T extends string>(value: string | null, valid: rea
  */
 export function severityRank(severity?: string): number {
   return _severityRank(severity || "");
-}
-
-/**
- * Backward-compatible wrapper returning only the CSS class string.
- * Uses the security-events–specific styling (CSS variables for actions,
- * rounded-sm borders for severities).
- */
-export function getActionBadge(action?: string): string {
-  const value = toUpperEn(action || "");
-  if (value === "BLOCK") {
-    return "border-[var(--status-block)]/40 bg-[var(--status-block-bg)] text-[var(--status-block)]";
-  }
-  if (value === "REDACT") {
-    return "border-[var(--status-redact)]/40 bg-[var(--status-redact-bg)] text-[var(--status-redact)]";
-  }
-  if (value === "WARN") {
-    return "border-[var(--status-warn)]/40 bg-[var(--status-warn-bg)] text-[var(--status-warn)]";
-  }
-  if (value === "PASS") {
-    return "border-[var(--status-pass)]/40 bg-[var(--status-pass-bg)] text-[var(--status-pass)]";
-  }
-  return "border-[var(--border-default)] bg-[var(--bg-tertiary)] text-[var(--text-secondary)]";
-}
-
-/**
- * Backward-compatible wrapper returning only the CSS class string.
- * Preserves the security-events–specific colour palette.
- */
-export function getSeverityBadge(severity?: string): string {
-  const s = toLowerEn(severity || "");
-  if (s === "critical") return "rounded-sm border border-red-500/30 bg-red-500/10 text-red-500";
-  if (s === "high") return "rounded-sm border border-orange-500/30 bg-orange-500/10 text-orange-500";
-  if (s === "medium") return "rounded-sm border border-amber-500/30 bg-amber-500/10 text-amber-500";
-  if (s === "low") return "rounded-sm border border-sky-500/30 bg-sky-500/10 text-sky-500";
-  return "rounded-sm border border-zinc-700 bg-zinc-900 text-zinc-300";
 }
 
 export function primarySeverity(findings: SecurityEvent["findings"] | undefined) {

@@ -88,20 +88,20 @@ export function CompetitorsForm({ adminKey }: Props) {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-[11px] uppercase tracking-[0.14em] text-red-400">
+            <p className="text-[11px] uppercase tracking-[0.14em] text-status-critical">
               Competitor Intelligence
             </p>
-            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+            <p className="mt-1 text-xs text-fg-subtle">
               Detects competitor brand and product mentions in LLM prompts.
               Configure via{" "}
-              <code className="rounded-sm bg-zinc-100 dark:bg-zinc-900 px-1 font-mono text-[11px] text-zinc-600 dark:text-zinc-400">
+              <code className="rounded-sm bg-surface-subtle px-1 font-mono text-[11px] text-fg-muted">
                 competitors
               </code>{" "}
               block in policy YAML.
             </p>
           </div>
           {data && (
-            <span className="text-[10px] text-zinc-500 dark:text-zinc-400">
+            <span className="text-[10px] text-fg-subtle">
               {data.name} v{data.version}
             </span>
           )}
@@ -109,15 +109,15 @@ export function CompetitorsForm({ adminKey }: Props) {
 
         {/* Loading */}
         {isLoading && (
-          <div className="flex items-center gap-2 py-8 text-center text-xs text-zinc-500">
-            <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-zinc-500" />
+          <div className="flex items-center gap-2 py-8 text-center text-xs text-fg-subtle">
+            <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-surface-subtle0" />
             Loading competitor configuration…
           </div>
         )}
 
         {/* Error */}
         {error && (
-          <div className="rounded-sm border border-red-500/30 bg-red-500/5 p-3 text-xs text-red-400">
+          <div className="rounded-sm border border-status-critical/30 bg-status-critical/5 p-3 text-xs text-status-critical">
             Failed to load policy: {(error as Error).message}
           </div>
         )}
@@ -125,12 +125,12 @@ export function CompetitorsForm({ adminKey }: Props) {
         {/* Empty */}
         {!isLoading && !error && competitors.length === 0 && (
           <div className="py-8 text-center">
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            <p className="text-xs text-fg-subtle">
               No competitors configured.
             </p>
-            <p className="mt-1 text-[11px] text-zinc-600 dark:text-zinc-500">
+            <p className="mt-1 text-[11px] text-fg-muted dark:text-fg-subtle">
               Add a{" "}
-              <code className="rounded-sm bg-zinc-100 dark:bg-zinc-900 px-1 font-mono text-[10px]">
+              <code className="rounded-sm bg-surface-subtle px-1 font-mono text-[10px]">
                 competitors:
               </code>{" "}
               block to your policy YAML to enable competitor detection.
@@ -139,7 +139,7 @@ export function CompetitorsForm({ adminKey }: Props) {
               href="https://github.com/tamga-dev/tamga/blob/dev/tamga/docs/benchmarks/README.md"
               target="_blank"
               rel="noreferrer"
-              className="mt-3 inline-flex items-center gap-1.5 rounded-sm border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 px-3 py-1.5 text-[11px] text-zinc-600 dark:text-zinc-400 hover:text-zinc-200 transition-colors"
+              className="mt-3 inline-flex items-center gap-1.5 rounded-sm border border-border dark:border-border-strong bg-surface-subtle px-3 py-1.5 text-[11px] text-fg-muted hover:text-fg transition-colors"
             >
               See example policy
               <ExternalLink className="h-3 w-3" />
@@ -158,17 +158,17 @@ export function CompetitorsForm({ adminKey }: Props) {
               return (
                 <div
                   key={c.name}
-                  className="rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950/60 overflow-hidden"
+                  className="rounded-sm border border-border bg-surface-card/60 overflow-hidden"
                 >
                   {/* Top row */}
                   <div className="flex items-center justify-between px-3 py-2">
                     <div className="flex items-center gap-2 min-w-0">
                       {c.enabled ? (
-                        <Eye className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
+                        <Eye className="h-3.5 w-3.5 shrink-0 text-status-pass" />
                       ) : (
-                        <EyeOff className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
+                        <EyeOff className="h-3.5 w-3.5 shrink-0 text-fg-subtle" />
                       )}
-                      <span className="font-mono text-sm text-zinc-800 dark:text-zinc-200 truncate">
+                      <span className="font-mono text-sm text-fg truncate">
                         {c.name}
                       </span>
                     </div>
@@ -190,12 +190,12 @@ export function CompetitorsForm({ adminKey }: Props) {
 
                   {/* Patterns */}
                   {c.patterns.length > 0 && (
-                    <div className="border-t border-zinc-200 dark:border-zinc-800 px-3 py-1.5 bg-zinc-100 dark:bg-zinc-900/40">
+                    <div className="border-t border-border px-3 py-1.5 bg-surface-subtle">
                       <div className="flex flex-wrap gap-1">
                         {c.patterns.map((p, i) => (
                           <code
                             key={i}
-                            className="rounded-sm bg-zinc-200 dark:bg-zinc-800 px-1.5 py-0.5 font-mono text-[10px] text-zinc-700 dark:text-zinc-300"
+                            className="rounded-sm bg-surface-subtle px-1.5 py-0.5 font-mono text-[10px] text-fg-muted"
                           >
                             /{p}/
                           </code>
@@ -206,8 +206,8 @@ export function CompetitorsForm({ adminKey }: Props) {
 
                   {/* Description */}
                   {c.description && (
-                    <div className="border-t border-zinc-200 dark:border-zinc-800 px-3 py-1.5">
-                      <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
+                    <div className="border-t border-border px-3 py-1.5">
+                      <p className="text-[11px] text-fg-subtle truncate">
                         {c.description}
                       </p>
                     </div>
@@ -220,7 +220,7 @@ export function CompetitorsForm({ adminKey }: Props) {
 
         {/* Footer stats */}
         {!isLoading && !error && competitors.length > 0 && (
-          <div className="flex items-center gap-3 border-t border-zinc-200 dark:border-zinc-800 pt-3 text-[10px] text-zinc-500 dark:text-zinc-400">
+          <div className="flex items-center gap-3 border-t border-border pt-3 text-[10px] text-fg-subtle">
             <span>
               {competitors.filter((c) => c.enabled).length} active
             </span>

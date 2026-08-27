@@ -51,12 +51,16 @@ export function BudgetBurnCard({ adminKey, className }: BudgetBurnCardProps) {
   const burnPct = Math.max(tokenPct ?? 0, costPct ?? 0);
   const accent =
     burnPct >= 90
-      ? "text-red-400"
+      ? "text-status-critical"
       : burnPct >= 70
-      ? "text-amber-400"
-      : "text-emerald-400";
+      ? "text-status-medium"
+      : "text-status-pass";
   const ringColor =
-    burnPct >= 90 ? "#f87171" : burnPct >= 70 ? "#fbbf24" : "#34d399";
+    burnPct >= 90
+      ? "var(--status-critical)"
+      : burnPct >= 70
+        ? "var(--status-medium)"
+        : "var(--status-pass)";
 
   // 44-radius ring for a 100x100 viewBox so the stroke stays crisp.
   const circumference = 2 * Math.PI * 44;
@@ -65,15 +69,15 @@ export function BudgetBurnCard({ adminKey, className }: BudgetBurnCardProps) {
   return (
     <div
       className={cn(
-        "relative rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4",
+        "relative rounded-sm border border-border bg-surface-card p-4",
         className,
       )}
     >
       <div className="flex items-center justify-between">
-        <div className="text-[10px] uppercase tracking-[0.14em] text-zinc-600 dark:text-zinc-400">
+        <div className="text-[10px] uppercase tracking-[0.14em] text-fg-muted">
           Budget Burn
         </div>
-        <span className="text-[10px] text-zinc-600 dark:text-zinc-400">
+        <span className="text-[10px] text-fg-muted">
           {stats.day || new Date().toISOString().slice(0, 10)}
         </span>
       </div>
@@ -89,7 +93,7 @@ export function BudgetBurnCard({ adminKey, className }: BudgetBurnCardProps) {
             cx="50"
             cy="50"
             r="44"
-            stroke="#27272a"
+            stroke="var(--border-subtle)"
             strokeWidth="8"
             fill="none"
           />
@@ -123,13 +127,13 @@ export function BudgetBurnCard({ adminKey, className }: BudgetBurnCardProps) {
 
         <div className="min-w-0 flex-1 space-y-2">
           <div>
-            <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.14em] text-zinc-600 dark:text-zinc-400">
+            <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.14em] text-fg-muted">
               <Zap className="h-3 w-3" />
               tokens
             </div>
-            <div className="mt-0.5 text-sm tabular-nums text-zinc-900 dark:text-zinc-100">
+            <div className="mt-0.5 text-sm tabular-nums text-fg">
               {formatTokens(stats.tokens_today)}
-              <span className="ml-1 text-zinc-600 dark:text-zinc-400">
+              <span className="ml-1 text-fg-muted">
                 /{" "}
                 {stats.limit_tokens > 0
                   ? formatTokens(stats.limit_tokens)
@@ -138,13 +142,13 @@ export function BudgetBurnCard({ adminKey, className }: BudgetBurnCardProps) {
             </div>
           </div>
           <div>
-            <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.14em] text-zinc-600 dark:text-zinc-400">
+            <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.14em] text-fg-muted">
               <DollarSign className="h-3 w-3" />
               cost
             </div>
-            <div className="mt-0.5 text-sm tabular-nums text-zinc-900 dark:text-zinc-100">
+            <div className="mt-0.5 text-sm tabular-nums text-fg">
               {formatUSD(stats.cost_today_usd)}
-              <span className="ml-1 text-zinc-600 dark:text-zinc-400">
+              <span className="ml-1 text-fg-muted">
                 /{" "}
                 {stats.limit_cost_usd > 0
                   ? formatUSD(stats.limit_cost_usd)
@@ -156,15 +160,15 @@ export function BudgetBurnCard({ adminKey, className }: BudgetBurnCardProps) {
       </div>
 
       {error ? (
-        <div className="mt-3 text-[10px] text-red-400">
+        <div className="mt-3 text-[10px] text-status-critical">
           budget endpoint unreachable
         </div>
       ) : isLoading ? (
-        <div className="mt-3 text-[10px] text-zinc-600 dark:text-zinc-400">
+        <div className="mt-3 text-[10px] text-fg-muted">
           syncing...
         </div>
       ) : stats.note ? (
-        <div className="mt-3 text-[10px] text-amber-500/80">
+        <div className="mt-3 text-[10px] text-status-medium/80">
           {stats.note}
         </div>
       ) : null}

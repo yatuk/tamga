@@ -66,9 +66,9 @@ export function HuntingFilters({
       <div className="space-y-3 p-3">
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           <label className="space-y-1">
-            <span className="text-[10px] uppercase tracking-wide text-zinc-600 dark:text-zinc-400">Action</span>
+            <span className="text-[10px] uppercase tracking-wide text-fg-muted">Action</span>
             <Input
-              className="h-8 focus:border-red-500"
+              className="h-8 focus:border-status-critical"
               placeholder="BLOCK, REDACT…"
               value={action}
               onChange={(e: ChangeEvent<HTMLInputElement>) => {
@@ -78,9 +78,9 @@ export function HuntingFilters({
             />
           </label>
           <label className="space-y-1">
-            <span className="text-[10px] uppercase tracking-wide text-zinc-600 dark:text-zinc-400">Provider</span>
+            <span className="text-[10px] uppercase tracking-wide text-fg-muted">Provider</span>
             <input
-              className="h-8 w-full rounded-sm border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-2 text-xs text-zinc-900 dark:text-zinc-100 outline-none focus:border-red-500 disabled:opacity-50"
+              className="h-8 w-full rounded-sm border border-border-strong bg-surface-card px-2 text-xs text-fg outline-none focus:border-status-critical disabled:opacity-50"
               placeholder="openai, shadow…"
               value={provider}
               disabled={shadow}
@@ -99,14 +99,14 @@ export function HuntingFilters({
                 if (e.target.checked) setProvider("");
                 resetPage();
               }}
-              className="accent-red-500"
+              className="accent-status-critical"
             />
-            <span className="text-[11px] text-zinc-600 dark:text-zinc-400">Shadow providers only</span>
+            <span className="text-[11px] text-fg-muted">Shadow providers only</span>
           </label>
           <label className="space-y-1">
-            <span className="text-[10px] uppercase tracking-wide text-zinc-600 dark:text-zinc-400">Range</span>
+            <span className="text-[10px] uppercase tracking-wide text-fg-muted">Range</span>
             <select
-              className="h-8 w-full rounded-sm border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-2 text-xs text-zinc-800 dark:text-zinc-200"
+              className="h-8 w-full rounded-sm border border-border-strong bg-surface-card px-2 text-xs text-fg"
               value={range}
               onChange={(e) => {
                 setRange(e.target.value as TimeRange);
@@ -121,9 +121,9 @@ export function HuntingFilters({
         </div>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           <label className="space-y-1">
-            <span className="text-[10px] uppercase tracking-wide text-zinc-600 dark:text-zinc-400">Finding type</span>
+            <span className="text-[10px] uppercase tracking-wide text-fg-muted">Finding type</span>
             <Input
-              className="h-8 focus:border-red-500"
+              className="h-8 focus:border-status-critical"
               placeholder="pii, injection…"
               value={findingType}
               onChange={(e: ChangeEvent<HTMLInputElement>) => {
@@ -133,9 +133,9 @@ export function HuntingFilters({
             />
           </label>
           <label className="space-y-1">
-            <span className="text-[10px] uppercase tracking-wide text-zinc-600 dark:text-zinc-400">Severity</span>
+            <span className="text-[10px] uppercase tracking-wide text-fg-muted">Severity</span>
             <Input
-              className="h-8 focus:border-red-500"
+              className="h-8 focus:border-status-critical"
               placeholder="high, critical…"
               value={severity}
               onChange={(e: ChangeEvent<HTMLInputElement>) => {
@@ -145,9 +145,9 @@ export function HuntingFilters({
             />
           </label>
           <label className="space-y-1">
-            <span className="text-[10px] uppercase tracking-wide text-zinc-600 dark:text-zinc-400">Category</span>
+            <span className="text-[10px] uppercase tracking-wide text-fg-muted">Category</span>
             <Input
-              className="h-8 focus:border-red-500"
+              className="h-8 focus:border-status-critical"
               placeholder="substring"
               value={category}
               onChange={(e: ChangeEvent<HTMLInputElement>) => {
@@ -157,9 +157,9 @@ export function HuntingFilters({
             />
           </label>
           <label className="space-y-1">
-            <span className="text-[10px] uppercase tracking-wide text-zinc-600 dark:text-zinc-400">Technique / OWASP</span>
+            <span className="text-[10px] uppercase tracking-wide text-fg-muted">Technique / OWASP</span>
             <Input
-              className="h-8 focus:border-red-500"
+              className="h-8 focus:border-status-critical"
               placeholder="LLM01, metadata…"
               value={technique}
               onChange={(e: ChangeEvent<HTMLInputElement>) => {
@@ -170,9 +170,9 @@ export function HuntingFilters({
           </label>
         </div>
         <label className="block space-y-1">
-          <span className="text-[10px] uppercase tracking-wide text-zinc-600 dark:text-zinc-400">Q (request_id / payload)</span>
+          <span className="text-[10px] uppercase tracking-wide text-fg-muted">Q (request_id / payload)</span>
           <Input
-              className="h-8 focus:border-red-500"
+              className="h-8 focus:border-status-critical"
             placeholder="req_… veya findings içinde ara"
             value={q}
             onChange={(e: ChangeEvent<HTMLInputElement>) => {
@@ -186,7 +186,7 @@ export function HuntingFilters({
             <BookmarkPlus className="h-3.5 w-3.5" />
             Save hunt
           </Button>
-          <span className="text-[10px] text-zinc-600 dark:text-zinc-400">
+          <span className="text-[10px] text-fg-muted">
             {isLoading || isFetching ? "Loading…" : `${total} eşleşme (sayfa ${page})`}
           </span>
         </div>

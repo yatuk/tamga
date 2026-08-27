@@ -12,10 +12,10 @@ import { useQueryClient } from "@tanstack/react-query";
 
 function stateClass(state: string): string {
   const s = toLowerEn(state);
-  if (s === "closed") return "text-emerald-400";
-  if (s === "open") return "text-red-400";
-  if (s === "half-open") return "text-amber-400";
-  return "text-zinc-600 dark:text-zinc-400";
+  if (s === "closed") return "text-status-pass";
+  if (s === "open") return "text-status-critical";
+  if (s === "half-open") return "text-status-medium";
+  return "text-fg-muted";
 }
 
 type Props = {
@@ -46,12 +46,12 @@ export function SettingsProvidersSection({ health, adminKey }: Props) {
     <div>
       <div className="space-y-2">
         <p className="text-sm text-[var(--text-secondary)]">
-          Policy <code className="text-xs text-zinc-700 dark:text-zinc-300">providers.pools</code> için circuit breaker
+          Policy <code className="text-xs text-fg-muted">providers.pools</code> için circuit breaker
           durumu. Açık (open) devrelerde trafik bu endpoint&apos;e gitmez; bakım sonrası manuel sıfırlayın.
         </p>
 
         {pools.length === 0 ? (
-          <div className="rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-4 py-6 text-sm text-zinc-600 dark:text-zinc-400">
+          <div className="rounded-sm border border-border bg-surface-card px-4 py-6 text-sm text-fg-muted">
             Henüz provider havuzu yok — health/detailed içinde <code className="text-xs">providers</code>{" "}
             alanı boş. Politikada <code className="text-xs">providers.pools</code> tanımlayıp proxy&apos;yi
             yeniden yükleyin.
@@ -64,12 +64,12 @@ export function SettingsProvidersSection({ health, adminKey }: Props) {
                 title={`${toUpperEn(pl.pool.charAt(0)) + pl.pool.slice(1)} Havuzu`}
 
                 status={
-                  <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-zinc-600 dark:text-zinc-400">
+                  <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
                     {pl.healthy_count}/{pl.total_count} healthy
                   </span>
                 }
               >
-                <div className="divide-y divide-zinc-800">
+                <div className="divide-y divide-border">
                   {pl.providers.map((p) => {
                     const isOpen = toLowerEn(p.state) === "open";
                     const busy = pending === `${pl.pool}:${p.name}`;
@@ -80,18 +80,18 @@ export function SettingsProvidersSection({ health, adminKey }: Props) {
                       >
                         <div className="min-w-0 flex-1 space-y-0.5">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-zinc-900 dark:text-zinc-100">{p.name}</span>
-                            <span className={`rounded-sm border border-zinc-300 dark:border-zinc-700 px-1.5 py-0.5 ${stateClass(p.state)}`}>
+                            <span className="text-fg">{p.name}</span>
+                            <span className={`rounded-sm border border-border-strong px-1.5 py-0.5 ${stateClass(p.state)}`}>
                               {p.state}
                             </span>
                             {isOpen ? (
-                              <span className="inline-flex items-center gap-1 text-red-300/90">
+                              <span className="inline-flex items-center gap-1 text-status-critical/90">
                                 <AlertTriangle className="h-3 w-3" />
                                 devre dışı
                               </span>
                             ) : null}
                           </div>
-                          <div className="text-[11px] text-zinc-600 dark:text-zinc-400">
+                          <div className="text-[11px] text-fg-muted">
                             req window: {p.requests_in_window ?? "—"} · success rate:{" "}
                             {typeof p.success_rate_observed === "number"
                               ? `${(p.success_rate_observed * 100).toFixed(1)}%`
@@ -103,7 +103,7 @@ export function SettingsProvidersSection({ health, adminKey }: Props) {
                         <Button
                           type="button"
                           disabled={busy || !adminKey}
-                          className="h-8 shrink-0 cursor-pointer rounded-sm border border-zinc-600 bg-zinc-100 dark:bg-zinc-900 px-2 text-[11px] text-zinc-800 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-800 disabled:opacity-50"
+                          className="h-8 shrink-0 cursor-pointer rounded-sm border border-border-strong bg-surface-subtle px-2 text-[11px] text-fg hover:bg-surface-card disabled:opacity-50"
                           onClick={() => void resetCircuit(pl.pool, p.name)}
                           title="Breaker sayacını sıfırla (yeni devre örneği)"
                         >

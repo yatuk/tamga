@@ -95,20 +95,20 @@ export function GlossaryPanel({ open, onClose }: GlossaryPanelProps) {
       role="presentation"
     >
       <div
-        className="w-full max-w-xl max-h-[80vh] overflow-y-auto rounded-sm border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 p-4"
+        className="w-full max-w-xl max-h-[80vh] overflow-y-auto rounded-sm border border-border-strong bg-surface-card p-4"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-labelledby="glossary-title"
       >
         <div className="flex items-center justify-between mb-3">
-          <h3 id="glossary-title" className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+          <h3 id="glossary-title" className="text-sm font-semibold text-fg">
             Glossary
           </h3>
           <button
             type="button"
             onClick={onClose}
-            className="cursor-pointer rounded-sm p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            className="cursor-pointer rounded-sm p-1 text-fg-subtle hover:text-fg-muted dark:hover:text-fg-subtle hover:bg-surface-subtle"
             aria-label="Close glossary"
           >
             <X className="h-4 w-4" />
@@ -119,12 +119,12 @@ export function GlossaryPanel({ open, onClose }: GlossaryPanelProps) {
           {GLOSSARY_TERMS.map(({ term, definition }) => (
             <div
               key={term}
-              className="rounded-sm border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 p-2.5"
+              className="rounded-sm border border-border bg-surface-subtle/60 p-2.5"
             >
-              <div className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 font-mono">
+              <div className="text-xs font-semibold text-fg font-mono">
                 {term}
               </div>
-              <p className="mt-0.5 text-[11px] leading-relaxed text-zinc-600 dark:text-zinc-400">
+              <p className="mt-0.5 text-[11px] leading-relaxed text-fg-muted">
                 {definition}
               </p>
             </div>
@@ -146,7 +146,7 @@ export function GlossaryToggle({
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex cursor-pointer items-center justify-center h-7 w-7 rounded-sm border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800"
+      className="inline-flex cursor-pointer items-center justify-center h-7 w-7 rounded-sm border border-border-strong bg-surface-subtle text-fg-subtle hover:text-fg-muted dark:hover:text-fg-subtle hover:bg-surface-card"
       title="Open glossary"
       aria-label="Open glossary"
     >
