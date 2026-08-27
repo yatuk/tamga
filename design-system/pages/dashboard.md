@@ -5,15 +5,15 @@
 
 ## Kaynak
 
-| Pattern | Kaynak | Ekran görüntüsü |
-|---|---|---|
-| Posture Score kartı (hero sayı + sparkline + gradient) | Datadog CSM | `/tmp/design-research/datadog-posture-blog.png` |
-| Top Failing Findings listesi | Datadog CSM | `/tmp/design-research/datadog-posture-blog.png` |
-| Rules Severity Breakdown (gradient bar) | Datadog CSM | `/tmp/design-research/datadog-posture-blog.png` |
-| Framework Readiness kartları (ince çizgi progress) | Drata | `/tmp/design-research/drata-overview.png` |
-| Donut + legend widget'ları (Policies / Vendor risks) | Drata | `/tmp/design-research/drata-overview.png` |
-| Drill-down slide-in panel | Drata | `/tmp/design-research/drata-overview.png` |
-| Weighted risk score (tek sayı metodolojisi) | Wiz | `/tmp/design-research/wiz-scanning-report.png` |
+| Pattern | Kaynak |
+|---|---|
+| Posture Score kartı (hero sayı + sparkline + gradient) | Datadog CSM |
+| Top Failing Findings listesi | Datadog CSM |
+| Rules Severity Breakdown (gradient bar) | Datadog CSM |
+| Framework Readiness kartları (ince çizgi progress) | Drata |
+| Donut + legend widget'ları (Policies / Vendor risks) | Drata |
+| Drill-down slide-in panel | Drata |
+| Weighted risk score (tek sayı metodolojisi) | Wiz |
 
 ---
 

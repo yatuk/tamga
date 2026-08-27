@@ -246,7 +246,7 @@ If a customer reports a blocked legitimate prompt:
 3. If the pattern is the sole match → lower confidence or remove
 4. If cumulative scoring caused the block → adjust `cumulativeBoostPerExtra`
 5. Deploy fix within 1 business day
-6. Postmortem: document in `docs/POSTMORTEMS/`
+6. Postmortem: document the incident and resolution
 
 ---
 
@@ -264,7 +264,6 @@ If a customer reports a blocked legitimate prompt:
 ## 9. Related Documentation
 
 - [Pattern Catalog](../internal/scanner/patterns/README.md)
-- [Detection Engine Sprint Plan](../../docs/TAMGA_DETECTION_ENGINE_SPRINTS.md)
 - [Adversarial Test Suite](../internal/scanner/injection_adversarial_test.go)
 - [DFA Benchmarks](../internal/scanner/dfa_bench_test.go)
 - [PCI Logging Policy](PCI_LOGGING_POLICY.md)
