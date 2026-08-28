@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 
 export type PostureScoreProps = {
   /** 0-100, higher = better */
-  score: number;
+  score: number | null;
   /** Change vs previous period, in percentage points */
   delta: number | null;
   /** Sparkline data (posture history) */
@@ -89,14 +89,14 @@ export default function PostureScore({
   series,
   methodology = DEFAULT_METHODOLOGY,
 }: PostureScoreProps) {
-  const empty = series.length === 0;
+  const empty = score === null || !Number.isFinite(score);
   const tone: Tone | null = empty ? null : toneForScore(score);
   const spark = series.length >= 2 ? buildSparkline(series) : null;
   const first = series.length > 0 ? series[0].v : null;
   const last = series.length > 0 ? series[series.length - 1].v : null;
 
   return (
-    <div className="relative flex h-full min-h-[280px] flex-col overflow-hidden rounded-sm border border-border bg-surface-card text-fg">
+    <div className="docket-surface relative flex h-full min-h-[280px] flex-col overflow-hidden rounded-sm border border-border text-fg">
       {/* Full-card status tint (neutral when empty) */}
       {tone ? (
         <div
@@ -109,9 +109,9 @@ export default function PostureScore({
       ) : null}
 
       {/* Header */}
-      <div className="relative flex items-center gap-1.5 px-3 pt-3">
-        <span className="text-[10px] tracking-[0.14em] text-fg-muted">
-          POSTURE SCORE
+      <div className="relative flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+        <span className="text-sm font-semibold text-fg">
+          Posture score
         </span>
         <span title={methodology} aria-label={methodology}>
           <Info
@@ -122,7 +122,7 @@ export default function PostureScore({
       </div>
 
       {/* Body: sparkline behind a centered hero number */}
-      <div className="relative flex-1">
+      <div className="relative flex-1 bg-surface-card/80">
         {spark ? (
           <svg
             viewBox="0 0 100 100"
@@ -167,30 +167,31 @@ export default function PostureScore({
         <div className="absolute inset-0 flex items-center justify-center">
           {empty ? (
             <div className="flex flex-col items-center gap-1.5">
-              <span className="font-mono text-5xl font-semibold leading-none tabular-nums text-fg-subtle">
+              <span className="font-mono text-4xl font-semibold leading-none tabular-nums text-fg-subtle">
                 —
               </span>
-              <span className="text-[10px] tracking-[0.14em] text-fg-muted">
-                NO POSTURE HISTORY
+              <span className="text-xs text-fg-muted">
+                Connect admin access to calculate posture
               </span>
             </div>
           ) : (
             <span
               className={cn(
-                "font-mono text-5xl font-semibold leading-none tabular-nums",
+                "font-mono text-4xl font-semibold leading-none tabular-nums sm:text-5xl",
                 tone ? TONE[tone].text : "text-fg",
               )}
             >
-              {score.toFixed(1)}%
+              {score.toFixed(1)}
             </span>
           )}
         </div>
       </div>
 
       {/* Footer: delta vs prior period */}
-      <div className="relative flex items-center justify-center gap-1.5 px-3 pb-3 pt-1 text-[10px]">
+      <div className="relative flex min-h-10 items-center justify-between gap-2 border-t border-border bg-surface-card/90 px-4 py-2 text-[10px]">
+        <span className="text-fg-muted">100 − average input risk</span>
         {!empty && typeof delta === "number" ? (
-          <>
+          <span className="inline-flex items-center gap-1.5">
             <span
               className={cn(
                 "font-mono tabular-nums",
@@ -203,9 +204,9 @@ export default function PostureScore({
             >
               {formatDelta(delta)}
             </span>
-            <span className="text-fg-muted">vs prior period</span>
-          </>
-        ) : null}
+            <span className="text-fg-muted">vs prior</span>
+          </span>
+        ) : <span className="text-fg-faint">Current snapshot</span>}
       </div>
     </div>
   );

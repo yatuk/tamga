@@ -29,6 +29,15 @@ const firaCode = Fira_Code({
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://tamga.dev";
 
+const DESIGN_CONTRACT = `<!--
+THESIS: Tamga is a chain-of-custody workspace for live LLM risk, not a wall of interchangeable security cards.
+OWN-WORLD: Ink-black and paper-white records, graphite rules, Tamga red evidence seals, compact sans labels, and mono measurements.
+STORY: Read posture, isolate the material change, then enter the incident with its source, time range, and evidence intact.
+FIRST VIEWPORT: Persistent case-index navigation; an operational header; one risk disposition; a live evidence queue; compact supporting measurements.
+FORM: Forensic chain-of-custody docket, grounded direction 5, seed 3015f63b.
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
+-->`;
+
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
@@ -88,6 +97,10 @@ export default async function RootLayout({
     return (
       <html lang="tr" className={htmlClassName} suppressHydrationWarning>
         <body className={bodyClass}>
+          <template
+            data-impeccable-contract="3015f63b"
+            dangerouslySetInnerHTML={{ __html: DESIGN_CONTRACT }}
+          />
           <ThemeProvider
             attribute="class"
             defaultTheme={defaultTheme}
@@ -105,6 +118,10 @@ export default async function RootLayout({
   return (
     <html lang="tr" className={htmlClassName} suppressHydrationWarning>
       <body className={bodyClass}>
+        <template
+          data-impeccable-contract="3015f63b"
+          dangerouslySetInnerHTML={{ __html: DESIGN_CONTRACT }}
+        />
         <ClerkProvider>
           <ThemeProvider
             attribute="class"

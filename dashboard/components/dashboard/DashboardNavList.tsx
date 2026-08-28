@@ -94,17 +94,17 @@ export function DashboardNavList({
   }, [collapsed, hydrated]);
 
   return (
-    <nav className="flex-1 space-y-0.5">
+    <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto pr-0.5">
       {navGroups.map((group, gi) => {
         const isCollapsible = !!group.label;
         const isCollapsed = isCollapsible ? collapsed[group.label!] : false;
         return (
-          <div key={gi} className={gi === 0 ? "" : "mt-3"}>
+          <div key={gi} className={gi === 0 ? "" : "mt-4"}>
             {group.label ? (
               <button
                 type="button"
                 onClick={() => toggle(group.label!)}
-                className={`w-full flex items-center gap-1 px-2 pb-1 pt-2 text-[9px] uppercase tracking-[0.18em] text-fg-muted hover:text-fg transition-colors ${
+                className={`w-full items-center gap-1.5 px-2.5 pb-1.5 pt-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-fg-muted transition-colors hover:text-fg ${
                   desktopCollapsed ? "hidden" : "hidden lg:flex"
                 }`}
               >

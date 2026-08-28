@@ -1,6 +1,5 @@
 import { Globe, Landmark, Layers, Shield, type LucideIcon } from "lucide-react";
 
-import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 export type ComplianceFramework = {
@@ -72,12 +71,9 @@ function FrameworkCard({ framework }: { framework: ComplianceFramework }) {
     : 0;
 
   return (
-    <Card className="flex flex-col gap-4 p-4">
-      {/* Header: circular icon + name/standard */}
+    <article className="flex flex-col gap-4 bg-surface-card p-4">
       <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-surface-subtle">
-          <Icon className="h-5 w-5 text-fg-muted" aria-hidden />
-        </div>
+        <Icon className="h-4 w-4 shrink-0 text-fg-muted" aria-hidden />
         <div className="min-w-0">
           <div className="truncate text-sm font-semibold text-fg">
             {framework.name}
@@ -121,7 +117,7 @@ function FrameworkCard({ framework }: { framework: ComplianceFramework }) {
             REQUIREMENTS
           </div>
           <div className="mt-1 font-mono text-2xl font-semibold tabular-nums text-fg">
-            {framework.totalControls}
+            {framework.totalControls > 0 ? framework.totalControls : "—"}
           </div>
         </div>
       </div>
@@ -132,10 +128,10 @@ function FrameworkCard({ framework }: { framework: ComplianceFramework }) {
           CONTROLS
         </span>
         <span className="font-mono text-sm tabular-nums text-fg-muted">
-          {framework.totalControls}
+          {framework.totalControls > 0 ? framework.totalControls : "—"}
         </span>
       </div>
-    </Card>
+    </article>
   );
 }
 
@@ -143,7 +139,7 @@ export default function ComplianceReadiness({
   frameworks,
 }: ComplianceReadinessProps) {
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid grid-cols-1 divide-y divide-border overflow-hidden rounded-sm border border-border bg-surface-card sm:grid-cols-2 sm:divide-x sm:divide-y-0 lg:grid-cols-4">
       {frameworks.map((framework) => (
         <FrameworkCard key={framework.id} framework={framework} />
       ))}

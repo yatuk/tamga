@@ -46,13 +46,13 @@ export default function SeverityBreakdown({
   }
 
   return (
-    <div className="flex h-full flex-col rounded-sm border border-border bg-surface-card p-3">
-      <div className="mb-3 text-[10px] tracking-[0.14em] text-fg-muted">
-        SEVERITY BREAKDOWN
+    <div className="flex h-full min-h-[280px] flex-col rounded-sm border border-border bg-surface-card p-4">
+      <div className="mb-5 text-sm font-semibold text-fg">
+        Severity distribution
       </div>
 
       {total === 0 ? (
-        <div className="text-[11px] text-fg-muted">No findings in range</div>
+        <div className="flex flex-1 items-center justify-center text-center text-xs leading-5 text-fg-muted">No findings recorded in this window</div>
       ) : (
         <div className="flex flex-1 flex-col justify-between">
           {SEVERITY_ORDER.map((severity) => {
@@ -61,7 +61,7 @@ export default function SeverityBreakdown({
 
             return (
               <div key={severity} className="flex items-center gap-2">
-                <span className="w-20 shrink-0 text-[11px] tracking-[0.14em] text-fg-muted">
+                <span className="w-16 shrink-0 text-[10px] font-medium tracking-[0.08em] text-fg-muted">
                   {SEVERITY_LABEL[severity]}
                 </span>
                 <div className="h-1.5 flex-1 overflow-hidden rounded-sm bg-surface-subtle">
@@ -73,8 +73,8 @@ export default function SeverityBreakdown({
                     }}
                   />
                 </div>
-                <span className="w-28 shrink-0 text-right font-mono text-[11px] tabular-nums text-fg-muted">
-                  {`${pct}%  ${count} of ${total}`}
+                <span className="w-20 shrink-0 text-right font-mono text-[10px] tabular-nums text-fg-muted">
+                  {`${pct}% · ${count}`}
                 </span>
               </div>
             );

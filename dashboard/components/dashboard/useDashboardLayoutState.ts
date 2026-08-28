@@ -197,9 +197,9 @@ export function useDashboardLayoutState() {
   }, [paletteOpen]);
 
   const navLinkBase =
-    "relative flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 pl-2 text-xs font-mono transition-colors duration-150 ";
-  const navLinkInactive = "text-fg-muted hover:bg-surface-subtle hover:text-fg";
-  const navLinkActive = "bg-surface-subtle text-fg";
+    "relative flex min-h-9 cursor-pointer items-center gap-2.5 rounded-sm px-2.5 py-2 text-[13px] font-medium transition-colors duration-150 ";
+  const navLinkInactive = "text-fg-muted hover:bg-surface-card hover:text-fg";
+  const navLinkActive = "bg-surface-card text-fg";
 
   return {
     router,

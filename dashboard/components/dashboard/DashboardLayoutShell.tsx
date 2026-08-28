@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Menu, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { Command, Menu, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { DashboardPageTransition } from "@/components/dashboard/DashboardPageTransition";
 import { TamgaLogo } from "@/components/TamgaLogo";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -50,17 +50,17 @@ export function DashboardLayoutShell({ children }: { children: React.ReactNode }
   return (
     <div className="min-h-screen bg-surface-base text-fg">
       <GlobalAlertBanner alerts={globalAlerts} />
-      <div className="flex">
+      <div className="flex min-h-screen">
         <aside
-        className={`${focusMode ? "md:hidden" : "hidden md:flex"} flex-col border-r border-border bg-surface-subtle px-2 py-3 ${
-          desktopCollapsed ? "w-14" : "w-14 lg:w-56"
+        className={`${focusMode ? "md:hidden" : "hidden md:flex"} sticky top-0 h-screen shrink-0 flex-col border-r border-border bg-surface-subtle px-2.5 py-4 ${
+          desktopCollapsed ? "w-16" : "w-16 lg:w-64"
         }`}
       >
-        <Link href="/dashboard" className="mb-5 flex items-center gap-2 px-2" title="Tamga">
-          <TamgaLogo size={desktopCollapsed ? 26 : 32} priority />
+        <Link href="/dashboard" className="mb-6 flex items-center gap-3 px-2" title="Tamga">
+          <TamgaLogo size={desktopCollapsed ? 28 : 34} priority />
           <div className={`${desktopCollapsed ? "hidden" : "hidden lg:block"} min-w-0`}>
-            <div className="text-[13px] font-semibold leading-none text-fg">tamga</div>
-            <div className="mt-1 text-[9px] uppercase tracking-[0.14em] text-fg-muted">v0.1.1</div>
+            <div className="text-[15px] font-semibold leading-none tracking-[-0.02em] text-fg">tamga</div>
+            <div className="mt-1.5 text-[10px] text-fg-muted">Security control plane</div>
           </div>
         </Link>
 
@@ -75,7 +75,17 @@ export function DashboardLayoutShell({ children }: { children: React.ReactNode }
           useLayoutId
         />
 
-        <div className="space-y-2 border-t border-border pt-3">
+        <div className="mt-auto space-y-3 border-t border-border pt-3">
+          <div className={`rounded-sm border border-border bg-surface-card p-2.5 ${desktopCollapsed ? "hidden" : "hidden lg:block"}`}>
+            <div className="mb-1.5 flex items-center justify-between gap-2 text-[10px] text-fg-muted">
+              <span>Runtime</span>
+              <span className="font-mono tabular-nums">{healthLatency != null ? `${healthLatency}ms` : "—"}</span>
+            </div>
+            <span className={`inline-flex items-center gap-2 text-xs ${healthUp ? "text-status-pass" : "text-status-critical"}`}>
+              <span className={`h-2 w-2 rounded-full ${healthUp ? "bg-status-pass" : "bg-status-critical"}`} aria-hidden />
+              {healthUp ? "Proxy operational" : "Proxy unavailable"}
+            </span>
+          </div>
           <div className="flex items-center justify-end gap-2 px-1">
             <Button
               onClick={() => setDesktopCollapsed((v) => !v)}
@@ -85,24 +95,10 @@ export function DashboardLayoutShell({ children }: { children: React.ReactNode }
               {desktopCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
             </Button>
           </div>
-          <div className={`px-2 text-[9px] uppercase tracking-[0.18em] text-fg-muted ${desktopCollapsed ? "hidden" : "hidden lg:block"}`}>
-            RUNTIME //
-          </div>
-          <div className={`px-2 text-[11px] ${desktopCollapsed ? "hidden" : "hidden lg:block"}`}>
-            <span className="inline-flex items-center gap-1.5 text-fg-muted">
-              <span className={`h-2 w-2 rounded-full ${healthUp ? "bg-status-pass" : "bg-status-critical"}`} aria-hidden />
-              {healthUp ? "Proxy up" : "Proxy down"}
-            </span>
-            {!healthUp && healthReason && (
-              <div className="mt-1 truncate text-[10px] text-status-critical" title={healthReason}>
-                reason: {healthReason}
-              </div>
-            )}
-          </div>
         </div>
       </aside>
 
-      <main className="min-w-0 flex-1 overflow-auto">
+      <main className="min-w-0 flex-1">
         <div
           className={`sticky top-0 z-20 flex items-center justify-between border-b bg-surface-subtle px-3 py-2 md:hidden ${
             scrolled
@@ -128,7 +124,7 @@ export function DashboardLayoutShell({ children }: { children: React.ReactNode }
         </div>
 
         <div
-          className={`sticky top-0 z-20 hidden items-center justify-between border-b bg-surface-subtle px-4 py-2 md:flex ${
+          className={`sticky top-0 z-20 hidden h-14 items-center justify-between border-b bg-surface-base/95 px-5 backdrop-blur-md md:flex ${
             scrolled
               ? "border-border-strong shadow-sm"
               : "border-border"
@@ -142,21 +138,27 @@ export function DashboardLayoutShell({ children }: { children: React.ReactNode }
               </Link>
             )}
             {runtimeChip}
+            <span className="h-4 w-px bg-border" aria-hidden />
+            <span className="text-xs text-fg-muted">Protected workspace</span>
           </div>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setPaletteOpen(true)}
-              className="hidden cursor-pointer rounded-sm border border-border bg-surface-subtle px-2 py-1 text-[11px] font-mono text-fg-muted transition-colors duration-150 hover:border-border-strong hover:text-fg lg:inline-flex"
+              className="hidden min-w-52 cursor-pointer items-center justify-between gap-5 rounded-sm border border-border bg-surface-card px-3 py-2 text-[11px] text-fg-muted transition-colors duration-150 hover:border-border-strong hover:text-fg lg:inline-flex"
               aria-label="Open command palette"
             >
-              <span>Ctrl+K</span>
+              <span className="inline-flex items-center gap-2"><Command className="h-3.5 w-3.5" /> Search or jump to…</span>
+              <span className="font-mono text-[10px]">Ctrl K</span>
             </button>
+            <ThemeToggle />
           </div>
         </div>
 
-        <div className={focusMode ? "p-2" : "p-3"}>
-          <DashboardPageTransition>{children}</DashboardPageTransition>
+        <div className={focusMode ? "p-3" : "px-4 py-5 sm:px-6 lg:px-8"}>
+          <div className="mx-auto w-full max-w-[1600px]">
+            <DashboardPageTransition>{children}</DashboardPageTransition>
+          </div>
         </div>
       </main>
       </div>{/* end flex container */}

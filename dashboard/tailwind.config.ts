@@ -9,7 +9,9 @@ module.exports = {
   theme: {
     extend: {
       borderRadius: {
-        sm: "0.125rem",
+        sm: "0.75rem",
+        md: "0.875rem",
+        lg: "1rem",
       },
       boxShadow: {
         elevated:

@@ -25,10 +25,10 @@ html.dark {
   color-scheme: dark;
 
   /* --- Surfaces (dark theme; Tamga is a SOC tool) --- */
-  --surface-base: oklch(0.18 0.008 260);
-  --surface-subtle: oklch(0.205 0.008 260);
-  --surface-card: oklch(0.225 0.009 260);
-  --surface-elevated: oklch(0.25 0.009 260);
+  --surface-base: oklch(0.155 0.008 255);
+  --surface-subtle: oklch(0.185 0.009 255);
+  --surface-card: oklch(0.205 0.009 255);
+  --surface-elevated: oklch(0.235 0.01 255);
   --surface-overlay: oklch(0.06 0 0 / 0.7);
 
   /* --- Foreground --- */
@@ -38,9 +38,9 @@ html.dark {
   --fg-faint: oklch(0.48 0.01 260);
 
   /* --- Border + ring --- */
-  --border: oklch(0.3 0.01 260);
-  --border-strong: oklch(0.36 0.012 260);
-  --border-subtle: oklch(0.24 0.009 260);
+  --border: oklch(0.29 0.012 255);
+  --border-strong: oklch(0.39 0.014 255);
+  --border-subtle: oklch(0.245 0.01 255);
   --ring: oklch(0.68 0.14 22 / 0.55);
   --inner-highlight: 0 1px 0 0 oklch(1 0 0 / 0.03);
 
@@ -107,10 +107,10 @@ html.dark {
 :root {
   color-scheme: light;
 
-  --surface-base: oklch(0.99 0.002 260);
-  --surface-subtle: oklch(0.97 0.003 260);
-  --surface-card: oklch(1 0 0);
-  --surface-elevated: oklch(1 0 0);
+  --surface-base: oklch(0.975 0.006 85);
+  --surface-subtle: oklch(0.95 0.008 85);
+  --surface-card: oklch(0.992 0.004 85);
+  --surface-elevated: oklch(1 0.002 85);
   --surface-overlay: oklch(0.2 0 0 / 0.45);
 
   --fg: oklch(0.18 0.008 260);
@@ -176,6 +176,12 @@ body {
 
 body {
   font-family: var(--font-inter), system-ui, sans-serif;
+  min-width: 320px;
+}
+
+a {
+  text-underline-offset: 0.22em;
+  text-decoration-thickness: 0.08em;
 }
 
 code,
@@ -261,10 +267,20 @@ body {
 
 /* ---------------- Helpers ---------------- */
 .security-data-surface {
-  border-radius: 0.125rem;
+  border-radius: 0.75rem;
   border: 1px solid var(--border);
   background: var(--surface-card);
   box-shadow: var(--inner-highlight);
+}
+
+.docket-surface {
+  background-color: var(--surface-card);
+  background-image: linear-gradient(to bottom, transparent 31px, var(--border-subtle) 32px);
+  background-size: 100% 32px;
+}
+
+.evidence-seal {
+  box-shadow: 0 0 0 1px color-mix(in oklch, var(--accent) 24%, transparent);
 }
 
 .security-dense {

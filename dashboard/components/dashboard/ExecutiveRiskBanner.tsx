@@ -4,7 +4,7 @@ import { AlertTriangle, Shield, ShieldAlert, ShieldCheck, TrendingDown, Trending
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-type RiskLevel = "critical" | "elevated" | "moderate" | "low";
+type RiskLevel = "critical" | "elevated" | "moderate" | "low" | "unknown";
 
 interface RiskBannerProps {
   level?: RiskLevel;
@@ -21,6 +21,14 @@ interface RiskBannerProps {
 // ── Config ─────────────────────────────────────────────────────────────────────
 
 const config: Record<RiskLevel, { label: string; icon: typeof Shield; bg: string; border: string; text: string; dot: string }> = {
+  unknown: {
+    label: "UNVERIFIED",
+    icon: AlertTriangle,
+    bg: "bg-status-medium/[0.06]",
+    border: "border-status-medium/25",
+    text: "text-status-medium",
+    dot: "bg-status-medium",
+  },
   critical: {
     label: "CRITICAL",
     icon: ShieldAlert,
@@ -83,7 +91,7 @@ export function ExecutiveRiskBanner({
         {/* Risk level badge */}
         <div className="flex items-center gap-2">
           <span className={`inline-flex items-center gap-1 rounded-sm ${c.bg} border ${c.border} px-2 py-1`}>
-            <span className={`h-1.5 w-1.5 rounded-full ${c.dot} animate-pulse`} aria-hidden />
+              <span className={`h-1.5 w-1.5 rounded-full ${c.dot}`} aria-hidden />
             <span className={`text-[11px] font-bold uppercase tracking-[0.1em] ${c.text}`}>
               {c.label}
             </span>

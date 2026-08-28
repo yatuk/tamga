@@ -14,6 +14,7 @@ export type TopFinding = {
 
 export type TopFindingsProps = {
   findings: TopFinding[];
+  unavailable?: boolean;
   onViewAll?: () => void;
   href?: string;
 };
@@ -82,7 +83,7 @@ export const DEMO_FINDINGS: TopFinding[] = [
   },
 ];
 
-export default function TopFindings({ findings, onViewAll, href }: TopFindingsProps) {
+export default function TopFindings({ findings, unavailable = false, onViewAll, href }: TopFindingsProps) {
   const empty = findings.length === 0;
 
   const viewAll =
@@ -91,7 +92,7 @@ export default function TopFindings({ findings, onViewAll, href }: TopFindingsPr
         href={href}
         className="shrink-0 text-[10px] text-fg-muted transition-colors hover:text-fg"
       >
-        View all in Events →
+        Open investigation →
       </a>
     ) : onViewAll ? (
       <button
@@ -99,21 +100,26 @@ export default function TopFindings({ findings, onViewAll, href }: TopFindingsPr
         onClick={onViewAll}
         className="shrink-0 cursor-pointer text-[10px] text-fg-muted transition-colors hover:text-fg"
       >
-        View all in Events →
+        Open investigation →
       </button>
     ) : (
-      <span className="shrink-0 text-[10px] text-fg-faint">View all in Events →</span>
+      <span className="shrink-0 text-[10px] text-fg-faint">Open investigation →</span>
     );
 
   return (
-    <div className="rounded-sm border border-border bg-surface-card">
+    <div className="h-full overflow-hidden rounded-sm border border-border bg-surface-card">
       {/* Header */}
       <div className="flex items-center justify-between gap-3 border-b border-border px-3 py-2.5">
-        <h3 className="text-xs font-semibold text-fg">Top Failing Findings</h3>
+        <h3 className="text-sm font-semibold text-fg">Material findings</h3>
         {viewAll}
       </div>
 
-      {empty ? (
+      {unavailable ? (
+        <div className="flex items-center gap-2 px-3 py-6 text-xs text-fg-muted">
+          <span className="h-2 w-2 shrink-0 rounded-full bg-status-medium" aria-hidden />
+          <span>Evidence unavailable</span>
+        </div>
+      ) : empty ? (
         <div className="flex items-center gap-2 px-3 py-6 text-xs text-fg-muted">
           <CheckCircle2 className="h-4 w-4 shrink-0 text-status-pass" />
           <span>No failing findings detected</span>
@@ -125,10 +131,10 @@ export default function TopFindings({ findings, onViewAll, href }: TopFindingsPr
             <span className="w-[3px] shrink-0" aria-hidden="true" />
             <div className="flex min-w-0 flex-1 items-center gap-3 px-3 py-1.5">
               <span className="min-w-0 flex-1" aria-hidden="true" />
-              <span className={cn("w-20 shrink-0 text-right", COLUMN_LABEL)}>
+              <span className={cn("hidden w-20 shrink-0 text-right sm:block", COLUMN_LABEL)}>
                 RESOURCES
               </span>
-              <span className={cn("w-20 shrink-0 text-right", COLUMN_LABEL)}>
+              <span className={cn("w-16 shrink-0 text-right sm:w-20", COLUMN_LABEL)}>
                 TRIAGE
               </span>
             </div>
@@ -147,7 +153,7 @@ export default function TopFindings({ findings, onViewAll, href }: TopFindingsPr
                 />
                 <div className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2">
                   <span
-                    className={cn("w-16 shrink-0 text-[10px] font-medium tracking-wide", SEVERITY_TEXT[f.severity])}
+                    className={cn("hidden w-16 shrink-0 text-[10px] font-medium tracking-wide sm:block", SEVERITY_TEXT[f.severity])}
                   >
                     {SEVERITY_LABEL[f.severity]}
                   </span>
@@ -157,10 +163,10 @@ export default function TopFindings({ findings, onViewAll, href }: TopFindingsPr
                   >
                     {f.text}
                   </span>
-                  <span className="w-20 shrink-0 text-right font-mono text-xs tabular-nums text-fg">
+                  <span className="hidden w-20 shrink-0 text-right font-mono text-xs tabular-nums text-fg sm:block">
                     {f.resources}
                   </span>
-                  <span className="flex w-20 shrink-0 justify-end">
+                  <span className="flex w-16 shrink-0 justify-end sm:w-20">
                     <span
                       className={cn(
                         "inline-flex items-center rounded-sm border px-2 py-0.5 text-[10px] uppercase tracking-wide",
