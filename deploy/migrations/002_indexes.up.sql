@@ -1,7 +1,10 @@
 -- Additional performance indexes
 -- Migration: 002_indexes.up.sql
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_request_logs_created_at_brin
+-- request_logs is partitioned (001), and PostgreSQL cannot build an index on
+-- a partitioned table CONCURRENTLY. A plain CREATE INDEX on the parent
+-- cascades to every partition.
+CREATE INDEX IF NOT EXISTS idx_request_logs_created_at_brin
     ON request_logs USING BRIN (created_at);
 
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_api_keys_org_id

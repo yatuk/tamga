@@ -272,11 +272,25 @@ func parsePartitionUpperBoundTO(bound string) (time.Time, bool) {
 	if len(m) < 2 {
 		return time.Time{}, false
 	}
-	t, err := time.ParseInLocation("2006-01-02", m[1], time.UTC)
-	if err != nil {
-		return time.Time{}, false
+	// request_logs is partitioned on a timestamptz column, so pg_get_expr
+	// renders the bound as '2020-02-01 00:00:00+00' (offset per the server
+	// TimeZone), not as the bare date the partition was created with. Accept
+	// every shape PostgreSQL emits; an unparsed bound means the partition is
+	// skipped and never dropped.
+	for _, layout := range partitionBoundLayouts {
+		if t, err := time.ParseInLocation(layout, m[1], time.UTC); err == nil {
+			return t.UTC(), true
+		}
 	}
-	return t, true
+	return time.Time{}, false
+}
+
+var partitionBoundLayouts = []string{
+	"2006-01-02 15:04:05.999999999-07:00:00",
+	"2006-01-02 15:04:05.999999999-07:00",
+	"2006-01-02 15:04:05.999999999-07",
+	"2006-01-02 15:04:05.999999999",
+	"2006-01-02",
 }
 
 func (pm *PartitionManager) detachDrop(ctx context.Context, partName string) error {

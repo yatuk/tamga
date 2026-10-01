@@ -3,6 +3,7 @@
 
 ALTER TABLE request_logs ADD COLUMN IF NOT EXISTS model_family TEXT;
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_request_logs_model_family
+-- Not CONCURRENTLY: request_logs is partitioned (see 002).
+CREATE INDEX IF NOT EXISTS idx_request_logs_model_family
     ON request_logs(org_id, model_family, created_at DESC)
     WHERE model_family IS NOT NULL;
