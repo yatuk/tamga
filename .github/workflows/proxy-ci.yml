@@ -30,7 +30,7 @@ jobs:
           cache-dependency-path: proxy/go.sum
       - name: govulncheck
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
+          go install golang.org/x/vuln/cmd/govulncheck@v1.7.0
           govulncheck ./...
 
   gosec:
@@ -55,7 +55,7 @@ jobs:
           cache-dependency-path: proxy/go.sum
       - name: Generate SBOM
         run: |
-          go install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@latest
+          go install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@v1.10.0
           # The module root has no main package; point at the proxy binary.
           cyclonedx-gomod app -main cmd/tamga -output sbom.json -licenses -assert-licenses
       - name: Upload SBOM

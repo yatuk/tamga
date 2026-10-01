@@ -61,7 +61,7 @@ test-load:
 
 vuln:
 	@echo "→ go govulncheck"
-	cd $(PROXY_DIR) && go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+	cd $(PROXY_DIR) && go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
 	@echo "→ npm audit (production)"
 	cd $(DASHBOARD_DIR) && npm audit --production || true
 
