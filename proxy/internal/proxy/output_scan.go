@@ -7,12 +7,17 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/rs/zerolog/log"
+
 	"github.com/yatuk/tamga/internal/policy"
 	"github.com/yatuk/tamga/internal/scanner"
 )
 
-// maxOutputScanBytes caps non-stream response bodies that will be scanned.
-const maxOutputScanBytes = 256 * 1024
+// maxOutputScanBytes is the default cap on non-stream response bodies that
+// will be buffered and scanned. It sits above what current models can emit in
+// one completion, so in practice only binary payloads (e.g. base64 images)
+// exceed it; those are forwarded intact and unscanned.
+const maxOutputScanBytes = 1024 * 1024
 
 // vaultMaxRestoreBytes caps how much of a response the vault will buffer to
 // restore placeholders. Chat responses are far smaller; a response larger than
@@ -51,16 +56,17 @@ func scanResponseBody(ctx context.Context, reg *scanner.Registry, outputReg *sca
 		scanCtx, cancel = context.WithTimeout(ctx, time.Duration(windowMs)*time.Millisecond)
 		defer cancel()
 	}
+	// A scanner that fails or times out degrades the scan but does not void
+	// it: whatever the other scanners found is still evaluated, and the error
+	// is handed back so the caller can flag the response.
 	findings, err := reg.ScanAllWithConfig(scanCtx, []byte(text), pipeCfg)
-	if err != nil {
-		return outputScanResult{action: policy.ActionPass, elapsed: time.Since(start)}, err
-	}
 
 	// Run output-only scanners (e.g. code_leak) if configured.
 	if outputReg != nil {
 		extraFindings, extraErr := outputReg.ScanAllWithConfig(scanCtx, []byte(text), pipeCfg)
-		if extraErr == nil {
-			findings = append(findings, extraFindings...)
+		findings = append(findings, extraFindings...)
+		if err == nil {
+			err = extraErr
 		}
 	}
 
@@ -70,7 +76,7 @@ func scanResponseBody(ctx context.Context, reg *scanner.Registry, outputReg *sca
 		action:   act,
 		text:     text,
 		elapsed:  time.Since(start),
-	}, nil
+	}, err
 }
 
 // wrapResponseForOutputScan replaces the upstream response body with a buffered
@@ -120,14 +126,32 @@ func wrapResponseForOutputScan(resp *http.Response, pol *policy.Policy, forceBuf
 		limit = maxOutputScanBytes
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, int64(limit)+1))
-	_ = resp.Body.Close()
 	if err != nil {
+		_ = resp.Body.Close()
 		return nil, false, err
 	}
-	truncated := len(body) > limit
-	if truncated {
-		body = body[:limit]
+	if len(body) > limit {
+		// Larger than the scan buffer. The client must still receive the
+		// whole response, so stitch the bytes already read back in front of
+		// the rest of the stream and forward it unscanned — visibly, not
+		// silently: a truncated JSON body cannot be parsed for scanning and
+		// would reach the caller corrupted.
+		resp.Body = struct {
+			io.Reader
+			io.Closer
+		}{io.MultiReader(bytes.NewReader(body), resp.Body), resp.Body}
+		if resp.Header == nil {
+			resp.Header = http.Header{}
+		}
+		resp.Header.Set("X-Tamga-Output-Scan", "skipped-too-large")
+		scanner.RecordDegraded(scanner.DegradedOutputTooLarge)
+		log.Warn().
+			Str("component", "proxy").
+			Int("buffer_bytes", limit).
+			Msg("response exceeds output_rules.buffer_bytes; forwarded without output scan")
+		return nil, false, nil
 	}
+	_ = resp.Body.Close()
 	resp.Body = io.NopCloser(bytes.NewReader(body))
 	return body, true, nil
 }

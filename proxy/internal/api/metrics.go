@@ -85,6 +85,15 @@ func (cfg Config) handleMetrics(w http.ResponseWriter, _ *http.Request) {
 		_, _ = fmt.Fprintf(w, "tamga_scanner_detections_total{scanner=\"%s\"} %d\n", name, count)
 	}
 
+	// Scans that ran with reduced coverage (scanner panic/error, pool shedding,
+	// oversized response). The proxy fails open in these cases, so a non-zero
+	// rate here means traffic is passing with less inspection than configured.
+	_, _ = fmt.Fprintln(w, "# HELP tamga_scan_degraded_total Scans that completed with reduced coverage, by reason.")
+	_, _ = fmt.Fprintln(w, "# TYPE tamga_scan_degraded_total counter")
+	for reason, count := range scanner.ScanDegradedStats() {
+		_, _ = fmt.Fprintf(w, "tamga_scan_degraded_total{reason=\"%s\"} %d\n", reason, count)
+	}
+
 	// Scanner worker pool metrics (only when pool is enabled).
 	if cfg.ScannerPool != nil {
 		stats := cfg.ScannerPool.Stats()

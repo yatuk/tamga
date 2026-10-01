@@ -2,6 +2,7 @@ package scanner
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 )
@@ -98,8 +99,10 @@ func TestPipeline_PanicRecovery(t *testing.T) {
 	}
 	p := NewPipeline(entries)
 	fs, err := p.Scan(context.Background(), []byte("test"))
-	if err != nil {
-		t.Fatal(err) // Pipeline.Scan never returns error
+	// The panic is contained, but reported: the caller learns the scan ran
+	// with reduced coverage while still getting the healthy scanner's result.
+	if !errors.Is(err, ErrScanDegraded) {
+		t.Fatalf("want ErrScanDegraded for a panicking scanner, got %v", err)
 	}
 	if len(fs) != 1 {
 		t.Fatalf("want 1 finding from good scanner, got %d", len(fs))

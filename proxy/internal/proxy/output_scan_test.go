@@ -483,7 +483,8 @@ func TestWrapResponseForOutputScan_NilPolicy(t *testing.T) {
 }
 
 func TestWrapResponseForOutputScan_BufferBytesLimit(t *testing.T) {
-	// Policy has buffer_bytes: 4; body is 10 bytes → truncated to 4.
+	// Policy has buffer_bytes: 4; body is 10 bytes → too large to scan. The
+	// client must still get all 10 bytes, flagged as unscanned.
 	originalBody := []byte("0123456789")
 	resp := &http.Response{
 		Header: http.Header{"Content-Type": []string{"text/plain"}},
@@ -502,12 +503,18 @@ providers:
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !buffered {
-		t.Error("expected buffered=true")
+	if buffered || body != nil {
+		t.Errorf("oversized body must not be handed to the scanner: buffered=%v body=%q", buffered, body)
 	}
-	expected := []byte("0123")
-	if !bytes.Equal(body, expected) {
-		t.Errorf("body = %q, want %q", body, expected)
+	forwarded, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read forwarded body: %v", err)
+	}
+	if !bytes.Equal(forwarded, originalBody) {
+		t.Errorf("forwarded body = %q, want the full %q (no truncation)", forwarded, originalBody)
+	}
+	if got := resp.Header.Get("X-Tamga-Output-Scan"); got != "skipped-too-large" {
+		t.Errorf("X-Tamga-Output-Scan = %q, want skipped-too-large", got)
 	}
 }
 

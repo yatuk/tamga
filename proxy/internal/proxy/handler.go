@@ -455,7 +455,12 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 	scanSpan.SetAttributes(attribute.Int("scanner.findings_count", len(findings)))
 	scanSpan.End()
 	if err != nil {
+		// The proxy fails open here: findings from the scanners that did run
+		// are still enforced, but the caller and the operator are told the
+		// verdict was reached with reduced coverage.
 		logger.Error().Err(err).Msg("scanner error")
+		w.Header().Set("X-Tamga-Scan-Degraded", "true")
+		span.SetAttributes(attribute.Bool("tamga.scan_degraded", true))
 	}
 
 	scanDuration := time.Since(start)
@@ -736,6 +741,9 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 			if errWrap != nil {
 				return errWrap
 			}
+			// outputClean stays true only while nothing was found in the
+			// response; it gates the cache write further down.
+			outputClean := true
 
 			// Canary: force-buffer (if needed) and scan the response for the
 			// injected token. Its presence means the system prompt leaked.
@@ -763,6 +771,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 						Match:          canaryToken,
 						ScannerVersion: scanner.ScannerVersion,
 					}
+					outputClean = false
 					resp.Header.Set("X-Tamga-System-Prompt-Leak", "true")
 					go publishOutputEvent(ctx, cfg, requestID, provider, []scanner.Finding{leak}, policy.ActionBlock, 0)
 					if pol.Canary != nil && pol.Canary.BlockOnLeak {
@@ -795,25 +804,6 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 				attachStreamingOutputScanner(resp, pol, cfg.Registry, cfg, provider, requestID, ctx)
 				resp.Header.Set("X-Tamga-Stream-Scan", "enabled")
 				return nil
-			}
-			// Phase 3C — cache successful responses for later exact-match hits.
-			// Never cache while vaulting: respBody still holds placeholders, and
-			// caching them would serve tokenized bodies on later hits.
-			if respBuffered && !vaultActive && cfg.Cache != nil && pol != nil && pol.Cache != nil && pol.Cache.Enabled &&
-				resp.StatusCode == http.StatusOK {
-				ttl := time.Duration(pol.Cache.TTLSeconds) * time.Second
-				if ttl <= 0 {
-					ttl = 5 * time.Minute
-				}
-				cfg.Cache.Set(&cache.Entry{
-					Key:         cache.KeyForOrg(orgIDForRequest(r, cfg), provider, extractModelFromBody(body), body),
-					Provider:    provider,
-					Model:       extractModelFromBody(body),
-					Body:        append([]byte(nil), respBody...),
-					ContentType: resp.Header.Get("Content-Type"),
-					StoredAt:    time.Now().UTC(),
-					TTL:         ttl,
-				})
 			}
 			// Budget tracking: extract token usage from the provider payload.
 			if respBuffered && cfg.Budget != nil {
@@ -848,7 +838,14 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 					LoadShed: cfg.Config.ScannerLoadShed,
 				}
 				res, err := scanResponseBody(ctx, cfg.Registry, cfg.OutputOnlyRegistry, pol, prov, respBody, winMs, outPipeCfg)
-				if err == nil && len(res.findings) > 0 {
+				if err != nil {
+					// An incomplete scan cannot vouch for the body, so it
+					// is not cacheable either.
+					outputClean = false
+					resp.Header.Set("X-Tamga-Scan-Degraded", "true")
+				}
+				if len(res.findings) > 0 {
+					outputClean = false
 					resp.Header.Set("X-Tamga-Output-Findings", strconv.Itoa(len(res.findings)))
 					resp.Header.Set("X-Tamga-Output-Action", string(res.action))
 					if res.action == policy.ActionBlock {
@@ -863,6 +860,28 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 					// Publish the output scan finding into the event bus.
 					go publishOutputEvent(ctx, cfg, requestID, provider, res.findings, res.action, res.elapsed)
 				}
+			}
+			// Phase 3C — cache successful responses for later exact-match hits.
+			// This runs after the output scan on purpose: a cache hit is served
+			// without rescanning, so only a response that produced no output
+			// findings (and no canary leak) may be stored. Never cache while
+			// vaulting: respBody still holds placeholders, and caching them
+			// would serve tokenized bodies on later hits.
+			if respBuffered && outputClean && !vaultActive && cfg.Cache != nil && pol != nil && pol.Cache != nil && pol.Cache.Enabled &&
+				resp.StatusCode == http.StatusOK {
+				ttl := time.Duration(pol.Cache.TTLSeconds) * time.Second
+				if ttl <= 0 {
+					ttl = 5 * time.Minute
+				}
+				cfg.Cache.Set(&cache.Entry{
+					Key:         cache.KeyForOrg(orgIDForRequest(r, cfg), provider, extractModelFromBody(body), body),
+					Provider:    provider,
+					Model:       extractModelFromBody(body),
+					Body:        append([]byte(nil), respBody...),
+					ContentType: resp.Header.Get("Content-Type"),
+					StoredAt:    time.Now().UTC(),
+					TTL:         ttl,
+				})
 			}
 			// Vault restore: swap placeholders back to originals before the
 			// response reaches the client. Skipped when an output-policy block

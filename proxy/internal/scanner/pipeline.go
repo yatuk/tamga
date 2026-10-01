@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
@@ -197,11 +198,12 @@ func (p *Pipeline) scanAsync(ctx context.Context, content []byte) ([]Finding, er
 	var wg sync.WaitGroup
 	wg.Add(len(entries))
 	var all []Finding
+	var deg degradation
 
 	for _, entry := range entries {
 		go func(e ScannerEntry) {
 			defer wg.Done()
-			defer recoverScanPanic(e.Scanner.Name())
+			defer recoverScanPanic(e.Scanner.Name(), &deg)
 
 			sctx, sp := telemetry.Tracer().Start(ctx, telemetry.SpanNameForScanner(e.Scanner.Name()),
 				trace.WithAttributes(attribute.Int("content.size_bytes", len(content))),
@@ -210,6 +212,7 @@ func (p *Pipeline) scanAsync(ctx context.Context, content []byte) ([]Finding, er
 			sp.SetAttributes(attribute.Int("findings.count", len(findings)))
 			if err != nil {
 				sp.RecordError(err)
+				deg.note(e.Scanner.Name(), DegradedError, err)
 			}
 			sp.End()
 
@@ -225,7 +228,7 @@ func (p *Pipeline) scanAsync(ctx context.Context, content []byte) ([]Finding, er
 
 	wg.Wait()
 	stampVersions(all)
-	return all, nil
+	return all, deg.result()
 }
 
 // scanAdaptive is the original hybrid strategy: fast scanners run
@@ -239,16 +242,9 @@ func (p *Pipeline) scanAdaptive(ctx context.Context, content []byte) ([]Finding,
 
 	// Phase 1 — Fast scanners (sequential, no goroutine overhead).
 	var all []Finding
+	var deg degradation
 	for _, entry := range p.fast {
-		sctx, sp := telemetry.Tracer().Start(ctx, telemetry.SpanNameForScanner(entry.Scanner.Name()),
-			trace.WithAttributes(attribute.Int("content.size_bytes", len(content))),
-		)
-		findings, err := scanEntry(sctx, entry.Scanner, content, p.cfg.RequestCtx)
-		sp.SetAttributes(attribute.Int("findings.count", len(findings)))
-		if err != nil {
-			sp.RecordError(err)
-		}
-		sp.End()
+		findings := p.scanFast(ctx, entry, content, &deg)
 		if len(findings) > 0 {
 			incDetectionCount(entry.Scanner.Name(), int64(len(findings)))
 		}
@@ -258,7 +254,7 @@ func (p *Pipeline) scanAdaptive(ctx context.Context, content []byte) ([]Finding,
 	// Phase 2 — Slow scanners (parallel goroutines).
 	if len(p.slow) == 0 {
 		stampVersions(all)
-		return all, nil
+		return all, deg.result()
 	}
 
 	var mu sync.Mutex
@@ -268,7 +264,7 @@ func (p *Pipeline) scanAdaptive(ctx context.Context, content []byte) ([]Finding,
 	for _, entry := range p.slow {
 		go func(e ScannerEntry) {
 			defer wg.Done()
-			defer recoverScanPanic(e.Scanner.Name())
+			defer recoverScanPanic(e.Scanner.Name(), &deg)
 
 			sctx, sp := telemetry.Tracer().Start(ctx, telemetry.SpanNameForScanner(e.Scanner.Name()),
 				trace.WithAttributes(attribute.Int("content.size_bytes", len(content))),
@@ -277,6 +273,7 @@ func (p *Pipeline) scanAdaptive(ctx context.Context, content []byte) ([]Finding,
 			sp.SetAttributes(attribute.Int("findings.count", len(findings)))
 			if err != nil {
 				sp.RecordError(err)
+				deg.note(e.Scanner.Name(), DegradedError, err)
 			}
 			sp.End()
 
@@ -292,7 +289,25 @@ func (p *Pipeline) scanAdaptive(ctx context.Context, content []byte) ([]Finding,
 
 	wg.Wait()
 	stampVersions(all)
-	return all, nil
+	return all, deg.result()
+}
+
+// scanFast runs one fast scanner in the calling goroutine. A panic is
+// contained here so it cannot take the request handler down with it.
+func (p *Pipeline) scanFast(ctx context.Context, entry ScannerEntry, content []byte, deg *degradation) (findings []Finding) {
+	defer recoverScanPanic(entry.Scanner.Name(), deg)
+
+	sctx, sp := telemetry.Tracer().Start(ctx, telemetry.SpanNameForScanner(entry.Scanner.Name()),
+		trace.WithAttributes(attribute.Int("content.size_bytes", len(content))),
+	)
+	defer sp.End()
+	findings, err := scanEntry(sctx, entry.Scanner, content, p.cfg.RequestCtx)
+	sp.SetAttributes(attribute.Int("findings.count", len(findings)))
+	if err != nil {
+		sp.RecordError(err)
+		deg.note(entry.Scanner.Name(), DegradedError, err)
+	}
+	return findings
 }
 
 // allEntries returns fast + slow scanners concatenated (sync/async modes
@@ -322,15 +337,12 @@ func (p *Pipeline) scanWorkerPool(ctx context.Context, content []byte) ([]Findin
 	entries := p.allEntries()
 	resultCh := make(chan ScanResult, len(entries))
 	submitted := 0
+	var deg degradation
 
 	for _, entry := range entries {
 		// Load shedding: skip non-critical scanners under overload.
 		if p.shedder != nil && !p.shedder.ShouldRun(entry.Scanner.Name()) {
-			resultCh <- ScanResult{
-				Scanner: entry.Scanner.Name(),
-				Error:   ErrQueueFull,
-			}
-			submitted++
+			deg.note(entry.Scanner.Name(), DegradedLoadShed, nil)
 			continue
 		}
 
@@ -342,12 +354,10 @@ func (p *Pipeline) scanWorkerPool(ctx context.Context, content []byte) ([]Findin
 			ResultCh: resultCh,
 		})
 		if err == ErrQueueFull {
-			// Queue full → skip this scanner silently (fail-open).
-			// Other scanners still produce results.
-			resultCh <- ScanResult{
-				Scanner: entry.Scanner.Name(),
-				Error:   err,
-			}
+			// Queue full → this scanner is skipped (fail-open); the others
+			// still produce results.
+			deg.note(entry.Scanner.Name(), DegradedQueueFull, nil)
+			continue
 		}
 		submitted++
 	}
@@ -356,6 +366,7 @@ func (p *Pipeline) scanWorkerPool(ctx context.Context, content []byte) ([]Findin
 	for i := 0; i < submitted; i++ {
 		r := <-resultCh
 		if r.Error != nil {
+			deg.note(r.Scanner, DegradedError, r.Error)
 			continue
 		}
 		if len(r.Findings) > 0 {
@@ -365,13 +376,58 @@ func (p *Pipeline) scanWorkerPool(ctx context.Context, content []byte) ([]Findin
 	}
 
 	stampVersions(all)
-	return all, nil
+	return all, deg.result()
 }
 
-// recoverScanPanic logs a scanner panic without killing the proxy.
-func recoverScanPanic(name string) {
+// degradation records scanners that did not report during one pipeline run.
+// The pipeline keeps going (other scanners' findings still count), but the
+// loss of coverage is logged, counted and returned to the caller instead of
+// being swallowed.
+type degradation struct {
+	mu  sync.Mutex
+	err error
+}
+
+func (d *degradation) note(scannerName, reason string, cause error) {
+	RecordDegraded(reason)
+	// Shedding happens per scanner per request while the pool is saturated;
+	// logging each one at warn would add load exactly when there is none to
+	// spare. The counter carries that signal instead.
+	ev := log.Warn()
+	switch reason {
+	case DegradedPanic:
+		ev = log.Error()
+	case DegradedLoadShed, DegradedQueueFull:
+		ev = log.Debug()
+	}
+	ev = ev.Str("component", "scanner").Str("scanner", scannerName).Str("reason", reason)
+	if cause != nil {
+		ev = ev.Err(cause)
+	}
+	ev.Msg("scanner did not report; request evaluated with reduced coverage")
+
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.err == nil {
+		if cause != nil {
+			d.err = fmt.Errorf("%w: %s (%s): %v", ErrScanDegraded, scannerName, reason, cause)
+		} else {
+			d.err = fmt.Errorf("%w: %s (%s)", ErrScanDegraded, scannerName, reason)
+		}
+	}
+}
+
+func (d *degradation) result() error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.err
+}
+
+// recoverScanPanic keeps a panicking scanner from killing the proxy and
+// reports it as a degraded scan.
+func recoverScanPanic(name string, d *degradation) {
 	if r := recover(); r != nil {
-		_ = fmt.Errorf("scanner %s panicked: %v", name, r)
+		d.note(name, DegradedPanic, fmt.Errorf("panic: %v", r))
 	}
 }
 
