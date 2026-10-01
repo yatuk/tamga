@@ -7,7 +7,7 @@
     "pii": { "total": 17, "detected": 16, "bypassed": 1 },
     "injection": { "total": 22, "detected": 17, "bypassed": 5 },
     "secret": { "total": 12, "detected": 12, "bypassed": 0 },
-    "policy": { "total": 11, "detected": 9, "bypassed": 1 },
+    "policy": { "total": 11, "detected": 6, "bypassed": 1 },
     "operator_state": { "total": 7, "detected": 6, "bypassed": 1 },
     "total_bypassed": 8
   },

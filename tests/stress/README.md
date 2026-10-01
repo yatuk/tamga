@@ -47,11 +47,11 @@ detection metric, not an enforcement one: a finding that the policy lets
 through still counts. Enforcement of the default policy is covered by
 `proxy/internal/policy/default_policy_test.go`.
 
-The policy category contains 4 control requests that are expected to pass.
-Three of them call admin endpoints with `x-api-key` instead of
-`X-Tamga-Admin-Key`, get a 401, and are reported as "detected". That inflates
-the category's detected count by 3 but does not affect the bypass count the
-regression gate compares.
+The policy category contains 4 control requests that are expected to pass
+(the health endpoint, and three admin endpoints called with the admin key).
+They are not counted as detections; a control that does not return 200 is
+reported under `controls_failed`. The suite starts the stack with a known
+`TAMGA_ADMIN_KEY` so the controls can authenticate.
 
 ## Options
 

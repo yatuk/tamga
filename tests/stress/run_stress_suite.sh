@@ -75,6 +75,10 @@ export STRESS_POLICY_DIR
 # none of them is forwarded to a real provider; scanning and policy still run.
 export TAMGA_MOCK_UPSTREAM="${TAMGA_MOCK_UPSTREAM:-true}"
 
+# The policy suite calls management endpoints as an admin. Give the stack and
+# the scripts the same key; a shell variable takes precedence over --env-file.
+export TAMGA_ADMIN_KEY="${TAMGA_ADMIN_KEY:-stress-suite-admin-key}"
+
 cleanup() {
     local exit_code=$?
     log "Cleaning up... (exit=$exit_code)"
