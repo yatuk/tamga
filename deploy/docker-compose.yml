@@ -8,9 +8,12 @@
 # - OTLP sample rate is set to 5% for production.
 
 services:
-  # Standalone scanner service — optional. When TAMGA_SCANNER_SERVICE_ADDR is set,
-  # the proxy delegates all scanning to this service via gRPC instead of running
-  # scanners inline. Leave commented out for monolith mode.
+  # Standalone scanner service — optional. By default the proxy scans in-process
+  # and this service sits idle. Set TAMGA_SCANNER_SERVICE_ADDR=scanner-service:50052
+  # in .env to delegate the stateless scanners (PII, secrets, injection,
+  # jailbreak, moderation) to it over gRPC. Scanners that need the live policy or
+  # the request (custom entities, competitors, operator_state) always run in the
+  # proxy, and a gRPC failure falls back to in-process scanning.
   scanner-service:
     build:
       context: ../proxy
@@ -37,8 +40,11 @@ services:
       - TAMGA_DB_URL=postgresql://${POSTGRES_USER:-tamga}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-tamga}
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
       - TAMGA_NATS_URL=nats://nats:4222
-      - TAMGA_SCANNER_SERVICE_ADDR=scanner-service:50052
+      - TAMGA_SCANNER_SERVICE_ADDR=${TAMGA_SCANNER_SERVICE_ADDR:-}
       - TAMGA_ADMIN_KEY=${TAMGA_ADMIN_KEY}
+      # Demo / test mode: answer with a canned response instead of calling the
+      # provider. Scanning and policy still run. Off unless set in .env.
+      - TAMGA_MOCK_UPSTREAM=${TAMGA_MOCK_UPSTREAM:-false}
       - TAMGA_ORG_ID=${TAMGA_ORG_ID:-}
       - TAMGA_CORS_ORIGIN=${TAMGA_CORS_ORIGIN:-http://localhost:3000}
       - TAMGA_OTLP_ENDPOINT=http://jaeger:4318

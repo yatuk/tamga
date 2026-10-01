@@ -144,6 +144,14 @@ type HandlerConfig struct {
 	// false, the local Registry is used instead — this is the default and
 	// preserves backward compatibility.
 	ScannerClient *scanner.GRPCScannerClient
+	// ProxyBoundRegistry holds the scanners that cannot be delegated to the
+	// scanner-service because they depend on state only the proxy has: the
+	// live policy (custom entities, competitors), runtime patterns, and the
+	// per-request headers and audit-log projection behind operator_state.
+	// When ScannerClient is in use these still run in-process and their
+	// findings are merged with the remote ones. Unused otherwise — Registry
+	// already contains them.
+	ProxyBoundRegistry *scanner.Registry
 	// VaultStore persists reversible PII tokenization mappings (encrypted at
 	// rest). Nil when the vault feature is not configured; the handler also
 	// keeps the mapping in a request-scoped variable, so same-process
@@ -448,6 +456,12 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 		if err != nil {
 			logger.Warn().Err(err).Msg("gRPC scanner failed, falling back to local registry")
 			findings, err = cfg.Registry.ScanAllWithConfig(scanCtx, body, pipelineCfg)
+		} else if cfg.ProxyBoundRegistry != nil && cfg.ProxyBoundRegistry.Count() > 0 {
+			// The remote service only runs the stateless scanners. Policy- and
+			// request-bound scanners run here, with the request context.
+			local, localErr := cfg.ProxyBoundRegistry.ScanAllWithConfig(scanCtx, body, pipelineCfg)
+			findings = append(findings, local...)
+			err = localErr
 		}
 	} else {
 		findings, err = cfg.Registry.ScanAllWithConfig(scanCtx, body, pipelineCfg)

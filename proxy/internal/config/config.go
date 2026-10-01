@@ -110,7 +110,9 @@ type Config struct {
 	// Default empty (disabled). Set to e.g. "nats://localhost:4222" to enable.
 	NATSURL string
 	// ScannerServiceAddr is the gRPC address of the scanner service.
-	// Default empty (use local Registry). Set to e.g. "scanner-service:50052".
+	// Default empty (scan in-process). Set to e.g. "scanner-service:50052" to
+	// delegate the stateless scanners; policy- and request-bound scanners
+	// (custom entities, competitors, operator_state) still run in the proxy.
 	ScannerServiceAddr string
 	// DevMode bypasses admin auth (both AdminKey and JWTSecret empty) for
 	// local development convenience. Set via TAMGA_DEV_MODE=true.

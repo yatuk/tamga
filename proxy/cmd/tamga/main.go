@@ -438,9 +438,16 @@ func main() {
 		}
 		return out
 	}
+	// proxyBoundRegistry collects the scanners that depend on proxy-side state
+	// (live policy, runtime patterns, request headers) and therefore keep
+	// running in-process when scanning is delegated to the scanner-service.
+	proxyBoundRegistry := scanner.NewRegistry()
+
 	customScanner = scanner.NewCustomScanner(getCustomSpecs)
 	registry.Register(customScanner)
 	registry.SetSpeed("custom", scanner.SpeedFast)
+	proxyBoundRegistry.Register(customScanner)
+	proxyBoundRegistry.SetSpeed("custom", scanner.SpeedFast)
 
 	getCompetitorSpecs := func() []scanner.CompetitorSpec {
 		p := policyStore.GetPolicy()
@@ -462,6 +469,8 @@ func main() {
 	competitorScanner = scanner.NewCompetitorScanner(getCompetitorSpecs)
 	registry.Register(competitorScanner)
 	registry.SetSpeed("competitor", scanner.SpeedFast)
+	proxyBoundRegistry.Register(competitorScanner)
+	proxyBoundRegistry.SetSpeed("competitor", scanner.SpeedFast)
 
 	// Operator-state scanner (jugeni-contracts v1). Enabled when at least one
 	// audit-log path is configured via TAMGA_OPERATOR_STATE_* env vars.
@@ -506,6 +515,8 @@ func main() {
 
 		registry.Register(opScanner)
 		registry.SetSpeed("operator_state", scanner.SpeedFast)
+		proxyBoundRegistry.Register(opScanner)
+		proxyBoundRegistry.SetSpeed("operator_state", scanner.SpeedFast)
 		decisions, notes := opProjection.Stats()
 		log.Info().
 			Int("decisions", decisions).
@@ -591,8 +602,13 @@ func main() {
 			Int("workers", cfg.ScannerWorkerPoolSize).
 			Int("queue_size", queueSize).
 			Msg("scanner worker pool started")
+	}
 
-		// Remote scanner service (gRPC client). Fail-open: falls back to local Registry.
+	// Remote scanner service (gRPC client), enabled by TAMGA_SCANNER_SERVICE_ADDR
+	// alone. The stateless scanners are delegated; proxy-bound scanners keep
+	// running in-process (see proxyBoundRegistry). Fail-open: a gRPC error
+	// falls back to the full local Registry for that request.
+	if cfg.ScannerServiceAddr != "" {
 		var scErr error
 		scannerClient, scErr = scanner.NewGRPCScannerClient(context.Background(),
 			scanner.GRPCScannerConfig{Addr: cfg.ScannerServiceAddr})
@@ -601,8 +617,13 @@ func main() {
 				Msg("scanner gRPC client unavailable -- using local scanner registry")
 		} else if scannerClient != nil {
 			defer scannerClient.Close()
+			log.Info().
+				Str("addr", cfg.ScannerServiceAddr).
+				Int("in_process_scanners", proxyBoundRegistry.Count()).
+				Msg("scanning delegated to scanner-service; policy- and request-bound scanners stay in-process")
 		}
-
+	} else {
+		log.Info().Msg("scanning in-process (TAMGA_SCANNER_SERVICE_ADDR not set)")
 	}
 
 	root := http.NewServeMux()
@@ -681,6 +702,7 @@ func main() {
 		TierEnforcer:       tierEnforcer, // nil-safe — falls back to hardcoded map
 		ScannerPool:        scannerPool,
 		ScannerClient:      scannerClient,
+		ProxyBoundRegistry: proxyBoundRegistry,
 		VaultStore:         vaultStore,
 	})
 
