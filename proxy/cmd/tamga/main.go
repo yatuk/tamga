@@ -105,6 +105,7 @@ func main() {
 	}
 	policyStore := policy.NewPolicyStore(pol)
 	log.Info().Str("policy", pol.Name).Msg("policy loaded")
+	policy.LogCoverageGaps(pol)
 
 	// Declared here so the policy watcher callback can call Refresh();
 	// assigned later when getCustomSpecs + patternStore are ready.

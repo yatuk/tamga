@@ -26,7 +26,7 @@ func TestPolicyValidate_ValidYAML(t *testing.T) {
 version: "1.0"
 rules:
   pii:
-    enabled: true
+    action: REDACT
 output_rules:
   enabled: false
 `
@@ -74,7 +74,7 @@ func TestPolicyValidate_JSONWrapper(t *testing.T) {
 	ts := httptest.NewServer(testMux(cfg))
 	defer ts.Close()
 
-	jsonBody := `{"yaml":"name: test\nversion: \"1.0\"\nrules:\n  pii:\n    enabled: true"}`
+	jsonBody := `{"yaml":"name: test\nversion: \"1.0\"\nrules:\n  pii:\n    action: REDACT"}`
 	req, _ := http.NewRequest("POST", ts.URL+"/api/v1/policies/validate", strings.NewReader(jsonBody))
 	adminHeaders(cfg.AdminKey)(req)
 	req.Header.Set("Content-Type", "application/json")

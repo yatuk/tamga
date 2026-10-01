@@ -88,6 +88,7 @@ func (cfg Config) handlePolicyValidate(w http.ResponseWriter, r *http.Request) {
 		writePolicyValidationFailed(w, issues)
 		return
 	}
+	issues = append(issues, policy.CoverageGaps(pol)...)
 	warnings := make([]map[string]interface{}, 0)
 	for _, i := range issues {
 		if i.Severity != "warning" {

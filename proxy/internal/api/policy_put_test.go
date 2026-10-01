@@ -157,7 +157,7 @@ func TestPolicyPut_JSONWrapper(t *testing.T) {
 	ts := httptest.NewServer(testMux(cfg))
 	defer ts.Close()
 
-	jsonBody := `{"yaml":"version: \"1.0\"\nname: from-json-put\nrules:\n  pii:\n    enabled: true"}`
+	jsonBody := `{"yaml":"version: \"1.0\"\nname: from-json-put\nrules:\n  pii:\n    action: REDACT"}`
 	req, _ := http.NewRequest("PUT", ts.URL+"/api/v1/policies", strings.NewReader(jsonBody))
 	req.Header.Set("X-Tamga-Admin-Key", "admin")
 	req.Header.Set("Content-Type", "application/json")

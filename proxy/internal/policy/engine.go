@@ -1,7 +1,10 @@
 package policy
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"sync/atomic"
@@ -512,22 +515,21 @@ func LoadFromFile(path string) (*Policy, error) {
 		return nil, fmt.Errorf("reading policy file: %w", err)
 	}
 
-	var p Policy
-	if err := yaml.Unmarshal(data, &p); err != nil {
-		return nil, fmt.Errorf("parsing policy YAML: %w", err)
-	}
-
-	if p.Version == "" {
-		p.Version = "1.0"
-	}
-
-	return &p, nil
+	return LoadFromBytes(data)
 }
 
 // LoadFromBytes parses policy YAML from memory (tests and embedded configs).
+//
+// Parsing is strict: a key that does not map to a known policy field is an
+// error. A mis-indented block (e.g. rules nested under an unrelated section)
+// would otherwise be dropped silently and the policy would load without the
+// enforcement the operator wrote down.
 func LoadFromBytes(data []byte) (*Policy, error) {
 	var p Policy
-	if err := yaml.Unmarshal(data, &p); err != nil {
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(true)
+	// io.EOF means an empty document, which yaml.Unmarshal also accepted.
+	if err := dec.Decode(&p); err != nil && !errors.Is(err, io.EOF) {
 		return nil, fmt.Errorf("parsing policy YAML: %w", err)
 	}
 
@@ -571,6 +573,7 @@ func (s *PolicyStore) Reload(path string) error {
 		return err
 	}
 	s.p.Store(newP)
+	LogCoverageGaps(newP)
 	return nil
 }
 
@@ -771,8 +774,9 @@ func (p *Policy) ProviderAllowed(provider string) bool {
 	if p.Providers == nil {
 		return true
 	}
+	want := CanonicalProvider(provider)
 	for _, b := range p.Providers.Blocked {
-		if strings.EqualFold(b, provider) {
+		if CanonicalProvider(b) == want {
 			return false
 		}
 	}
@@ -780,9 +784,34 @@ func (p *Policy) ProviderAllowed(provider string) bool {
 		return true
 	}
 	for _, a := range p.Providers.Allowed {
-		if strings.EqualFold(a, provider) {
+		if CanonicalProvider(a) == want {
 			return true
 		}
 	}
 	return false
+}
+
+// providerAliases maps the vendor-style names used in older policies and docs
+// to the route names the proxy actually dispatches on (see proxy.RegisterRoutes).
+var providerAliases = map[string]string{
+	"azure_openai":  "azure",
+	"azure-openai":  "azure",
+	"google_vertex": "gemini",
+	"google-vertex": "gemini",
+	"vertex":        "gemini",
+	"google":        "gemini",
+	"aws_bedrock":   "bedrock",
+	"aws-bedrock":   "bedrock",
+	"ollama":        "local",
+}
+
+// CanonicalProvider normalizes a provider name from policy YAML or a route to
+// the proxy's route name, so "azure_openai" in an allowlist matches the
+// "/azure/" route.
+func CanonicalProvider(name string) string {
+	n := strings.ToLower(strings.TrimSpace(name))
+	if canon, ok := providerAliases[n]; ok {
+		return canon
+	}
+	return n
 }
