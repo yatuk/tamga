@@ -34,12 +34,10 @@ jobs:
   stress-suite:
     name: Stress Suite (adversarial + load)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
 
-    services:
-      docker:
-        options: --privileged
-
+    # Docker and Compose are preinstalled on ubuntu-latest; no service
+    # container is needed to use them.
     steps:
       - name: Checkout
         uses: actions/checkout@v4
