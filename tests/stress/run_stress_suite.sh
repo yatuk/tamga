@@ -28,7 +28,7 @@ BASELINE_FILE="$SCRIPT_DIR/baseline.json"
 TIMESTAMP="$(date '+%Y%m%d-%H%M%S')"
 RESULTS_DIR="$RESULTS_BASE/$TIMESTAMP"
 
-HEALTH_URL="${TAMGA_HEALTH_URL:-http://localhost:8443/api/v1/health}"
+HEALTH_URL="${TAMGA_HEALTH_URL:-http://localhost:8443/health}"
 HEALTH_TIMEOUT="${TAMGA_HEALTH_TIMEOUT:-60}"
 K6_BIN="${K6_BIN:-k6}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
@@ -51,11 +51,35 @@ ok()      { _green "  ✓ $*"; }
 fail()    { _red "  ✗ $*"; }
 warn()    { _yellow "  ⚠ $*"; }
 
+# Compose resolves ${VAR} from the shell and from a .env next to the compose
+# file — not from the repo-root .env that `cp .env.example .env` creates. Pass
+# it explicitly when present; CI has none and supplies the variables itself.
+COMPOSE=(docker compose)
+if [ -f "$PROJECT_ROOT/.env" ]; then
+    COMPOSE+=(--env-file "$PROJECT_ROOT/.env")
+fi
+COMPOSE+=(-f "$DOCKER_COMPOSE_FILE" -f "$SCRIPT_DIR/docker-compose.stress.yml")
+
+# native_path turns an MSYS path (/c/...) into one that non-MSYS programs
+# understand (C:/...). A no-op everywhere except Git Bash on Windows.
+native_path() {
+    if command -v cygpath &>/dev/null; then cygpath -m "$1"; else printf '%s' "$1"; fi
+}
+
+# docker-compose.stress.yml mounts this directory as the proxy's policy dir;
+# the policy itself is generated below, once the results dir exists.
+STRESS_POLICY_DIR="$(native_path "$RESULTS_DIR")/policy"
+export STRESS_POLICY_DIR
+
+# The suite sends adversarial payloads through the proxy. Mock the upstream so
+# none of them is forwarded to a real provider; scanning and policy still run.
+export TAMGA_MOCK_UPSTREAM="${TAMGA_MOCK_UPSTREAM:-true}"
+
 cleanup() {
     local exit_code=$?
     log "Cleaning up... (exit=$exit_code)"
     cd "$PROJECT_ROOT"
-    docker compose -f "$DOCKER_COMPOSE_FILE" down --timeout 30 2>/dev/null || true
+    "${COMPOSE[@]}" down --timeout 30 2>/dev/null || true
     if [ $exit_code -eq 0 ]; then
         _green "Stress suite complete — exit 0"
     elif [ $exit_code -eq 1 ]; then
@@ -106,11 +130,19 @@ fi
 
 mkdir -p "$RESULTS_DIR"
 
+# Derive the suite's policy from the shipped default (adds the operator_state
+# authorization allowlist the adversarial vectors expect).
+"$PYTHON_BIN" "$SCRIPT_DIR/scripts/make_stress_policy.py" \
+    "$PROJECT_ROOT/proxy/tamga-policy.yaml" "$RESULTS_DIR/policy/tamga-policy.yaml" || {
+    _red "could not generate the stress policy"
+    exit 2
+}
+
 # ── infrastructure ──────────────────────────────────────────────────────────
 
 log "Starting Tamga stack..."
 cd "$PROJECT_ROOT"
-docker compose -f "$DOCKER_COMPOSE_FILE" up -d --wait 2>&1 | _dim
+"${COMPOSE[@]}" up -d --wait 2>&1 | _dim
 
 # Wait for proxy health
 log "Waiting for proxy health ($HEALTH_TIMEOUT seconds)..."
@@ -151,10 +183,11 @@ if ! $SKIP_ADVERSARIAL; then
     done
 
     # Merge adversarial results into a single file
+    RESULTS_DIR_NATIVE="$(native_path "$RESULTS_DIR")"
     "$PYTHON_BIN" -c "
 import json, pathlib
 results = {}
-for f in sorted(pathlib.Path('$RESULTS_DIR').glob('adversarial_*.json')):
+for f in sorted(pathlib.Path('$RESULTS_DIR_NATIVE').glob('adversarial_*.json')):
     data = json.loads(f.read_text())
     cat = data.get('category', f.stem.replace('adversarial_', ''))
     results[cat] = {
@@ -164,7 +197,7 @@ for f in sorted(pathlib.Path('$RESULTS_DIR').glob('adversarial_*.json')):
     }
 total_bypassed = sum(r['bypassed'] for r in results.values())
 results['total_bypassed'] = total_bypassed
-with open('$RESULTS_DIR/adversarial_results.json', 'w') as out:
+with open('$RESULTS_DIR_NATIVE/adversarial_results.json', 'w') as out:
     json.dump(results, out, indent=2)
 print(f'Adversarial complete: {total_bypassed} total bypassed across {len(results)-1} categories')
 "
@@ -185,31 +218,40 @@ if ! $SKIP_LOAD; then
             continue
         fi
         log "  → ${rps} RPS baseline"
-        TAMGA_BASE_URL="$PROXY_URL" TAMGA_API_KEY="$API_KEY" \
+        # k6 exits non-zero when one of the script's own thresholds is
+        # breached. That is a result, not an infrastructure failure: keep
+        # going so the regression check below can report every level.
+        if TAMGA_BASE_URL="$PROXY_URL" TAMGA_API_KEY="$API_KEY" \
             "$K6_BIN" run --summary-export="$RESULTS_DIR/load_test_${rps}rps.json" \
-            "$script_file" 2>&1 | _dim
-        ok "${rps} RPS complete"
+            "$script_file" 2>&1 | _dim; then
+            ok "${rps} RPS complete"
+        else
+            warn "${rps} RPS: k6 thresholds breached"
+        fi
     done
 
     # Workload mix (short version)
     workload_file="$K6_DIR/workload_mix.js"
     if [ -f "$workload_file" ]; then
         log "  → workload_mix (${WORKLOAD_DURATION})"
-        TAMGA_BASE_URL="$PROXY_URL" TAMGA_API_KEY="$API_KEY" \
+        if TAMGA_BASE_URL="$PROXY_URL" TAMGA_API_KEY="$API_KEY" \
             "$K6_BIN" run --duration "$WORKLOAD_DURATION" \
             --summary-export="$RESULTS_DIR/workload_mix.json" \
-            "$workload_file" 2>&1 | _dim
-        ok "workload_mix complete"
+            "$workload_file" 2>&1 | _dim; then
+            ok "workload_mix complete"
+        else
+            warn "workload_mix: k6 thresholds breached"
+        fi
     fi
 fi
 
 # ── regression check ────────────────────────────────────────────────────────
 
 log "Running regression check..."
+REGRESSION_EXIT=0
 "$PYTHON_BIN" "$SCRIPT_DIR/check_regression.py" \
     --results-dir "$RESULTS_DIR" \
-    --baseline "$BASELINE_FILE"
-REGRESSION_EXIT=$?
+    --baseline "$BASELINE_FILE" || REGRESSION_EXIT=$?
 
 # ── done ────────────────────────────────────────────────────────────────────
 

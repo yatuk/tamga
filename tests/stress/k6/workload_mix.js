@@ -1,6 +1,12 @@
 import http from 'k6/http';
 import { check } from 'k6';
 
+// About 30% of this mix is PII, injection or secrets, which the proxy is
+// supposed to block. A 403 is therefore a correct response here, not a failed
+// request — without this, http_req_failed trips its threshold exactly when
+// enforcement works.
+http.setResponseCallback(http.expectedStatuses(200, 403));
+
 // Realistic workload: 70% clean, 20% PII, 8% injection, 2% secret leak
 const CLEAN = [
   'What is 2+2?',
@@ -83,7 +89,9 @@ export default function () {
   }), {
     headers: {
       'Content-Type': 'application/json',
-      'x-api-key': API_KEY,
+      // One key per request: the default policy rate-limits per key (60/min), and
+      // a load test on a single key would measure the limiter's 429s, not the proxy.
+      'x-api-key': `${API_KEY}-${__VU}-${__ITER}`,
     },
   });
 

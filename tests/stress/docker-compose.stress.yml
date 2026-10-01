@@ -1,0 +1,22 @@
+# Stress-suite overrides, layered on top of deploy/docker-compose.yml by
+# run_stress_suite.sh / .ps1. Relative paths resolve against deploy/.
+#
+# The adversarial suite has preconditions the stock stack does not meet:
+#
+#   - operator_state vectors need the scanner enabled (audit-log fixtures) and
+#     an authorization allowlist in the policy;
+#   - the baseline is defined for in-process scanning, so delegation to
+#     scanner-service is switched off here even if .env turns it on.
+#
+# STRESS_POLICY_DIR is a directory holding tamga-policy.yaml, generated from the
+# shipped default by scripts/make_stress_policy.py so the two cannot drift.
+services:
+  proxy:
+    environment:
+      - TAMGA_SCANNER_SERVICE_ADDR=
+      - TAMGA_POLICY_PATH=/app/stress/tamga-policy.yaml
+      - TAMGA_OPERATOR_STATE_DECISIONS_PATH=/app/testdata/operator_state/decisions.jsonl
+      - TAMGA_OPERATOR_STATE_NOTES_PATH=/app/testdata/operator_state/notes.jsonl
+    volumes:
+      - ../proxy/testdata/operator_state:/app/testdata/operator_state:ro
+      - ${STRESS_POLICY_DIR:?set by run_stress_suite}:/app/stress:ro

@@ -63,8 +63,8 @@ npm run dev
 ### Running the full stack
 
 ```bash
-cd deploy
-docker compose up -d
+# from the repo root; --env-file is required (see README Quick Start)
+docker compose --env-file .env -f deploy/docker-compose.yml up -d
 ```
 
 ## Development Workflow

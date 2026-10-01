@@ -86,6 +86,13 @@ jobs:
           ./tests/stress/run_stress_suite.sh
         env:
           TAMGA_HEALTH_TIMEOUT: "90"
+          # The runner has no .env. Compose needs these to start the stack;
+          # they are throwaway values for an ephemeral CI database.
+          POSTGRES_PASSWORD: ci-only-postgres
+          REDIS_PASSWORD: ci-only-redis
+          TAMGA_ADMIN_KEY: ci-only-admin-key
+          # Scan and enforce, but never forward test vectors to a provider.
+          TAMGA_MOCK_UPSTREAM: "true"
 
       - name: Upload results artifact
         if: always()

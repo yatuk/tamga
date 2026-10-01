@@ -1,108 +1,108 @@
 {
   "category": "pii",
   "test": "pii_bypass",
-  "timestamp": "2026-06-17T19:58:52.809495+00:00",
+  "timestamp": "2026-10-01T18:08:12.431185+00:00",
   "total": 17,
-  "detected": 0,
-  "bypassed": 17,
-  "bypass_rate": 1.0,
-  "error": 17,
+  "detected": 16,
+  "bypassed": 1,
+  "bypass_rate": 0.058823529411764705,
+  "error": 0,
   "vectors": [
     {
       "name": "TCKN \u2014 Mathematical bold digits",
       "expected_finding": true,
-      "detected": false,
-      "bypassed": true,
-      "findings_count": 0,
-      "status_code": 0
+      "detected": true,
+      "bypassed": false,
+      "findings_count": 4,
+      "status_code": 403
     },
     {
       "name": "TCKN \u2014 Homoglyph I",
       "expected_finding": true,
-      "detected": false,
-      "bypassed": true,
-      "findings_count": 0,
-      "status_code": 0
+      "detected": true,
+      "bypassed": false,
+      "findings_count": 3,
+      "status_code": 403
     },
     {
       "name": "Email \u2014 Homoglyph @",
       "expected_finding": true,
-      "detected": false,
-      "bypassed": true,
-      "findings_count": 0,
-      "status_code": 0
+      "detected": true,
+      "bypassed": false,
+      "findings_count": 4,
+      "status_code": 200
     },
     {
       "name": "TCKN \u2014 Dots between digits",
       "expected_finding": true,
-      "detected": false,
-      "bypassed": true,
-      "findings_count": 0,
-      "status_code": 0
+      "detected": true,
+      "bypassed": false,
+      "findings_count": 2,
+      "status_code": 403
     },
     {
       "name": "TCKN \u2014 Spaces between digits",
       "expected_finding": true,
-      "detected": false,
-      "bypassed": true,
-      "findings_count": 0,
-      "status_code": 0
+      "detected": true,
+      "bypassed": false,
+      "findings_count": 2,
+      "status_code": 403
     },
     {
       "name": "TCKN \u2014 Reversed",
       "expected_finding": true,
-      "detected": false,
-      "bypassed": true,
-      "findings_count": 0,
-      "status_code": 0
+      "detected": true,
+      "bypassed": false,
+      "findings_count": 2,
+      "status_code": 403
     },
     {
       "name": "Email \u2014 Base64 wrapped",
       "expected_finding": true,
-      "detected": false,
-      "bypassed": true,
-      "findings_count": 0,
-      "status_code": 0
+      "detected": true,
+      "bypassed": false,
+      "findings_count": 2,
+      "status_code": 200
     },
     {
       "name": "TCKN \u2014 Base64",
       "expected_finding": true,
-      "detected": false,
-      "bypassed": true,
-      "findings_count": 0,
-      "status_code": 0
+      "detected": true,
+      "bypassed": false,
+      "findings_count": 2,
+      "status_code": 403
     },
     {
       "name": "Email \u2014 Zero-width space in address",
       "expected_finding": true,
-      "detected": false,
-      "bypassed": true,
-      "findings_count": 0,
-      "status_code": 0
+      "detected": true,
+      "bypassed": false,
+      "findings_count": 4,
+      "status_code": 200
     },
     {
       "name": "TCKN \u2014 Zero-width space",
       "expected_finding": true,
-      "detected": false,
-      "bypassed": true,
-      "findings_count": 0,
-      "status_code": 0
+      "detected": true,
+      "bypassed": false,
+      "findings_count": 4,
+      "status_code": 403
     },
     {
       "name": "Email \u2014 HTML entities",
       "expected_finding": true,
-      "detected": false,
-      "bypassed": true,
-      "findings_count": 0,
-      "status_code": 0
+      "detected": true,
+      "bypassed": false,
+      "findings_count": 4,
+      "status_code": 200
     },
     {
       "name": "Phone \u2014 Turkish word digits",
       "expected_finding": true,
-      "detected": false,
-      "bypassed": true,
-      "findings_count": 0,
-      "status_code": 0
+      "detected": true,
+      "bypassed": false,
+      "findings_count": 2,
+      "status_code": 200
     },
     {
       "name": "TCKN \u2014 Indirect description",
@@ -110,39 +110,39 @@
       "detected": false,
       "bypassed": true,
       "findings_count": 0,
-      "status_code": 0
+      "status_code": 200
     },
     {
       "name": "Email \u2014 Plain baseline",
       "expected_finding": true,
-      "detected": false,
-      "bypassed": true,
-      "findings_count": 0,
-      "status_code": 0
+      "detected": true,
+      "bypassed": false,
+      "findings_count": 5,
+      "status_code": 200
     },
     {
       "name": "TCKN \u2014 Plain baseline",
       "expected_finding": true,
-      "detected": false,
-      "bypassed": true,
-      "findings_count": 0,
-      "status_code": 0
+      "detected": true,
+      "bypassed": false,
+      "findings_count": 5,
+      "status_code": 403
     },
     {
       "name": "Phone \u2014 Plain baseline",
       "expected_finding": true,
-      "detected": false,
-      "bypassed": true,
-      "findings_count": 0,
-      "status_code": 0
+      "detected": true,
+      "bypassed": false,
+      "findings_count": 5,
+      "status_code": 200
     },
     {
       "name": "Credit card \u2014 Plain baseline",
       "expected_finding": true,
-      "detected": false,
-      "bypassed": true,
-      "findings_count": 0,
-      "status_code": 0
+      "detected": true,
+      "bypassed": false,
+      "findings_count": 7,
+      "status_code": 403
     }
   ]
 }

@@ -51,12 +51,12 @@ PR triggers a regression gate comparing current results to a known
 baseline.
 
 - **Adversarial tests** — 5 categories (PII, injection, secret, policy,
-  operator state), 69 published bypass vectors (39 detected, 30 bypassed)
-  covering Unicode evasion, homoglyphs, base64 encoding, zero-width
-  characters, and indirect references. Numbers tracked in
+  operator state), 69 published vectors: 65 attacks (57 detected, 8 bypassed)
+  and 4 controls, covering Unicode evasion, homoglyphs, base64 encoding,
+  zero-width characters, and indirect references. Numbers tracked in
   [tests/stress/baseline.json](../tests/stress/baseline.json).
 - **Load tests** — k6 benchmarks at 100/500/1000 RPS with P95 latency and
-  error-rate thresholds.
+  error-rate thresholds, run against a mocked upstream.
 - **Regression gate** — CI blocks PRs that degrade detection or performance
   beyond tolerance.
 

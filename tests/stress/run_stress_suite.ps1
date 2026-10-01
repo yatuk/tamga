@@ -27,7 +27,7 @@ $BaselineFile = "$ScriptDir\baseline.json"
 $Timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $ResultsDir = "$ResultsBase\$Timestamp"
 
-$HealthUrl = if ($env:TAMGA_HEALTH_URL) { $env:TAMGA_HEALTH_URL } else { "http://localhost:8443/api/v1/health" }
+$HealthUrl = if ($env:TAMGA_HEALTH_URL) { $env:TAMGA_HEALTH_URL } else { "http://localhost:8443/health" }
 $HealthTimeout = if ($env:TAMGA_HEALTH_TIMEOUT) { [int]$env:TAMGA_HEALTH_TIMEOUT } else { 60 }
 $K6Bin = if ($env:K6_BIN) { $env:K6_BIN } else { "k6" }
 $PythonBin = if ($env:PYTHON_BIN) { $env:PYTHON_BIN } else { "python" }
@@ -77,13 +77,33 @@ if (-not (Test-Path $ComposeFile)) {
 
 New-Item -ItemType Directory -Force -Path $ResultsDir | Out-Null
 
+# Compose resolves ${VAR} from the shell and from a .env next to the compose
+# file — not from the repo-root .env. Pass it explicitly when present.
+$ComposeArgs = @()
+if (Test-Path "$ProjectRoot\.env") { $ComposeArgs += @("--env-file", "$ProjectRoot\.env") }
+$ComposeArgs += @("-f", $ComposeFile, "-f", "$ScriptDir\docker-compose.stress.yml")
+
+# docker-compose.stress.yml mounts this directory as the proxy's policy dir.
+# The policy is derived from the shipped default (adds the operator_state
+# authorization allowlist the adversarial vectors expect).
+$env:STRESS_POLICY_DIR = "$ResultsDir\policy"
+& $PythonBin "$ScriptDir\scripts\make_stress_policy.py" "$ProjectRoot\proxy\tamga-policy.yaml" "$ResultsDir\policy\tamga-policy.yaml"
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "ERROR: could not generate the stress policy" -ForegroundColor Red
+    exit 2
+}
+
+# The suite sends adversarial payloads through the proxy. Mock the upstream so
+# none of them is forwarded to a real provider; scanning and policy still run.
+if (-not $env:TAMGA_MOCK_UPSTREAM) { $env:TAMGA_MOCK_UPSTREAM = "true" }
+
 # ── cleanup trap ────────────────────────────────────────────────────────────
 
 $CleanupScript = {
     $exitCode = $LASTEXITCODE
     Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Cleaning up... (exit=$exitCode)" -ForegroundColor Yellow
     Push-Location $ProjectRoot
-    docker compose -f $ComposeFile down --timeout 30 2>$null
+    docker compose @ComposeArgs down --timeout 30 2>$null
     Pop-Location
     if ($exitCode -eq 0) {
         Write-Host "Stress suite complete — exit 0" -ForegroundColor Green
@@ -102,7 +122,7 @@ try { Register-EngineEvent -SourceIdentifier PowerShell.Exiting -Action $Cleanup
 
 Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Starting Tamga stack..." -ForegroundColor Cyan
 Push-Location $ProjectRoot
-docker compose -f $ComposeFile up -d --wait 2>&1 | Out-Null
+docker compose @ComposeArgs up -d --wait 2>&1 | Out-Null
 Pop-Location
 
 Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Waiting for proxy health ($HealthTimeout seconds)..." -ForegroundColor Cyan

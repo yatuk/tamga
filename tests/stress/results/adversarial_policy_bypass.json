@@ -1,44 +1,44 @@
 {
   "category": "policy",
   "test": "policy_bypass",
-  "timestamp": "2026-06-17T19:59:53.187219+00:00",
+  "timestamp": "2026-10-01T18:08:14.001487+00:00",
   "total": 11,
-  "detected": 0,
-  "bypassed": 7,
-  "bypass_rate": 1.0,
-  "error": 11,
+  "detected": 9,
+  "bypassed": 1,
+  "bypass_rate": 0.14285714285714285,
+  "error": 0,
   "vectors": [
     {
       "name": "Path traversal %2F encoded",
       "expected_finding": true,
-      "detected": false,
-      "bypassed": true,
+      "detected": true,
+      "bypassed": false,
       "findings_count": 0,
-      "status_code": 0
+      "status_code": 403
     },
     {
       "name": "Path traversal %252F double",
       "expected_finding": true,
-      "detected": false,
-      "bypassed": true,
+      "detected": true,
+      "bypassed": false,
       "findings_count": 0,
-      "status_code": 0
+      "status_code": 403
     },
     {
       "name": "Path traversal overlong UTF-8",
       "expected_finding": true,
-      "detected": false,
-      "bypassed": true,
+      "detected": true,
+      "bypassed": false,
       "findings_count": 0,
-      "status_code": 0
+      "status_code": 403
     },
     {
       "name": "Path traversal encoded dots",
       "expected_finding": true,
-      "detected": false,
-      "bypassed": true,
+      "detected": true,
+      "bypassed": false,
       "findings_count": 0,
-      "status_code": 0
+      "status_code": 403
     },
     {
       "name": "Path traversal plain ../",
@@ -46,15 +46,15 @@
       "detected": false,
       "bypassed": true,
       "findings_count": 0,
-      "status_code": 0
+      "status_code": 404
     },
     {
       "name": "Path traversal backslash",
       "expected_finding": true,
-      "detected": false,
-      "bypassed": true,
+      "detected": true,
+      "bypassed": false,
       "findings_count": 0,
-      "status_code": 0
+      "status_code": 403
     },
     {
       "name": "Health endpoint accessible",
@@ -62,39 +62,39 @@
       "detected": false,
       "bypassed": false,
       "findings_count": 0,
-      "status_code": 0
+      "status_code": 200
     },
     {
       "name": "API without auth key",
       "expected_finding": true,
-      "detected": false,
-      "bypassed": true,
+      "detected": true,
+      "bypassed": false,
       "findings_count": 0,
-      "status_code": 0
+      "status_code": 401
     },
     {
       "name": "Stats with auth",
       "expected_finding": false,
-      "detected": false,
+      "detected": true,
       "bypassed": false,
       "findings_count": 0,
-      "status_code": 0
+      "status_code": 401
     },
     {
       "name": "Policies with auth",
       "expected_finding": false,
-      "detected": false,
+      "detected": true,
       "bypassed": false,
       "findings_count": 0,
-      "status_code": 0
+      "status_code": 401
     },
     {
       "name": "Events with auth",
       "expected_finding": false,
-      "detected": false,
+      "detected": true,
       "bypassed": false,
       "findings_count": 0,
-      "status_code": 0
+      "status_code": 401
     }
   ]
 }

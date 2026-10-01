@@ -37,6 +37,35 @@
   `google_vertex` → `gemini`); the default allowlist previously rejected the
   `/azure/` and `/gemini/` routes with 403.
 - CI: Go tests and the adversarial gate now also run on pushes to `main`.
+- **Fresh installs came up with only the first migration applied.** Migrations
+  002 and 006 used `CREATE INDEX CONCURRENTLY` on the partitioned
+  `request_logs` table, which PostgreSQL rejects; the database init aborted at
+  002 and, after a restart, skipped 003–013. Existing deployments created this
+  way are missing the audit log, retention log, pricing, outbox, RLS, incident
+  lifecycle and saved-hunt tables — recreate the volume or apply the missing
+  migrations by hand.
+- **Retention never dropped expired `request_logs` partitions.** The partition
+  bound was parsed as a bare date, but PostgreSQL renders it as a timestamp
+  with offset, so every partition was skipped.
+- **Delegating scanning to scanner-service switched off three scanners.**
+  Custom entities, competitors and operator_state need the proxy's policy and
+  the request, which the remote service does not have. They now keep running
+  in-process and their findings are merged. `TAMGA_SCANNER_SERVICE_ADDR` alone
+  now enables delegation (it previously also required a worker pool size), and
+  the compose file makes it opt-in.
+- Docker Compose: the Quick Start now passes `--env-file .env`; Compose does
+  not read the repo-root `.env` on its own, which left the database password
+  empty. `TAMGA_MOCK_UPSTREAM` is now passed through to the proxy container.
+
+### Tests
+- Stress suite: runs against a mocked upstream, sets up the operator_state
+  fixtures it needs, uses one API key per load-test request (it was measuring
+  the rate limiter's 429s), and the regression checker now reads k6's summary
+  format — it previously treated every load result as 0 ms / 0 errors.
+- Baseline re-measured on 2026-10-01: 65 attack vectors, 57 detected, 8
+  bypassed (the previous 30 could not be reproduced; the committed result files
+  were from a run in which the proxy was unreachable).
+- Store integration tests run again (they skip without Docker and had rotted).
 
 ### Dashboard
 - Trend graphs — a new Trends page (ANALYTICS nav) charts requests scanned vs

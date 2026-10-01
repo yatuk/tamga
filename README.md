@@ -55,8 +55,8 @@ time and enforcing your security policy before data leaves your network.
 > prefer — Tamga enforces policy transparently in front of it.
 
 **Latency.** Sub-millisecond static scanning via an Aho-Corasick DFA. Scan-stage
-p95 is **0.52 ms**; end-to-end proxy overhead p95 is **5.5 ms** at 100 RPS on
-consumer hardware. See [benchmarks](#benchmarks).
+p95 is **0.52 ms**; end-to-end proxy overhead p95 is under **5 ms** at up to
+1000 RPS on a 16-core laptop. See [benchmarks](#benchmarks).
 
 <div align="center">
   <img src="docs/incidents.png" alt="Tamga incident queue — a PII leak blocked in real time" width="850" />
@@ -101,9 +101,12 @@ cp .env.example .env          # add ANTHROPIC_API_KEY / OPENAI_API_KEY
 ### 2. Launch the stack
 
 ```bash
-cd deploy
-docker compose up -d
+docker compose --env-file .env -f deploy/docker-compose.yml up -d
 ```
+
+`--env-file .env` matters: Compose only auto-loads a `.env` that sits next to
+the compose file, so without it the database password is empty and Postgres
+refuses to start.
 
 Dashboard at http://localhost:3000 · Proxy at http://localhost:8443
 
@@ -396,19 +399,21 @@ patterns against it between runs.
 
 ### Load performance
 
-k6 benchmarks on a single-process Go proxy, 4-core consumer CPU, 16 GB RAM,
-NVMe SSD. No GPU, no SIMD tuning. Scripts in `tests/stress/k6/`.
+k6 against the Docker Compose stack with a mocked upstream, so the numbers
+are proxy overhead (scan + policy + rate limiter), not provider latency.
+Measured 2026-10-01 on a 16-core laptop CPU (Intel Core Ultra 7 255H), Docker
+limited to 12 GB RAM, in-process scanning. Scripts in `tests/stress/k6/`.
 
-| Workload | RPS | P95 | Errors |
-|---|---|---|---|
-| Clean prompts | 100 | 5.5 ms | 0% |
-| Clean prompts | 500 | 3.7 ms | 0% |
-| Clean prompts | 1000 | 130 ms | 0% (WARN) |
+| Workload | RPS | P50 | P95 | P99 | Errors |
+|---|---|---|---|---|---|
+| Clean prompts | 100 | 3.2 ms | 4.7 ms | 6.0 ms | 0% |
+| Clean prompts | 500 | 2.1 ms | 4.1 ms | 7.8 ms | 0% |
+| Clean prompts | 1000 | 2.1 ms | 4.8 ms | 9.0 ms | 0% |
 
-> **How to read this.** P95 at 100–500 RPS reflects normal operating
-> conditions. The spike at 1000 RPS is Go GC and goroutine scheduling on
-> consumer hardware; deployments with tuned GC (`GOGC=50`) and dedicated CPUs
-> stay well under it.
+> **How to read this.** These figures depend on the hardware. An earlier
+> measurement on a 4-core machine (2026-06-13) saw the same P95 up to 500 RPS
+> but 130 ms at 1000 RPS, where the proxy ran out of CPU. Run
+> `tests/stress/run_stress_suite.sh` to get the numbers for your own machine.
 
 Full report: [docs/benchmarks/](docs/benchmarks/README.md) ·
 [red team corpus](proxy/testdata/redteam/prompts.csv)
@@ -421,24 +426,35 @@ Tamga publishes its own failures. The stress suite runs adversarial bypass
 attempts and load thresholds on every PR, and a regression gate blocks changes
 that degrade detection or performance.
 
-| Category | Vectors | Detected | Bypassed |
+| Category | Attack vectors | Detected | Bypassed |
 |---|---|---|---|
-| PII | 17 | 6 | 11 |
-| Injection | 22 | 9 | 13 |
-| Secret | 12 | 8 | 4 |
-| Policy | 11 | 10 | 1 |
+| PII | 17 | 16 | 1 |
+| Injection | 22 | 17 | 5 |
+| Secret | 12 | 12 | 0 |
+| Policy | 7 | 6 | 1 |
 | Operator state | 7 | 6 | 1 |
-| **Total** | **69** | **39** | **30** |
+| **Total** | **65** | **57** | **8** |
 
-Those 30 bypasses are real and tracked in
-[tests/stress/baseline.json](tests/stress/baseline.json). They are mostly
-semantic attacks — ROT13, "grandma" framings, homoglyphs, fictional
-scenarios — which the deterministic hot path is not designed to catch alone.
-Publishing them is the point: a security tool that only reports its wins
-isn't giving you a threat model.
+Measured 2026-10-01 with the shipped default policy. The suite has 69 vectors:
+the 65 attacks above plus 4 control requests in the policy category that are
+expected to pass. "Detected" means a scanner raised a finding; 46 of the 57
+were blocked outright with a 403, the rest were redacted or flagged.
+
+The 8 bypasses are real and tracked in
+[tests/stress/baseline.json](tests/stress/baseline.json): Turkish injection
+phrasings written without diacritics, leetspeak, character-by-character
+smuggling, an indirectly described national ID, a plain `../` path, and a
+paraphrased decision contradiction. Most need semantic reasoning, which the
+deterministic hot path is not designed to do alone. Publishing them is the
+point: a security tool that only reports its wins isn't giving you a threat
+model.
+
+These vectors are known to the authors, so this is a regression suite, not an
+independent evaluation. For accuracy against a mixed corpus see the
+[benchmarks](#benchmarks) above (recall 0.484).
 
 ```bash
-cd tests/stress && ./run_stress_suite.sh   # requires Docker
+./tests/stress/run_stress_suite.sh   # requires Docker, Python and k6
 ```
 
 Details: [tests/stress/README.md](tests/stress/README.md)
@@ -903,7 +919,7 @@ Full mappings: [docs/compliance/](docs/compliance/)
 - PostgreSQL audit log with hash-chain integrity
 - Next.js dashboard — incident queue, cost control, OWASP coverage
 - Docker Compose, Helm, and Terraform deployment; Python and TypeScript SDKs
-- 69 published adversarial vectors, 30 currently bypassing
+- 69 published adversarial vectors (65 attacks, 4 controls), 8 currently bypassing
 
 ### v0.8.0-rc1
 

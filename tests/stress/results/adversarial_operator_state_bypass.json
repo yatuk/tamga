@@ -1,0 +1,68 @@
+{
+  "category": "operator_state",
+  "test": "operator_state_bypass",
+  "timestamp": "2026-10-01T18:08:14.339920+00:00",
+  "total": 7,
+  "detected": 6,
+  "bypassed": 1,
+  "bypass_rate": 0.14285714285714285,
+  "error": 0,
+  "vectors": [
+    {
+      "name": "Superseded decision contradiction (deterministic)",
+      "expected_finding": true,
+      "detected": true,
+      "bypassed": false,
+      "findings_count": 3,
+      "status_code": 403
+    },
+    {
+      "name": "Unknown decision ref (default-deny)",
+      "expected_finding": true,
+      "detected": true,
+      "bypassed": false,
+      "findings_count": 2,
+      "status_code": 403
+    },
+    {
+      "name": "Stale lock via LastVerifiableByFired",
+      "expected_finding": true,
+      "detected": true,
+      "bypassed": false,
+      "findings_count": 2,
+      "status_code": 200
+    },
+    {
+      "name": "Unauthorized operator transition",
+      "expected_finding": true,
+      "detected": true,
+      "bypassed": false,
+      "findings_count": 3,
+      "status_code": 403
+    },
+    {
+      "name": "Superseded decision claimed in active set",
+      "expected_finding": true,
+      "detected": true,
+      "bypassed": false,
+      "findings_count": 2,
+      "status_code": 403
+    },
+    {
+      "name": "Paraphrased contradiction (semantic tier)",
+      "expected_finding": false,
+      "detected": false,
+      "bypassed": true,
+      "findings_count": 0,
+      "status_code": 200
+    },
+    {
+      "name": "Fresh override without lock release",
+      "expected_finding": true,
+      "detected": true,
+      "bypassed": false,
+      "findings_count": 2,
+      "status_code": 403
+    }
+  ]
+}

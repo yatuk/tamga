@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any
 
 DEFAULT_TOLERANCE = 0.20  # 20% headroom for load test P95
+ERROR_RATE_TOLERANCE = 0.01  # absolute: 1 percentage point above baseline
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -45,6 +46,8 @@ def load_adversarial_results(results_dir: Path) -> dict[str, dict[str, int]]:
     """
     merged: dict[str, dict[str, int]] = {}
     for fpath in sorted(results_dir.glob("adversarial_*.json")):
+        if fpath.name == "adversarial_results.json":
+            continue  # the suite's own merged summary, not a per-category result
         data = load_json(fpath)
         cat = data.get("category", fpath.stem.replace("adversarial_", ""))
         merged[cat] = {
@@ -67,14 +70,30 @@ def load_load_results(results_dir: Path) -> dict[str, dict[str, float]]:
         label = fpath.stem.replace("load_test_", "")
         data = load_json(fpath)
         try:
-            p95 = data["metrics"]["http_req_duration"]["values"]["p(95)"]
-            error_rate = data["metrics"]["http_req_failed"]["values"]["rate"]
+            p95, error_rate = extract_k6_summary(data)
         except (KeyError, TypeError):
-            print(f"WARNING: {fpath} missing expected k6 summary fields", file=sys.stderr)
-            p95 = 0.0
-            error_rate = 0.0
+            # Unreadable results must not pass as "0 ms, 0 errors": that would
+            # score as an improvement over any baseline.
+            print(f"ERROR: {fpath} is not a k6 summary this checker understands", file=sys.stderr)
+            merged[label] = {"p95_ms": float("inf"), "error_rate": 1.0}
+            continue
         merged[label] = {"p95_ms": round(float(p95), 2), "error_rate": round(float(error_rate), 4)}
     return merged
+
+
+def extract_k6_summary(data: dict[str, Any]) -> tuple[float, float]:
+    """Return (p95_ms, error_rate) from either k6 summary shape.
+
+    `k6 run --summary-export` (what the suite uses) writes metrics flat:
+        metrics.http_req_duration["p(95)"], metrics.http_req_failed["value"]
+    A handleSummary() export nests them under "values":
+        metrics.http_req_duration.values["p(95)"], metrics.http_req_failed.values["rate"]
+    """
+    duration = data["metrics"]["http_req_duration"]
+    failed = data["metrics"]["http_req_failed"]
+    if "values" in duration:
+        return duration["values"]["p(95)"], failed["values"]["rate"]
+    return duration["p(95)"], failed["value"]
 
 
 # ── check functions ──────────────────────────────────────────────────────────
@@ -142,11 +161,16 @@ def check_load(
     baseline: dict[str, dict[str, float]],
     tolerance: float = DEFAULT_TOLERANCE,
 ) -> tuple[bool, list[dict[str, Any]]]:
-    """Return (has_regression, rows). Regression = P95 > baseline * (1+tolerance)."""
+    """Return (has_regression, rows).
+
+    Regression = P95 > baseline * (1+tolerance), or the error rate rising more
+    than ERROR_RATE_TOLERANCE above baseline. Only levels that were actually
+    run are compared; a baseline level with no current result is skipped.
+    """
     has_regression = False
     rows: list[dict[str, Any]] = []
 
-    for label in sorted(set(current) | set(baseline)):
+    for label in sorted(current):
         cur = current.get(label, {})
         base = baseline.get(label, {})
         cur_p95 = cur.get("p95_ms", 0.0)
@@ -156,7 +180,11 @@ def check_load(
 
         threshold = base_p95 * (1.0 + tolerance) if base_p95 > 0 else 999.0
 
-        if cur_p95 > threshold:
+        if cur_err > base_err + ERROR_RATE_TOLERANCE:
+            # A run that mostly errors out returns fast; its P95 says nothing.
+            verdict = "REGRESSION (errors)"
+            has_regression = True
+        elif cur_p95 > threshold:
             verdict = "REGRESSION"
             has_regression = True
         elif cur_p95 <= base_p95:
@@ -206,7 +234,7 @@ def print_table(adversarial_rows: list[dict[str, Any]], load_rows: list[dict[str
     print(header2)
     print("  " + "-" * 76)
     for r in load_rows:
-        verdict_icon = {"REGRESSION": "[FAIL]", "STABLE/IMPROVED": "[OK]", "WITHIN TOLERANCE": "[~]"}.get(r["verdict"], "?")
+        verdict_icon = {"REGRESSION": "[FAIL]", "REGRESSION (errors)": "[FAIL]", "STABLE/IMPROVED": "[OK]", "WITHIN TOLERANCE": "[~]"}.get(r["verdict"], "?")
         print(f"  {r['label']:<12} {r['current_p95_ms']:>8.2f}ms {r['baseline_p95_ms']:>8.2f}ms {r['threshold_p95_ms']:>9.2f}ms {r['current_error_rate']*100:>8.2f}%  {verdict_icon} {r['verdict']}")
     print()
 

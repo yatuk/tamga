@@ -10,9 +10,10 @@ Automated adversarial bypass and load test suite with regression detection.
 ```
 
 This single command:
-1. Starts the full Tamga stack (`docker compose up -d`)
+1. Starts the full Tamga stack with `docker-compose.stress.yml` layered on top
 2. Waits for the proxy to become healthy (up to 60 seconds)
-3. Runs 4 adversarial bypass test suites (PII, injection, secret, policy)
+3. Runs 5 adversarial bypass test suites (PII, injection, secret, policy,
+   operator state)
 4. Runs k6 load tests at 100, 500, and 1000 RPS
 5. Runs a short workload mix test (3 minutes)
 6. Checks results against `baseline.json` for regressions
@@ -20,7 +21,37 @@ This single command:
 
 **Requirements:** Docker, Python 3.9+, k6 (for load tests)
 
-**Duration:** 5-8 minutes
+**Duration:** 7-8 minutes
+
+### What the suite sets up for itself
+
+- **Mocked upstream** (`TAMGA_MOCK_UPSTREAM=true`). Scanning and policy run as
+  usual, but nothing is forwarded to a real provider — the suite sends
+  adversarial payloads and must not leak them, or spend API credit.
+- **The repo-root `.env`**, passed with `--env-file` when it exists. Compose
+  does not pick it up on its own.
+- **The shipped default policy**, plus the operator_state authorization
+  allowlist those vectors need. `scripts/make_stress_policy.py` derives it
+  from `proxy/tamga-policy.yaml` at run time, so there is no second policy
+  file to drift.
+- **Operator-state fixtures** from `proxy/testdata/operator_state/`.
+- **In-process scanning**, regardless of `TAMGA_SCANNER_SERVICE_ADDR`.
+- **One API key per load-test request.** The default policy rate-limits per
+  key (60/min); a single key would measure the limiter's 429s, not the proxy.
+
+### How a vector is scored
+
+A vector counts as detected when the response carries a finding
+(`X-Tamga-Findings-Count`), a high or critical risk level, or a 403. It is a
+detection metric, not an enforcement one: a finding that the policy lets
+through still counts. Enforcement of the default policy is covered by
+`proxy/internal/policy/default_policy_test.go`.
+
+The policy category contains 4 control requests that are expected to pass.
+Three of them call admin endpoints with `x-api-key` instead of
+`X-Tamga-Admin-Key`, get a 401, and are reported as "detected". That inflates
+the category's detected count by 3 but does not affect the bypass count the
+regression gate compares.
 
 ## Options
 

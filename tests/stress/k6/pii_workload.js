@@ -39,7 +39,9 @@ export default function () {
   }), {
     headers: {
       'Content-Type': 'application/json',
-      'x-api-key': API_KEY,
+      // One key per request: the default policy rate-limits per key (60/min), and
+      // a load test on a single key would measure the limiter's 429s, not the proxy.
+      'x-api-key': `${API_KEY}-${__VU}-${__ITER}`,
     },
   });
   check(res, {
