@@ -128,16 +128,16 @@ func TestPG_Retention_PurgeOldRows(t *testing.T) {
 	// Insert an old alert (100 days ago)
 	oldTime := time.Now().UTC().Add(-100 * 24 * time.Hour)
 	_, err := s.pool.Exec(ctx,
-		"INSERT INTO alerts (title, severity, created_at) VALUES ($1, $2, $3)",
-		"old-alert", "critical", oldTime)
+		"INSERT INTO alerts (org_id, request_id, severity, finding_type, message, created_at) VALUES ($1, $2, $3, $4, $5, $6)",
+		testOrgID, "req-old", "critical", "pii", "old-alert", oldTime)
 	if err != nil {
 		t.Fatalf("insert alert: %v", err)
 	}
 
 	// Insert an old audit log
 	_, err = s.pool.Exec(ctx,
-		"INSERT INTO audit_log (ts, action) VALUES ($1, $2)",
-		oldTime, "test-action")
+		"INSERT INTO audit_log (ts, kind, hash) VALUES ($1, $2, $3)",
+		oldTime, "test-action", "test-hash")
 	if err != nil {
 		t.Fatalf("insert audit_log: %v", err)
 	}
@@ -166,7 +166,7 @@ func TestPG_Retention_PurgeOldRows(t *testing.T) {
 
 	// Verify old alert was purged
 	var alertCount int
-	if err := s.pool.QueryRow(ctx, "SELECT COUNT(*) FROM alerts WHERE title = 'old-alert'").Scan(&alertCount); err != nil {
+	if err := s.pool.QueryRow(ctx, "SELECT COUNT(*) FROM alerts WHERE message = 'old-alert'").Scan(&alertCount); err != nil {
 		t.Fatalf("check alert: %v", err)
 	}
 	if alertCount != 0 {
@@ -175,7 +175,7 @@ func TestPG_Retention_PurgeOldRows(t *testing.T) {
 
 	// Verify old audit_log was purged
 	var auditCount int
-	if err := s.pool.QueryRow(ctx, "SELECT COUNT(*) FROM audit_log WHERE action = 'test-action'").Scan(&auditCount); err != nil {
+	if err := s.pool.QueryRow(ctx, "SELECT COUNT(*) FROM audit_log WHERE kind = 'test-action'").Scan(&auditCount); err != nil {
 		t.Fatalf("check audit_log: %v", err)
 	}
 	if auditCount != 0 {
@@ -197,7 +197,7 @@ func TestPG_Retention_LogRun(t *testing.T) {
 	// Verify the log was inserted
 	var phase, msg string
 	if err := s.pool.QueryRow(ctx,
-		"SELECT phase, message FROM retention_run_log WHERE phase = 'test-phase' ORDER BY run_at DESC LIMIT 1",
+		"SELECT phase, message FROM retention_run_log WHERE phase = 'test-phase' ORDER BY ran_at DESC LIMIT 1",
 	).Scan(&phase, &msg); err != nil {
 		t.Fatalf("check retention_run_log: %v", err)
 	}

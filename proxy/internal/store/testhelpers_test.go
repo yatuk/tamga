@@ -71,6 +71,13 @@ func NewTestPostgres(t *testing.T) *pgxpool.Pool {
 
 	// Seed default org if not present (needed for FK references in other tables).
 	_, _ = pool.Exec(ctx, `INSERT INTO organizations (name, slug, plan) VALUES ('Default Org', 'default', 'trial') ON CONFLICT DO NOTHING`)
+	// Tests write rows under testOrgID; daily_stats and alerts reference
+	// organizations(id), so that org has to exist.
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO organizations (id, name, slug, plan) VALUES ($1, 'Test Org', 'test-org', 'trial') ON CONFLICT DO NOTHING`,
+		testOrgID); err != nil {
+		t.Fatalf("seed test org: %v", err)
+	}
 
 	t.Cleanup(func() {
 		pool.Close()
@@ -140,13 +147,41 @@ func runMigrations(t *testing.T, pool *pgxpool.Pool) {
 		if strings.TrimSpace(sql) == "" {
 			continue
 		}
-		// pgx Exec runs in auto-commit mode, so CREATE INDEX CONCURRENTLY
-		// (migration 002) works correctly.
-		if _, err := pool.Exec(ctx, sql); err != nil {
+		// A multi-statement string is sent as one simple-protocol query, which
+		// PostgreSQL wraps in an implicit transaction — and CREATE INDEX
+		// CONCURRENTLY refuses to run inside one. Those migrations are run one
+		// statement at a time, the way psql applies them in deployment.
+		if strings.Contains(strings.ToUpper(sql), "CONCURRENTLY") {
+			for _, stmt := range splitPlainStatements(sql) {
+				if _, err := pool.Exec(ctx, stmt); err != nil {
+					t.Fatalf("run migration %s: %v\nstatement: %s", f, err, stmt)
+				}
+			}
+		} else if _, err := pool.Exec(ctx, sql); err != nil {
 			t.Fatalf("run migration %s: %v", f, err)
 		}
 		t.Logf("applied migration: %s", f)
 	}
+}
+
+// splitPlainStatements splits SQL on semicolons after dropping "--" comment
+// lines. It does not understand dollar-quoted bodies, so it is only used for
+// the index migrations, which contain none.
+func splitPlainStatements(sql string) []string {
+	var kept []string
+	for _, line := range strings.Split(sql, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "--") {
+			continue
+		}
+		kept = append(kept, line)
+	}
+	var out []string
+	for _, stmt := range strings.Split(strings.Join(kept, "\n"), ";") {
+		if s := strings.TrimSpace(stmt); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // findMigrationsDir locates the deploy/migrations directory.

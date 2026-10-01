@@ -155,6 +155,47 @@ func newTestPostgresStore(t *testing.T) *PostgresStore {
 		pool.Close()
 		t.Fatalf("failed to create model_pricing table: %v", err)
 	}
+	// Tables the retention job purges and logs to. Columns mirror
+	// deploy/migrations (001 alerts, 004 audit_log, 005 retention_run_log);
+	// the alerts FK to organizations is omitted because this minimal schema
+	// has no organizations table.
+	for name, ddl := range map[string]string{
+		"alerts": `
+		CREATE TABLE IF NOT EXISTS alerts (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			org_id UUID NOT NULL,
+			request_id TEXT NOT NULL,
+			severity TEXT NOT NULL,
+			finding_type TEXT NOT NULL,
+			message TEXT NOT NULL,
+			is_read BOOLEAN NOT NULL DEFAULT false,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+		)`,
+		"audit_log": `
+		CREATE TABLE IF NOT EXISTS audit_log (
+			id BIGSERIAL PRIMARY KEY,
+			ts TIMESTAMPTZ NOT NULL DEFAULT now(),
+			actor TEXT,
+			kind TEXT NOT NULL,
+			target TEXT,
+			detail JSONB NOT NULL DEFAULT '{}'::jsonb,
+			prev_hash TEXT,
+			hash TEXT NOT NULL
+		)`,
+		"retention_run_log": `
+		CREATE TABLE IF NOT EXISTS retention_run_log (
+			id BIGSERIAL PRIMARY KEY,
+			ran_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+			phase TEXT NOT NULL,
+			message TEXT,
+			detail JSONB NOT NULL DEFAULT '{}'::jsonb
+		)`,
+	} {
+		if _, err := pool.Exec(ctx, ddl); err != nil {
+			pool.Close()
+			t.Fatalf("failed to create %s table: %v", name, err)
+		}
+	}
 	pool.Close()
 
 	// Use the real constructor so flushLoop, done channel, etc. are set up.

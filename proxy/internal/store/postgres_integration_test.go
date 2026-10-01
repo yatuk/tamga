@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 )
 
@@ -854,6 +855,14 @@ func TestTC_Close(t *testing.T) {
 		t.Errorf("expected 1 buffered row, got %d", bufLen)
 	}
 
+	// Close shuts the store's pool down, so the check below needs its own
+	// connection to the same database.
+	verify, err := pgxpool.New(ctx, pool.Config().ConnString())
+	if err != nil {
+		t.Fatalf("open verification pool: %v", err)
+	}
+	defer verify.Close()
+
 	// Close should flush.
 	if err := s.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
@@ -861,7 +870,7 @@ func TestTC_Close(t *testing.T) {
 
 	// Verify the row made it to the database.
 	var count int
-	if err := pool.QueryRow(ctx,
+	if err := verify.QueryRow(ctx,
 		"SELECT COUNT(*) FROM request_logs WHERE request_id = $1", rid,
 	).Scan(&count); err != nil {
 		t.Fatalf("verify: %v", err)
