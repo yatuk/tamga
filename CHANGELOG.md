@@ -2,6 +2,42 @@
 
 ## v0.9.0 (unreleased)
 
+### Security
+- **Default policy did not enforce prompt injection.** On `main` since the
+  vault/canary merge (2026-08-02), the `injection`, `code_leakage` and
+  `operator_state` rules in `proxy/tamga-policy.yaml` were nested under
+  `canary:` and silently dropped; injection findings evaluated to PASS. The
+  file is fixed, policy YAML is now parsed strictly (an unknown or misplaced key
+  is a load error), and startup/reload/validate warn when no rule acts on PII,
+  secret or injection findings. If you run a copy of the default policy from
+  that period, re-check its indentation.
+- **Cross-provider failover forwarded caller credentials.** When the addressed
+  provider returned 429/5xx, the request — including `Authorization` /
+  `x-api-key` — was retried against the other of OpenAI/Anthropic. Retries now
+  stay on the addressed provider; use `providers.pools` for same-vendor
+  failover.
+- **Policy exceptions trusted a caller-supplied role.** `X-Tamga-Role` is now
+  ignored unless `TAMGA_TRUST_ROLE_HEADER=true` (for deployments behind an
+  authenticating gateway). Caller-supplied `X-Tamga-*` headers are no longer
+  forwarded to the provider.
+- **Blocked responses could be served from cache.** The response cache was
+  written before the output scan; it is now written after, and only for
+  responses with no output findings.
+- **Large responses were truncated.** With output scanning on, a non-stream
+  response above `output_rules.buffer_bytes` was cut at the limit. It is now
+  forwarded whole with `X-Tamga-Output-Scan: skipped-too-large`; the default
+  limit is raised from 256 KB to 1 MB.
+
+### Core Proxy (fixes)
+- Scans that lose coverage — scanner panic or error, worker-pool shedding,
+  oversized response — are no longer silent: counted in
+  `tamga_scan_degraded_total{reason}`, logged, and flagged to the caller with
+  `X-Tamga-Scan-Degraded: true`. The proxy still fails open in these cases.
+- Provider allowlist names resolve aliases (`azure_openai` → `azure`,
+  `google_vertex` → `gemini`); the default allowlist previously rejected the
+  `/azure/` and `/gemini/` routes with 403.
+- CI: Go tests and the adversarial gate now also run on pushes to `main`.
+
 ### Dashboard
 - Trend graphs — a new Trends page (ANALYTICS nav) charts requests scanned vs
   findings caught over 24h/7d/30d, with a catch-rate tile and a findings-by-type

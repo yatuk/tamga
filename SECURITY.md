@@ -20,6 +20,36 @@ within 14 days for critical issues.
 | 0.7.x   | ✅ |
 | < 0.7.0 | ❌ |
 
+## Trust Assumptions
+
+Tamga does not yet authenticate callers on the proxy path. Until it does,
+deploy it where only trusted applications can reach it, and note:
+
+- `X-Tamga-Role` is ignored by default. Set `TAMGA_TRUST_ROLE_HEADER=true`
+  only when an authenticating gateway in front of Tamga strips the header
+  from client requests and sets it itself.
+- `X-Tamga-Org-Id`, `X-Tamga-User-Id` and the operator-state headers
+  (`X-Tamga-Operator-Id`, `X-Tamga-Active-Decisions`,
+  `X-Tamga-Last-Verifiable-By`) are taken from the request as sent. They drive
+  budget attribution and operator-state checks, so the same gateway rule
+  applies if callers are not fully trusted.
+- The proxy fails open when a scanner errors, panics or is shed under load.
+  Watch `tamga_scan_degraded_total` and the `X-Tamga-Scan-Degraded` response
+  header.
+
+## Fixed on `main` (unreleased)
+
+Found in an internal review on 2026-10-01; see the Security section of
+[CHANGELOG.md](CHANGELOG.md) for details.
+
+| Issue | Affected |
+|-------|----------|
+| Default policy did not enforce the prompt-injection rule | `main` from 2026-08-02 |
+| Failover forwarded caller credentials to a different provider | ≤ 0.8.0-rc1 |
+| Policy exceptions honoured a caller-supplied `X-Tamga-Role` | ≤ 0.8.0-rc1 |
+| Output-blocked responses could be served from the cache | ≤ 0.8.0-rc1 |
+| Responses above the output scan buffer were truncated | ≤ 0.8.0-rc1 |
+
 ## Disclosure Policy
 
 We follow responsible disclosure. Once a fix is released, we credit

@@ -28,6 +28,8 @@ Essential environment variables:
 | `TAMGA_ANALYZER_URL` | — | Analyzer service base URL |
 | `TAMGA_MAX_BODY_BYTES` | `1048576` | Max request body size (1 MB) |
 | `TAMGA_MOCK_UPSTREAM` | `false` | Demo mode without real providers |
+| `TAMGA_STRICT_MODE` | `false` | Ignore all policy exceptions |
+| `TAMGA_TRUST_ROLE_HEADER` | `false` | Honour `X-Tamga-Role` for policy exceptions. Enable only behind an authenticating gateway that sets the header itself |
 | `TAMGA_OTLP_ENDPOINT` | — | OpenTelemetry collector endpoint |
 | `ANTHROPIC_API_KEY` | — | Anthropic provider key |
 | `OPENAI_API_KEY` | — | OpenAI provider key |

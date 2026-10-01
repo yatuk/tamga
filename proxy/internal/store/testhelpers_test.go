@@ -153,7 +153,8 @@ func runMigrations(t *testing.T, pool *pgxpool.Pool) {
 func findMigrationsDir() (string, error) {
 	// Try relative paths from proxy/internal/store/.
 	candidates := []string{
-		"../../deploy/migrations", // from proxy/internal/store/
+		"../../../deploy/migrations", // from proxy/internal/store/ (deploy/ is a sibling of proxy/)
+		"../../deploy/migrations",
 		"../deploy/migrations",    // from proxy/
 		"deploy/migrations",       // from project root
 	}
