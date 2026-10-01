@@ -44,7 +44,15 @@ WORKLOAD_DURATION="180s"  # 3 minutes for CI (full is 12m)
 _red()    { echo -e "\033[31m$*\033[0m"; }
 _green()  { echo -e "\033[32m$*\033[0m"; }
 _yellow() { echo -e "\033[33m$*\033[0m"; }
-_dim()    { echo -e "\033[2m$*\033[0m"; }
+# _dim is a filter: it dims whatever is piped into it. It has to consume its
+# input — a helper that printed and returned would close the pipe, and the
+# command writing into it (docker compose, k6) would die on the broken pipe.
+_dim() {
+    local line
+    while IFS= read -r line || [ -n "$line" ]; do
+        echo -e "\033[2m${line}\033[0m"
+    done
+}
 
 log()     { echo "[$(date '+%H:%M:%S')] $*"; }
 ok()      { _green "  ✓ $*"; }
