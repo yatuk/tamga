@@ -123,6 +123,14 @@ type Config struct {
 	// This provides a kill-switch for audit-critical deployments.
 	StrictMode bool
 
+	// TrustRoleHeader makes the proxy honour the caller-supplied X-Tamga-Role
+	// header when evaluating policy exceptions. Off by default: the header is
+	// unauthenticated, so any caller could claim "admin" and bypass a rule.
+	// Enable only when an authenticating gateway in front of Tamga strips the
+	// header from client requests and sets it itself. Set via
+	// TAMGA_TRUST_ROLE_HEADER=true.
+	TrustRoleHeader bool
+
 	// mTLS/client-cert verification (KVKK/BDDK compliance for Turkish banks).
 	// MTLSClientCAFile is the path to a CA bundle PEM for validating client certificates.
 	// Set via TAMGA_MTLS_CLIENT_CA_FILE. Required when MTLSStrictVerify is true.
@@ -204,6 +212,7 @@ func Load() (*Config, error) {
 		ScannerServiceAddr:       envOrDefault("TAMGA_SCANNER_SERVICE_ADDR", ""),
 		DevMode:                  envOrDefaultBool("TAMGA_DEV_MODE", false),
 		StrictMode:               envOrDefaultBool("TAMGA_STRICT_MODE", false),
+		TrustRoleHeader:          envOrDefaultBool("TAMGA_TRUST_ROLE_HEADER", false),
 		MTLSClientCAFile:         envOrDefault("TAMGA_MTLS_CLIENT_CA_FILE", ""),
 		MTLSStrictVerify:         envOrDefaultBool("TAMGA_MTLS_STRICT_VERIFY", false),
 		IPAllowlist:              envOrDefault("TAMGA_IP_ALLOWLIST", ""),

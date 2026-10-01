@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -796,12 +797,19 @@ rate_limit:
 	}
 }
 
-func TestProxy_UpstreamFallback_FromOpenAIToAnthropic(t *testing.T) {
+// A failing provider must not fail over to a different vendor: the caller's
+// credentials were issued for the provider they addressed and must never be
+// forwarded elsewhere.
+func TestProxy_NoCrossProviderFallback(t *testing.T) {
 	openaiFail := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "temporary unavailable", http.StatusServiceUnavailable)
 	}))
 	defer openaiFail.Close()
+	var anthropicCalls atomic.Int32
+	var leakedAuth atomic.Value
 	anthropicOK := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		anthropicCalls.Add(1)
+		leakedAuth.Store(r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"ok":true,"provider":"anthropic"}`))
@@ -828,17 +836,21 @@ providers:
 	defer srv.Close()
 
 	body := []byte(`{"messages":[{"role":"user","content":"fallback dene"}]}`)
-	resp, err := http.Post(srv.URL+"/v1/chat/completions", "application/json", bytes.NewReader(body))
+	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/v1/chat/completions", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer sk-openai-caller-key")
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusBadGateway {
 		b, _ := io.ReadAll(resp.Body)
-		t.Fatalf("want 200, got %d: %s", resp.StatusCode, b)
+		t.Fatalf("want 502 when the addressed provider is down, got %d: %s", resp.StatusCode, b)
 	}
-	if got := resp.Header.Get("X-Tamga-Upstream-Provider"); got != "anthropic" {
-		t.Fatalf("expected fallback provider anthropic, got %q", got)
+	if n := anthropicCalls.Load(); n != 0 {
+		t.Fatalf("anthropic received %d request(s) carrying Authorization=%q; cross-provider fallback must not happen",
+			n, leakedAuth.Load())
 	}
 }
 

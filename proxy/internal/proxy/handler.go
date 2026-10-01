@@ -472,12 +472,24 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 
 	_, polSpan := telemetry.Tracer().Start(ctx, "policy.evaluate")
 
-	// Extract user identity for RBAC exception evaluation.
-	userRole := r.Header.Get("X-Tamga-Role")
+	// Extract user identity for RBAC exception evaluation. X-Tamga-Role is an
+	// unauthenticated request header, so it only counts when the operator has
+	// declared a trusted gateway in front of the proxy (TAMGA_TRUST_ROLE_HEADER).
+	// Otherwise a caller could claim any role and waive the rule it trips.
+	userRole := ""
 	userID := r.Header.Get("X-Tamga-User-Id")
 	strictMode := false
 	if cfg.Config != nil {
 		strictMode = cfg.Config.StrictMode
+		if cfg.Config.TrustRoleHeader {
+			userRole = r.Header.Get("X-Tamga-Role")
+		}
+	}
+	if userRole == "" && r.Header.Get("X-Tamga-Role") != "" && len(pol.Exceptions) > 0 {
+		logger.Warn().
+			Str("event", "role_header_ignored").
+			Str("claimed_role", r.Header.Get("X-Tamga-Role")).
+			Msg("X-Tamga-Role ignored: set TAMGA_TRUST_ROLE_HEADER=true only behind an authenticating gateway")
 	}
 
 	var action policy.Action
@@ -628,7 +640,12 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 		})
 		return
 	}
-	fallbackProviders := providerFallbackChain(provider, pol)
+	// Retries stay on the provider the caller addressed. Failing over to a
+	// different vendor would forward the caller's credentials (Authorization /
+	// x-api-key) to a host they were not issued for, and the request path and
+	// body are vendor-specific anyway. Same-vendor failover is configured
+	// explicitly through providers.pools, where each endpoint has its own key.
+	upstreamProviders := []string{provider}
 	var providerPool *upstream.ProviderPool
 	var upstreamHooks upstream.Hooks
 	if cfg.UpstreamRegistry != nil {
@@ -659,6 +676,14 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 			req.Body = io.NopCloser(bytes.NewReader(body))
 			req.ContentLength = int64(len(body))
 			req.Header.Del("Transfer-Encoding")
+			// X-Tamga-* request headers are instructions to the proxy
+			// (identity, operator state). They are not the provider's
+			// business, so none of them leave the network.
+			for name := range req.Header {
+				if strings.HasPrefix(strings.ToLower(name), "x-tamga-") {
+					req.Header.Del(name)
+				}
+			}
 			req.Header.Set("X-Tamga-Request-Id", requestID)
 			req.Header.Set("Content-Length", strconv.Itoa(len(body)))
 
@@ -676,7 +701,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 		Transport: &resilientTransport{
 			base:          upstreamTransportOrDefault(cfg),
 			upstreams:     cfg.UpstreamURLs,
-			providers:     fallbackProviders,
+			providers:     upstreamProviders,
 			maxRetries:    maxUpstreamRetries(cfg.Config),
 			breaker:       cfg.Breaker,
 			providerPool:  providerPool,
@@ -1067,34 +1092,6 @@ func breakerCooldown(cfg *config.Config) time.Duration {
 		return 10 * time.Second
 	}
 	return time.Duration(cfg.BreakerCooldownMs) * time.Millisecond
-}
-
-func providerFallbackChain(primary string, pol *policy.Policy) []string {
-	seen := map[string]struct{}{}
-	out := make([]string, 0, 2)
-	push := func(p string) {
-		if p == "" {
-			return
-		}
-		if _, ok := seen[p]; ok {
-			return
-		}
-		seen[p] = struct{}{}
-		out = append(out, p)
-	}
-	push(primary)
-
-	candidates := []string{"openai", "anthropic"}
-	for _, p := range candidates {
-		if p == primary {
-			continue
-		}
-		if pol != nil && !pol.ProviderAllowed(p) {
-			continue
-		}
-		push(p)
-	}
-	return out
 }
 
 func resolveProviderTarget(provider string, overrides map[string]*url.URL) (*url.URL, bool) {

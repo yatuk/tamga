@@ -160,11 +160,15 @@ providers:
 # RBAC exception framework (opt-in)
 # ---------------------------------------------------------------------------
 # Exceptions allow specific admin/security roles to bypass policy rules with
-# full audit logging. When a user sends the X-Tamga-Role header (e.g. "admin"
-# or "security_lead") and their role matches an exception for a rule, that rule
-# is skipped entirely — BLOCK becomes allow, REDACT returns raw content.
+# full audit logging. When a request carries the X-Tamga-Role header (e.g.
+# "admin" or "security_lead") and the role matches an exception for a rule, that
+# rule is skipped entirely — BLOCK becomes allow, REDACT returns raw content.
 #
 # Security notes:
+#   - X-Tamga-Role is an unauthenticated header, so it is IGNORED unless
+#     TAMGA_TRUST_ROLE_HEADER=true. Turn that on only when an authenticating
+#     gateway in front of Tamga strips the header from client requests and
+#     sets it itself; otherwise any caller can claim a role.
 #   - Rule names must match exactly (no wildcards).
 #   - Every exception application is audit-logged as event=exception_applied.
 #   - Expired exceptions are silently ignored (not a parse error).

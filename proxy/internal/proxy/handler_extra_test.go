@@ -25,54 +25,6 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// providerFallbackChain
-// ---------------------------------------------------------------------------
-
-func TestProviderFallbackChain_EmptyChain(t *testing.T) {
-	// primary="" and policy allows only non-candidate providers (gemini, not openai/anthropic).
-	pol := &policy.Policy{
-		Version:   "1.0",
-		Providers: &policy.Providers{Allowed: []string{"gemini"}},
-	}
-	chain := providerFallbackChain("", pol)
-	if len(chain) != 0 {
-		t.Fatalf("expected empty chain, got %v", chain)
-	}
-}
-
-func TestProviderFallbackChain_SingleProvider(t *testing.T) {
-	// primary="openai" with a policy that only allows openai → chain is just ["openai"].
-	pol := &policy.Policy{
-		Version:   "1.0",
-		Providers: &policy.Providers{Allowed: []string{"openai"}},
-	}
-	chain := providerFallbackChain("openai", pol)
-	if len(chain) != 1 || chain[0] != "openai" {
-		t.Fatalf("expected [openai], got %v", chain)
-	}
-}
-
-func TestProviderFallbackChain_FullChain(t *testing.T) {
-	// primary="openai" with nil policy (everything allowed) → ["openai", "anthropic"].
-	chain := providerFallbackChain("openai", nil)
-	if len(chain) != 2 || chain[0] != "openai" || chain[1] != "anthropic" {
-		t.Fatalf("expected [openai anthropic], got %v", chain)
-	}
-}
-
-func TestProviderFallbackChain_DuplicateDedup(t *testing.T) {
-	// Both primary and the candidates list contain "openai" → deduped.
-	pol := &policy.Policy{
-		Version:   "1.0",
-		Providers: &policy.Providers{Allowed: []string{"openai", "anthropic"}},
-	}
-	chain := providerFallbackChain("openai", pol)
-	if len(chain) != 2 || chain[0] != "openai" || chain[1] != "anthropic" {
-		t.Fatalf("expected [openai anthropic], got %v", chain)
-	}
-}
-
-// ---------------------------------------------------------------------------
 // resolveProviderTarget
 // ---------------------------------------------------------------------------
 
