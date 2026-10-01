@@ -3,6 +3,7 @@ package policy
 import (
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -296,9 +297,10 @@ rules: {}
 	}
 	store := NewPolicyStore(p0)
 
-	reloadCount := 0
+	// The callback runs on the watcher's timer goroutine.
+	var reloadCount atomic.Int32
 	stop, err := WatchPolicy(path, store, func() {
-		reloadCount++
+		reloadCount.Add(1)
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -315,9 +317,9 @@ rules: {}
 	}
 
 	deadline := time.Now().Add(3 * time.Second)
-	for reloadCount < 1 {
+	for reloadCount.Load() < 1 {
 		if time.Now().After(deadline) {
-			t.Fatalf("timeout waiting for onReload callback; count=%d", reloadCount)
+			t.Fatalf("timeout waiting for onReload callback; count=%d", reloadCount.Load())
 		}
 		time.Sleep(50 * time.Millisecond)
 	}

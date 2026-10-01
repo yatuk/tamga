@@ -273,6 +273,40 @@ func (w *Watcher) fsnotifyTail(ctx context.Context, path string, offset int64, c
 
 	lastSize := offset
 
+	// catchUp delivers everything appended since lastSize. A file that shrank
+	// was truncated or rotated and is re-read from the start.
+	catchUp := func() {
+		fi, err := os.Stat(path)
+		if err != nil {
+			return
+		}
+		newSize := fi.Size()
+		if newSize < lastSize {
+			lastSize = 0
+		}
+		if newSize > lastSize {
+			if err := w.readRange(path, lastSize, newSize, cb); err != nil {
+				log.Warn().Err(err).Str("path", path).Msg("jugeni: readRange failed on fsnotify")
+				return
+			}
+			lastSize = newSize
+		}
+	}
+
+	// Lines appended between the initial replay and the watch being registered
+	// raised no event; pick them up now instead of waiting for the next write.
+	catchUp()
+
+	// Events are the fast path. The ticker is the safety net: it covers a
+	// dropped event and a rotated file, whose replacement inode this watch
+	// does not follow.
+	interval := w.cfg.PollInterval
+	if interval <= 0 {
+		interval = time.Second
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case <-w.stopCh:
@@ -283,23 +317,11 @@ func (w *Watcher) fsnotifyTail(ctx context.Context, path string, offset int64, c
 			if !ok {
 				return
 			}
-			if event.Has(fsnotify.Write) {
-				fi, err := os.Stat(path)
-				if err != nil {
-					continue
-				}
-				newSize := fi.Size()
-				if newSize < lastSize {
-					lastSize = 0
-				}
-				if newSize > lastSize {
-					if err := w.readRange(path, lastSize, newSize, cb); err != nil {
-						log.Warn().Err(err).Str("path", path).Msg("jugeni: readRange failed on fsnotify")
-						continue
-					}
-					lastSize = newSize
-				}
+			if event.Has(fsnotify.Write) || event.Has(fsnotify.Create) {
+				catchUp()
 			}
+		case <-ticker.C:
+			catchUp()
 		case err, ok := <-watcher.Errors:
 			if !ok {
 				return
