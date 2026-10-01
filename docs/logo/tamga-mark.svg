@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title description">
+  <title id="title">Tamga</title>
+  <desc id="description">A geometric T-shaped inspection gate and downward security seal.</desc>
+  <path fill="#10120f" fill-rule="evenodd" d="M6 8h52v18H43v19.5L32 57 21 45.5V26H6V8Zm8 8v4h15v22.3l3 3.2 3-3.2V20h15v-4H14Z"/>
+  <rect x="29" y="20" width="6" height="24" fill="#c53d2f"/>
+  <rect x="6" y="31" width="8" height="5" fill="#c53d2f"/>
+  <rect x="50" y="31" width="8" height="5" fill="#c53d2f"/>
+</svg>

@@ -21,18 +21,29 @@ cards, and secret-format tokens are all mixed in.
 
 - **File:** [`redteam_latest.json`](./redteam_latest.json)
 - **Corpus size:** 309 prompts (≈ 40% benign, 60% adversarial/PII/secret)
-- **Environment:** Go 1.22, Windows amd64, single proc, no Shadow ML sidecar
+- **Run:** 2026-10-01, Go 1.25.14, linux/amd64 (container on a 16-core
+  laptop CPU), single process, deterministic scanners only
 
 ### Aggregate
 
 | metric | value |
 | --- | --- |
 | Precision | **0.969** |
-| Recall | **0.484** |
-| F1 | **0.646** |
-| Scan latency p95 | **0.52 ms** |
-| Scan latency p99 | **0.58 ms** |
-| Scan latency max | **0.77 ms** |
+| Recall | **0.495** |
+| F1 | **0.655** |
+| Scan latency p50 | **0.21 ms** |
+| Scan latency p95 | **0.83 ms** |
+| Scan latency p99 | **1.22 ms** |
+| Scan latency max | **1.41 ms** |
+
+Latency varies between runs on the same machine; three consecutive runs
+gave a p95 of 0.83–1.16 ms and a p99 of 1.2–1.8 ms.
+
+> **About the earlier 0.52 ms figure.** The previous published run
+> (2026-04-18) was taken on Windows and reported p50 = 0 ms and p95 = 0.52 ms.
+> A median of exactly zero is the Windows clock's resolution, not the
+> scanner: individual scans were being rounded to 0 or to one timer tick.
+> The numbers above come from Linux, where the clock resolves nanoseconds.
 
 ### How to read these numbers honestly
 
@@ -40,14 +51,13 @@ cards, and secret-format tokens are all mixed in.
   96.9% were actually adversarial or contained sensitive data. This is the
   number that governs user experience: false positives block real traffic
   and train analysts to ignore alerts.
-- **Recall (0.484)** — the inline deterministic engine catches ≈ 48% of
-  the adversarial corpus on its own. The remaining 52% are designed to
-  need semantic reasoning (ROT13, grandma prompts, homoglyph attacks,
-  fictional framings). Those are the prompts the Shadow ML sidecar (S4)
-  is built to handle asynchronously and feed back into the DFA
-  dictionary; they are not the target of the 5 ms hot path.
-- **Latency** — every scan finishes well under our 5 ms budget, even on
-  a commodity developer laptop without SIMD tuning.
+- **Recall (0.495)** — the inline deterministic engine catches about half
+  of the adversarial corpus on its own. Much of the rest needs semantic
+  reasoning (grandma prompts, homoglyph attacks, fictional framings,
+  Turkish paraphrases), which pattern matching cannot do. Closing that gap
+  is what an inline classifier is for; it is not implemented yet.
+- **Latency** — the median scan is a fraction of a millisecond and the
+  tail stays under 2 ms, well inside a 5 ms budget.
 
 Where precision is 1.000 and recall is high (e.g. `pii.credit_card`,
 `secret.openai`, `tool.fetch`, `indirect.canary`, `jailbreak.dan`), the

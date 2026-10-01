@@ -1,19 +1,19 @@
 {
-  "generated_at": "2026-04-18T12:36:24Z",
+  "generated_at": "2026-10-01T19:18:24Z",
   "corpus": "prompts.csv",
   "samples": 309,
-  "tp": 93,
+  "tp": 95,
   "fp": 3,
-  "fn": 99,
+  "fn": 97,
   "tn": 114,
-  "precision": 0.96875,
-  "recall": 0.484375,
-  "f1": 0.6458333333333334,
+  "precision": 0.9693877551020408,
+  "recall": 0.4947916666666667,
+  "f1": 0.6551724137931035,
   "scan_latency": {
-    "p50_ms": 0,
-    "p95_ms": 0.525,
-    "p99_ms": 0.577,
-    "max_ms": 0.768
+    "p50_ms": 0.211,
+    "p95_ms": 0.827,
+    "p99_ms": 1.217,
+    "max_ms": 1.411
   },
   "categories": [
     {
@@ -96,13 +96,13 @@
     {
       "category": "indirect.canary",
       "n": 3,
-      "tp": 3,
+      "tp": 1,
       "fp": 0,
-      "fn": 0,
+      "fn": 2,
       "tn": 0,
       "precision": 1,
-      "recall": 1,
-      "f1": 1
+      "recall": 0.3333333333333333,
+      "f1": 0.5
     },
     {
       "category": "injection.context",
@@ -459,13 +459,13 @@
     {
       "category": "jailbreak.role",
       "n": 5,
-      "tp": 3,
+      "tp": 4,
       "fp": 0,
-      "fn": 2,
+      "fn": 1,
       "tn": 0,
       "precision": 1,
-      "recall": 0.6,
-      "f1": 0.7499999999999999
+      "recall": 0.8,
+      "f1": 0.888888888888889
     },
     {
       "category": "jailbreak.role.fiction",
@@ -492,13 +492,13 @@
     {
       "category": "jailbreak.rot13",
       "n": 1,
-      "tp": 0,
+      "tp": 1,
       "fp": 0,
-      "fn": 1,
+      "fn": 0,
       "tn": 0,
-      "precision": 0,
-      "recall": 0,
-      "f1": 0
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "jailbreak.systemspoof",
@@ -635,13 +635,13 @@
     {
       "category": "pii.credit_card.spaced",
       "n": 6,
-      "tp": 2,
+      "tp": 4,
       "fp": 0,
-      "fn": 4,
+      "fn": 2,
       "tn": 0,
       "precision": 1,
-      "recall": 0.3333333333333333,
-      "f1": 0.5
+      "recall": 0.6666666666666666,
+      "f1": 0.8
     },
     {
       "category": "pii.email",
@@ -756,13 +756,13 @@
     {
       "category": "pii.tckn.spaced",
       "n": 2,
-      "tp": 1,
+      "tp": 2,
       "fp": 0,
-      "fn": 1,
+      "fn": 0,
       "tn": 0,
       "precision": 1,
-      "recall": 0.5,
-      "f1": 0.6666666666666666
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "pii.vkn",
@@ -965,13 +965,13 @@
     {
       "category": "secret.private_key",
       "n": 1,
-      "tp": 1,
+      "tp": 0,
       "fp": 0,
-      "fn": 0,
+      "fn": 1,
       "tn": 0,
-      "precision": 1,
-      "recall": 1,
-      "f1": 1
+      "precision": 0,
+      "recall": 0,
+      "f1": 0
     },
     {
       "category": "secret.slack",

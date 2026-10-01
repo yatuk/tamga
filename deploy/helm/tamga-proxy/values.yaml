@@ -1,3 +1,5 @@
+# No public image is published yet. Build one from proxy/Dockerfile, push it to
+# a registry your cluster can pull from, and set repository/tag accordingly.
 image:
   repository: ghcr.io/yatuk/tamga
   tag: "0.7.0"

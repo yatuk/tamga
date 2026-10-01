@@ -1,46 +1,63 @@
 # Tamga Roadmap
 
-Public roadmap for the Tamga open-source LLM security proxy.
+Public roadmap for the Tamga open-source LLM security proxy. Release notes are
+in [CHANGELOG.md](../CHANGELOG.md).
 
-## Completed (v0.7.0)
+## Released
 
-- **Core Proxy**: PII detection (25+ entity types), secret detection,
-  prompt injection defense, YAML policy engine with hot reload
-- **Scanner Pipeline**: 7 inline scanners (PII, secrets, injection,
+### v0.7.0 — 2026-06-20 — initial public release
+
+- **Core proxy**: PII, secret and prompt-injection detection; YAML policy
+  engine with hot reload
+- **Scanner pipeline**: seven inline scanners (PII, secrets, injection,
   jailbreak, competitor, custom entities, content moderation)
-- **Policy Engine**: BLOCK, REDACT, WARN, PASS actions; provider
-  allow/block lists; rate limiting; budget enforcement
-- **Analyzer**: Python deep analysis with gRPC integration
-- **Dashboard**: Real-time traffic monitoring, incident lifecycle,
-  policy editor, RBAC, OWASP LLM Top 10 coverage
+- **Policy engine**: BLOCK, REDACT, WARN, PASS; provider allow/block lists;
+  rate limiting; budget enforcement
+- **Analyzer**: Python deep-analysis service (asynchronous, advisory)
+- **Dashboard**: traffic monitoring, incident lifecycle, policy editor
 - **Deployment**: Docker Compose, Helm chart, Terraform (AWS)
-- **SDK**: Python (PyPI) and TypeScript (npm)
-- **Observability**: OpenTelemetry tracing, Prometheus metrics, Jaeger
-- **Compliance**: KVKK, BDDK, GDPR, PCI-DSS control mappings
-- **Security**: mTLS, IP allowlists, hash-chain audit logs, Vault/KMS
+- **SDK**: Python and TypeScript
+- **Observability**: OpenTelemetry tracing, Prometheus metrics
+- **Compliance**: KVKK, BDDK, GDPR and OWASP LLM Top 10 control mappings
 
-## Coming next (v0.8.0, Q3 2026)
+### v0.8.0-rc1 — 2026-07-21
 
 - Operator-state scanner — [jugeni](https://github.com/jugeni/jugeni-contracts)
   integration for pre-call decision governance
-- Encrypted vault for PII — redact-then-restore round-trip
-- Custom entity UI — define your own PII patterns via the dashboard
-- Trend graphs and incident analytics
 
-## Roadmap (v0.9+)
+## On `main`, unreleased (v0.9.0)
 
-- Semantic caching with embedding-based similarity (30-40% cost reduction target)
-- Multi-language expansion — Arabic and Persian PII patterns
-- Canary tokens for system prompt leak detection
-- MCP gateway integration (tool parameter validation)
-- Indirect injection defense (cross-request context)
-- Advanced multi-region active-active replication (Enterprise)
-- SSO / SAML / SCIM enterprise integration (Enterprise)
+- Vault — reversible PII tokenization, encrypted at rest
+- Canary tokens — system-prompt leak detection
+- Trend graphs — DB-backed detection timeseries
+- Custom entity UI — policy entities from the dashboard
+- Security and correctness fixes from the 2026-10-01 review (see the changelog)
+
+## Next
+
+Ordered by what closes the largest known gaps first.
+
+1. **Message- and role-aware scanning.** Scanners currently read the raw
+   request body. Parsing it into per-role segments fixes JSON-escape evasion
+   and allows separate rules for system, user and tool content.
+2. **Inline semantic classifier.** A small local model on the uncertain band,
+   to raise recall on paraphrased and non-English injection.
+3. **Verified identity.** Virtual keys with hashed storage; roles and budgets
+   attached to the key instead of request headers. Persistent stores for keys,
+   webhooks and patterns.
+4. **Agent traffic.** Tool-call and tool-result inspection, streaming-safe
+   vault and canary, and an MCP gateway mode.
+
+## Later
+
+- Semantic caching
+- Arabic and Persian PII patterns
+- Multi-region active-active replication (Enterprise)
+- SSO / SAML / SCIM (Enterprise)
 - Fine-grained RBAC with custom roles (Enterprise)
 
 ## Contributing
 
-See [CONTRIBUTING.md](../CONTRIBUTING.md) for how to propose features
-and contribute code.
-
-Feature requests and discussion: [GitHub Discussions](https://github.com/yatuk/tamga/discussions)
+See [CONTRIBUTING.md](../CONTRIBUTING.md) for how to propose features and
+contribute code. Feature requests and discussion:
+[GitHub Discussions](https://github.com/yatuk/tamga/discussions)

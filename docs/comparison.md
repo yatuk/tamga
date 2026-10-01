@@ -6,7 +6,7 @@ lives in the [main README](../README.md#how-tamga-compares).
 | Feature | Tamga | Cloud Services | Open-Source Gateways | Legacy DLP |
 |---------|-------|---------------|---------------------|------------|
 | Self-hosted | Yes, full | No, cloud-only | Yes | Yes |
-| Turkish PII (TCKN, IBAN, VKN) | Yes, native | Partial | No | Partial |
+| Turkish PII (TCKN, IBAN, phone) | Yes, native | Partial | No | Partial |
 | KVKK / BDDK mapping | Yes, documented | No | No | Partial |
 | Inline PII redaction (sub-ms) | Yes | Yes | Tier-gated | HTTPS only |
 | Multi-provider routing | Yes | Yes | Yes | No |
