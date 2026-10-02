@@ -28,7 +28,7 @@ if _version_not_supported:
 class AnalyzerServiceStub:
     """── AnalyzerService ─────────────────────────────────────────────────────────
     Deep semantic NLP analysis for LLM security scanning.
-
+    
     Called by the Go proxy AFTER static regex scanning completes. The Go proxy
     has already detected and redacted/blocked based on regex patterns. This
     service provides the ML/NLP layer: Presidio spaCy NER, Claude Haiku judge,
@@ -57,7 +57,7 @@ class AnalyzerServiceStub:
 class AnalyzerServiceServicer:
     """── AnalyzerService ─────────────────────────────────────────────────────────
     Deep semantic NLP analysis for LLM security scanning.
-
+    
     Called by the Go proxy AFTER static regex scanning completes. The Go proxy
     has already detected and redacted/blocked based on regex patterns. This
     service provides the ML/NLP layer: Presidio spaCy NER, Claude Haiku judge,
@@ -104,7 +104,7 @@ def add_AnalyzerServiceServicer_to_server(servicer, server):
 class AnalyzerService:
     """── AnalyzerService ─────────────────────────────────────────────────────────
     Deep semantic NLP analysis for LLM security scanning.
-
+    
     Called by the Go proxy AFTER static regex scanning completes. The Go proxy
     has already detected and redacted/blocked based on regex patterns. This
     service provides the ML/NLP layer: Presidio spaCy NER, Claude Haiku judge,
