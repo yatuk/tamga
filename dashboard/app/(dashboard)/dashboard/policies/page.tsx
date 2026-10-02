@@ -38,7 +38,7 @@ export default function PoliciesPage() {
           <>
             v{(activePolicy?.version as string | undefined) ?? "—"} · last reload{" "}
             {typeof activePolicy?.updated_at === "string"
-              ? new Date(activePolicy.updated_at as string).toLocaleString("tr-TR")
+              ? new Date(activePolicy.updated_at as string).toLocaleString("en-GB")
               : "—"}
           </>
         }

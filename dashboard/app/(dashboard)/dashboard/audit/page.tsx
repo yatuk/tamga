@@ -283,7 +283,7 @@ export default function AuditPage() {
                         }`}
                       >
                         <td className="px-3 py-1.5 text-[10px] text-fg-muted whitespace-nowrap">
-                          {new Date(it.timestamp).toLocaleString("tr-TR")}
+                          {new Date(it.timestamp).toLocaleString("en-GB")}
                         </td>
                         <td className="px-3 py-1.5 whitespace-nowrap">
                           <Badge className={`rounded-sm border text-[10px] ${kindClass(it.kind)}`}>
@@ -316,7 +316,7 @@ export default function AuditPage() {
                     {selected.kind}
                   </Badge>
                   <span className="text-[10px] text-fg-muted">
-                    {new Date(selected.timestamp).toLocaleString("tr-TR")}
+                    {new Date(selected.timestamp).toLocaleString("en-GB")}
                   </span>
                 </div>
                 <div>

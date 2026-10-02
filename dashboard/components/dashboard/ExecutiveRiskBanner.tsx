@@ -103,7 +103,7 @@ export function ExecutiveRiskBanner({
         <div className="flex flex-wrap items-center gap-3 text-[10px]">
           <div className="flex items-center gap-1">
             <span className="text-fg-muted">Requests</span>
-            <span className="tabular-nums text-fg">{totalRequests.toLocaleString("tr-TR")}</span>
+            <span className="tabular-nums text-fg">{totalRequests.toLocaleString("en-US")}</span>
             {TrendIcon && (
               <TrendIcon className={`h-3 w-3 ${trendDirection === "up" ? "text-status-critical" : "text-status-pass"}`} />
             )}
@@ -153,7 +153,7 @@ export function ExecutiveRiskBanner({
 
         {/* Right: last updated */}
         <span className="ml-auto text-[9px] text-fg-muted" suppressHydrationWarning>
-          Last updated: {new Date().toLocaleTimeString("tr-TR", { hour12: false })}
+          Last updated: {new Date().toLocaleTimeString("en-GB", { hour12: false })}
         </span>
       </div>
     </div>

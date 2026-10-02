@@ -147,7 +147,7 @@ export function HuntingResults({ events, total, page, setPage, isLoading, error 
               <span className="text-[10px] text-fg-muted">·</span>
               <span className="flex items-center gap-1 text-[10px] text-fg-muted">
                 <Clock className="h-3 w-3" />
-                {lastRunMeta.latest.toLocaleString("tr-TR")}
+                {lastRunMeta.latest.toLocaleString("en-GB")}
               </span>
               <span className="text-[10px] text-fg-muted">
                 {totalFindings} findings in {lastRunMeta.totalLatencyMs} ms

@@ -90,7 +90,7 @@ export function OverviewViewPartC() {
                           <span className="absolute left-0 top-1/2 hidden h-8 w-0.5 -translate-y-1/2 rounded-full bg-status-low opacity-0 transition-opacity group-hover:opacity-100 dark:bg-status-low md:block" />
                           {e.request_id.slice(0, 12)}
                         </TableCell>
-                        <TableCell>{e.timestamp ? new Date(e.timestamp).toLocaleString("tr-TR") : "—"}</TableCell>
+                        <TableCell>{e.timestamp ? new Date(e.timestamp).toLocaleString("en-GB") : "—"}</TableCell>
                         <TableCell>{e.provider || "unknown"}</TableCell>
                         <TableCell>
                           <OverviewActionBadge action={e.action} />
@@ -160,7 +160,7 @@ export function OverviewViewPartC() {
                       href={buildIncidentsHref({ range, request_id: e.request_id })}
                       className="block truncate text-fg-muted hover:text-fg"
                     >
-                      {new Date(e.timestamp).toLocaleTimeString("tr-TR", { hour12: false })} {e.request_id.slice(0, 10)}{" "}
+                      {new Date(e.timestamp).toLocaleTimeString("en-GB", { hour12: false })} {e.request_id.slice(0, 10)}{" "}
                       {toUpperEn(e.provider || "unknown")} {(e.model || "n/a").slice(0, 16)} {toUpperEn(e.action || "PASS")}{" "}
                       {toUpperEn(e.findings?.[0]?.type || "-")} {Math.round(e.scan_latency_ms || 0)}ms {relTime(e.timestamp)}
                     </a>

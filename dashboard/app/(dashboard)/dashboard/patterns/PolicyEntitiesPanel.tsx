@@ -155,7 +155,7 @@ export function PolicyEntitiesPanel() {
               className={`${inputCls} font-mono`}
               value={draft.pattern}
               onChange={(e) => setDraft({ ...draft, pattern: e.target.value })}
-              placeholder="FIB-\d{8}"
+              placeholder="ACME-\d{8}"
             />
           </div>
           <div>

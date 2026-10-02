@@ -108,7 +108,7 @@ export function OverviewViewPartA() {
     : undefined;
 
   useEffect(() => {
-    const formatClock = () => new Date().toLocaleTimeString("tr-TR", { hour12: false });
+    const formatClock = () => new Date().toLocaleTimeString("en-GB", { hour12: false });
     setRefreshClock(formatClock());
     const timer = window.setInterval(() => setRefreshClock(formatClock()), 1000);
     return () => window.clearInterval(timer);

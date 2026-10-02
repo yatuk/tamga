@@ -38,5 +38,5 @@ export function formatRate(rate: number | undefined | null): string {
 /** Format integer with locale-aware thousand separators (always TR locale for consistency). */
 export function formatInt(n: number | undefined | null): string {
   if (n == null) return "—";
-  return Intl.NumberFormat("tr-TR", { useGrouping: true }).format(Math.round(n));
+  return Intl.NumberFormat("en-US", { useGrouping: true }).format(Math.round(n));
 }

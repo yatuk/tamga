@@ -50,7 +50,7 @@ function diffLines(a: string, b: string): DiffOp[] {
 function revisionLabel(rev: PolicyRevision | undefined): string {
   if (!rev) return "—";
   const short = rev.id.slice(0, 8);
-  const when = rev.created_at ? new Date(rev.created_at).toLocaleString("tr-TR") : "";
+  const when = rev.created_at ? new Date(rev.created_at).toLocaleString("en-GB") : "";
   return `${short} · ${when}`;
 }
 
@@ -241,7 +241,7 @@ function RevisionCard({ rev, title }: { rev: PolicyRevision | undefined; title: 
         </span>
         <span className="inline-flex items-center gap-1">
           <Clock3 className="h-3 w-3" aria-hidden />{" "}
-          {rev.created_at ? new Date(rev.created_at).toLocaleString("tr-TR") : "—"}
+          {rev.created_at ? new Date(rev.created_at).toLocaleString("en-GB") : "—"}
         </span>
       </div>
     </div>

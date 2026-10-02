@@ -82,7 +82,7 @@ export function SettingsAccessSection({ draft, setDraft, saved, saveAdminKey, ke
                           <Badge className="rounded-sm border-border-strong bg-surface-subtle text-[10px] text-fg-muted">{k.scope}</Badge>
                         </td>
                         <td className="px-2 py-1 text-fg-muted">{k.prefix}…</td>
-                        <td className="px-2 py-1 text-[10px] text-fg-muted">{new Date(k.created_at).toLocaleString("tr-TR")}</td>
+                        <td className="px-2 py-1 text-[10px] text-fg-muted">{new Date(k.created_at).toLocaleString("en-GB")}</td>
                         <td className="px-2 py-1 text-right">
                           <Button variant="outline"
                             className="h-7 cursor-pointer rounded-sm border border-border-strong bg-surface-subtle px-2 text-fg-muted hover:bg-status-critical hover:text-white"

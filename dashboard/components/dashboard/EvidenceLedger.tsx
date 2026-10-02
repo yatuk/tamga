@@ -21,7 +21,7 @@ const actionTone: Record<string, string> = {
 function formatTime(timestamp: string) {
   const date = new Date(timestamp);
   if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  return date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
 export function EvidenceLedger({ events, range, available }: Props) {

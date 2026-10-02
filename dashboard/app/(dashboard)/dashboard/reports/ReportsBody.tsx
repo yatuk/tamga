@@ -236,7 +236,7 @@ export function ReportsBody({
         <ul className="space-y-1 text-xs text-fg-muted">
           <li className="flex items-center gap-1.5">
             <span className="text-fg-subtle">&bull;</span>
-            {executiveSummary.totalRequests.toLocaleString("tr-TR")} requests processed this period
+            {executiveSummary.totalRequests.toLocaleString("en-US")} requests processed this period
           </li>
           <li className="flex items-center gap-1.5">
             <span className="text-fg-subtle">&bull;</span>
@@ -337,7 +337,7 @@ export function ReportsBody({
                     </div>
                     <div className="mt-1 text-[10px] text-fg-muted">
                       {e.provider || "unknown"} {e.model ? `· ${e.model}` : ""} ·{" "}
-                      {new Date(e.timestamp).toLocaleString("tr-TR")}
+                      {new Date(e.timestamp).toLocaleString("en-GB")}
                     </div>
                   </div>
                 ))

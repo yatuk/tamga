@@ -7,7 +7,7 @@ export function providerSliceKey(name: string, index: number) {
 
 export function formatInt(n: number | undefined) {
   if (typeof n !== "number") return "—";
-  return n.toLocaleString("tr-TR");
+  return n.toLocaleString("en-US");
 }
 
 export function buildIncidentsHref(query: Record<string, string | undefined>) {

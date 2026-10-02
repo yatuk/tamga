@@ -205,7 +205,7 @@ export function TrafficBody({
           </div>
         </TerminalFrame>
 
-        <TerminalFrame title="Bulgu Analizi">
+        <TerminalFrame title="Finding types">
           <div className="space-y-2 p-3">
             {isLoading ? (
               Array.from({ length: 4 }).map((_, i) => (

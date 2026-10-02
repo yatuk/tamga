@@ -31,7 +31,7 @@ export function SavedHuntsPanel({ savedHunts, onApply, onDelete }: Props) {
                   {h.name}
                 </button>
                 <div className="mt-0.5 text-[9px] text-fg-subtle dark:text-fg-subtle">
-                  {new Date(h.updated_at).toLocaleString("tr-TR")}
+                  {new Date(h.updated_at).toLocaleString("en-GB")}
                 </div>
               </div>
               <button

@@ -36,8 +36,8 @@ export function useOverviewDerived(
           key: dt.toISOString(),
           day:
             range === "24h"
-              ? dt.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })
-              : dt.toLocaleDateString("tr-TR", { weekday: "short", day: days > 7 ? "2-digit" : undefined }),
+              ? dt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })
+              : dt.toLocaleDateString("en-GB", { weekday: "short", day: days > 7 ? "2-digit" : undefined }),
         };
       });
       const base = labels.map((d) => ({ key: d.key, day: d.day, total: 0, blocked: 0, redacted: 0 }));
@@ -57,8 +57,8 @@ export function useOverviewDerived(
       const dt = new Date(p.t);
       const day =
         range === "24h"
-          ? dt.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })
-          : dt.toLocaleDateString("tr-TR", { weekday: "short", day: range === "30d" ? "2-digit" : undefined });
+          ? dt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })
+          : dt.toLocaleDateString("en-GB", { weekday: "short", day: range === "30d" ? "2-digit" : undefined });
       return { key: p.t, day, total: p.total, blocked: p.blocked, redacted: p.redacted };
     });
   }, [timeseries, events, range]);

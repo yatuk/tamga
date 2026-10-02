@@ -78,7 +78,7 @@ export function useReportsPage() {
   const chartData = useMemo(
     () =>
       (ts?.points || []).map((p) => ({
-        time: new Date(p.t).toLocaleString("tr-TR", { month: "short", day: "2-digit", hour: "2-digit" }),
+        time: new Date(p.t).toLocaleString("en-GB", { month: "short", day: "2-digit", hour: "2-digit" }),
         total: p.total,
         blocked: p.blocked,
         redacted: p.redacted,

@@ -13,9 +13,8 @@ describe("formatInt", () => {
     expect(formatInt(undefined)).toBe("—");
   });
 
-  it("formats a number with Turkish locale", () => {
-    const result = formatInt(1234567);
-    expect(result).toContain(".");
+  it("groups thousands with commas", () => {
+    expect(formatInt(1234567)).toBe("1,234,567");
   });
 
   it("formats zero", () => {
