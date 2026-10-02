@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { api } from "@/lib/api";
 import type { SecurityEvent } from "@/lib/api/types-core";
@@ -9,7 +9,9 @@ import { useLiveEventsStream } from "./useLiveEventsStream";
 import { useAdminKey } from "@/hooks/useAdminKey";
 import { VALID_TIMERANGES, type TimeRange } from "@/lib/types";
 
-type ActionFilter = "pass" | "block" | "redact" | "warn";
+export type ActionFilter = "pass" | "block" | "redact" | "warn";
+
+const PAGE_SIZE = 100;
 
 interface Filters {
   actions: ActionFilter[];
@@ -61,15 +63,26 @@ export function useEventsPage() {
     updateFilters({ actions: next });
   };
 
-  const { data, isLoading, error: queryError } = useQuery({
+  const {
+    data,
+    isLoading,
+    error: queryError,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+    refetch,
+  } = useInfiniteQuery({
     queryKey: ["tamga-events-explorer", adminKey, filters],
-    queryFn: () =>
+    queryFn: ({ pageParam }) =>
       api.getEvents(adminKey, {
-        limit: 100,
+        page: pageParam,
+        limit: PAGE_SIZE,
         action: filters.actions.length > 0 ? filters.actions.join(",") : undefined,
         provider: filters.provider || undefined,
         range: filters.range,
       }),
+    initialPageParam: 1,
+    getNextPageParam: (last, pages) => (pages.length * PAGE_SIZE < last.total ? pages.length + 1 : undefined),
     enabled: !!adminKey,
     retry: 1,
     staleTime: 15 * 1000,
@@ -93,37 +106,42 @@ export function useEventsPage() {
     staleTime: 60 * 1000,
   });
 
-  const events: SecurityEvent[] = data?.events ?? [];
-  const total = data?.total ?? 0;
+  const events: SecurityEvent[] = useMemo(() => data?.pages.flatMap((pg) => pg.events ?? []) ?? [], [data]);
+  /** Events matching the current filters, across all pages. */
+  const total = data?.pages[0]?.total ?? 0;
   const hasError = !!queryError;
 
-  const { blockedCount: _blockedCount, passedCount: _passedCount } = useMemo(() => {
-    let blocked = 0;
-    let passed = 0;
-    for (const e of events) {
-      if (e.action === "block") blocked++;
-      else if (e.action === "pass") passed++;
-    }
-    return { blockedCount: blocked, passedCount: passed };
-  }, [events]);
-  const blockedCount = _blockedCount;
-  const passedCount = _passedCount;
-  const passRate = total > 0 ? ((_passedCount / total) * 100).toFixed(1) : "0.0";
+  // Totals for the whole window come from the timeseries, not from the rows
+  // loaded so far, so they stay correct however far the table is scrolled.
+  const windowTotals = useMemo(() => {
+    const pts = ts?.points ?? [];
+    const sum = (k: "total" | "blocked" | "redacted" | "warned") => pts.reduce((n, p) => n + (p[k] ?? 0), 0);
+    const all = sum("total");
+    const blocked = sum("blocked");
+    const redacted = sum("redacted");
+    const passed = Math.max(0, all - blocked - redacted - sum("warned"));
+    return { all, blocked, redacted, passed, passRate: all > 0 ? (passed / all) * 100 : null };
+  }, [ts]);
 
   const timeseriesData = useMemo(
     () =>
       (ts?.points ?? []).map((p) => ({
-        time: new Date(p.t).toLocaleString("en-GB", { hour: "2-digit", minute: "2-digit" }),
+        time: new Date(p.t).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }),
         count: p.total,
+        blocked: p.blocked,
       })),
     [ts],
   );
 
-  // Simpler: just use router.refresh for refetch
   const loadMore = useCallback(() => {
-    // For MVP: page reload with current filters (simplified pagination)
-    router.refresh();
-  }, [router]);
+    if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  /** Pull in the events the live stream has counted since the last load. */
+  const showNew = useCallback(() => {
+    resetCounter();
+    void refetch();
+  }, [resetCounter, refetch]);
 
   return {
     adminKey,
@@ -134,13 +152,13 @@ export function useEventsPage() {
     hasError,
     events,
     total,
-    blockedCount,
-    passedCount,
-    passRate,
+    windowTotals,
     timeseriesData,
     liveCount,
     sseStatus,
-    resetCounter,
+    showNew,
+    hasNextPage,
+    isFetchingNextPage,
     selectedEventId,
     setSelectedEventId,
     eventDetail,

@@ -16,14 +16,12 @@ test.describe("Event Explorer", () => {
     test.skip(!!process.env.CI, "requires backend proxy");
     await page.goto("/dashboard/events?range=7d");
     // Table or data should appear
-    await expect(page.locator('[role="table"]')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('[role="grid"]')).toBeVisible({ timeout: 10_000 });
   });
 
   test("filter by block action updates URL", async ({ page }) => {
     await page.goto("/dashboard/events");
-    // Click the block checkbox
-    const blockCheckbox = page.locator("label").filter({ hasText: /block/i }).locator("input[type='checkbox']");
-    await blockCheckbox.check();
+    await page.getByRole("group", { name: "Filter by action" }).getByRole("button", { name: /block/i }).click();
     await expect(page).toHaveURL(/action=block/);
   });
 
@@ -31,7 +29,7 @@ test.describe("Event Explorer", () => {
     test.skip(!!process.env.CI, "requires backend proxy");
     await page.goto("/dashboard/events?action=block&range=7d");
     // Page should load with filters applied
-    await expect(page.locator('[role="table"]')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('[role="grid"]')).toBeVisible({ timeout: 10_000 });
     await expect(page).toHaveURL(/action=block/);
   });
 });

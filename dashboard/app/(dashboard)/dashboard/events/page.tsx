@@ -1,25 +1,12 @@
-"use client";
-
 import { Suspense } from "react";
-import { EventsBody } from "./EventsBody";
-import { useEventsPage } from "./useEventsPage";
-
-function EventsPageInner() {
-  const p = useEventsPage();
-  return <EventsBody {...p} />;
-}
+import { SkeletonRows } from "@/components/app/states";
+import { EventsView } from "./events-view";
 
 export default function EventsPage() {
+  // useSearchParams in the view needs a Suspense boundary during prerender.
   return (
-    <Suspense
-      fallback={
-        <div className="space-y-2">
-          <div className="h-[40px] animate-pulse rounded-sm bg-surface-subtle" />
-          <div className="h-[600px] animate-pulse rounded-sm bg-surface-subtle" />
-        </div>
-      }
-    >
-      <EventsPageInner />
+    <Suspense fallback={<SkeletonRows rows={10} />}>
+      <EventsView />
     </Suspense>
   );
 }
