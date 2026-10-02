@@ -8,6 +8,12 @@ Usage:
     python check_regression.py --results-dir results/20260617-120000 --baseline baseline.json
     python check_regression.py --results-dir results/20260617-120000 --baseline baseline.json --json
 
+With --load-gate-levels (or STRESS_LOAD_GATE_LEVELS), e.g. "100rps", only the
+listed load levels gate on P95; a P95 above its threshold at any other level is
+reported but does not fail the check. P95 depends on the machine, so on a
+shared CI runner the higher levels measure the runner, not the change.
+Adversarial bypass counts and the load error rate gate at every level.
+
 Exit codes:
     0 — stable or improved (no regression detected)
     1 — regression detected (current > baseline beyond tolerance)
@@ -18,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -160,12 +167,17 @@ def check_load(
     current: dict[str, dict[str, float]],
     baseline: dict[str, dict[str, float]],
     tolerance: float = DEFAULT_TOLERANCE,
+    gate_levels: set[str] | None = None,
 ) -> tuple[bool, list[dict[str, Any]]]:
     """Return (has_regression, rows).
 
     Regression = P95 > baseline * (1+tolerance), or the error rate rising more
     than ERROR_RATE_TOLERANCE above baseline. Only levels that were actually
     run are compared; a baseline level with no current result is skipped.
+
+    gate_levels limits the P95 gate to the named levels (None = all). At any
+    other level a P95 over its threshold is labelled "SLOW (advisory)" and does
+    not count as a regression. Errors and unreadable results still do.
     """
     has_regression = False
     rows: list[dict[str, Any]] = []
@@ -184,9 +196,15 @@ def check_load(
             # A run that mostly errors out returns fast; its P95 says nothing.
             verdict = "REGRESSION (errors)"
             has_regression = True
-        elif cur_p95 > threshold:
-            verdict = "REGRESSION"
+        elif cur_p95 == float("inf"):
+            verdict = "REGRESSION"  # unreadable result file
             has_regression = True
+        elif cur_p95 > threshold:
+            if gate_levels is not None and label not in gate_levels:
+                verdict = "SLOW (advisory)"
+            else:
+                verdict = "REGRESSION"
+                has_regression = True
         elif cur_p95 <= base_p95:
             verdict = "STABLE/IMPROVED"
         else:
@@ -208,7 +226,11 @@ def check_load(
 # ── output ───────────────────────────────────────────────────────────────────
 
 
-def print_table(adversarial_rows: list[dict[str, Any]], load_rows: list[dict[str, Any]]) -> None:
+def print_table(
+    adversarial_rows: list[dict[str, Any]],
+    load_rows: list[dict[str, Any]],
+    gate_levels: set[str] | None = None,
+) -> None:
     """Pretty-print results to stdout (ASCII-safe, no emoji or box-drawing)."""
     sep = "=" * 80
 
@@ -228,15 +250,31 @@ def print_table(adversarial_rows: list[dict[str, Any]], load_rows: list[dict[str
     # Load table
     print()
     print(sep)
-    print("  LOAD TEST REGRESSION CHECK (P95, +/-20% tolerance)")
+    scope = "all levels" if gate_levels is None else ", ".join(sorted(gate_levels)) or "no level"
+    print(f"  LOAD TEST REGRESSION CHECK (P95 gate: {scope}; error rate: all levels)")
     print(sep)
     header2 = f"  {'Label':<12} {'Cur P95':>9} {'Base P95':>9} {'Threshold':>10} {'Cur Err%':>9}  Verdict"
     print(header2)
     print("  " + "-" * 76)
     for r in load_rows:
-        verdict_icon = {"REGRESSION": "[FAIL]", "REGRESSION (errors)": "[FAIL]", "STABLE/IMPROVED": "[OK]", "WITHIN TOLERANCE": "[~]"}.get(r["verdict"], "?")
+        verdict_icon = {"REGRESSION": "[FAIL]", "REGRESSION (errors)": "[FAIL]", "STABLE/IMPROVED": "[OK]", "WITHIN TOLERANCE": "[~]", "SLOW (advisory)": "[WARN]"}.get(r["verdict"], "?")
         print(f"  {r['label']:<12} {r['current_p95_ms']:>8.2f}ms {r['baseline_p95_ms']:>8.2f}ms {r['threshold_p95_ms']:>9.2f}ms {r['current_error_rate']*100:>8.2f}%  {verdict_icon} {r['verdict']}")
     print()
+
+
+def annotate_github(adversarial_rows: list[dict[str, Any]], load_rows: list[dict[str, Any]]) -> None:
+    """Emit GitHub Actions annotations so a result is readable from the run page."""
+    for r in adversarial_rows:
+        if r["verdict"] == "REGRESSION":
+            print(f"::error title=Adversarial regression::{r['category']}: "
+                  f"{r['current_bypassed']} bypassed, baseline {r['baseline_bypassed']}")
+    for r in load_rows:
+        detail = (f"{r['label']}: p95 {r['current_p95_ms']:.2f} ms, threshold {r['threshold_p95_ms']:.2f} ms, "
+                  f"errors {r['current_error_rate'] * 100:.2f}%")
+        if r["verdict"].startswith("REGRESSION"):
+            print(f"::error title=Load regression::{detail}")
+        elif r["verdict"] == "SLOW (advisory)":
+            print(f"::warning title=Load P95 above threshold (advisory)::{detail}")
 
 
 def main() -> int:
@@ -245,7 +283,17 @@ def main() -> int:
     parser.add_argument("--baseline", required=True, help="Path to baseline.json")
     parser.add_argument("--tolerance", type=float, default=DEFAULT_TOLERANCE, help="P95 tolerance (default: 0.20 = 20%%)")
     parser.add_argument("--json", action="store_true", help="Output machine-readable JSON to stdout")
+    parser.add_argument(
+        "--load-gate-levels",
+        default=os.environ.get("STRESS_LOAD_GATE_LEVELS"),
+        help="Comma-separated load levels that gate on P95, e.g. '100rps' "
+             "(default: all; also STRESS_LOAD_GATE_LEVELS)",
+    )
     args = parser.parse_args()
+
+    gate_levels: set[str] | None = None
+    if args.load_gate_levels:
+        gate_levels = {lvl.strip() for lvl in args.load_gate_levels.split(",") if lvl.strip()}
 
     results_dir = Path(args.results_dir)
     baseline_path = Path(args.baseline)
@@ -270,7 +318,7 @@ def main() -> int:
 
     # ── check ────────────────────────────────────────────────────────────
     adv_reg, adv_rows = check_adversarial(adv_current, baseline.get("adversarial", {}))
-    load_reg, load_rows = check_load(load_current, baseline.get("load", {}), args.tolerance)
+    load_reg, load_rows = check_load(load_current, baseline.get("load", {}), args.tolerance, gate_levels)
 
     has_regression = adv_reg or load_reg
 
@@ -278,13 +326,16 @@ def main() -> int:
     if args.json:
         output = {
             "has_regression": has_regression,
+            "load_gate_levels": sorted(gate_levels) if gate_levels is not None else None,
             "exit_code": 1 if has_regression else 0,
             "adversarial": adv_rows,
             "load": load_rows,
         }
         json.dump(output, sys.stdout, indent=2)
     else:
-        print_table(adv_rows, load_rows)
+        print_table(adv_rows, load_rows, gate_levels)
+        if os.environ.get("GITHUB_ACTIONS") == "true":
+            annotate_github(adv_rows, load_rows)
 
         if has_regression:
             print("RESULT: REGRESSION DETECTED — see above for details\n")

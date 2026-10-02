@@ -87,6 +87,12 @@ jobs:
           TAMGA_ADMIN_KEY: ci-only-admin-key
           # Scan and enforce, but never forward test vectors to a provider.
           TAMGA_MOCK_UPSTREAM: "true"
+          # A shared runner hosts the whole stack and k6 on the same few
+          # cores, so P95 at 500 and 1000 RPS measures the runner, not the
+          # change. Only 100 RPS gates on P95 here; the higher levels are
+          # reported as warning annotations. Bypass counts and the load error
+          # rate fail the job at every level.
+          STRESS_LOAD_GATE_LEVELS: "100rps"
 
       - name: Upload results artifact
         if: always()

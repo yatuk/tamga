@@ -95,14 +95,22 @@ python check_regression.py \
 | Code | Meaning |
 |------|---------|
 | 0 | Stable or improved — no regression |
-| 1 | Regression detected (more bypasses or higher P95) |
+| 1 | Regression detected (more bypasses, higher P95, or more errors under load) |
 | 2 | Baseline file missing or unreadable |
 
 ### Rules
 
 - **Adversarial:** Any category with more bypasses than baseline → regression
-- **Load:** P95 latency exceeds baseline by more than 20% → regression
-- **Error rate:** Not checked for regression (only P95)
+- **Load P95:** P95 latency exceeds baseline by more than 20% → regression
+- **Load error rate:** more than 1 percentage point above baseline → regression
+
+### Limiting the P95 gate
+
+P95 depends on the machine. `--load-gate-levels 100rps` (or
+`STRESS_LOAD_GATE_LEVELS=100rps`) gates on P95 only at the listed levels; at
+the others a P95 over its threshold is printed as `SLOW (advisory)` and does
+not fail the check. Bypass counts and the load error rate gate at every level.
+CI gates on 100 RPS only; a local run gates on every level by default.
 
 ### JSON Output
 
@@ -171,7 +179,13 @@ The `adversarial-gate.yml` workflow runs on every PR to `dev` or `main` that tou
 - Runs the full suite
 - Uploads results as a 30-day artifact
 - Posts a summary comment on the PR
-- Fails the check if regression is detected
+- Fails the check if a category has more bypasses than the baseline, or the
+  error rate under load rises
+- Fails the check if P95 at 100 RPS exceeds its threshold
+- Reports P95 over its threshold at 500 and 1000 RPS as a warning annotation,
+  without failing: the shared runner hosts the stack and k6 on the same few
+  cores, so P95 there measures the runner
+  (see [Limiting the P95 gate](#limiting-the-p95-gate))
 
 Manual trigger: **Actions → Adversarial & Load Regression Gate → Run workflow**
 
