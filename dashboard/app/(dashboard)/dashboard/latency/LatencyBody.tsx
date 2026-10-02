@@ -296,14 +296,14 @@ export function LatencyBody({
                     <TableCell className="text-center">
                       {(p.state === "HALF" || p.state === "OPEN" || p.state === "CLOSED" || p.state === "degraded") ? (
                         <Button
- size="sm"
- variant="outline"
- className="uppercase"
- onClick={() =>
+                          size="sm"
+                          variant="outline"
+                          className="uppercase"
+                          onClick={() =>
  circuitReset.mutate({ pool: p.pool, endpoint: p.name })
  }
- disabled={circuitReset.isPending}
- >
+                          disabled={circuitReset.isPending}
+                        >
                           <RotateCw className="mr-1 h-3 w-3" />
                           {circuitReset.isPending ? "..." : "Reset"}
                         </Button>

@@ -88,7 +88,9 @@ export function HuntingFilters({
               onChange={(e: ChangeEvent<HTMLInputElement>) => {
                 setProvider(e.target.value);
                 resetPage();
-              }} aria-label="openai, shadow" />
+              }}
+              aria-label="openai, shadow"
+            />
           </label>
           <label className="flex items-end gap-2 pb-1">
             <input
@@ -172,7 +174,7 @@ export function HuntingFilters({
         <label className="block space-y-1">
           <span className="text-xs uppercase tracking-wide text-fg-muted">Q (request_id / payload)</span>
           <Input
-              className="h-8 focus:border-status-critical"
+            className="h-8 focus:border-status-critical"
             placeholder="req_… or search within findings"
             value={q}
             onChange={(e: ChangeEvent<HTMLInputElement>) => {

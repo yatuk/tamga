@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { ConfirmButton } from "@/components/app/confirm-button";
 
 const inputCls =
   "mt-1 w-full rounded-sm border border-border bg-surface-card px-2 py-1.5 text-xs text-fg focus:border-status-critical/40 ";
@@ -88,13 +89,16 @@ export function PolicyEntitiesPanel() {
                       <TableCell>{e.severity}</TableCell>
                       <TableCell>{e.confidence ?? "—"}</TableCell>
                       <TableCell>
-                        <button
-                          aria-label={`delete ${e.name}`}
-                          className="text-fg-subtle hover:text-status-critical"
-                          onClick={() => deleteMut.mutate(e.name)}
+                        <ConfirmButton
+                          variant="ghost"
+                          size="icon-xs"
+                          aria-label={`Delete entity ${e.name}`}
+                          title={`Delete entity ${e.name}?`}
+                          description="It is removed from the active policy."
+                          onConfirm={() => deleteMut.mutate(e.name)}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                        </ConfirmButton>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -110,14 +114,10 @@ export function PolicyEntitiesPanel() {
               className={`${inputCls} h-16 font-mono`}
               value={sampleText}
               onChange={(e) => setSampleText(e.target.value)}
-              placeholder="Paste sample text, e.g. customer ACME-12345678 record" aria-label="Paste sample text, e.g. customer ACME-12345678 record" />
-            <Button
- variant="outline"
- size="sm"
- className="mt-2"
- onClick={onSimulate}
- disabled={simulating}
- >
+              placeholder="Paste sample text, e.g. customer ACME-12345678 record"
+              aria-label="Paste sample text, e.g. customer ACME-12345678 record"
+            />
+            <Button variant="outline" size="sm" className="mt-2" onClick={onSimulate} disabled={simulating}>
               <Play className="mr-1 h-3.5 w-3.5" />
               {simulating ? "Running…" : "Simulate"}
             </Button>
@@ -129,7 +129,7 @@ export function PolicyEntitiesPanel() {
                 </div>
                 {simResult.findings.map((f, i) => (
                   <div key={i} className="mt-1 text-fg-muted">
-                    <span className="font-mono text-status-medium">{f.category}</span> — {f.match}{" "}
+                    <span className="font-mono text-status-medium">{f.category}</span>: {f.match}{" "}
                     <span className="text-fg-subtle">({f.action})</span>
                   </div>
                 ))}
@@ -148,7 +148,9 @@ export function PolicyEntitiesPanel() {
               className={inputCls}
               value={draft.name}
               onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-              placeholder="fib_musteri_no" aria-label="fib_musteri_no" />
+              placeholder="fib_musteri_no"
+              aria-label="fib_musteri_no"
+            />
           </div>
           <div>
             <label className={labelCls}>Pattern (regex)</label>
@@ -156,7 +158,9 @@ export function PolicyEntitiesPanel() {
               className={`${inputCls} font-mono`}
               value={draft.pattern}
               onChange={(e) => setDraft({ ...draft, pattern: e.target.value })}
-              placeholder="ACME-\d{8}" aria-label="ACME-\d{8}" />
+              placeholder="ACME-\d{8}"
+              aria-label="ACME-\d{8}"
+            />
           </div>
           <div>
             <label className={labelCls}>Description</label>
@@ -164,7 +168,9 @@ export function PolicyEntitiesPanel() {
               className={inputCls}
               value={draft.description}
               onChange={(e) => setDraft({ ...draft, description: e.target.value })}
-              placeholder="Customer number" aria-label="Customer number" />
+              placeholder="Customer number"
+              aria-label="Customer number"
+            />
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>

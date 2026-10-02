@@ -15,24 +15,22 @@ export function CreateApiKeyInline({ onCreate }: { onCreate: (label: string, sco
       <Input
         value={label}
         onChange={(e) => setLabel(e.target.value)}
-        id="apikey-label-input" placeholder="label"
+        id="apikey-label-input"
+        placeholder="label"
         className="w-28"
       />
-      <NativeSelect
-        value={scope}
-        onChange={(e) => setScope(e.target.value as ApiKey["scope"])}
-      >
+      <NativeSelect value={scope} onChange={(e) => setScope(e.target.value as ApiKey["scope"])}>
         <NativeSelectOption value="read">read</NativeSelectOption>
         <NativeSelectOption value="write">write</NativeSelectOption>
         <NativeSelectOption value="admin">admin</NativeSelectOption>
       </NativeSelect>
-      <Button size="sm" 
-
- onClick={() => {
+      <Button
+        size="sm"
+        onClick={() => {
  onCreate(label, scope);
  setLabel("");
  }}
- >
+      >
         <Key className="mr-1 h-3.5 w-3.5" /> New
       </Button>
     </div>

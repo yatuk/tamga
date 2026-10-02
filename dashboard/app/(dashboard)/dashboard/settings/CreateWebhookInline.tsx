@@ -18,19 +18,18 @@ export function CreateWebhookInline({ onCreate }: { onCreate: (payload: Omit<Web
       <Input
         value={label}
         onChange={(e) => setLabel(e.target.value)}
-        id="webhook-label-input" placeholder="label"
+        id="webhook-label-input"
+        placeholder="label"
         className="w-24"
       />
       <Input
         value={url}
         onChange={(e) => setUrl(e.target.value)}
-        id="webhook-url-input" placeholder="https://…"
+        id="webhook-url-input"
+        placeholder="https://…"
         className="w-72"
       />
-      <NativeSelect
-        value={kind}
-        onChange={(e) => setKind(e.target.value as Webhook["kind"])}
-      >
+      <NativeSelect value={kind} onChange={(e) => setKind(e.target.value as Webhook["kind"])}>
         <NativeSelectOption value="generic">generic</NativeSelectOption>
         <NativeSelectOption value="slack">slack</NativeSelectOption>
         <NativeSelectOption value="teams">teams</NativeSelectOption>
@@ -43,15 +42,11 @@ export function CreateWebhookInline({ onCreate }: { onCreate: (payload: Omit<Web
         <NativeSelectOption value="opsgenie">opsgenie</NativeSelectOption>
         <NativeSelectOption value="servicenow">servicenow</NativeSelectOption>
       </NativeSelect>
-      <Input
-        value={blocksPerMin}
-        onChange={(e) => setBlocksPerMin(e.target.value)}
-        className="w-16"
-      />
+      <Input value={blocksPerMin} onChange={(e) => setBlocksPerMin(e.target.value)} className="w-16" />
       <span className="text-xs uppercase tracking-wide text-fg-muted">blocks/min</span>
-      <Button size="sm" 
-
- onClick={() => {
+      <Button
+        size="sm"
+        onClick={() => {
  if (!label.trim() || !url.trim()) {
  toast.error("Label and URL are required");
  return;
@@ -66,7 +61,7 @@ export function CreateWebhookInline({ onCreate }: { onCreate: (payload: Omit<Web
  setLabel("");
  setUrl("");
  }}
- >
+      >
         <Plus className="mr-1 h-3.5 w-3.5" /> Add
       </Button>
     </div>

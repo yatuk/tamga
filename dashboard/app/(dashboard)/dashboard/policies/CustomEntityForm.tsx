@@ -17,6 +17,7 @@ import { api } from "@/lib/api/client";
 import type { CustomEntity } from "@/lib/api/types-core";
 import { Input } from "@/components/ui/input";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { ConfirmButton } from "@/components/app/confirm-button";
 
 function isValidRegex(pattern: string): boolean {
   try {
@@ -128,15 +129,16 @@ export function CustomEntityForm({ adminKey }: { adminKey: string }) {
                   </TableCell>
                   <TableCell className="uppercase">{ce.action}</TableCell>
                   <TableCell className="text-right">
-                    <Button
- size="sm"
- variant="ghost"
-
- onClick={() => deleteMut.mutate(ce.name)}
- disabled={deleteMut.isPending}
- >
+                    <ConfirmButton
+                      size="sm"
+                      variant="ghost"
+                      title={`Delete entity ${ce.name}?`}
+                      description="It is removed from the active policy."
+                      onConfirm={() => deleteMut.mutate(ce.name)}
+                      disabled={deleteMut.isPending}
+                    >
                       Delete
-                    </Button>
+                    </ConfirmButton>
                   </TableCell>
                 </TableRow>
               ))}
@@ -204,11 +206,7 @@ export function CustomEntityForm({ adminKey }: { adminKey: string }) {
         {createMut.error && (
           <p className="text-xs text-status-critical">{createMut.error.message}</p>
         )}
-        <Button 
- type="submit"
-
- disabled={createMut.isPending}
- >
+        <Button type="submit" disabled={createMut.isPending}>
           {createMut.isPending ? "Adding…" : "Add entity"}
         </Button>
       </form>

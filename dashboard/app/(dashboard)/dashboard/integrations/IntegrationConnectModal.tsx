@@ -67,7 +67,9 @@ export function IntegrationConnectModal({ draft, setDraft, createMut }: Props) {
                   className="mt-1 w-full"
                   value={draft.projectKey}
                   onChange={(e) => setDraft({ ...draft, projectKey: toUpperEn(e.target.value) })}
-                  placeholder="SEC" aria-label="SEC" />
+                  placeholder="SEC"
+                  aria-label="SEC"
+                />
               </div>
               <div>
                 <label className="text-xs uppercase tracking-[0.16em] text-fg-muted">Issue type</label>
@@ -75,7 +77,9 @@ export function IntegrationConnectModal({ draft, setDraft, createMut }: Props) {
                   className="mt-1 w-full"
                   value={draft.issueType}
                   onChange={(e) => setDraft({ ...draft, issueType: e.target.value })}
-                  placeholder="Task" aria-label="Task" />
+                  placeholder="Task"
+                  aria-label="Task"
+                />
               </div>
             </div>
           ) : null}
@@ -122,15 +126,11 @@ export function IntegrationConnectModal({ draft, setDraft, createMut }: Props) {
           </label>
         </div>
         <div className="mt-4 flex items-center justify-end gap-2">
-          <Button variant="outline"
-
- onClick={() => setDraft(null)}
- >
+          <Button variant="outline" onClick={() => setDraft(null)}>
             Cancel
           </Button>
-          <Button 
-
- onClick={() => {
+          <Button
+            onClick={() => {
  if (!draft.url.trim()) {
  toast.error("URL required");
  return;
@@ -149,8 +149,8 @@ export function IntegrationConnectModal({ draft, setDraft, createMut }: Props) {
  }
  createMut.mutate(draft);
  }}
- disabled={createMut.isPending}
- >
+            disabled={createMut.isPending}
+          >
             Connect
           </Button>
         </div>

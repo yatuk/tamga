@@ -9,6 +9,7 @@ import { formatSince } from "@/lib/utils/format";
 import type { Webhook } from "@/lib/api";
 import { integrationKindBadge } from "./integrationWebhookHelpers";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { ConfirmButton } from "@/components/app/confirm-button";
 
 type Props = {
   hooks: Webhook[];
@@ -113,20 +114,19 @@ export function IntegrationsHooksTable({ hooks, onTest, onDelete, onConnect }: P
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="inline-flex gap-1">
-                        <Button variant="outline"
-
- onClick={() => onTest(h.id)}
- >
+                        <Button variant="outline" size="icon-sm" aria-label={`Send a test event to ${h.label}`} onClick={() => onTest(h.id)}>
                           <CheckCircle2 className="h-3.5 w-3.5" />
                         </Button>
-                        <Button variant="outline"
-
- onClick={() => {
- onDelete(h.id);
- }}
- >
+                        <ConfirmButton
+                          variant="outline"
+                          size="icon-sm"
+                          aria-label={`Delete integration ${h.label}`}
+                          title={`Delete ${h.label}?`}
+                          description="Incidents will no longer be sent to this destination."
+                          onConfirm={() => onDelete(h.id)}
+                        >
                           <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                        </ConfirmButton>
                       </div>
                     </TableCell>
                   </TableRow>

@@ -55,10 +55,7 @@ function PresetCard({
             Docs <ExternalLink className="h-3 w-3" />
           </a>
         </div>
-        <Button 
-
- onClick={() => onConnect(preset.kind, preset.name)}
- >
+        <Button onClick={() => onConnect(preset.kind, preset.name)}>
           <Plug className="mr-1 h-3.5 w-3.5" /> Connect
         </Button>
       </div>

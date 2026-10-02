@@ -56,10 +56,7 @@ export default function PoliciesPage() {
             <Button variant="outline" onClick={onReload}>
               Reload disk
             </Button>
-            <Button variant="outline"
-
- onClick={() => setDraft(originalYaml)}
- >
+            <Button variant="outline" onClick={() => setDraft(originalYaml)}>
               Reset draft
             </Button>
           </>

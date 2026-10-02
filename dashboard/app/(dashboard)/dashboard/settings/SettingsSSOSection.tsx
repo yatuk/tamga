@@ -114,7 +114,9 @@ export function SettingsSSOSection({ config, loading, error, onSave }: Props) {
               value={metadataUrl}
               onChange={(e) => setMetadataUrl(e.target.value)}
               placeholder="https://idp.example.com/metadata"
-              className="w-full" aria-label="https://idp.example.com/metadata" />
+              className="w-full"
+              aria-label="https://idp.example.com/metadata"
+            />
           </div>
 
           {/* Domain */}
@@ -127,7 +129,9 @@ export function SettingsSSOSection({ config, loading, error, onSave }: Props) {
               value={domain}
               onChange={(e) => setDomain(e.target.value)}
               placeholder="example.com"
-              className="w-full" aria-label="example.com" />
+              className="w-full"
+              aria-label="example.com"
+            />
           </div>
 
           {/* Enabled Toggle */}
@@ -161,11 +165,7 @@ export function SettingsSSOSection({ config, loading, error, onSave }: Props) {
           </div>
 
           {/* Save Button */}
-          <Button 
-
- onClick={handleSave}
- disabled={saving}
- >
+          <Button onClick={handleSave} disabled={saving}>
             {saving ? (
               <>
                 <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> Saving...

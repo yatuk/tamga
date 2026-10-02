@@ -47,7 +47,9 @@ export function PatternFormPanel({
               className="mt-1 w-full"
               value={draft.name}
               onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-              placeholder="project-codename" aria-label="project-codename" />
+              placeholder="project-codename"
+              aria-label="project-codename"
+            />
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
@@ -103,12 +105,11 @@ export function PatternFormPanel({
               className="mt-1 min-h-[60px] w-full resize-y"
               value={testInput}
               onChange={(e) => setTestInput(e.target.value)}
-              placeholder="paste sample text…" aria-label="paste sample text" />
+              placeholder="paste sample text…"
+              aria-label="paste sample text"
+            />
             <div className="mt-1 flex items-center justify-between">
-              <Button variant="outline"
-
- onClick={onTest}
- >
+              <Button variant="outline" onClick={onTest}>
                 Test
               </Button>
               {testMatch ? (
@@ -122,18 +123,11 @@ export function PatternFormPanel({
 
           <div className="flex items-center justify-end gap-2 pt-1">
             {draft.id ? (
-              <Button variant="outline"
-
- onClick={() => setDraft(EMPTY_DRAFT)}
- >
+              <Button variant="outline" onClick={() => setDraft(EMPTY_DRAFT)}>
                 Cancel
               </Button>
             ) : null}
-            <Button 
-
- onClick={onSubmit}
- disabled={createPending || updatePending}
- >
+            <Button onClick={onSubmit} disabled={createPending || updatePending}>
               <Plus className="mr-1 h-4 w-4" />
               {draft.id ? "Update" : "Create"}
             </Button>

@@ -45,7 +45,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "Tamga — AI Security Proxy",
+    default: "Tamga: AI Security Proxy",
     template: "%s · Tamga",
   },
   description:
@@ -64,14 +64,14 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     siteName: "Tamga",
-    title: "Tamga — AI Security Proxy",
+    title: "Tamga: AI Security Proxy",
     description:
       "Scans LLM traffic inline, redacts PII and secrets, blocks prompt injection.",
     url: SITE_URL,
   },
   twitter: {
     card: "summary_large_image",
-    title: "Tamga — AI Security Proxy",
+    title: "Tamga: AI Security Proxy",
     description:
       "LLM firewall, PII redaction, policy engine, SOC dashboard.",
   },

@@ -20,7 +20,7 @@ export function KeyRevealDialog({ revealed, onDismiss, onCopy }: Props) {
           <span className="mt-0.5 text-lg">⚠</span>
           <div>
             <h2 className="text-sm font-semibold text-status-medium">
-              Copy this key now — it will not be shown again
+              Copy this key now. It will not be shown again.
             </h2>
             <p className="mt-1 text-xs text-fg-subtle">
               Key name: <span className="font-mono text-fg-muted">{revealed.label}</span>
@@ -35,19 +35,10 @@ export function KeyRevealDialog({ revealed, onDismiss, onCopy }: Props) {
         </div>
 
         <div className="mt-4 flex justify-between gap-2">
-          <Button
- size="sm"
- variant="outline"
-
- onClick={() => onCopy(revealed.rawKey)}
- >
+          <Button size="sm" variant="outline" onClick={() => onCopy(revealed.rawKey)}>
             <Copy className="mr-1 h-3.5 w-3.5" /> Copy
           </Button>
-          <Button 
- size="sm"
-
- onClick={onDismiss}
- >
+          <Button size="sm" onClick={onDismiss}>
             <Check className="mr-1 h-3.5 w-3.5" /> I have saved this key
           </Button>
         </div>

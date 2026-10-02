@@ -83,25 +83,14 @@ export function ReportsBody({
         actions={
           <>
             <TimeRangeToggle value={range} onChange={setRange} />
-            <Button variant="outline"
-
- onClick={exportBlockedCsv}
- >
+            <Button variant="outline" onClick={exportBlockedCsv}>
               <Download className="mr-1 h-4 w-4" /> CSV
             </Button>
-            <Button variant="outline"
-
- disabled={isExporting}
- onClick={exportOwaspPdf}
- >
+            <Button variant="outline" disabled={isExporting} onClick={exportOwaspPdf}>
               {isExporting ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <FileDown className="mr-1 h-4 w-4" />}
               OWASP PDF
             </Button>
-            <Button variant="outline"
-
- disabled={isExporting}
- onClick={exportIncidentPdf}
- >
+            <Button variant="outline" disabled={isExporting} onClick={exportIncidentPdf}>
               {isExporting ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <FileDown className="mr-1 h-4 w-4" />}
               Incident PDF
             </Button>

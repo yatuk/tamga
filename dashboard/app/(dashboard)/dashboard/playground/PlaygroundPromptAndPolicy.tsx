@@ -38,7 +38,9 @@ export function PlaygroundPromptAndPolicy({
             className="min-h-[260px] w-full resize-y"
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            placeholder="Sample prompt…" aria-label="Sample prompt" />
+            placeholder="Sample prompt…"
+            aria-label="Sample prompt"
+          />
           <div className="flex flex-wrap gap-1 border-t border-border bg-surface-subtle px-2 py-2">
             {PLAYGROUND_SNIPPETS.map((s) => (
               <button
@@ -79,7 +81,9 @@ export function PlaygroundPromptAndPolicy({
                 className="min-h-[180px] w-full resize-y"
                 value={uploadYaml}
                 onChange={(e) => setUploadYaml(e.target.value)}
-                placeholder="Paste policy YAML…" aria-label="Paste policy YAML" />
+                placeholder="Paste policy YAML…"
+                aria-label="Paste policy YAML"
+              />
             ) : (
               <pre className="max-h-[220px] overflow-auto rounded-sm border border-border bg-surface-card p-2 text-xs leading-4 text-fg-muted">
                 {effectiveYaml || "// (empty) — switch source or load a policy"}

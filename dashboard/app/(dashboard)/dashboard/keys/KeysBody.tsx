@@ -80,10 +80,7 @@ export function KeysBody({
         title="API Keys"
         description={`${total} key${total !== 1 ? "s" : ""}. Each key carries a role: admin, write or read-only.`}
         actions={
-          <Button 
-
- onClick={() => setCreateOpen(true)}
- >
+          <Button onClick={() => setCreateOpen(true)}>
             <Plus className="mr-1 h-4 w-4" /> New API Key
           </Button>
         }
@@ -221,11 +218,11 @@ export function KeysBody({
                       </TableCell>
                       <TableCell className="text-center whitespace-nowrap">
                         <Button
- size="sm"
- variant="outline"
- className="uppercase"
- onClick={() => setDeleteTarget({ id: key.id, label: key.label })}
- >
+                          size="sm"
+                          variant="outline"
+                          className="uppercase"
+                          onClick={() => setDeleteTarget({ id: key.id, label: key.label })}
+                        >
                           <Trash2 className="mr-1 h-3 w-3" /> Revoke
                         </Button>
                       </TableCell>

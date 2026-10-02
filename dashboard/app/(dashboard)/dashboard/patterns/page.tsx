@@ -70,7 +70,7 @@ export default function PatternsPage() {
 
       <PageHeader
         title="Policy Entities"
-        description="Named PII entities with an enforcement action — define your own, test against the active policy"
+        description="Named PII entities with an enforcement action. Define your own and test them against the active policy."
       />
       <PolicyEntitiesPanel />
     </div>

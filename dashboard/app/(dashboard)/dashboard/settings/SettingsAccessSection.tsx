@@ -7,6 +7,7 @@ import { Panel } from "@/components/app/panel";
 import { CreateApiKeyInline } from "./CreateApiKeyInline";
 import { Input } from "@/components/ui/input";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { ConfirmButton } from "@/components/app/confirm-button";
 
 type KeyList = NonNullable<Awaited<ReturnType<typeof import("@/lib/api").api.listApiKeys>>>;
 
@@ -86,12 +87,17 @@ export function SettingsAccessSection({ draft, setDraft, saved, saveAdminKey, ke
                         <TableCell>{k.prefix}…</TableCell>
                         <TableCell>{new Date(k.created_at).toLocaleString("en-GB")}</TableCell>
                         <TableCell className="text-right">
-                          <Button size="sm" variant="outline"
-
- onClick={() => removeKey(k.id)}
- >
+                          <ConfirmButton
+                            size="icon-sm"
+                            variant="outline"
+                            aria-label={`Revoke API key ${k.label}`}
+                            title={`Revoke API key ${k.label}?`}
+                            description="Clients using this key are rejected immediately."
+                            confirmLabel="Revoke"
+                            onConfirm={() => removeKey(k.id)}
+                          >
                             <Trash className="h-3.5 w-3.5" />
-                          </Button>
+                          </ConfirmButton>
                         </TableCell>
                       </TableRow>
                     ))}

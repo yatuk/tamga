@@ -178,22 +178,20 @@ export function HuntingResults({ events, total, page, setPage, isLoading, error 
             {selectedRows.size} selected
           </span>
           <Button
- size="sm"
- variant="outline"
-
- disabled
- title="Bulk tagging will be available in a future release"
- >
+            size="sm"
+            variant="outline"
+            disabled
+            title="Bulk tagging will be available in a future release"
+          >
             <Tag className="h-3 w-3 mr-1" />
             Tag selected
           </Button>
           <Button
- size="sm"
- variant="outline"
-
- disabled
- title="Bulk status change will be available in a future release"
- >
+            size="sm"
+            variant="outline"
+            disabled
+            title="Bulk status change will be available in a future release"
+          >
             Change status
           </Button>
           <button

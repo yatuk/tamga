@@ -22,13 +22,11 @@ export function PoliciesSimulatePanel({ sample, onSampleChange, simulating, onSi
           className="min-h-[120px] w-full resize-y"
           value={sample}
           onChange={(e) => onSampleChange(e.target.value)}
-          placeholder="Sample prompt…" aria-label="Sample prompt" />
+          placeholder="Sample prompt…"
+          aria-label="Sample prompt"
+        />
       </Panel>
-      <Button 
-
- onClick={onSimulate}
- disabled={simulating}
- >
+      <Button onClick={onSimulate} disabled={simulating}>
         {simulating ? "Running…" : "Run simulate"}
       </Button>
       {simResult ? (

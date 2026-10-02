@@ -2,6 +2,7 @@
 
 import { Crosshair, Trash2 } from "lucide-react";
 import type { SavedHunt } from "./_types";
+import { ConfirmButton } from "@/components/app/confirm-button";
 
 type Props = {
   savedHunts: SavedHunt[];
@@ -34,14 +35,15 @@ export function SavedHuntsPanel({ savedHunts, onApply, onDelete }: Props) {
                   {new Date(h.updated_at).toLocaleString("en-GB")}
                 </div>
               </div>
-              <button
-                type="button"
-                aria-label="Delete hunt"
-                className="text-fg-muted hover:text-status-critical"
-                onClick={() => onDelete(h.id)}
+              <ConfirmButton
+                variant="ghost"
+                size="icon-xs"
+                aria-label={`Delete saved hunt ${h.name}`}
+                title={`Delete saved hunt ${h.name}?`}
+                onConfirm={() => onDelete(h.id)}
               >
                 <Trash2 className="h-3.5 w-3.5" />
-              </button>
+              </ConfirmButton>
             </li>
           ))}
         </ul>

@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Panel } from "@/components/app/panel";
 import { type Webhook } from "@/lib/api";
 import { CreateWebhookInline } from "./CreateWebhookInline";
+import { ConfirmButton } from "@/components/app/confirm-button";
 
 type HookList = NonNullable<Awaited<ReturnType<typeof import("@/lib/api").api.listWebhooks>>>;
 
@@ -59,18 +60,19 @@ export function SettingsWebhooksSection({ hookList, createHook, removeHook, test
                   </Badge>
                   <span className="truncate text-xs text-fg-muted">{w.url}</span>
                   <div className="ml-auto flex items-center gap-1">
-                    <Button size="sm" variant="outline"
-
- onClick={() => testHook(w.id)}
- >
+                    <Button size="sm" variant="outline" onClick={() => testHook(w.id)}>
                       Test
                     </Button>
-                    <Button size="sm" variant="outline"
-
- onClick={() => removeHook(w.id)}
- >
+                    <ConfirmButton
+                      size="icon-sm"
+                      variant="outline"
+                      aria-label={`Delete webhook ${w.label}`}
+                      title={`Delete webhook ${w.label}?`}
+                      description="Events will no longer be posted to this URL."
+                      onConfirm={() => removeHook(w.id)}
+                    >
                       <Trash className="h-3.5 w-3.5" />
-                    </Button>
+                    </ConfirmButton>
                   </div>
                 </div>
               ))}

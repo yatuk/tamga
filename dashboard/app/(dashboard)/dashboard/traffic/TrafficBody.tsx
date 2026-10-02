@@ -66,10 +66,7 @@ export function TrafficBody({
         actions={
           <>
             <TimeRangeToggle value={range} onChange={setRange} />
-            <Button variant="outline"
-
- onClick={exportCsv}
- >
+            <Button variant="outline" onClick={exportCsv}>
               <Download className="mr-1 h-4 w-4" /> CSV
             </Button>
           </>

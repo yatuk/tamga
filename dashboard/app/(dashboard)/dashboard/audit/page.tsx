@@ -150,15 +150,14 @@ export default function AuditPage() {
                 : `CHAIN BROKEN @ #${chain?.broken_at ?? "?"}`}
             </Badge>
             <Button
- size="sm"
- variant="secondary"
-
- onClick={() => {
+              size="sm"
+              variant="secondary"
+              onClick={() => {
  refetchChain();
  queryClient.invalidateQueries({ queryKey: ["tamga-audit", adminKey] });
  }}
- disabled={chainLoading}
- >
+              disabled={chainLoading}
+            >
               <RefreshCw
                 className={`mr-1 h-3 w-3 ${chainLoading ? "animate-spin" : ""}`}
               />
@@ -174,11 +173,10 @@ export default function AuditPage() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="actor, target, kind…"
-            className="w-64" aria-label="actor, target, kind" />
-          <NativeSelect
-            value={kind}
-            onChange={(e) => setKind(e.target.value)}
-          >
+            className="w-64"
+            aria-label="actor, target, kind"
+          />
+          <NativeSelect value={kind} onChange={(e) => setKind(e.target.value)}>
             <NativeSelectOption value="">all kinds</NativeSelectOption>
             {kinds.map((k) => (
               <NativeSelectOption key={k} value={k}>
@@ -186,10 +184,7 @@ export default function AuditPage() {
               </NativeSelectOption>
             ))}
           </NativeSelect>
-          <NativeSelect
-            value={actor}
-            onChange={(e) => setActor(e.target.value)}
-          >
+          <NativeSelect value={actor} onChange={(e) => setActor(e.target.value)}>
             <NativeSelectOption value="">all actors</NativeSelectOption>
             {actors.map((a) => (
               <NativeSelectOption key={a} value={a}>

@@ -52,7 +52,7 @@ export function SettingsProvidersSection({ health, adminKey }: Props) {
 
         {pools.length === 0 ? (
           <div className="rounded-sm border border-border bg-surface-card px-4 py-6 text-sm text-fg-muted">
-            No provider pools yet — the <code className="text-xs">providers</code> field in health/detailed is
+            No provider pools yet: the <code className="text-xs">providers</code> field in health/detailed is
             empty. Define <code className="text-xs">providers.pools</code> in the policy and reload the
             proxy.
           </div>
@@ -100,13 +100,15 @@ export function SettingsProvidersSection({ health, adminKey }: Props) {
                             {p.failure_reason ? ` (${p.failure_reason})` : ""}
                           </div>
                         </div>
-                        <Button size="sm" variant="outline"
- type="button"
- disabled={busy || !adminKey}
- className="shrink-0"
- onClick={() => void resetCircuit(pl.pool, p.name)}
- title="Reset the breaker counters (new circuit instance)"
- >
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          type="button"
+                          disabled={busy || !adminKey}
+                          className="shrink-0"
+                          onClick={() => void resetCircuit(pl.pool, p.name)}
+                          title="Reset the breaker counters (new circuit instance)"
+                        >
                           <RotateCcw className="mr-1 h-3 w-3" />
                           {busy ? "…" : "Reset circuit"}
                         </Button>

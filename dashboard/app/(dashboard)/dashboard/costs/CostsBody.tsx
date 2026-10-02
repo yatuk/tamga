@@ -90,10 +90,7 @@ export function CostsBody({
         actions={
           <>
             <TimeRangeToggle value={range} onChange={setRange} />
-            <Button variant="outline"
-
- onClick={exportCsv}
- >
+            <Button variant="outline" onClick={exportCsv}>
               <Download className="mr-1 h-4 w-4" /> CSV
             </Button>
           </>
@@ -246,7 +243,7 @@ export function CostsBody({
           )}
         </div>
         <div className="border-t border-border px-3 py-2 text-xs text-fg-subtle">
-          Pricing as of June 2026. Costs are server-side estimates — verify with provider invoices.
+          Pricing as of June 2026. Costs are server-side estimates; verify them against provider invoices.
         </div>
       </Panel>
 

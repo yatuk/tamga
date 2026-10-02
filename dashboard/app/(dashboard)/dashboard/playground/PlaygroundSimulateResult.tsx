@@ -152,7 +152,7 @@ export function PlaygroundSimulateResult({ result, originalPrompt, loading = fal
                       <span className="text-fg-muted">Redacted</span>
                     </span>
                     <span className="text-fg-muted text-[8px]">
-                      — original text with matches highlighted
+                      original text with matches highlighted
                     </span>
                   </div>
                   {/* Highlighted text */}

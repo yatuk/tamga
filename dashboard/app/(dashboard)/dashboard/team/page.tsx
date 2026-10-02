@@ -98,7 +98,7 @@ export default function TeamPage() {
       {!clerkOK ? (
         <div>
           <div className="rounded-sm border border-status-medium/40 bg-status-medium/5 p-3 text-xs text-status-medium">
-            {"//"} CLERK_SECRET_KEY is not set — only local role assignments are shown.
+            {"//"} CLERK_SECRET_KEY is not set, so only local role assignments are shown.
             To load user identities from Clerk, set{" "}
             <span className="text-status-medium">CLERK_SECRET_KEY</span>{" "}
             and restart the proxy.
@@ -275,7 +275,7 @@ export default function TeamPage() {
                 admin
               </Badge>
               <div className="mt-1 text-xs text-fg-muted">
-                Full access — policies, settings, integrations, team, audit
+                Full access: policies, settings, integrations, team, audit
               </div>
             </div>
             <div className="rounded-sm border border-status-medium/30 bg-status-medium/5 p-2">
@@ -291,7 +291,7 @@ export default function TeamPage() {
                 viewer
               </Badge>
               <div className="mt-1 text-xs text-fg-muted">
-                Read-only — overview, incidents, reports
+                Read-only: overview, incidents, reports
               </div>
             </div>
           </div>

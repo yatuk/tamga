@@ -206,13 +206,10 @@ function RevisionPicker({
   return (
     <label className="inline-flex items-center gap-2 text-xs text-fg-muted">
       <span className="text-fg-muted">{label}</span>
-      <NativeSelect
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      >
+      <NativeSelect value={value} onChange={(e) => onChange(e.target.value)}>
         {revisions.map((rev) => (
           <NativeSelectOption key={rev.id} value={rev.id}>
-            {revisionLabel(rev)} {rev.message ? `— ${rev.message}` : ""}
+            {revisionLabel(rev)} {rev.message ? `: ${rev.message}` : ""}
           </NativeSelectOption>
         ))}
       </NativeSelect>

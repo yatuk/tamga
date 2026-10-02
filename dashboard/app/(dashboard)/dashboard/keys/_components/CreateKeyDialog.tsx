@@ -14,7 +14,7 @@ type Props = {
 };
 
 const SCOPES: { value: KeyScope; label: string; desc: string }[] = [
-  { value: "read", label: "Read-only", desc: "View stats, events — no modifications" },
+  { value: "read", label: "Read-only", desc: "View stats and events, no modifications" },
   { value: "write", label: "Read & Write", desc: "Manage incidents, policies, patterns" },
   { value: "admin", label: "Full Admin", desc: "Full access including key management" },
 ];
@@ -97,21 +97,10 @@ export function CreateKeyDialog({ open, onClose, onCreate, isPending }: Props) {
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
-            <Button
- type="button"
- variant="outline"
- size="sm"
-
- onClick={onClose}
- >
+            <Button type="button" variant="outline" size="sm" onClick={onClose}>
               Cancel
             </Button>
-            <Button 
- type="submit"
- size="sm"
- disabled={!label.trim() || isPending}
-
- >
+            <Button type="submit" size="sm" disabled={!label.trim() || isPending}>
               {isPending ? "Creating…" : "Create"}
             </Button>
           </div>

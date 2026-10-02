@@ -90,13 +90,13 @@ export function ReportsOwaspAndCompliance({ owaspCoverageRows, range, adminKey }
                 <Link className="text-fg-subtle hover:text-status-low hover:underline" href="https://tamgaproxy.com/trust">
                   Trust Center
                 </Link>{" "}
-                — data residency and sub-processors
+                for data residency and sub-processors
               </li>
               <li>
                 <Link className="text-fg-subtle hover:text-status-low hover:underline" href="/dashboard/audit">
                   Audit Logs
                 </Link>{" "}
-                — hash-chain verification and governance events
+                for hash-chain verification and governance events
               </li>
               <li>
                 <a

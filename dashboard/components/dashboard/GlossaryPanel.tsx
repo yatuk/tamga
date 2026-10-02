@@ -6,7 +6,7 @@ const GLOSSARY_TERMS: { term: string; definition: string }[] = [
   {
     term: "MTTR",
     definition:
-      "Mean Time to Resolve — the average time from incident creation to closure. Lower MTTR indicates faster analyst response.",
+      "Mean Time to Resolve: the average time from incident creation to closure. Lower MTTR indicates faster analyst response.",
   },
   {
     term: "P50 / P95 / P99",
@@ -16,7 +16,7 @@ const GLOSSARY_TERMS: { term: string; definition: string }[] = [
   {
     term: "RPS",
     definition:
-      "Requests Per Second — the rate of API calls flowing through the proxy. Used to monitor traffic volume and detect anomalies.",
+      "Requests Per Second: the rate of API calls flowing through the proxy. Used to monitor traffic volume and detect anomalies.",
   },
   {
     term: "Shadow AI",
@@ -36,7 +36,7 @@ const GLOSSARY_TERMS: { term: string; definition: string }[] = [
   {
     term: "PII",
     definition:
-      "Personally Identifiable Information — data like names, emails, phone numbers, SSNs. Tamga's scanner detects and can redact PII before it reaches the LLM.",
+      "Personally Identifiable Information: data like names, emails, phone numbers, SSNs. Tamga's scanner detects and can redact PII before it reaches the LLM.",
   },
   {
     term: "Redaction",
@@ -56,12 +56,12 @@ const GLOSSARY_TERMS: { term: string; definition: string }[] = [
   {
     term: "SSE",
     definition:
-      "Server-Sent Events — a one-way streaming connection from proxy to dashboard. Used for live event updates without polling.",
+      "Server-Sent Events: a one-way streaming connection from proxy to dashboard. Used for live event updates without polling.",
   },
   {
     term: "OWASP LLM",
     definition:
-      "OWASP Top 10 for LLM Applications — industry-standard vulnerability categories: prompt injection, insecure output handling, training data poisoning, model DoS, etc.",
+      "OWASP Top 10 for LLM Applications: industry-standard vulnerability categories: prompt injection, insecure output handling, training data poisoning, model DoS, etc.",
   },
   {
     term: "Policy Rule",

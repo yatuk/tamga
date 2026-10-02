@@ -125,7 +125,8 @@ function JsonNodeView({
           </button>
         )}
         <button
-          className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity ml-1"
+          aria-label="Copy value"
+            className="ml-1 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
           onClick={(e) => {
             e.stopPropagation();
             navigator.clipboard
@@ -253,7 +254,9 @@ export function JsonInspector({
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search payload…"
-            className="w-full font-mono" aria-label="Search payload" />
+            className="w-full font-mono"
+            aria-label="Search payload"
+          />
         </div>
         <button
           className="text-xs text-fg-subtle hover:text-fg-subtle transition-colors"

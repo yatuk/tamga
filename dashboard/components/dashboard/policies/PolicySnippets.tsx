@@ -31,7 +31,7 @@ export function appendCustomEntity(draft: string): string {
   entities.push({
     name: "custom_token_v1",
     pattern: "(?i)(ACME|PROJ)[-_][A-Z0-9]{6,}",
-    description: "Internal project or customer token — adjust the regular expression",
+    description: "Internal project or customer token. Adjust the regular expression.",
     severity: "high",
     action: "REDACT",
     confidence: 0.88,
@@ -88,31 +88,18 @@ export function PolicySnippetsBar({ draft, onApply }: { draft: string; onApply: 
   return (
     <div className="flex flex-wrap gap-2 rounded-sm border border-border bg-surface-subtle/50 p-2">
       <span className="w-full text-xs uppercase tracking-wide text-fg-muted">Quick templates</span>
-      <Button
- type="button"
- variant="outline"
- size="sm"
-
- onClick={() => onApply(appendCustomEntity(draft))}
- >
+      <Button type="button" variant="outline" size="sm" onClick={() => onApply(appendCustomEntity(draft))}>
         + Custom entity (regex)
       </Button>
-      <Button
- type="button"
- variant="outline"
- size="sm"
-
- onClick={() => onApply(strengthenInjection(draft))}
- >
+      <Button type="button" variant="outline" size="sm" onClick={() => onApply(strengthenInjection(draft))}>
         Injection → BLOCK
       </Button>
       <Button
- type="button"
- variant="outline"
- size="sm"
-
- onClick={() => onApply(appendRateLimitTemplate(draft))}
- >
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => onApply(appendRateLimitTemplate(draft))}
+      >
         + Rate limit
       </Button>
     </div>

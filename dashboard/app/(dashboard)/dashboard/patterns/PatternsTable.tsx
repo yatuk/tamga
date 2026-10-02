@@ -11,6 +11,7 @@ import { SkeletonRows } from "@/components/app/states";
 import { Panel } from "@/components/app/panel";
 import { sevClass } from "./_constants";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { ConfirmButton } from "@/components/app/confirm-button";
 
 type Props = {
   items: CustomPattern[];
@@ -62,7 +63,7 @@ export function PatternsTable({ items, isLoading, onEdit, onDelete, onToggleEnab
                       icon="search"
                       title="No detection patterns defined yet"
                       description="Custom regex and keyword patterns detect sensitive data, prompt injections, and PII in LLM traffic."
-                      suggestion="Create a pattern from the right panel — it takes effect immediately after scanner reload."
+                      suggestion="Create a pattern in the panel on the right. It takes effect after a scanner reload."
                     />
                   </TableCell>
                 </TableRow>
@@ -98,20 +99,19 @@ export function PatternsTable({ items, isLoading, onEdit, onDelete, onToggleEnab
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="inline-flex gap-1">
-                        <Button variant="outline"
-
- onClick={() => onEdit(p)}
- >
+                        <Button variant="outline" size="icon-sm" aria-label={`Edit pattern ${p.name}`} onClick={() => onEdit(p)}>
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
-                        <Button variant="outline"
-
- onClick={() => {
- onDelete(p.id);
- }}
- >
+                        <ConfirmButton
+                          variant="outline"
+                          size="icon-sm"
+                          aria-label={`Delete pattern ${p.name}`}
+                          title={`Delete pattern ${p.name}?`}
+                          description="The scanner stops matching it after the next reload."
+                          onConfirm={() => onDelete(p.id)}
+                        >
                           <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                        </ConfirmButton>
                       </div>
                     </TableCell>
                   </TableRow>
