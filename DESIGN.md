@@ -1,42 +1,47 @@
 ---
 name: Tamga Dashboard
-description: A forensic chain-of-custody workspace for live LLM security operations.
+description: The operations console of the Tamga LLM security proxy. One identity with tamgaproxy.com.
 colors:
-  tamga-red: "oklch(0.62 0.16 22)"
-  ink: "oklch(0.155 0.008 255)"
-  graphite: "oklch(0.205 0.009 255)"
-  paper: "oklch(0.992 0.004 85)"
-  muted-ink: "oklch(0.75 0.01 260)"
-  rule: "oklch(0.29 0.012 255)"
-  critical: "oklch(0.64 0.16 22)"
-  caution: "oklch(0.78 0.12 90)"
-  verified: "oklch(0.72 0.13 150)"
+  ink: "#10120f"
+  ink-subtle: "#171a16"
+  ink-card: "#1d211b"
+  ink-elevated: "#242921"
+  paper: "#f1f1e8"
+  muted-paper: "#c0c5ba"
+  rule: "#343a31"
+  tamga-red: "#e45e4f"
+  critical: "#e5604f"
+  high: "#d9903f"
+  medium: "#d2a63c"
+  low: "#6fa8cf"
+  pass: "#75c9a4"
 typography:
-  headline:
-    fontFamily: "Inter, system-ui, sans-serif"
-    fontSize: "1.5rem"
-    fontWeight: 600
-    lineHeight: 1.2
-    letterSpacing: "-0.02em"
+  display:
+    fontFamily: "Barlow Condensed, Arial Narrow, sans-serif"
+    fontSize: "1.875rem"
+    fontWeight: 800
+    lineHeight: 1
+    letterSpacing: "0.025em"
   body:
-    fontFamily: "Inter, system-ui, sans-serif"
+    fontFamily: "Barlow, system-ui, sans-serif"
     fontSize: "0.875rem"
     fontWeight: 400
     lineHeight: 1.5
   label:
-    fontFamily: "Inter, system-ui, sans-serif"
-    fontSize: "0.75rem"
+    fontFamily: "JetBrains Mono, ui-monospace, monospace"
+    fontSize: "0.6875rem"
     fontWeight: 500
     lineHeight: 1.25
+    letterSpacing: "0.1em"
   measurement:
-    fontFamily: "Fira Code, ui-monospace, monospace"
+    fontFamily: "JetBrains Mono, ui-monospace, monospace"
     fontSize: "0.75rem"
-    fontWeight: 500
+    fontWeight: 400
     lineHeight: 1.25
 rounded:
-  sm: "0.75rem"
-  md: "0.875rem"
-  lg: "1rem"
+  sm: "0"
+  md: "0"
+  lg: "0"
 spacing:
   xs: "0.5rem"
   sm: "0.75rem"
@@ -44,143 +49,93 @@ spacing:
   lg: "1.5rem"
   xl: "2rem"
 components:
-  evidence-seal:
-    backgroundColor: "{colors.graphite}"
-    textColor: "{colors.muted-ink}"
-    typography: "{typography.measurement}"
-    rounded: "{rounded.sm}"
-    padding: "0.25rem 0.5rem"
-  docket-container:
-    backgroundColor: "{colors.graphite}"
+  panel:
+    backgroundColor: "{colors.ink-card}"
     textColor: "{colors.paper}"
     rounded: "{rounded.sm}"
     padding: "1rem"
+  status-badge:
+    backgroundColor: "{colors.ink-subtle}"
+    textColor: "{colors.muted-paper}"
+    typography: "{typography.label}"
+    rounded: "{rounded.sm}"
+    padding: "0 0.375rem"
 ---
 
 # Design System: Tamga Dashboard
 
 ## Overview
 
-**Creative North Star: "The Evidence Docket"**
+The dashboard shares one identity with [tamgaproxy.com](https://tamgaproxy.com): warm ink and paper surfaces, square corners, a condensed display face, and Tamga red kept for what was blocked or is critical. It is a working tool for SOC analysts, so density and legibility come before decoration.
 
-Tamga is designed as a chain-of-custody workspace, not a decorative cybersecurity dashboard. The interface is calm under pressure: strong rules, compact labels, explicit provenance, and status treatments that distinguish verified safety from unavailable evidence.
+**Key characteristics:**
 
-The visual world borrows from forensic records and regulated operations. Ink and paper surfaces carry the information; Tamga red is a scarce evidence seal for block, critical, or unverified states. Measurements use monospace only when fixed-width scanning improves comprehension.
+- Flat, ruled surfaces. Depth comes from borders and four surface tones, not shadows.
+- Dense but ordered: state first, then the numbers, then the evidence.
+- Request identity, provider, time, decision and finding stay together in every row.
+- Empty, loading, failed and unauthorised states are designed, not left blank.
 
-**Key Characteristics:**
-
-- Continuous evidence records with identity, source, time, action, and finding kept together.
-- Flat, ruled surfaces with restrained tonal layering.
-- Dense but strongly ordered information: disposition, evidence, measures, then supporting analysis.
-- Honest unavailable, empty, error, and verified states.
+Tokens live in `dashboard/app/globals.css`. Shared building blocks are in `dashboard/components/app`, the shell in `components/shell`, and shadcn/ui primitives in `components/ui`.
 
 ## Colors
 
-The palette is nearly neutral, with semantic color reserved for operational meaning.
+Two themes with the same structure; dark is the default. The values in the front matter are the dark theme; the light theme mirrors them (`#e7e8e2` page, `#10120f` text).
 
-### Primary
+- **Surfaces:** base (page), subtle (sidebar), card (panels), elevated (popovers, dialogs).
+- **Text:** `fg`, `fg-muted`, `fg-subtle`, `fg-faint`. Every text color reaches 4.5:1 on every surface in both themes.
+- **Brand (Tamga red):** the active navigation rail, the focus ring and selection. Not for buttons that are not destructive.
+- **Status:** critical, high, medium, low, pass. Actions map onto them: BLOCK is critical, REDACT is medium, WARN is high, PASS is pass.
 
-- **Tamga Evidence Red:** the product accent and the seal for critical, blocked, or unverified evidence.
+**The evidence color rule.** Never show green for missing data. No traffic, no evaluation or no admin key is a neutral state with its own wording, not a low-risk reading.
 
-### Secondary
-
-- **Caution Amber:** degraded, incomplete, or attention-required states.
-- **Verified Green:** confirmed healthy, pass, and complete states only.
-
-### Neutral
-
-- **Ink:** dark application ground.
-- **Graphite:** records, panels, and navigation surfaces.
-- **Paper:** light-mode records and high-contrast foreground.
-- **Rule:** borders, dividers, and chain-of-custody row separation.
-- **Muted Ink:** secondary labels and explanatory copy.
-
-**The Evidence Color Rule.** Never use green to imply low risk when telemetry is absent. Missing evidence is amber and explicitly unverified.
+Semantic names follow shadcn/ui (`background`, `card`, `muted`, `accent`, `primary`, `destructive`), so generated components work unmodified. `accent` is the hover surface; the red is `brand`.
 
 ## Typography
 
-**Display Font:** Inter (system sans fallback)
-**Body Font:** Inter (system sans fallback)
-**Label/Mono Font:** Fira Code (system monospace fallback)
+- **Display:** Barlow Condensed 800, uppercase. Page titles only.
+- **Body:** Barlow 400 to 600 at 14px; small text 12px. Nothing below 11px.
+- **Label / mono:** JetBrains Mono. Uppercase with letter-spacing for column heads, panel titles and stat labels (11px); plain for IDs, timestamps and numbers.
 
-**Character:** Inter keeps dense operational language legible; Fira Code is limited to request IDs, timestamps, counts, and measurements.
+**The measurement rule.** Monospace means data: request IDs, counts, latencies, timestamps. Numbers in columns use tabular figures. Dates are `en-GB` (24-hour), numbers `en-US`.
 
-### Hierarchy
-
-- **Headline** (600, 1.5rem, 1.2): page identity.
-- **Title** (600, 0.875–1rem): sections and record headers.
-- **Body** (400, 0.875rem, 1.5): explanation and recovery guidance, kept under 75 characters per line.
-- **Label** (500, 0.75rem): controls and short metadata.
-- **Measurement** (500, 0.75rem): tabular values, timestamps, and immutable identifiers.
-
-**The Measurement Rule.** Monospace means data, not “technical” decoration.
+Titles and buttons use Title Case; descriptions are full sentences. No em-dashes in interface copy; `…` for loading and placeholders.
 
 ## Layout
 
-The application shell uses a persistent 16rem desktop case index, a 3.5rem operational top bar, and a centered content canvas capped at 1600px. The overview sequence is disposition, live evidence, supporting findings, operational measures, control coverage, and deeper analytics.
+A collapsible sidebar (16rem, icons only when collapsed, a drawer on mobile), a 3.5rem header with the breadcrumb, proxy status, command palette and theme toggle, and a content column capped at 1600px. A page is: `PageHeader`, then a `StatGrid` if it has headline numbers, then `Panel`s.
 
-Desktop evidence uses a 12-column composition: posture occupies four columns and the live ledger eight. At mobile widths, navigation moves into a sheet and evidence follows disposition immediately. No essential state or investigation link may depend on horizontal scrolling.
+Spacing follows a 4px base. Sections are 16 to 24px apart; panel padding is 16px; table cells 8px by 16px.
 
-Spacing follows an 8px base rhythm. Related controls use 8–12px gaps; major operational sections use 28px vertical separation.
+## Shapes and depth
 
-## Elevation & Depth
-
-The system is flat by default. Borders, divider rules, and tonal surface shifts establish depth. Shadows are limited to elevated popovers and command surfaces; normal records never combine a border with a wide ambient shadow.
-
-**The Flat Record Rule.** Evidence remains on the same visual plane until interaction genuinely elevates it.
-
-## Shapes
-
-Surfaces use gently curved 12px corners. Controls and records share the same geometry; pills are reserved for compact statuses. One-pixel rules divide evidence. Circular shapes are limited to status indicators, avatars, and icon-only controls.
+Corners are square everywhere; `rounded-full` is for dots and avatars only. Surfaces are flat with one-pixel rules. Shadows are limited to popovers, dialogs and sheets.
 
 ## Components
 
-### Buttons
+- **PageHeader:** title, one-sentence description, actions on the right. The section is in the header breadcrumb, so pages carry no eyebrow.
+- **Panel:** the standard surface. Mono uppercase title, optional description, and an aside for counts or small actions.
+- **Stat / StatGrid:** label, value, optional delta, sparkline, hint and tooltip. Stats share dividers inside one ruled block instead of sitting in separate cards. Tone (critical, warn, pass) is for state, not decoration.
+- **StatusBadge, ActionBadge, SeverityBadge:** square, mono, uppercase. The text always names the state; color is never the only carrier.
+- **Tables:** shadcn `Table` for short lists; a virtualised ARIA grid (TanStack Virtual) for queues with keyboard navigation. Long lists paginate with an infinite query.
+- **States:** `EmptyState`, `ErrorState`, `AdminKeyRequired`, `SkeletonRows`.
+- **ConfirmButton:** every destructive action asks first, naming the item and the consequence.
+- **TimeRangeToggle:** the 24h / 7d / 30d window, stored in the URL as `?range=`.
+- **Buttons:** primary is the high-contrast fill; outline and ghost for everything else; destructive only for delete and revoke. No per-call color overrides.
 
-- **Shape:** gently curved (12px) with a minimum 32px target for compact controls.
-- **Primary:** high-contrast foreground fill for committed actions.
-- **Hover / Focus:** tonal shift plus the shared two-pixel semantic focus ring.
-- **Secondary:** flat surface with a rule border; never a low-contrast text-only mystery action.
+## Accessibility
 
-### Chips
+- Visible focus ring on every interactive element; no `outline-none` without a replacement.
+- Skip link to `#main`; one `h1` per page.
+- Form controls have a visible label or an accessible name.
+- Pointer-only interactions have a keyboard equivalent; `prefers-reduced-motion` is respected.
+- Filters, tabs and the time window that change what a page shows belong in the URL.
 
-- **Style:** compact bordered seal with semantic foreground and translucent semantic background.
-- **State:** text always names the state; color is never the only carrier.
+## Do and don't
 
-### Cards / Containers
-
-- **Corner Style:** 12px.
-- **Background:** graphite in dark mode, paper in light mode.
-- **Shadow Strategy:** none at rest.
-- **Border:** one-pixel rule.
-- **Internal Padding:** 12–16px, with continuous ledgers using row dividers instead of nested cards.
-
-### Inputs / Fields
-
-- **Style:** surface fill, rule border, 12px corners.
-- **Focus:** two-pixel semantic outline with two-pixel offset.
-- **Error / Disabled:** explanatory copy names the failure and recovery; reduced contrast alone is insufficient.
-
-### Navigation
-
-Navigation is a compact case index. Active items use a graphite record surface and a narrow verified rail; section labels are short, uppercase, and collapsible. Mobile uses a full-height sheet with the same grouping and runtime state.
-
-### Live Evidence Ledger
-
-The signature component preserves action, finding, request ID, source, and timestamp in one linked row. Selecting a row carries its request identity and observation window into the incident console. “No evidence” and “evidence unavailable” are separate states.
-
-## Do's and Don'ts
-
-### Do:
-
-- **Do** lead operational pages with verified state and the next investigation action.
-- **Do** keep request identity, provider, timestamp, decision, and finding together.
-- **Do** use explicit `UNVERIFIED`, empty, loading, and error language.
-- **Do** preserve keyboard focus, reduced motion, tabular numerals, and color-independent status labels.
-
-### Don't:
-
-- **Don't** infer “LOW” or safe posture from missing telemetry.
-- **Don't** present illustrative or demo values as live production evidence.
-- **Don't** flatten every metric into an equal-weight card.
-- **Don't** use Tamga red decoratively; its scarcity gives evidence states authority.
+- **Do** lead with state and the next action, then numbers, then rows.
+- **Do** keep request identity, provider, timestamp, decision and finding together.
+- **Do** say plainly when data is missing, loading or failed.
+- **Don't** show a safe or low reading without telemetry behind it.
+- **Don't** present demo values as live data.
+- **Don't** use Tamga red decoratively or for ordinary primary buttons.
+- **Don't** add one-off borders, radii, shadows or text sizes to a component; change the shared primitive instead.

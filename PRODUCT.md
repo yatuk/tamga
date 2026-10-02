@@ -33,7 +33,8 @@ Tamga combines inline enforcement, Turkish and regulated-industry data controls,
 
 ## Capabilities and Constraints
 
-- Next.js 15, React 19, TypeScript, Tailwind, Recharts, TanStack Query, and Framer Motion.
+- Next.js 15, React 19, TypeScript, Tailwind CSS 4, shadcn/ui, Recharts, TanStack Query and TanStack Virtual, nuqs, CodeMirror.
+- The interface is English only.
 - The dashboard consumes the Tamga proxy management API and must remain useful when the admin key is missing, the proxy is offline, or datasets are empty.
 - Core actions and terminology are `BLOCK`, `REDACT`, `WARN`, and `PASS`; risk severity is critical, high, medium, low, and informational/pass where relevant.
 - Existing functional routes, API contracts, authentication behavior, light/dark themes, and real product data must be preserved.

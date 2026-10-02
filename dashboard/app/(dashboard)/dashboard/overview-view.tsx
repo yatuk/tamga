@@ -29,6 +29,8 @@ type Posture = { label: string; tone: Tone };
 
 /** How much of the traffic is being stopped, as one word. */
 function posture(total: number, blocked: number, open: number): Posture {
+  // No traffic is not a low-risk reading; say so instead of showing green.
+  if (total === 0) return { label: "No traffic", tone: "neutral" };
   const blockedPct = total > 0 ? (blocked / total) * 100 : 0;
   if (blockedPct > 20 || open > 50) return { label: "Critical", tone: "critical" };
   if (blockedPct > 10 || open > 20) return { label: "Elevated", tone: "high" };
