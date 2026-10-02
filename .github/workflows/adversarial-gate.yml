@@ -1,4 +1,4 @@
-name: Adversarial & Load Regression Gate
+name: Adversarial Regression Gate
 
 on:
   pull_request:
@@ -19,7 +19,16 @@ on:
       - "deploy/docker-compose.yml"
       - "tests/stress/**"
       - ".github/workflows/adversarial-gate.yml"
+  # Load tests are not part of the gate: a shared runner hosts the whole stack
+  # and k6 on the same few cores, so latency there measures the runner, not
+  # the change. They run locally (tests/stress/run_stress_suite.sh) or here on
+  # request.
   workflow_dispatch:
+    inputs:
+      load:
+        description: "Also run the k6 load tests (P95 gate on 100 RPS only)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -32,7 +41,7 @@ concurrency:
 
 jobs:
   stress-suite:
-    name: Stress Suite (adversarial + load)
+    name: Stress Suite (adversarial)
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -55,6 +64,7 @@ jobs:
           cache-dependency-path: proxy/go.sum
 
       - name: Install k6
+        if: github.event_name == 'workflow_dispatch' && inputs.load
         run: |
           if command -v k6 &>/dev/null; then
             echo "k6 already installed: $(k6 version)"
@@ -77,8 +87,13 @@ jobs:
         id: stress
         run: |
           chmod +x tests/stress/run_stress_suite.sh
-          ./tests/stress/run_stress_suite.sh
+          if [ "$RUN_LOAD" = "true" ]; then
+            ./tests/stress/run_stress_suite.sh
+          else
+            ./tests/stress/run_stress_suite.sh --skip-load
+          fi
         env:
+          RUN_LOAD: ${{ github.event_name == 'workflow_dispatch' && inputs.load }}
           TAMGA_HEALTH_TIMEOUT: "90"
           # The runner has no .env. Compose needs these to start the stack;
           # they are throwaway values for an ephemeral CI database.
@@ -87,11 +102,8 @@ jobs:
           TAMGA_ADMIN_KEY: ci-only-admin-key
           # Scan and enforce, but never forward test vectors to a provider.
           TAMGA_MOCK_UPSTREAM: "true"
-          # A shared runner hosts the whole stack and k6 on the same few
-          # cores, so P95 at 500 and 1000 RPS measures the runner, not the
-          # change. Only 100 RPS gates on P95 here; the higher levels are
-          # reported as warning annotations. Bypass counts and the load error
-          # rate fail the job at every level.
+          # Only used by a manual run with load tests: 100 RPS gates on P95,
+          # the higher levels are reported as warning annotations.
           STRESS_LOAD_GATE_LEVELS: "100rps"
 
       - name: Upload results artifact
@@ -122,7 +134,7 @@ jobs:
               if (dirs.length > 0) latestDir = path.join(resultsBase, dirs[0]);
             }
 
-            let body = "## 🛡️ Adversarial & Load Regression Gate\n\n";
+            let body = "## 🛡️ Adversarial Regression Gate\n\n";
 
             if (process.env.STRESS_EXIT_CODE === "0" || !process.env.STRESS_EXIT_CODE) {
               body += "**Status:** ✅ Passed — no regression detected\n\n";

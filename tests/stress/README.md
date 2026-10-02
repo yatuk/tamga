@@ -110,7 +110,7 @@ P95 depends on the machine. `--load-gate-levels 100rps` (or
 `STRESS_LOAD_GATE_LEVELS=100rps`) gates on P95 only at the listed levels; at
 the others a P95 over its threshold is printed as `SLOW (advisory)` and does
 not fail the check. Bypass counts and the load error rate gate at every level.
-CI gates on 100 RPS only; a local run gates on every level by default.
+A local run gates on every level by default.
 
 ### JSON Output
 
@@ -176,18 +176,19 @@ After a scanner hardening sprint or policy improvement that reduces bypasses:
 The `adversarial-gate.yml` workflow runs on every PR to `dev` or `main` that touches proxy, analyzer, or stress test files. It:
 
 - Builds Docker images
-- Runs the full suite
+- Runs the adversarial tests (`--skip-load`)
 - Uploads results as a 30-day artifact
 - Posts a summary comment on the PR
-- Fails the check if a category has more bypasses than the baseline, or the
-  error rate under load rises
-- Fails the check if P95 at 100 RPS exceeds its threshold
-- Reports P95 over its threshold at 500 and 1000 RPS as a warning annotation,
-  without failing: the shared runner hosts the stack and k6 on the same few
-  cores, so P95 there measures the runner
-  (see [Limiting the P95 gate](#limiting-the-p95-gate))
+- Fails the check if a category has more bypasses than the baseline
 
-Manual trigger: **Actions → Adversarial & Load Regression Gate → Run workflow**
+Load tests are not part of the CI gate. A shared runner hosts the whole stack
+and k6 on the same few cores, so latency there measures the runner, not the
+change: the same code measured p95 4.8 ms at 1000 RPS on a 16-core laptop and
+1340 ms on the runner. Run them locally before a release, or tick **load** on a
+manual run; that run gates on P95 at 100 RPS only
+(see [Limiting the P95 gate](#limiting-the-p95-gate)).
+
+Manual trigger: **Actions → Adversarial Regression Gate → Run workflow**
 
 ## Troubleshooting
 

@@ -14,7 +14,7 @@ lives in the [main README](../README.md#how-tamga-compares).
 | Open source | Yes, AGPL-3.0 | No | Yes, MIT | Mostly no |
 | Custom regex / entity | Yes | No | Partial | Yes |
 | Adversarial test suite published | Yes — 65 attack vectors, 57 detected / 8 bypassed, published | No | No | No |
-| Stress test CI gate | Yes — bypass counts and 100 RPS P95 block the PR | No | No | No |
+| Adversarial CI gate | Yes — a rise in bypass count blocks the PR | No | No | No |
 
 "Cloud Services" covers hosted LLM security gateways such as Lakera Guard
 and Portkey; "Open-Source Gateways" covers self-hostable LLM routers;
