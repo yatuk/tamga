@@ -28,8 +28,8 @@ export default function PatternsPage() {
   return (
     <div className="space-y-2">
       <PageHeader
-        title="Custom Patterns"
-        description={`${items.length} user-defined rules · live after a scanner reload`}
+        title="Patterns"
+        description={`${items.length} custom patterns. Changes apply after a scanner reload.`}
       />
 
       <div className="grid gap-3 lg:grid-cols-[1fr_360px]">

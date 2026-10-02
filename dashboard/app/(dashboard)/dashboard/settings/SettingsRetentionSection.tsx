@@ -29,7 +29,7 @@ export function SettingsRetentionSection({ retention, setRetention, saveRetentio
               onChange={(e) => setRetention(e.target.value)}
               className="w-28"
             />
-            <Button variant="outline" className="rounded-sm bg-status-critical text-white hover:bg-status-critical" onClick={saveRetention}>
+            <Button onClick={saveRetention}>
               Save
             </Button>
           </div>

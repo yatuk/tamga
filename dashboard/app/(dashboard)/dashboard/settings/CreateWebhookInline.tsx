@@ -49,24 +49,24 @@ export function CreateWebhookInline({ onCreate }: { onCreate: (payload: Omit<Web
         className="w-16"
       />
       <span className="text-xs uppercase tracking-wide text-fg-muted">blocks/min</span>
-      <Button variant="outline"
-        className="h-8 rounded-sm bg-status-critical px-3 text-white hover:bg-status-critical"
-        onClick={() => {
-          if (!label.trim() || !url.trim()) {
-            toast.error("Label and URL are required");
-            return;
-          }
-          onCreate({
-            label: label.trim(),
-            url: url.trim(),
-            kind,
-            enabled: true,
-            rule: { blocks_per_minute: Number(blocksPerMin) || 0 },
-          });
-          setLabel("");
-          setUrl("");
-        }}
-      >
+      <Button size="sm" 
+
+ onClick={() => {
+ if (!label.trim() || !url.trim()) {
+ toast.error("Label and URL are required");
+ return;
+ }
+ onCreate({
+ label: label.trim(),
+ url: url.trim(),
+ kind,
+ enabled: true,
+ rule: { blocks_per_minute: Number(blocksPerMin) || 0 },
+ });
+ setLabel("");
+ setUrl("");
+ }}
+ >
         <Plus className="mr-1 h-3.5 w-3.5" /> Add
       </Button>
     </div>

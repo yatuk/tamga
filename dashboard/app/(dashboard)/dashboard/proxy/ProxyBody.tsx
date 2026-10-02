@@ -4,7 +4,7 @@ import { RefreshCw, Info, Tag } from "lucide-react";
 import { useMemo, useState } from "react";
 import { PageHeader } from "@/components/app/page-header";
 import { Panel } from "@/components/app/panel";
-import { Stat } from "@/components/app/stat";
+import { Stat, StatGrid } from "@/components/app/stat";
 import { HealthScoreBadge } from "@/components/common/HealthScoreBadge";
 import { GlossaryToggle, GlossaryPanel } from "@/components/dashboard/GlossaryPanel";
 import { Badge } from "@/components/ui/badge";
@@ -56,7 +56,7 @@ export function ProxyBody({
     <div className="space-y-2">
       <PageHeader
         title="Proxy Status"
-        description="runtime health · component status · uptime · version"
+        description="Runtime health of the proxy and the services it depends on."
         actions={
           <div className="flex items-center gap-1.5">
             <GlossaryToggle onClick={() => setGlossaryOpen(true)} />
@@ -116,7 +116,7 @@ export function ProxyBody({
       </div>
 
       {/* Quick stats */}
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      <StatGrid>
         {isLoading ? (
           Array.from({ length: 4 }).map((_, i) => (
             <div
@@ -146,7 +146,7 @@ export function ProxyBody({
             />
           </>
         )}
-      </div>
+      </StatGrid>
 
       {/* Component status table */}
       <Panel

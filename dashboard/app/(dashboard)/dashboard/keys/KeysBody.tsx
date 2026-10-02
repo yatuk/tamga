@@ -77,13 +77,13 @@ export function KeysBody({
   return (
     <div className="space-y-2">
       <PageHeader
-        title="API Keys & Access"
-        description={`${total} key${total !== 1 ? "s" : ""} · admin · write · read-only`}
+        title="API Keys"
+        description={`${total} key${total !== 1 ? "s" : ""}. Each key carries a role: admin, write or read-only.`}
         actions={
-          <Button variant="outline"
-            className="rounded-sm bg-status-pass text-white hover:bg-status-pass"
-            onClick={() => setCreateOpen(true)}
-          >
+          <Button 
+
+ onClick={() => setCreateOpen(true)}
+ >
             <Plus className="mr-1 h-4 w-4" /> New API Key
           </Button>
         }
@@ -221,11 +221,11 @@ export function KeysBody({
                       </TableCell>
                       <TableCell className="text-center whitespace-nowrap">
                         <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-6 rounded-sm border-status-critical/30 bg-status-critical/5 text-xs uppercase text-status-critical hover:bg-status-critical/10"
-                          onClick={() => setDeleteTarget({ id: key.id, label: key.label })}
-                        >
+ size="sm"
+ variant="outline"
+ className="uppercase"
+ onClick={() => setDeleteTarget({ id: key.id, label: key.label })}
+ >
                           <Trash2 className="mr-1 h-3 w-3" /> Revoke
                         </Button>
                       </TableCell>

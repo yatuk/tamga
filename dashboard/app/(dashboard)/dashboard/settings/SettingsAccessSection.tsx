@@ -39,7 +39,7 @@ export function SettingsAccessSection({ draft, setDraft, saved, saveAdminKey, ke
                 placeholder="X-Tamga-Admin-Key"
                 className="flex-1"
               />
-              <Button variant="outline" className="rounded-sm bg-status-critical text-white hover:bg-status-critical" onClick={saveAdminKey}>
+              <Button onClick={saveAdminKey}>
                 Save
               </Button>
             </div>
@@ -86,10 +86,10 @@ export function SettingsAccessSection({ draft, setDraft, saved, saveAdminKey, ke
                         <TableCell>{k.prefix}…</TableCell>
                         <TableCell>{new Date(k.created_at).toLocaleString("en-GB")}</TableCell>
                         <TableCell className="text-right">
-                          <Button variant="outline"
-                            className="h-7 rounded-sm border border-border-strong bg-surface-subtle px-2 text-fg-muted hover:bg-status-critical hover:text-white"
-                            onClick={() => removeKey(k.id)}
-                          >
+                          <Button size="sm" variant="outline"
+
+ onClick={() => removeKey(k.id)}
+ >
                             <Trash className="h-3.5 w-3.5" />
                           </Button>
                         </TableCell>

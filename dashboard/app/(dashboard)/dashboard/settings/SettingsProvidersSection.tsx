@@ -100,13 +100,13 @@ export function SettingsProvidersSection({ health, adminKey }: Props) {
                             {p.failure_reason ? ` (${p.failure_reason})` : ""}
                           </div>
                         </div>
-                        <Button variant="outline"
-                          type="button"
-                          disabled={busy || !adminKey}
-                          className="h-8 shrink-0 rounded-sm border border-border-strong bg-surface-subtle px-2 text-xs text-fg hover:bg-surface-card disabled:opacity-50"
-                          onClick={() => void resetCircuit(pl.pool, p.name)}
-                          title="Reset the breaker counters (new circuit instance)"
-                        >
+                        <Button size="sm" variant="outline"
+ type="button"
+ disabled={busy || !adminKey}
+ className="shrink-0"
+ onClick={() => void resetCircuit(pl.pool, p.name)}
+ title="Reset the breaker counters (new circuit instance)"
+ >
                           <RotateCcw className="mr-1 h-3 w-3" />
                           {busy ? "…" : "Reset circuit"}
                         </Button>

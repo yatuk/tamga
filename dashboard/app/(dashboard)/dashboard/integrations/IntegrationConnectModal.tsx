@@ -123,34 +123,34 @@ export function IntegrationConnectModal({ draft, setDraft, createMut }: Props) {
         </div>
         <div className="mt-4 flex items-center justify-end gap-2">
           <Button variant="outline"
-            className="rounded-sm border border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card"
-            onClick={() => setDraft(null)}
-          >
+
+ onClick={() => setDraft(null)}
+ >
             Cancel
           </Button>
-          <Button variant="outline"
-            className="rounded-sm bg-status-critical text-white hover:bg-status-critical"
-            onClick={() => {
-              if (!draft.url.trim()) {
-                toast.error("URL required");
-                return;
-              }
-              if (draft.kind === "jira" && !draft.projectKey.trim()) {
-                toast.error("Project key required", "Jira Cloud v3 rejects creates without it");
-                return;
-              }
-              if (draft.kind === "pagerduty" && !draft.authToken.trim()) {
-                toast.error("Routing key required", "PagerDuty Events API v2 rejects requests without routing_key");
-                return;
-              }
-              if (draft.kind === "opsgenie" && !draft.authToken.trim()) {
-                toast.error("API key required", "Opsgenie returns 401 without GenieKey");
-                return;
-              }
-              createMut.mutate(draft);
-            }}
-            disabled={createMut.isPending}
-          >
+          <Button 
+
+ onClick={() => {
+ if (!draft.url.trim()) {
+ toast.error("URL required");
+ return;
+ }
+ if (draft.kind === "jira" && !draft.projectKey.trim()) {
+ toast.error("Project key required", "Jira Cloud v3 rejects creates without it");
+ return;
+ }
+ if (draft.kind === "pagerduty" && !draft.authToken.trim()) {
+ toast.error("Routing key required", "PagerDuty Events API v2 rejects requests without routing_key");
+ return;
+ }
+ if (draft.kind === "opsgenie" && !draft.authToken.trim()) {
+ toast.error("API key required", "Opsgenie returns 401 without GenieKey");
+ return;
+ }
+ createMut.mutate(draft);
+ }}
+ disabled={createMut.isPending}
+ >
             Connect
           </Button>
         </div>

@@ -36,18 +36,18 @@ export function KeyRevealDialog({ revealed, onDismiss, onCopy }: Props) {
 
         <div className="mt-4 flex justify-between gap-2">
           <Button
-            size="sm"
-            variant="outline"
-            className="rounded-sm"
-            onClick={() => onCopy(revealed.rawKey)}
-          >
+ size="sm"
+ variant="outline"
+
+ onClick={() => onCopy(revealed.rawKey)}
+ >
             <Copy className="mr-1 h-3.5 w-3.5" /> Copy
           </Button>
-          <Button variant="outline"
-            size="sm"
-            className="rounded-sm bg-status-pass text-white hover:bg-status-pass"
-            onClick={onDismiss}
-          >
+          <Button 
+ size="sm"
+
+ onClick={onDismiss}
+ >
             <Check className="mr-1 h-3.5 w-3.5" /> I have saved this key
           </Button>
         </div>

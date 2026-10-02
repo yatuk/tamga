@@ -98,20 +98,20 @@ export function CreateKeyDialog({ open, onClose, onCreate, isPending }: Props) {
 
           <div className="flex justify-end gap-2 pt-2">
             <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="rounded-sm"
-              onClick={onClose}
-            >
+ type="button"
+ variant="outline"
+ size="sm"
+
+ onClick={onClose}
+ >
               Cancel
             </Button>
-            <Button variant="outline"
-              type="submit"
-              size="sm"
-              disabled={!label.trim() || isPending}
-              className="rounded-sm bg-status-pass text-white hover:bg-status-pass"
-            >
+            <Button 
+ type="submit"
+ size="sm"
+ disabled={!label.trim() || isPending}
+
+ >
               {isPending ? "Creating…" : "Create"}
             </Button>
           </div>

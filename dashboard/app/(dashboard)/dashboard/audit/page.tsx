@@ -9,7 +9,7 @@ import { humanizeAuditKind } from "@/lib/humanize";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/app/page-header";
-import { Stat } from "@/components/app/stat";
+import { Stat, StatGrid } from "@/components/app/stat";
 import { SkeletonRows } from "@/components/app/states";
 import { Panel } from "@/components/app/panel";
 import { useAdminKey } from "@/hooks/useAdminKey";
@@ -135,7 +135,7 @@ export default function AuditPage() {
   return (
     <div className="space-y-2">
       <PageHeader
-        title="Audit"
+        title="Audit Log"
         description={`${filtered.length} / ${data?.total ?? 0} records · in-system actions`}
         actions={
           <div className="flex items-center gap-2">
@@ -150,15 +150,15 @@ export default function AuditPage() {
                 : `CHAIN BROKEN @ #${chain?.broken_at ?? "?"}`}
             </Badge>
             <Button
-              size="sm"
-              variant="secondary"
-              className="h-7 rounded-sm border border-border-strong bg-surface-card px-2 text-xs text-fg-muted hover:bg-surface-subtle"
-              onClick={() => {
-                refetchChain();
-                queryClient.invalidateQueries({ queryKey: ["tamga-audit", adminKey] });
-              }}
-              disabled={chainLoading}
-            >
+ size="sm"
+ variant="secondary"
+
+ onClick={() => {
+ refetchChain();
+ queryClient.invalidateQueries({ queryKey: ["tamga-audit", adminKey] });
+ }}
+ disabled={chainLoading}
+ >
               <RefreshCw
                 className={`mr-1 h-3 w-3 ${chainLoading ? "animate-spin" : ""}`}
               />
@@ -204,11 +204,11 @@ export default function AuditPage() {
       </div>
 
       {/* 3-card metric row */}
-      <div className="grid gap-2 sm:grid-cols-3">
+      <StatGrid className="lg:grid-cols-3">
         <Stat label="TOTAL ENTRIES" value={data?.total ?? 0} />
         <Stat label="UNIQUE ACTORS" value={uniqueActorCount} />
         <Stat label="UNIQUE KINDS" value={kinds.length} />
-      </div>
+      </StatGrid>
 
       {/* Kind distribution bar chart */}
       {Object.keys(kindCounts).length > 0 && (

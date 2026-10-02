@@ -99,17 +99,17 @@ export function PatternsTable({ items, isLoading, onEdit, onDelete, onToggleEnab
                     <TableCell className="text-right">
                       <div className="inline-flex gap-1">
                         <Button variant="outline"
-                          className="rounded-sm border border-border-strong bg-surface-subtle px-2 py-1 text-fg-muted hover:bg-surface-card"
-                          onClick={() => onEdit(p)}
-                        >
+
+ onClick={() => onEdit(p)}
+ >
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
                         <Button variant="outline"
-                          className="rounded-sm border border-status-critical bg-status-critical/30 px-2 py-1 text-status-critical hover:bg-status-critical/40"
-                          onClick={() => {
-                            onDelete(p.id);
-                          }}
-                        >
+
+ onClick={() => {
+ onDelete(p.id);
+ }}
+ >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </div>

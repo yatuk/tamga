@@ -15,26 +15,26 @@ export default function PlaygroundPage() {
     <div className="space-y-2">
       <PageHeader
         title="Playground"
-        description="does not affect live traffic · POST /api/v1/policies/simulate"
+        description="Simulate a prompt against a policy. Nothing here touches live traffic."
         actions={
           <>
             <Button variant="outline"
-              className="rounded-sm border border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card"
-              onClick={p.copyCurl}
-            >
+
+ onClick={p.copyCurl}
+ >
               <Copy className="mr-1 h-4 w-4" /> COPY CURL
             </Button>
             <Button variant="outline"
-              className="rounded-sm border border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card"
-              onClick={p.copyJson}
-            >
+
+ onClick={p.copyJson}
+ >
               <Copy className="mr-1 h-4 w-4" /> COPY JSON
             </Button>
-            <Button variant="outline"
-              className="rounded-sm bg-status-critical text-white hover:bg-status-critical"
-              onClick={p.runSimulate}
-              disabled={p.running}
-            >
+            <Button 
+
+ onClick={p.runSimulate}
+ disabled={p.running}
+ >
               <Play className="mr-1 h-4 w-4" />
               {p.running ? "Running…" : "Run"}
             </Button>

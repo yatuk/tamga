@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { Stat } from "@/components/app/stat";
+import { Stat, StatGrid } from "@/components/app/stat";
 import { PageHeader } from "@/components/app/page-header";
 import { EmptyState } from "@/components/app/states";
 import { HealthScoreBadge } from "@/components/common/HealthScoreBadge";
@@ -87,14 +87,14 @@ export function ScannerPoolBody({
       )}
 
       {loading && !pool && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <StatGrid>
           {Array.from({ length: 4 }).map((_, i) => (
             <div
               key={i}
               className="h-24 animate-pulse rounded-xl bg-surface-elevated/50"
             />
           ))}
-        </div>
+        </StatGrid>
       )}
 
       {!poolEnabled && !loading && (
@@ -107,7 +107,7 @@ export function ScannerPoolBody({
       {pool && poolEnabled && (
         <>
           {/* Metric cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <StatGrid>
             <Stat
               label="Active Workers"
               value={`${pool.workersActive} / ${pool.workersActive + pool.workersIdle}`}
@@ -127,10 +127,10 @@ export function ScannerPoolBody({
               label="Scanners Registered"
               value={scannerCount.toString()}
             />
-          </div>
+          </StatGrid>
 
           {/* Second row: utilization + throughput + shed + queue bar */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <StatGrid>
             <Stat
               label="Utilization"
               value={`${(pool.utilization * 100).toFixed(1)}%`}
@@ -167,7 +167,7 @@ export function ScannerPoolBody({
                     : "pass"
               }
             />
-          </div>
+          </StatGrid>
 
           {/* Throughput sparkline + shed gauge + queue bar + scanner dots */}
           <div className="grid gap-4 sm:grid-cols-2 mb-6">

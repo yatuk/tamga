@@ -3,13 +3,14 @@
 import { Download } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
 import { Panel } from "@/components/app/panel";
-import { Stat } from "@/components/app/stat";
+import { Stat, StatGrid } from "@/components/app/stat";
 import { EmptyState } from "@/components/app/states";
 import { formatInt } from "@/lib/utils/format";
 import { Button } from "@/components/ui/button";
 import type { TimeRange } from "@/lib/types";
 import type { useCostsPage } from "./useCostsPage";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { TimeRangeToggle } from "@/components/app/time-range";
 
 function formatCost(usd: number): string {
   if (usd === 0) return "$0";
@@ -84,30 +85,15 @@ export function CostsBody({
   return (
     <div className="space-y-2">
       <PageHeader
-        title="Token Burn & Costs"
-        description="daily spend · per-model billing · budget tracking"
+        title="Token Costs"
+        description="Estimated spend per model against the daily budget."
         actions={
           <>
-            <div className="inline-flex overflow-hidden rounded-sm border border-border-strong">
-              {(["24h", "7d", "30d"] as TimeRange[]).map((r) => (
-                <button
-                  key={r}
-                  className={` px-3 py-1 text-xs ${
-                    range === r
-                      ? "bg-status-pass text-white"
-                      : "bg-surface-card text-fg-muted hover:bg-surface-subtle"
-                  }`}
-                  onClick={() => setRange(r)}
-                  type="button"
-                >
-                  {r}
-                </button>
-              ))}
-            </div>
+            <TimeRangeToggle value={range} onChange={setRange} />
             <Button variant="outline"
-              className="rounded-sm border border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card"
-              onClick={exportCsv}
-            >
+
+ onClick={exportCsv}
+ >
               <Download className="mr-1 h-4 w-4" /> CSV
             </Button>
           </>
@@ -124,7 +110,7 @@ export function CostsBody({
       ) : null}
 
       {/* Budget + MTD + Projected metric cards */}
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      <StatGrid>
         {isLoading ? (
           Array.from({ length: 4 }).map((_, i) => (
             <div
@@ -154,10 +140,10 @@ export function CostsBody({
             />
           </>
         )}
-      </div>
+      </StatGrid>
 
       {/* Derived metric cards */}
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      <StatGrid>
         {!isLoading && (
           <>
             <Stat
@@ -170,7 +156,7 @@ export function CostsBody({
             />
           </>
         )}
-      </div>
+      </StatGrid>
 
       {/* Token consumption trend */}
       <Panel

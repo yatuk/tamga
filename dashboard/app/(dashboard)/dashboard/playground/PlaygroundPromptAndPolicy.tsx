@@ -28,7 +28,7 @@ export function PlaygroundPromptAndPolicy({
     <div className="grid gap-3 lg:grid-cols-2">
       <div>
         <Panel
-          title="Prompt Girdisi"
+          title="Prompt"
           aside={
             <span className="px-2 text-xs uppercase tracking-[0.18em] text-fg-muted">{prompt.length} chars</span>
           }

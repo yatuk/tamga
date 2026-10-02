@@ -63,7 +63,7 @@ export function HuntingFilters({
   isFetching,
 }: Props) {
   return (
-    <Panel title="Arama Sorgusu">
+    <Panel title="Search query">
       <div className="space-y-3 p-3">
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           <label className="space-y-1">

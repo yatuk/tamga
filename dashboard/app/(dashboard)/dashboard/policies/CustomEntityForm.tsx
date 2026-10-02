@@ -129,12 +129,12 @@ export function CustomEntityForm({ adminKey }: { adminKey: string }) {
                   <TableCell className="uppercase">{ce.action}</TableCell>
                   <TableCell className="text-right">
                     <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-6 rounded-sm px-2 text-xs text-status-critical hover:bg-status-critical/10 hover:text-status-critical"
-                      onClick={() => deleteMut.mutate(ce.name)}
-                      disabled={deleteMut.isPending}
-                    >
+ size="sm"
+ variant="ghost"
+
+ onClick={() => deleteMut.mutate(ce.name)}
+ disabled={deleteMut.isPending}
+ >
                       Delete
                     </Button>
                   </TableCell>
@@ -204,11 +204,11 @@ export function CustomEntityForm({ adminKey }: { adminKey: string }) {
         {createMut.error && (
           <p className="text-xs text-status-critical">{createMut.error.message}</p>
         )}
-        <Button variant="outline"
-          type="submit"
-          className="rounded-sm bg-status-critical text-white hover:bg-status-critical"
-          disabled={createMut.isPending}
-        >
+        <Button 
+ type="submit"
+
+ disabled={createMut.isPending}
+ >
           {createMut.isPending ? "Adding…" : "Add entity"}
         </Button>
       </form>

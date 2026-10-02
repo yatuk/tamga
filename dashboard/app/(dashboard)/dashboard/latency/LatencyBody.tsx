@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { RefreshCw, RotateCw } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
 import { Panel } from "@/components/app/panel";
-import { Stat } from "@/components/app/stat";
+import { Stat, StatGrid } from "@/components/app/stat";
 import { HealthScoreBadge } from "@/components/common/HealthScoreBadge";
 import { GlossaryToggle, GlossaryPanel } from "@/components/dashboard/GlossaryPanel";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import type { TimeRange } from "@/lib/types";
 import type { useLatencyPage } from "./useLatencyPage";
 import { formatMs, formatRate, formatSince, formatUptime } from "@/lib/utils/format";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { TimeRangeToggle } from "@/components/app/time-range";
 
 const P95_THRESHOLD_MS = 2000; // P95 above 2s is considered slow
 
@@ -62,28 +63,13 @@ export function LatencyBody({
   return (
     <div className="space-y-2">
       <PageHeader
-        title="Latency & Performance"
-        description={`P50 · P95 · P99 percentiles · uptime ${formatUptime(uptimeSeconds)}`}
+        title="Latency"
+        description={`Scan latency percentiles. Proxy uptime ${formatUptime(uptimeSeconds)}.`}
         actions={
           <>
             <GlossaryToggle onClick={() => setGlossaryOpen(true)} />
             <HealthScoreBadge score={latencyHealthScore} label="P95" size="sm" showScore />
-            <div className="inline-flex overflow-hidden rounded-sm border border-border-strong">
-              {(["24h", "7d", "30d"] as TimeRange[]).map((r) => (
-                <button
-                  key={r}
-                  className={` px-3 py-1 text-xs ${
-                    range === r
-                      ? "bg-status-pass text-white"
-                      : "bg-surface-card text-fg-muted hover:bg-surface-subtle"
-                  }`}
-                  onClick={() => setRange(r)}
-                  type="button"
-                >
-                  {r}
-                </button>
-              ))}
-            </div>
+            <TimeRangeToggle value={range} onChange={setRange} />
           </>
         }
       />
@@ -95,7 +81,7 @@ export function LatencyBody({
       ) : null}
 
       {/* P50 / P95 / P99 */}
-      <div className="grid gap-2 sm:grid-cols-3">
+      <StatGrid className="lg:grid-cols-3">
         {isLoading ? (
           Array.from({ length: 3 }).map((_, i) => (
             <div
@@ -122,7 +108,7 @@ export function LatencyBody({
             />
           </>
         )}
-      </div>
+      </StatGrid>
 
       {/* Percentile histogram bars */}
       {!isLoading && histogramBars.length > 0 ? (
@@ -310,14 +296,14 @@ export function LatencyBody({
                     <TableCell className="text-center">
                       {(p.state === "HALF" || p.state === "OPEN" || p.state === "CLOSED" || p.state === "degraded") ? (
                         <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-6 rounded-sm border-border-strong bg-surface-subtle text-xs uppercase text-fg-muted hover:bg-surface-card"
-                          onClick={() =>
-                            circuitReset.mutate({ pool: p.pool, endpoint: p.name })
-                          }
-                          disabled={circuitReset.isPending}
-                        >
+ size="sm"
+ variant="outline"
+ className="uppercase"
+ onClick={() =>
+ circuitReset.mutate({ pool: p.pool, endpoint: p.name })
+ }
+ disabled={circuitReset.isPending}
+ >
                           <RotateCw className="mr-1 h-3 w-3" />
                           {circuitReset.isPending ? "..." : "Reset"}
                         </Button>

@@ -112,12 +112,12 @@ export function PolicyEntitiesPanel() {
               onChange={(e) => setSampleText(e.target.value)}
               placeholder="Paste sample text, e.g. customer ACME-12345678 record" aria-label="Paste sample text, e.g. customer ACME-12345678 record" />
             <Button
-              variant="outline"
-              size="sm"
-              className="mt-2"
-              onClick={onSimulate}
-              disabled={simulating}
-            >
+ variant="outline"
+ size="sm"
+ className="mt-2"
+ onClick={onSimulate}
+ disabled={simulating}
+ >
               <Play className="mr-1 h-3.5 w-3.5" />
               {simulating ? "Running…" : "Simulate"}
             </Button>

@@ -26,13 +26,13 @@ export function CreateApiKeyInline({ onCreate }: { onCreate: (label: string, sco
         <NativeSelectOption value="write">write</NativeSelectOption>
         <NativeSelectOption value="admin">admin</NativeSelectOption>
       </NativeSelect>
-      <Button variant="outline"
-        className="h-8 rounded-sm bg-status-critical px-3 text-white hover:bg-status-critical"
-        onClick={() => {
-          onCreate(label, scope);
-          setLabel("");
-        }}
-      >
+      <Button size="sm" 
+
+ onClick={() => {
+ onCreate(label, scope);
+ setLabel("");
+ }}
+ >
         <Key className="mr-1 h-3.5 w-3.5" /> New
       </Button>
     </div>

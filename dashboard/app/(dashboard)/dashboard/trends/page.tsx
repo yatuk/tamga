@@ -1,7 +1,7 @@
 "use client";
 
 import { PageHeader } from "@/components/app/page-header";
-import { Stat } from "@/components/app/stat";
+import { Stat, StatGrid } from "@/components/app/stat";
 import { Panel } from "@/components/app/panel";
 import { VALID_TIMERANGES } from "@/lib/types";
 import { TrendsAreaChart } from "./TrendsAreaChart";
@@ -37,11 +37,11 @@ export default function TrendsPage() {
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <StatGrid className="lg:grid-cols-3">
         <Stat label="Requests scanned" value={totals.attempted.toLocaleString("en-US")} />
         <Stat label="Findings caught" value={totals.caught.toLocaleString("en-US")} tone="critical" />
         <Stat label="Catch rate" value={`${catchRate}%`} tone="pass" />
-      </div>
+      </StatGrid>
 
       <Panel title={`trend · ${range}`}>
         <div className="p-3">

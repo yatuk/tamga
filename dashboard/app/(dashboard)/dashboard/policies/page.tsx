@@ -50,16 +50,16 @@ export default function PoliciesPage() {
             >
               {isDirty ? "DRAFT" : "SYNCED"}
             </Badge>
-            <Button variant="outline" className="rounded-sm bg-status-critical text-white hover:bg-status-critical" onClick={onSave} disabled={saving}>
+            <Button onClick={onSave} disabled={saving}>
               {saving ? "Kaydediliyor…" : "Save & Reload"}
             </Button>
-            <Button variant="outline" className="rounded-sm border border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card" onClick={onReload}>
+            <Button variant="outline" onClick={onReload}>
               Reload disk
             </Button>
             <Button variant="outline"
-              className="rounded-sm border border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card"
-              onClick={() => setDraft(originalYaml)}
-            >
+
+ onClick={() => setDraft(originalYaml)}
+ >
               Reset draft
             </Button>
           </>

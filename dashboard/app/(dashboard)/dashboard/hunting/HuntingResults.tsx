@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { SeverityBadge } from "@/components/app/status-badge";
 import { severityClass } from "@/lib/badges";
 import { EmptyState } from "@/components/app/states";
-import { Stat } from "@/components/app/stat";
+import { Stat, StatGrid } from "@/components/app/stat";
 import { SkeletonRows } from "@/components/app/states";
 import { Panel } from "@/components/app/panel";
 import { PAGE_SIZE } from "./_constants";
@@ -160,7 +160,7 @@ export function HuntingResults({ events, total, page, setPage, isLoading, error 
 
       {/* Finding type breakdown */}
       {hasResults && !isLoading && findingTypeCounts.length > 0 && (
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        <StatGrid className="lg:grid-cols-3">
           {findingTypeCounts.map(([type, count]) => (
             <Stat
               key={type}
@@ -168,7 +168,7 @@ export function HuntingResults({ events, total, page, setPage, isLoading, error 
               value={count}
             />
           ))}
-        </div>
+        </StatGrid>
       )}
 
       {/* Bulk-action toolbar */}
@@ -178,22 +178,22 @@ export function HuntingResults({ events, total, page, setPage, isLoading, error 
             {selectedRows.size} selected
           </span>
           <Button
-            size="sm"
-            variant="outline"
-            className="rounded-sm border-border-strong text-xs h-7"
-            disabled
-            title="Bulk tagging will be available in a future release"
-          >
+ size="sm"
+ variant="outline"
+
+ disabled
+ title="Bulk tagging will be available in a future release"
+ >
             <Tag className="h-3 w-3 mr-1" />
             Tag selected
           </Button>
           <Button
-            size="sm"
-            variant="outline"
-            className="rounded-sm border-border-strong text-xs h-7 opacity-50"
-            disabled
-            title="Bulk status change will be available in a future release"
-          >
+ size="sm"
+ variant="outline"
+
+ disabled
+ title="Bulk status change will be available in a future release"
+ >
             Change status
           </Button>
           <button

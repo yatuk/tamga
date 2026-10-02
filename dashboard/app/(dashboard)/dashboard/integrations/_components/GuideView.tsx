@@ -78,7 +78,7 @@ export function GuideView({ guide }: { guide: IntegrationGuide }) {
               <BadgeCheck className="h-3 w-3" /> verified {guide.lastVerified}
             </span>
             <Link href={`/dashboard/integrations?connect=${guide.kind}`} className="inline-flex">
-              <Button variant="outline" className="rounded-sm bg-status-critical text-white hover:bg-status-critical">
+              <Button >
                 <Plug className="mr-1 h-3.5 w-3.5" /> Connect now
               </Button>
             </Link>

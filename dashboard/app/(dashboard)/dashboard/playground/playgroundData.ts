@@ -85,17 +85,17 @@ export const PLAYGROUND_SNIPPETS: { id: string; label: string; text: string }[] 
   {
     id: "cc",
     label: "Credit card",
-    text: "Merhaba, kart numaram 4242 4242 4242 4242 son kullanma 12/28, CVV 123.",
+    text: "Hi, my card number is 4242 4242 4242 4242, expiry 12/28, CVV 123.",
   },
   {
     id: "tckn",
     label: "TCKN",
-    text: "TC kimlik numaram 10000000146, dogum tarihim 1990.",
+    text: "My national ID (TC kimlik) is 10000000146, born in 1990.",
   },
   {
     id: "email",
     label: "Email",
-    text: "Lütfen raporu ali.veli@example.com adresine gönder.",
+    text: "Please send the report to ali.veli@example.com.",
   },
   {
     id: "injection",

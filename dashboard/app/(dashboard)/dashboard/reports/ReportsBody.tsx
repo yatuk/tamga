@@ -11,11 +11,12 @@ import { Button } from "@/components/ui/button";
 import { ActionBadge } from "@/components/app/status-badge";
 import { PageHeader } from "@/components/app/page-header";
 import { Panel } from "@/components/app/panel";
-import { Stat } from "@/components/app/stat";
+import { Stat, StatGrid } from "@/components/app/stat";
 import { BudgetBurnCard } from "@/components/dashboard/BudgetBurnCard";
 import { CHART_CONFIG, type ReportRange } from "./_constants";
 import { ReportsBarRow } from "./ReportsBarRow";
 import { ReportsOwaspAndCompliance } from "./ReportsOwaspAndCompliance";
+import { TimeRangeToggle } from "@/components/app/time-range";
 
 const ReportsAreaChart = dynamic(
   () => import("@/components/dashboard/charts/ReportsAreaChart").then((m) => m.ReportsAreaChart),
@@ -77,43 +78,30 @@ export function ReportsBody({
   return (
     <div ref={reportRef} className="space-y-2">
       <PageHeader
-        title="SOC Reporting"
-        description="live KPIs · executive summary · export"
+        title="Reports"
+        description="Key figures for the period, with CSV and PDF export."
         actions={
           <>
-            <div className="inline-flex overflow-hidden rounded-sm border border-border-strong">
-              {(["24h", "7d", "30d"] as ReportRange[]).map((r) => (
-                <button
-                  key={r}
-                  className={` px-3 py-1 text-xs ${
-                    range === r ? "bg-status-pass text-white" : "bg-surface-card text-fg-muted hover:bg-surface-subtle"
-                  }`}
-                  onClick={() => setRange(r)}
-                  type="button"
-                >
-                  {r}
-                </button>
-              ))}
-            </div>
+            <TimeRangeToggle value={range} onChange={setRange} />
             <Button variant="outline"
-              className="rounded-sm border border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card print:hidden"
-              onClick={exportBlockedCsv}
-            >
+
+ onClick={exportBlockedCsv}
+ >
               <Download className="mr-1 h-4 w-4" /> CSV
             </Button>
             <Button variant="outline"
-              className="rounded-sm border border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card print:hidden"
-              disabled={isExporting}
-              onClick={exportOwaspPdf}
-            >
+
+ disabled={isExporting}
+ onClick={exportOwaspPdf}
+ >
               {isExporting ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <FileDown className="mr-1 h-4 w-4" />}
               OWASP PDF
             </Button>
             <Button variant="outline"
-              className="rounded-sm border border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card print:hidden"
-              disabled={isExporting}
-              onClick={exportIncidentPdf}
-            >
+
+ disabled={isExporting}
+ onClick={exportIncidentPdf}
+ >
               {isExporting ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <FileDown className="mr-1 h-4 w-4" />}
               Incident PDF
             </Button>
@@ -122,12 +110,12 @@ export function ReportsBody({
       />
 
       <div>
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <StatGrid>
           <Stat label="TOTAL REQUESTS" value={stats?.total_requests ?? 0} />
           <Stat label="BLOCKED" value={stats?.blocked_requests ?? 0} tone="critical" />
           <Stat label="REDACTED" value={stats?.redacted_requests ?? 0} tone="warn" />
           <Stat label="AVG INPUT RISK" value={`${stats?.avg_input_risk_pct ?? 0}%`} />
-        </div>
+        </StatGrid>
       </div>
 
       <div>

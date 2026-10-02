@@ -45,19 +45,19 @@ export function DeleteKeyDialog({ target, onClose, onDelete, isPending }: Props)
 
         <div className="flex justify-end gap-2">
           <Button
-            variant="outline"
-            size="sm"
-            className="rounded-sm"
-            onClick={onClose}
-          >
+ variant="outline"
+ size="sm"
+
+ onClick={onClose}
+ >
             Cancel
           </Button>
-          <Button variant="outline"
-            size="sm"
-            disabled={!confirmed || isPending}
-            className="rounded-sm bg-status-critical text-white hover:bg-status-critical"
-            onClick={() => onDelete(target.id)}
-          >
+          <Button variant="destructive"
+ size="sm"
+ disabled={!confirmed || isPending}
+
+ onClick={() => onDelete(target.id)}
+ >
             {isPending ? "Revoking…" : "Revoke Key"}
           </Button>
         </div>

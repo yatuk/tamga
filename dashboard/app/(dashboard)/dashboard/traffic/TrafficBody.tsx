@@ -3,7 +3,7 @@
 import { Download } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
 import { Panel } from "@/components/app/panel";
-import { Stat } from "@/components/app/stat";
+import { Stat, StatGrid } from "@/components/app/stat";
 import { Button } from "@/components/ui/button";
 import { formatInt } from "@/lib/utils/format";
 import { TrafficAreaChart } from "./_components/TrafficAreaChart";
@@ -11,6 +11,7 @@ import { BarRow, DonutCard } from "./_components/BarRow";
 import { TRAFFIC_CHART_CONFIG } from "./_constants";
 import type { TimeRange } from "@/lib/types";
 import type { useTrafficPage } from "./useTrafficPage";
+import { TimeRangeToggle } from "@/components/app/time-range";
 
 const MODEL_COLORS = [
   "var(--chart-1)",
@@ -60,30 +61,15 @@ export function TrafficBody({
   return (
     <div className="space-y-2">
       <PageHeader
-        title="Traffic & Routing"
-        description="request volume · provider breakdown · model usage · finding types"
+        title="Traffic"
+        description="Request volume by provider, model and finding type."
         actions={
           <>
-            <div className="inline-flex overflow-hidden rounded-sm border border-border-strong">
-              {(["24h", "7d", "30d"] as TimeRange[]).map((r) => (
-                <button
-                  key={r}
-                  className={` px-3 py-1 text-xs ${
-                    range === r
-                      ? "bg-status-pass text-white"
-                      : "bg-surface-card text-fg-muted hover:bg-surface-subtle"
-                  }`}
-                  onClick={() => setRange(r)}
-                  type="button"
-                >
-                  {r}
-                </button>
-              ))}
-            </div>
+            <TimeRangeToggle value={range} onChange={setRange} />
             <Button variant="outline"
-              className="rounded-sm border border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card"
-              onClick={exportCsv}
-            >
+
+ onClick={exportCsv}
+ >
               <Download className="mr-1 h-4 w-4" /> CSV
             </Button>
           </>
@@ -97,7 +83,7 @@ export function TrafficBody({
       ) : null}
 
       {/* Metric cards */}
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+      <StatGrid className="lg:grid-cols-5">
         {isLoading ? (
           Array.from({ length: 5 }).map((_, i) => (
             <div
@@ -132,7 +118,7 @@ export function TrafficBody({
             />
           </>
         )}
-      </div>
+      </StatGrid>
 
       {/* Peak indicator */}
       {peakHour && !isLoading ? (

@@ -59,16 +59,16 @@ export function SettingsWebhooksSection({ hookList, createHook, removeHook, test
                   </Badge>
                   <span className="truncate text-xs text-fg-muted">{w.url}</span>
                   <div className="ml-auto flex items-center gap-1">
-                    <Button variant="outline"
-                      className="h-7 rounded-sm border border-border-strong bg-surface-card px-2 text-fg-muted hover:bg-surface-card"
-                      onClick={() => testHook(w.id)}
-                    >
+                    <Button size="sm" variant="outline"
+
+ onClick={() => testHook(w.id)}
+ >
                       Test
                     </Button>
-                    <Button variant="outline"
-                      className="h-7 rounded-sm border border-border-strong bg-surface-card px-2 text-fg-muted hover:bg-status-critical hover:text-white"
-                      onClick={() => removeHook(w.id)}
-                    >
+                    <Button size="sm" variant="outline"
+
+ onClick={() => removeHook(w.id)}
+ >
                       <Trash className="h-3.5 w-3.5" />
                     </Button>
                   </div>

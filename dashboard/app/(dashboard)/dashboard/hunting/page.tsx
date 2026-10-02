@@ -46,10 +46,10 @@ export default function HuntingPage() {
   return (
     <div className="space-y-2">
       <PageHeader
-        title="Threat hunting"
-        description="Server-side filters (PostgreSQL or the in-memory buffer). Use the deep link on a row to continue in Incidents."
+        title="Threat Hunting"
+        description="Search every scanned request by action, finding, technique or text."
         actions={
-          <Button variant="outline" size="sm" className="gap-1" onClick={() => refetch()} disabled={isFetching}>
+          <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
             Refresh
           </Button>
         }

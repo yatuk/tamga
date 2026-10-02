@@ -15,7 +15,7 @@ export default function IntegrationsPage() {
     <div className="space-y-2">
       <PageHeader
         title="Integrations"
-        description={`${hooks.length} connected · ${INTEGRATION_PRESETS.length} presets · step-by-step guide on each tile`}
+        description={`${hooks.length} connected. Send incidents to chat, ticketing and SIEM tools.`}
       />
 
       <IntegrationsPresetGrid hooks={hooks} onConnect={(kind, name) => setDraft(openIntegrationDraft(kind, name))} />

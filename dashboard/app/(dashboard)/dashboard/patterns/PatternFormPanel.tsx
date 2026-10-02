@@ -106,9 +106,9 @@ export function PatternFormPanel({
               placeholder="paste sample text…" aria-label="paste sample text" />
             <div className="mt-1 flex items-center justify-between">
               <Button variant="outline"
-                className="rounded-sm border border-border-strong bg-surface-subtle px-2 py-1 text-xs text-fg-muted hover:bg-surface-card"
-                onClick={onTest}
-              >
+
+ onClick={onTest}
+ >
                 Test
               </Button>
               {testMatch ? (
@@ -123,17 +123,17 @@ export function PatternFormPanel({
           <div className="flex items-center justify-end gap-2 pt-1">
             {draft.id ? (
               <Button variant="outline"
-                className="rounded-sm border border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card"
-                onClick={() => setDraft(EMPTY_DRAFT)}
-              >
+
+ onClick={() => setDraft(EMPTY_DRAFT)}
+ >
                 Cancel
               </Button>
             ) : null}
-            <Button variant="outline"
-              className="rounded-sm bg-status-critical text-white hover:bg-status-critical"
-              onClick={onSubmit}
-              disabled={createPending || updatePending}
-            >
+            <Button 
+
+ onClick={onSubmit}
+ disabled={createPending || updatePending}
+ >
               <Plus className="mr-1 h-4 w-4" />
               {draft.id ? "Update" : "Create"}
             </Button>
