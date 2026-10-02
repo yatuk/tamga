@@ -1,4 +1,4 @@
-import { toUpperEn } from "@/lib/utils/tr-string";
+import { toUpperEn } from "@/lib/utils/case";
 
 export type RedTeamSample = {
   id: string;

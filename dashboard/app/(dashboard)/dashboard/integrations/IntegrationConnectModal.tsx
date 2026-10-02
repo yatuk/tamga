@@ -7,7 +7,7 @@ import type { UseMutationResult } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/lib/toast";
-import { toUpperEn } from "@/lib/utils/tr-string";
+import { toUpperEn } from "@/lib/utils/case";
 import { INTEGRATION_PRESETS } from "./integrationPresets";
 import { integrationKindBadge } from "./integrationWebhookHelpers";
 import type { IntegrationDraft } from "./integrationDraft";

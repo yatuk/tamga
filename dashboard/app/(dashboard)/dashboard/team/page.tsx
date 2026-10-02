@@ -76,8 +76,8 @@ export default function TeamPage() {
         title="Team"
         subtitle={
           <span>
-            {counts.total} üye · admin {counts.admin} · analyst {counts.analyst} · viewer {counts.viewer}{" "}
-            {clerkOK ? "· Clerk bağlı" : "· Clerk yapılandırılmadı"}
+            {counts.total} members · admin {counts.admin} · analyst {counts.analyst} · viewer {counts.viewer}{" "}
+            {clerkOK ? "· Clerk connected" : "· Clerk not configured"}
           </span>
         }
         actions={
@@ -97,10 +97,10 @@ export default function TeamPage() {
       {!clerkOK ? (
         <div>
           <div className="rounded-sm border border-status-medium/40 bg-status-medium/5 p-3 text-[11px] text-status-medium">
-            {"//"} CLERK_SECRET_KEY ortam değişkeni tanımlı değil — yalnızca yerel rol atamaları görünür.
-            Kullanıcı kimliklerini Clerk üzerinden çekmek için{" "}
+            {"//"} CLERK_SECRET_KEY is not set — only local role assignments are shown.
+            To load user identities from Clerk, set{" "}
             <span className="text-status-medium">CLERK_SECRET_KEY</span>{" "}
-            ayarlayın ve proxy&apos;yi yeniden başlatın.
+            and restart the proxy.
           </div>
         </div>
       ) : null}

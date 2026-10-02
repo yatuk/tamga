@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api, type GetEventsQuery } from "@/lib/api";
 import type { SavedHunt } from "@/lib/api/types-extended";
 import { toast } from "@/lib/toast";
-import { toLowerEn } from "@/lib/utils/tr-string";
+import { toLowerEn } from "@/lib/utils/case";
 import { PAGE_SIZE } from "./_constants";
 import { useAdminKey } from "@/hooks/useAdminKey";
 import type { TimeRange } from "@/lib/types";

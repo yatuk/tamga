@@ -4,7 +4,7 @@ import type { RefObject } from "react";
 import dynamic from "next/dynamic";
 import { ArrowDownRight, ArrowUpRight, Download, FileDown, Loader2, Minus } from "lucide-react";
 import { api } from "@/lib/api";
-import { toUpperLocale } from "@/lib/utils/tr-string";
+import { toUpperEn } from "@/lib/utils/case";
 import { humanizeFindingType } from "@/lib/humanize";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -77,9 +77,9 @@ export function ReportsBody({
   return (
     <div ref={reportRef} className="space-y-2">
       <PageHeader
-        eyebrow={`ANALYTICS // REPORTS · ${toUpperLocale(range)}`}
+        eyebrow={`ANALYTICS // REPORTS · ${toUpperEn(range)}`}
         title="SOC Reporting"
-        subtitle="canlı KPI görünümü · yönetsel özet · export"
+        subtitle="live KPIs · executive summary · export"
         actions={
           <>
             <div className="inline-flex overflow-hidden rounded-sm border border-border-strong">
@@ -116,7 +116,7 @@ export function ReportsBody({
               onClick={exportIncidentPdf}
             >
               {isExporting ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <FileDown className="mr-1 h-4 w-4" />}
-              Olay PDF
+              Incident PDF
             </Button>
           </>
         }
@@ -271,7 +271,7 @@ export function ReportsBody({
 
       <div>
         <TerminalFrame
-          filename={`Trafik · ${range === "24h" ? "24 Saat" : range === "7d" ? "7 Gün" : "30 Gün"}`}
+          filename={`Traffic · ${range === "24h" ? "24 hours" : range === "7d" ? "7 days" : "30 days"}`}
           status={
             <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
               {chartData.length} pts
@@ -291,7 +291,7 @@ export function ReportsBody({
 
       <div className="grid gap-3 lg:grid-cols-2">
         <div>
-          <TerminalFrame title="En Sık Bulgular">
+          <TerminalFrame title="Top findings">
             <div className="space-y-2 p-3">
               {topFindingEntries.length === 0 ? (
                 <div className="py-6 text-center text-xs text-fg-muted">no findings</div>
@@ -314,7 +314,7 @@ export function ReportsBody({
 
         <div>
           <TerminalFrame
-            title="Engellenen Olaylar"
+            title="Blocked events"
             status={
               <Badge className="rounded-sm border border-status-critical/40 bg-status-critical/10 text-[10px] uppercase text-status-critical">
                 {recentBlocked.length} BLOCK

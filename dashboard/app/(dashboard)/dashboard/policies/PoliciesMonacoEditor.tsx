@@ -7,7 +7,7 @@ import { PolicySnippetsBar } from "@/components/dashboard/policies/PolicySnippet
 const MonacoEditor = dynamic(() => import("@monaco-editor/react").then((m) => m.default), {
   ssr: false,
   loading: () => (
-    <div className="flex h-[420px] items-center justify-center bg-surface-card text-sm text-fg-muted">Editor yükleniyor…</div>
+    <div className="flex h-[420px] items-center justify-center bg-surface-card text-sm text-fg-muted">Loading editor…</div>
   ),
 });
 
@@ -21,7 +21,7 @@ export function PoliciesMonacoEditor({ draft, onChange }: Props) {
     <>
       <PolicySnippetsBar draft={draft} onApply={onChange} />
       <TerminalFrame
-        title="Politika YAML"
+        title="Policy YAML"
         status={
           <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
             {draft.split("\n").length} lines

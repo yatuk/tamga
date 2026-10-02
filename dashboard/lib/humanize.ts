@@ -1,51 +1,51 @@
 /**
  * Maps internal backend enums, component IDs, and raw technical strings
- * to human-readable Turkish labels for the dashboard UI.
+ * to human-readable labels for the dashboard UI.
  *
  * All abstraction leaks are routed through this file — no raw dot-notation
  * strings or snake_case identifiers should appear in user-facing DOM.
  */
 
-import { toLowerEn, toUpperLocale } from "@/lib/utils/tr-string";
+import { toLowerEn, toUpperEn } from "@/lib/utils/case";
 
 // ── Audit / event kinds ──────────────────────────────────────────────────
 const AUDIT_KIND_MAP: Record<string, string> = {
   // Policy
-  "policy.create": "Politika Oluşturma",
-  "policy.update": "Politika Güncelleme",
-  "policy.delete": "Politika Silme",
-  "policy.reload": "Politika Yenileme",
+  "policy.create": "Policy created",
+  "policy.update": "Policy updated",
+  "policy.delete": "Policy deleted",
+  "policy.reload": "Policy reloaded",
   // Incidents
-  "incident.create": "Olay Oluşturma",
-  "incident.update": "Olay Güncelleme",
-  "incident.block": "Olay Engelleme",
-  "incident.status": "Durum Değişikliği",
-  "incident.assignee": "Atama",
-  "incident.reason": "Neden Açıklaması",
-  "incident.tag": "Etiket",
-  "incident.comment": "Yorum",
-  "incident.patch": "Olay Güncelleme",
+  "incident.create": "Incident created",
+  "incident.update": "Incident updated",
+  "incident.block": "Incident blocked",
+  "incident.status": "Status change",
+  "incident.assignee": "Assignment",
+  "incident.reason": "Reason note",
+  "incident.tag": "Tag",
+  "incident.comment": "Comment",
+  "incident.patch": "Incident updated",
   // API keys
-  "apikey.create": "API Anahtarı Oluşturma",
-  "apikey.delete": "API Anahtarı Silme",
-  "apikey.reveal": "API Anahtarı Görüntüleme",
-  "apikey.generate": "API Anahtarı Üretme",
+  "apikey.create": "API key created",
+  "apikey.delete": "API key deleted",
+  "apikey.reveal": "API key revealed",
+  "apikey.generate": "API key generated",
   // Webhooks
-  "webhook.create": "Webhook Oluşturma",
-  "webhook.delete": "Webhook Silme",
-  "webhook.test": "Webhook Testi",
+  "webhook.create": "Webhook created",
+  "webhook.delete": "Webhook deleted",
+  "webhook.test": "Webhook test",
   // Patterns
-  "pattern.create": "Pattern Oluşturma",
-  "pattern.update": "Pattern Güncelleme",
-  "pattern.delete": "Pattern Silme",
+  "pattern.create": "Pattern created",
+  "pattern.update": "Pattern updated",
+  "pattern.delete": "Pattern deleted",
   // Team
-  "team.invite": "Ekip Daveti",
-  "team.role": "Rol Değişikliği",
+  "team.invite": "Team invite",
+  "team.role": "Role change",
   // System
-  "genesis": "Başlangıç",
-  "proposal.create": "Onay Taslağı",
-  "proposal.approve": "Onaylandı",
-  "proposal.reject": "Reddedildi",
+  "genesis": "Genesis",
+  "proposal.create": "Proposal drafted",
+  "proposal.approve": "Proposal approved",
+  "proposal.reject": "Proposal rejected",
 };
 
 export function humanizeAuditKind(kind: string): string {
@@ -56,13 +56,13 @@ export function humanizeAuditKind(kind: string): string {
 // ── Finding types ────────────────────────────────────────────────────────
 const FINDING_TYPE_MAP: Record<string, string> = {
   pii: "PII",
-  secret: "Gizli Anahtar",
-  injection: "Enjeksiyon",
+  secret: "Secret",
+  injection: "Injection",
   jailbreak: "Jailbreak",
-  custom: "Özel",
-  competitor: "Rakip",
-  content_moderation: "İçerik Mod.",
-  code_leakage: "Kod Sızıntısı",
+  custom: "Custom",
+  competitor: "Competitor",
+  content_moderation: "Content moderation",
+  code_leakage: "Code leakage",
 };
 
 export function humanizeFindingType(type: string): string {
@@ -73,13 +73,13 @@ export function humanizeFindingType(type: string): string {
 // ── Source labels (MetricStat SRC: prefix) ───────────────────────────────
 const SOURCE_MAP: Record<string, string> = {
   proxy: "Proxy",
-  "policy.block": "Politika Engelleme",
-  "policy.redact": "Politika Gizleme",
-  triage: "Önceliklendirme",
-  scanner: "Tarayıcı",
-  "proxy.p95": "Proxy P95 Gecikmesi",
-  "provider.unknown": "Bilinmeyen Sağlayıcı",
-  "triage.resolve": "Çözümleme",
+  "policy.block": "Policy block",
+  "policy.redact": "Policy redact",
+  triage: "Triage",
+  scanner: "Scanner",
+  "proxy.p95": "Proxy P95 latency",
+  "provider.unknown": "Unknown provider",
+  "triage.resolve": "Resolution",
 };
 
 export function humanizeSource(source: string): string {
@@ -89,34 +89,34 @@ export function humanizeSource(source: string): string {
 
 // ── Severity & action display ────────────────────────────────────────────
 const SEVERITY_MAP: Record<string, string> = {
-  critical: "Kritik",
-  high: "Yüksek",
-  medium: "Orta",
-  low: "Düşük",
+  critical: "Critical",
+  high: "High",
+  medium: "Medium",
+  low: "Low",
 };
 
 export function humanizeSeverity(severity: string): string {
   if (!severity) return "—";
-  return SEVERITY_MAP[toLowerEn(severity)] ?? toUpperLocale(severity);
+  return SEVERITY_MAP[toLowerEn(severity)] ?? toUpperEn(severity);
 }
 
 const ACTION_MAP: Record<string, string> = {
-  block: "Engelle",
-  redact: "Maskele",
-  warn: "Uyar",
-  pass: "Geç",
-  pass_log: "Günlüğe Kaydet",
+  block: "Block",
+  redact: "Redact",
+  warn: "Warn",
+  pass: "Pass",
+  pass_log: "Pass and log",
 };
 
 export function humanizeAction(action: string): string {
   if (!action) return "—";
-  return ACTION_MAP[toLowerEn(action)] ?? toUpperLocale(action);
+  return ACTION_MAP[toLowerEn(action)] ?? toUpperEn(action);
 }
 
 // ── Assignee filter ──────────────────────────────────────────────────────
 const ASSIGNEE_MAP: Record<string, string> = {
-  me: "Ben",
-  unassigned: "Atanmamış",
+  me: "Me",
+  unassigned: "Unassigned",
 };
 
 export function humanizeAssignee(assignee: string): string {

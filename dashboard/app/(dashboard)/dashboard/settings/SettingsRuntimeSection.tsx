@@ -38,7 +38,7 @@ export function SettingsRuntimeSection({ health, runtime }: Props) {
           />
         </div>
 
-        <TerminalFrame title="Çalışma Durumu">
+        <TerminalFrame title="Runtime status">
           <div className="space-y-1 p-3 text-xs text-fg-muted">
             <div>
               version: <span className="text-fg">{runtime?.version || "—"}</span>

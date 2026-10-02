@@ -16,7 +16,7 @@ type Props = {
 export function PoliciesSimulatePanel({ sample, onSampleChange, simulating, onSimulate, simResult }: Props) {
   return (
     <div className="space-y-3">
-      <TerminalFrame title="Simülasyon Girdisi">
+      <TerminalFrame title="Simulation input">
         <textarea
           className="block min-h-[120px] w-full resize-y bg-surface-card p-3 text-xs text-fg focus:outline-none"
           value={sample}
@@ -34,7 +34,7 @@ export function PoliciesSimulatePanel({ sample, onSampleChange, simulating, onSi
       {simResult ? (
         <div>
           <TerminalFrame
-            title="Simülasyon Sonucu"
+            title="Simulation result"
             status={
               <Badge
                 className={`rounded-sm border text-[10px] uppercase tracking-[0.18em] ${
@@ -55,7 +55,7 @@ export function PoliciesSimulatePanel({ sample, onSampleChange, simulating, onSi
                 policy: {simResult.policy_name} @ {simResult.policy_version}
               </div>
               {simResult.findings.length === 0 ? (
-                <div className="text-fg-muted">Finding bulunamadı.</div>
+                <div className="text-fg-muted">No findings.</div>
               ) : (
                 <div className="space-y-1">
                   {simResult.findings.map((f, i) => (

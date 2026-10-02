@@ -18,7 +18,7 @@ export default function DashboardLoading() {
         ))}
       </div>
       <div className="h-72 animate-pulse rounded-sm border border-border/80 bg-surface-subtle" />
-      <span className="sr-only">Yükleniyor…</span>
+      <span className="sr-only">Loading…</span>
     </div>
   );
 }

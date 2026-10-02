@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { api, type SecurityEvent } from "@/lib/api";
 import { useCountUp } from "@/lib/use-count-up";
-import { toUpperEn, toLowerEn } from "@/lib/utils/tr-string";
+import { toUpperEn, toLowerEn } from "@/lib/utils/case";
 import { type RangeMode } from "./overviewConstants";
 import { useOverviewDerived } from "./useOverviewDerived";
 import { useAdminKey } from "@/hooks/useAdminKey";

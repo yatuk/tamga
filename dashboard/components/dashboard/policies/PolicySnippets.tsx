@@ -23,7 +23,7 @@ function stringifyPolicy(doc: PolicyDoc): string {
 export function appendCustomEntity(draft: string): string {
   const o = parsePolicyDraft(draft);
   if (!o) {
-    toast.error("Policy JSON parse edilemedi", "Şablon eklenemedi.");
+    toast.error("Could not parse the policy JSON", "The template was not added.");
     return draft;
   }
   const list = o.custom_entities;
@@ -31,13 +31,13 @@ export function appendCustomEntity(draft: string): string {
   entities.push({
     name: "custom_token_v1",
     pattern: "(?i)(ACME|PROJ)[-_][A-Z0-9]{6,}",
-    description: "Kurum içi proje / müşteri token’ı — düzenli ifadeyi özelleştirin",
+    description: "Internal project or customer token — adjust the regular expression",
     severity: "high",
     action: "REDACT",
     confidence: 0.88,
   });
   o.custom_entities = entities;
-  toast.success("Şablon eklendi", "custom_entities satırını gözden geçirin.");
+  toast.success("Template added", "Review the custom_entities entry.");
   return stringifyPolicy(o);
 }
 
@@ -50,7 +50,7 @@ export function strengthenInjection(draft: string): string {
   }
   const rules = o.rules;
   if (!rules || typeof rules !== "object" || Array.isArray(rules)) {
-    toast.error("rules objesi yok");
+    toast.error("The policy has no rules object");
     return draft;
   }
   const r = rules as Record<string, unknown>;
@@ -60,7 +60,7 @@ export function strengthenInjection(draft: string): string {
   } else {
     (inj as Record<string, unknown>).action = "BLOCK";
   }
-  toast.success("injection kuralı BLOCK olarak ayarlandı");
+  toast.success("Injection rule set to BLOCK");
   return stringifyPolicy(o);
 }
 
@@ -72,7 +72,7 @@ export function appendRateLimitTemplate(draft: string): string {
     return draft;
   }
   if (o.rate_limit) {
-    toast.error("rate_limit zaten tanımlı");
+    toast.error("rate_limit is already defined");
     return draft;
   }
   o.rate_limit = {
@@ -80,7 +80,7 @@ export function appendRateLimitTemplate(draft: string): string {
     max_tokens_per_day: 500000,
     action_on_exceed: "BLOCK",
   };
-  toast.success("rate_limit şablonu eklendi");
+  toast.success("rate_limit template added");
   return stringifyPolicy(o);
 }
 

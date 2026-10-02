@@ -17,7 +17,7 @@ export function SavedHuntsPanel({ savedHunts, onApply, onDelete }: Props) {
         Saved hunts
       </div>
       {savedHunts.length === 0 ? (
-        <p className="text-xs text-fg-muted">Henüz kayıtlı hunt yok.</p>
+        <p className="text-xs text-fg-muted">No saved hunts yet.</p>
       ) : (
         <ul className="space-y-2">
           {savedHunts.map((h) => (

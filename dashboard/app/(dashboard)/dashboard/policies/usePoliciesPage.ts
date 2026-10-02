@@ -12,7 +12,7 @@ export function usePoliciesPage() {
   const [adminKey] = useAdminKey();
   const [draft, setDraft] = useState("");
   const [originalYaml, setOriginalYaml] = useState("");
-  const [sample, setSample] = useState('Merhaba, kredi kartım: 4242 4242 4242 4242');
+  const [sample, setSample] = useState('Hi, my credit card is 4242 4242 4242 4242');
   const [saving, setSaving] = useState(false);
   const [simulating, setSimulating] = useState(false);
   const [simResult, setSimResult] = useState<PolicySimulateResult | null>(null);
@@ -61,19 +61,19 @@ export function usePoliciesPage() {
       toast.success(`Policy reload`, res.name || "default");
       await refetch();
     } catch (e) {
-      toast.error("Reload hatası", (e as Error).message);
+      toast.error("Reload failed", (e as Error).message);
     }
   }
 
   async function onSave() {
     if (!draft.trim()) {
-      toast.error("Draft boş");
+      toast.error("Draft is empty");
       return;
     }
     try {
       JSON.parse(draft);
     } catch {
-      toast.error("Geçersiz JSON", "Policy geçerli bir JSON olmalı.");
+      toast.error("Invalid JSON", "The policy must be valid JSON.");
       return;
     }
     setSaving(true);
@@ -81,11 +81,11 @@ export function usePoliciesPage() {
       const validation = await api.validatePolicy(adminKey, draft);
       await api.putPolicy(adminKey, draft);
       const subtitle =
-        validation.warnings?.length ? `${validation.warnings.length} uyarı · reload sonrası aktif` : "reload sonrası aktif";
+        validation.warnings?.length ? `${validation.warnings.length} warnings · active after reload` : "active after reload";
       toast.success("Policy kaydedildi", subtitle);
       await refetch();
     } catch (e) {
-      toast.error("Kaydetme hatası", (e as Error).message);
+      toast.error("Save failed", (e as Error).message);
     } finally {
       setSaving(false);
     }
@@ -97,7 +97,7 @@ export function usePoliciesPage() {
       const res = await api.simulatePolicy(adminKey, draft, sample);
       setSimResult(res);
     } catch (e) {
-      toast.error("Simulate hatası", (e as Error).message);
+      toast.error("Simulation failed", (e as Error).message);
     } finally {
       setSimulating(false);
     }

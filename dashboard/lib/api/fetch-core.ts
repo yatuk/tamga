@@ -33,7 +33,7 @@ export async function fetchAPI<T>(path: string, options?: APIOptions): Promise<T
       if (!res.ok) {
         const errBody = (await res.json().catch(() => ({}))) as Record<string, unknown>;
         const message = formatFetchErrorMessage(res.status, errBody);
-        const err = new Error(res.status === 401 ? "Admin key yanlış veya eksik" : message);
+        const err = new Error(res.status === 401 ? "Admin key is wrong or missing" : message);
         if (res.status >= 500 && attempt < retries) {
           lastError = err;
           continue;

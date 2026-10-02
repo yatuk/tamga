@@ -85,27 +85,27 @@ export function useSettingsPage() {
 
   async function createKey(label: string, scope: ApiKey["scope"]) {
     if (!label.trim()) {
-      toast.error("Label boş olamaz.");
+      toast.error("Label cannot be empty.");
       return;
     }
     try {
       const created = await api.createApiKey(saved, label.trim(), scope);
-      toast.success("API key oluşturuldu", "tek seferlik gösterim");
+      toast.success("API key created", "shown once");
       navigator.clipboard?.writeText(created.raw_key).catch(() => {});
       qc.invalidateQueries({ queryKey: ["tamga-apikeys"] });
       toast.success("Key copied to clipboard", created.raw_key.slice(0, 12) + "...");
     } catch (e) {
-      toast.error("Anahtar oluşturulamadı", (e as Error).message);
+      toast.error("Could not create the key", (e as Error).message);
     }
   }
 
   async function removeKey(id: string) {
     try {
       await api.deleteApiKey(saved, id);
-      toast.success("API key iptal edildi");
+      toast.success("API key revoked");
       qc.invalidateQueries({ queryKey: ["tamga-apikeys"] });
     } catch (e) {
-      toast.error("Silme hatası", (e as Error).message);
+      toast.error("Delete failed", (e as Error).message);
     }
   }
 
@@ -122,10 +122,10 @@ export function useSettingsPage() {
   async function removeHook(id: string) {
     try {
       await api.deleteWebhook(saved, id);
-      toast.success("Webhook silindi");
+      toast.success("Webhook deleted");
       qc.invalidateQueries({ queryKey: ["tamga-webhooks"] });
     } catch (e) {
-      toast.error("Silme hatası", (e as Error).message);
+      toast.error("Delete failed", (e as Error).message);
     }
   }
 
@@ -135,7 +135,7 @@ export function useSettingsPage() {
       if (r.ok) toast.success("Webhook OK", `HTTP ${r.status_code}`);
       else toast.error("Webhook FAIL", `HTTP ${r.status_code}`);
     } catch (e) {
-      toast.error("Test hatası", (e as Error).message);
+      toast.error("Test failed", (e as Error).message);
     }
   }
 

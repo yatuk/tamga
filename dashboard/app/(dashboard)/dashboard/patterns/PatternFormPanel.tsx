@@ -36,7 +36,7 @@ export function PatternFormPanel({
 }: Props) {
   return (
     <div>
-      <TerminalFrame filename={draft.id ? `Pattern Düzenle: ${draft.id}` : "Yeni Pattern"}>
+      <TerminalFrame filename={draft.id ? `Edit pattern: ${draft.id}` : "New pattern"}>
         <div className="space-y-3 p-3">
           <div>
             <label className="text-[10px] uppercase tracking-[0.16em] text-fg-muted">Name</label>

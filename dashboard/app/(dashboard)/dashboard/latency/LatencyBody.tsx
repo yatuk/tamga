@@ -219,7 +219,7 @@ export function LatencyBody({
 
       {/* Latency trend chart */}
       <TerminalFrame
-        filename={`Gecikme · ${range === "24h" ? "24 Saat" : range === "7d" ? "7 Gün" : "30 Gün"}`}
+        filename={`Latency · ${range === "24h" ? "24 hours" : range === "7d" ? "7 days" : "30 days"}`}
         status={
           <span className="flex items-center gap-1 px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
             <RefreshCw className="h-3 w-3" /> 10s
@@ -241,7 +241,7 @@ export function LatencyBody({
 
       {/* Provider pool health */}
       <TerminalFrame
-        title="Sağlayıcı Havuz Durumu"
+        title="Provider pool status"
         status={
           <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
             {providerPools.length} providers

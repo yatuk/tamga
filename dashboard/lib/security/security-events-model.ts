@@ -1,5 +1,5 @@
 import type { SecurityEvent } from "@/lib/api";
-import { toLowerEn } from "@/lib/utils/tr-string";
+import { toLowerEn } from "@/lib/utils/case";
 import { severityRank as _severityRank } from "@/lib/badges";
 
 import type { TimeRange } from "@/lib/types";

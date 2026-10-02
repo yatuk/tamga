@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import type { PolicySimulateResult } from "@/lib/api";
-import { toUpperLocale } from "@/lib/utils/tr-string";
+import { toUpperEn } from "@/lib/utils/case";
 import { Badge } from "@/components/ui/badge";
 import { TerminalFrame } from "@/components/dashboard/TerminalFrame";
 import { playgroundActionClass, playgroundSeverityClass } from "./playgroundUi";
@@ -108,7 +108,7 @@ export function PlaygroundSimulateResult({ result, originalPrompt, loading = fal
   return (
     <div>
       <TerminalFrame
-        title="Simülasyon Sonucu"
+        title="Simulation result"
         status={
           <Badge className={`rounded-sm border text-[10px] uppercase tracking-[0.18em] ${playgroundActionClass(result?.action || "")}`}>
             {result?.action || "—"}
@@ -185,7 +185,7 @@ export function PlaygroundSimulateResult({ result, originalPrompt, loading = fal
                         <td className="px-2 py-1 text-fg-muted">{f.category}</td>
                         <td className="px-2 py-1">
                           <Badge className={`rounded-sm border text-[10px] ${playgroundSeverityClass(f.severity)}`}>
-                            {toUpperLocale(f.severity || "—")}
+                            {toUpperEn(f.severity || "—")}
                           </Badge>
                         </td>
                         <td className="px-2 py-1 tabular-nums text-fg-muted">
@@ -193,7 +193,7 @@ export function PlaygroundSimulateResult({ result, originalPrompt, loading = fal
                         </td>
                         <td className="px-2 py-1">
                           <Badge className={`rounded-sm border text-[10px] ${playgroundActionClass(f.action)}`}>
-                            {toUpperLocale(f.action || "—")}
+                            {toUpperEn(f.action || "—")}
                           </Badge>
                         </td>
                         <td className="px-2 py-1 text-fg-muted">

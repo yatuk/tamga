@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { toLowerEn } from "@/lib/utils/tr-string";
+import { toLowerEn } from "@/lib/utils/case";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 

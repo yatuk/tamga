@@ -12,7 +12,7 @@ export const OVERVIEW_PALETTE = [
 ];
 
 export const overviewTrafficBarConfig = {
-  total: { label: "Toplam", color: "var(--chart-1)" },
+  total: { label: "Total", color: "var(--chart-1)" },
   blocked: { label: "Engellenen", color: "var(--chart-2)" },
   redacted: { label: "Maskelenen", color: "var(--chart-3)" },
 } satisfies ChartConfig;

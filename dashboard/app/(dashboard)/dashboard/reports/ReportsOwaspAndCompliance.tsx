@@ -31,9 +31,9 @@ export function ReportsOwaspAndCompliance({ owaspCoverageRows, range, adminKey }
         >
           <div className="space-y-2 p-3">
             <p className="text-xs text-fg-muted">
-              Bulgu aileleri (findings/breakdown) üzerinden OWASP LLM Top 10 ile{" "}
-              <span className="text-fg-muted">kaba</span> eşleme — denetim kanıtı için Incidents satırındaki teknik chip ve
-              Audit export birlikte kullanılmalıdır.
+              A <span className="text-fg-muted">coarse</span> mapping from finding families (findings/breakdown) to the
+              OWASP LLM Top 10. For audit evidence, use the technique chip on the Incidents row together with the
+              Audit export.
             </p>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-[11px]">
@@ -72,7 +72,7 @@ export function ReportsOwaspAndCompliance({ owaspCoverageRows, range, adminKey }
               </table>
             </div>
             <Link href="/docs/owasp-llm" className="inline-block text-[10px] text-fg-subtle hover:text-status-low hover:underline">
-              OWASP LLM Top 10 dokümanı →
+              OWASP LLM Top 10 reference →
             </Link>
           </div>
         </TerminalFrame>
@@ -83,19 +83,19 @@ export function ReportsOwaspAndCompliance({ owaspCoverageRows, range, adminKey }
 
         >
           <div className="space-y-3 p-3 text-xs text-fg-muted">
-            <p className="text-[10px] uppercase tracking-wide text-fg-muted">KVKK / denetim kanıtı</p>
+            <p className="text-[10px] uppercase tracking-wide text-fg-muted">KVKK / audit evidence</p>
             <ul className="list-inside list-disc space-y-1">
               <li>
                 <Link className="text-fg-subtle hover:text-status-low hover:underline" href="https://tamgaproxy.com/trust">
                   Trust Center
                 </Link>{" "}
-                — veri yerleşimi ve alt işleyenler
+                — data residency and sub-processors
               </li>
               <li>
                 <Link className="text-fg-subtle hover:text-status-low hover:underline" href="/dashboard/audit">
                   Audit Logs
                 </Link>{" "}
-                — hash-chain doğrulama ve yönetişim olayları
+                — hash-chain verification and governance events
               </li>
               <li>
                 <a
@@ -111,7 +111,7 @@ export function ReportsOwaspAndCompliance({ owaspCoverageRows, range, adminKey }
                   CSV export (events)
                 </a>
                 {adminKey ? (
-                  <span className="ml-1 text-[10px] text-fg-muted">(admin key query ile)</span>
+                  <span className="ml-1 text-[10px] text-fg-muted">(admin key in the query string)</span>
                 ) : null}
               </li>
               <li>
@@ -121,7 +121,7 @@ export function ReportsOwaspAndCompliance({ owaspCoverageRows, range, adminKey }
                   target="_blank"
                   rel="noreferrer"
                 >
-                  SIEM JSON şema notu (repo)
+                  SIEM JSON schema notes (repo)
                 </a>
               </li>
             </ul>

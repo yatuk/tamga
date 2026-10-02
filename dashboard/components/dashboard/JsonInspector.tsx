@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Copy, Search } from "lucide-react";
-import { toLowerEn } from "@/lib/utils/tr-string";
+import { toLowerEn } from "@/lib/utils/case";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 

@@ -26,7 +26,7 @@ export function IncidentsFiltersCard({ m }: { m: IncidentsConsoleModel }) {
           Incidents Console
         </CardTitle>
         <CardDescription className="text-fg-muted">
-          Triage odakli olay kuyrugu, filtreleme ve detay inceleme.
+          Triage-focused incident queue with filtering and detail review.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -71,10 +71,10 @@ export function IncidentsFiltersCard({ m }: { m: IncidentsConsoleModel }) {
             onValueChange={(v) => m.setActionFilter(v as ActionFilter)}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Aksiyon" />
+              <SelectValue placeholder="Action" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Aksiyon: Hepsi</SelectItem>
+              <SelectItem value="all">Action: all</SelectItem>
               <SelectItem value="BLOCK">BLOCK</SelectItem>
               <SelectItem value="REDACT">REDACT</SelectItem>
               <SelectItem value="WARN">WARN</SelectItem>
@@ -88,14 +88,14 @@ export function IncidentsFiltersCard({ m }: { m: IncidentsConsoleModel }) {
             onValueChange={(v) => m.setTypeFilter(v as TypeFilter)}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Tür" />
+              <SelectValue placeholder="Type" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Tümü</SelectItem>
+              <SelectItem value="all">All</SelectItem>
               <SelectItem value="pii">PII</SelectItem>
-              <SelectItem value="secret">Gizli Anahtar</SelectItem>
+              <SelectItem value="secret">Secret</SelectItem>
               <SelectItem value="injection">Enjeksiyon</SelectItem>
-              <SelectItem value="custom">Özel</SelectItem>
+              <SelectItem value="custom">Custom</SelectItem>
             </SelectContent>
           </Select>
 
@@ -104,14 +104,14 @@ export function IncidentsFiltersCard({ m }: { m: IncidentsConsoleModel }) {
             onValueChange={(v) => m.setSeverityFilter(v as SeverityFilter)}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Önem" />
+              <SelectValue placeholder="Severity" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Tümü</SelectItem>
-              <SelectItem value="critical">Kritik</SelectItem>
-              <SelectItem value="high">Yüksek</SelectItem>
-              <SelectItem value="medium">Orta</SelectItem>
-              <SelectItem value="low">Düşük</SelectItem>
+              <SelectItem value="all">All</SelectItem>
+              <SelectItem value="critical">Critical</SelectItem>
+              <SelectItem value="high">High</SelectItem>
+              <SelectItem value="medium">Medium</SelectItem>
+              <SelectItem value="low">Low</SelectItem>
             </SelectContent>
           </Select>
 
@@ -120,13 +120,13 @@ export function IncidentsFiltersCard({ m }: { m: IncidentsConsoleModel }) {
             onValueChange={(v) => m.setTimeRange(v as TimeRange)}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Zaman aralığı" />
+              <SelectValue placeholder="Time range" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="1h">Son 1 saat</SelectItem>
-              <SelectItem value="24h">Son 24 saat</SelectItem>
-              <SelectItem value="7d">Son 7 gün</SelectItem>
-              <SelectItem value="30d">Son 30 gün</SelectItem>
+              <SelectItem value="1h">Last hour</SelectItem>
+              <SelectItem value="24h">Last 24 hours</SelectItem>
+              <SelectItem value="7d">Last 7 days</SelectItem>
+              <SelectItem value="30d">Last 30 days</SelectItem>
             </SelectContent>
           </Select>
 
@@ -138,11 +138,11 @@ export function IncidentsFiltersCard({ m }: { m: IncidentsConsoleModel }) {
               <SelectValue placeholder="Triaj Durumu" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Tümü</SelectItem>
-              <SelectItem value="Open">Açık</SelectItem>
-              <SelectItem value="In Progress">İşlemde</SelectItem>
-              <SelectItem value="Closed">Kapalı</SelectItem>
-              <SelectItem value="False Positive">Hatalı Tespit</SelectItem>
+              <SelectItem value="all">All</SelectItem>
+              <SelectItem value="Open">Open</SelectItem>
+              <SelectItem value="In Progress">In progress</SelectItem>
+              <SelectItem value="Closed">Closed</SelectItem>
+              <SelectItem value="False Positive">False positive</SelectItem>
             </SelectContent>
           </Select>
 
@@ -154,9 +154,9 @@ export function IncidentsFiltersCard({ m }: { m: IncidentsConsoleModel }) {
               <SelectValue placeholder="Atanan" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Tümü</SelectItem>
+              <SelectItem value="all">All</SelectItem>
               <SelectItem value="me">Ben</SelectItem>
-              <SelectItem value="unassigned">Atanmamış</SelectItem>
+              <SelectItem value="unassigned">Unassigned</SelectItem>
             </SelectContent>
           </Select>
 
@@ -165,23 +165,23 @@ export function IncidentsFiltersCard({ m }: { m: IncidentsConsoleModel }) {
             onValueChange={(v) => m.setProviderFilter(v as ProviderFilter)}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Sağlayıcı" />
+              <SelectValue placeholder="Provider" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Tümü</SelectItem>
+              <SelectItem value="all">All</SelectItem>
               <SelectItem value="openai">OpenAI</SelectItem>
               <SelectItem value="anthropic">Anthropic</SelectItem>
               <SelectItem value="google">Google</SelectItem>
               <SelectItem value="azure">Azure</SelectItem>
               <SelectItem value="unknown">Bilinmeyen</SelectItem>
-              <SelectItem value="shadow">Gölge (kurumsal değil)</SelectItem>
+              <SelectItem value="shadow">Shadow (not sanctioned)</SelectItem>
             </SelectContent>
           </Select>
 
           <input
             value={m.requestIdFilter}
             onChange={(e) => m.setRequestIdFilter(e.target.value.trim())}
-            placeholder="İstek Kodu filtresi"
+            placeholder="Filter by request ID"
             className="h-10 rounded-sm border border-border-strong bg-surface-subtle px-3 text-xs text-fg placeholder:text-fg-muted"
           />
         </div>

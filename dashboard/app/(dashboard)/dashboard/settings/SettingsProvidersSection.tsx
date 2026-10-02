@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import type { DashboardHealthDetailed } from "@/lib/api/types-core";
 import { toast } from "@/lib/toast";
-import { toLowerEn, toUpperEn } from "@/lib/utils/tr-string";
+import { toLowerEn, toUpperEn } from "@/lib/utils/case";
 import { useQueryClient } from "@tanstack/react-query";
 
 function stateClass(state: string): string {
@@ -33,10 +33,10 @@ export function SettingsProvidersSection({ health, adminKey }: Props) {
     setPending(key);
     try {
       await api.resetUpstreamCircuit(adminKey, pool, endpoint);
-      toast.success("Circuit sıfırlandı", `${pool} / ${endpoint}`);
+      toast.success("Circuit reset", `${pool} / ${endpoint}`);
       await qc.invalidateQueries({ queryKey: ["tamga-settings-health"] });
     } catch (e) {
-      toast.error("Sıfırlanamadı", (e as Error).message);
+      toast.error("Reset failed", (e as Error).message);
     } finally {
       setPending(null);
     }
@@ -46,22 +46,22 @@ export function SettingsProvidersSection({ health, adminKey }: Props) {
     <div>
       <div className="space-y-2">
         <p className="text-sm text-[var(--text-secondary)]">
-          Policy <code className="text-xs text-fg-muted">providers.pools</code> için circuit breaker
-          durumu. Açık (open) devrelerde trafik bu endpoint&apos;e gitmez; bakım sonrası manuel sıfırlayın.
+          Circuit breaker state for the policy&apos;s <code className="text-xs text-fg-muted">providers.pools</code>.
+          An open circuit receives no traffic; reset it manually after maintenance.
         </p>
 
         {pools.length === 0 ? (
           <div className="rounded-sm border border-border bg-surface-card px-4 py-6 text-sm text-fg-muted">
-            Henüz provider havuzu yok — health/detailed içinde <code className="text-xs">providers</code>{" "}
-            alanı boş. Politikada <code className="text-xs">providers.pools</code> tanımlayıp proxy&apos;yi
-            yeniden yükleyin.
+            No provider pools yet — the <code className="text-xs">providers</code> field in health/detailed is
+            empty. Define <code className="text-xs">providers.pools</code> in the policy and reload the
+            proxy.
           </div>
         ) : (
           <div className="space-y-3">
             {pools.map((pl) => (
               <TerminalFrame
                 key={pl.pool}
-                title={`${toUpperEn(pl.pool.charAt(0)) + pl.pool.slice(1)} Havuzu`}
+                title={`${toUpperEn(pl.pool.charAt(0)) + pl.pool.slice(1)} pool`}
 
                 status={
                   <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
@@ -87,7 +87,7 @@ export function SettingsProvidersSection({ health, adminKey }: Props) {
                             {isOpen ? (
                               <span className="inline-flex items-center gap-1 text-status-critical/90">
                                 <AlertTriangle className="h-3 w-3" />
-                                devre dışı
+                                out of rotation
                               </span>
                             ) : null}
                           </div>
@@ -105,7 +105,7 @@ export function SettingsProvidersSection({ health, adminKey }: Props) {
                           disabled={busy || !adminKey}
                           className="h-8 shrink-0 cursor-pointer rounded-sm border border-border-strong bg-surface-subtle px-2 text-[11px] text-fg hover:bg-surface-card disabled:opacity-50"
                           onClick={() => void resetCircuit(pl.pool, p.name)}
-                          title="Breaker sayacını sıfırla (yeni devre örneği)"
+                          title="Reset the breaker counters (new circuit instance)"
                         >
                           <RotateCcw className="mr-1 h-3 w-3" />
                           {busy ? "…" : "Reset circuit"}

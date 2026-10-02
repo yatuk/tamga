@@ -49,8 +49,8 @@ export function useSecurityIncidentsTableBulk(L: SecurityIncidentsDataLayer) {
       ids.map((id) => api.patchIncident(adminKey, id, { status: status as IncidentStatus })),
     );
     const failed = results.filter((r) => r.status === "rejected").length;
-    if (failed > 0) toast.error(`${failed}/${ids.length} olay sunucuda güncellenemedi`);
-    else toast.success(`${ids.length} olay -> ${status}`);
+    if (failed > 0) toast.error(`${failed}/${ids.length} incidents could not be updated on the server`);
+    else toast.success(`${ids.length} incidents -> ${status}`);
   };
 
   const bulkAssignMe = async () => {
@@ -75,7 +75,7 @@ export function useSecurityIncidentsTableBulk(L: SecurityIncidentsDataLayer) {
       ),
     );
     const failed = results.filter((r) => r.status === "rejected").length;
-    if (failed > 0) toast.error(`${failed}/${ids.length} atama başarısız`);
+    if (failed > 0) toast.error(`${failed}/${ids.length} assignments failed`);
   };
 
   const addCommentToSelected = () => {
@@ -88,7 +88,7 @@ export function useSecurityIncidentsTableBulk(L: SecurityIncidentsDataLayer) {
     if (adminKey) {
       api
         .patchIncident(adminKey, selectedRequestId, { add_comment: { author: "me", text } })
-        .catch((err) => toast.error(`Yorum kaydedilemedi: ${String(err?.message || err)}`));
+        .catch((err) => toast.error(`Could not save the comment: ${String(err?.message || err)}`));
     }
     setCommentDraft("");
   };

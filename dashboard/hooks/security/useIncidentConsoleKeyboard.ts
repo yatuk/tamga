@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import type { SecurityEvent } from "@/lib/api";
 import type { IncidentOpsState } from "@/lib/security/security-events-model";
 import type { MutableRefObject } from "react";
-import { toLowerEn } from "@/lib/utils/tr-string";
+import { toLowerEn } from "@/lib/utils/case";
 
 type Args = {
   router: { push: (href: string) => void };

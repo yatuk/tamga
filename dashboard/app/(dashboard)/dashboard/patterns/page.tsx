@@ -30,7 +30,7 @@ export default function PatternsPage() {
       <PageHeader
         eyebrow="PROTECTION // CUSTOM PATTERNS"
         title="Custom Patterns"
-        subtitle={`${items.length} kullanıcı tanımlı kural · scanner reload ile anında geçerli`}
+        subtitle={`${items.length} user-defined rules · live after a scanner reload`}
       />
 
       <div className="grid gap-3 lg:grid-cols-[1fr_360px]">

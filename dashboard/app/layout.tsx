@@ -5,7 +5,7 @@ import "./globals.css";
 import { QueryProvider } from "@/lib/query-provider";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
-import { toLowerEn } from "@/lib/utils/tr-string";
+import { toLowerEn } from "@/lib/utils/case";
 
 // display: "swap" keeps fallback text painted while Inter downloads,
 // eliminating the "blank text" CLS flash; preload + system fallback
@@ -45,7 +45,7 @@ export const metadata: Metadata = {
     template: "%s · Tamga",
   },
   description:
-    "LLM trafiğine inline yerleşen AI güvenlik proxy'si: PII/PCI redaction, prompt injection defense, policy engine, SOC dashboard.",
+    "Inline AI security proxy for LLM traffic: PII/PCI redaction, prompt injection defense, policy engine, SOC dashboard.",
   keywords: [
     "AI security proxy",
     "LLM firewall",
@@ -62,7 +62,7 @@ export const metadata: Metadata = {
     siteName: "Tamga",
     title: "Tamga — AI Security Proxy",
     description:
-      "LLM trafiğini inline tarar, PII/secret'i redakte eder, prompt injection'ı bloklar.",
+      "Scans LLM traffic inline, redacts PII and secrets, blocks prompt injection.",
     url: SITE_URL,
   },
   twitter: {

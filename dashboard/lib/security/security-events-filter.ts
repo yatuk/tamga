@@ -13,7 +13,7 @@ import {
   type TriageFilter,
   type TypeFilter,
 } from "@/lib/security/security-events-model";
-import { toUpperEn, toLowerEn } from "@/lib/utils/tr-string";
+import { toUpperEn, toLowerEn } from "@/lib/utils/case";
 
 export type FilterSecurityEventsParams = {
   events: SecurityEvent[];

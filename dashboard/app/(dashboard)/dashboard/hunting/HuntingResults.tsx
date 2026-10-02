@@ -4,7 +4,7 @@ import { Fragment, useMemo, useState, type Dispatch, type SetStateAction, useCal
 import Link from "next/link";
 import { ChevronDown, ChevronRight, Clock, ExternalLink, Tag, X } from "lucide-react";
 import type { SecurityEvent, SecurityFinding } from "@/lib/api";
-import { toUpperLocale } from "@/lib/utils/tr-string";
+import { toUpperEn } from "@/lib/utils/case";
 import { humanizeFindingType } from "@/lib/humanize";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -207,7 +207,7 @@ export function HuntingResults({ events, total, page, setPage, isLoading, error 
         </div>
       )}
 
-      <TerminalFrame title="Arama Sonuçları">
+      <TerminalFrame title="Search results">
         {isLoading ? (
           <SkeletonTable rows={8} cols={6} />
         ) : (
@@ -215,8 +215,8 @@ export function HuntingResults({ events, total, page, setPage, isLoading, error 
             {events.length === 0 ? (
               <EmptyState
                 icon="search"
-                title="Sonuç yok"
-                suggestion="Filtreleri gevşetin veya aralığı genişletin."
+                title="No results"
+                suggestion="Loosen the filters or widen the time range."
               />
             ) : (
               <table className="w-full table-fixed border-collapse text-left text-xs">
@@ -274,7 +274,7 @@ export function HuntingResults({ events, total, page, setPage, isLoading, error 
                           <td className="px-2 py-1.5 font-mono text-fg min-w-[120px] max-w-[150px] truncate whitespace-nowrap">{ev.request_id}</td>
                           <td className="px-2 py-1.5 whitespace-nowrap">
                             <Badge className="rounded-sm border border-border-strong bg-surface-card text-[10px] text-fg-muted">
-                              {toUpperLocale(ev.action || "—")}
+                              {toUpperEn(ev.action || "—")}
                             </Badge>
                           </td>
                           <td className="px-2 py-1.5">
@@ -354,7 +354,7 @@ export function HuntingResults({ events, total, page, setPage, isLoading, error 
         )}
         <div className="flex items-center justify-between border-t border-border px-3 py-2 text-[10px] text-fg-muted">
           <span>
-            Toplam {total} · sayfa {page} / {Math.max(1, Math.ceil(total / PAGE_SIZE))}
+            {total} total · page {page} / {Math.max(1, Math.ceil(total / PAGE_SIZE))}
           </span>
           <div className="flex gap-2">
             <Button
@@ -363,7 +363,7 @@ export function HuntingResults({ events, total, page, setPage, isLoading, error 
               disabled={page <= 1}
               onClick={() => setPage((p) => Math.max(1, p - 1))}
             >
-              Önceki
+              Previous
             </Button>
             <Button
               size="sm"
@@ -371,7 +371,7 @@ export function HuntingResults({ events, total, page, setPage, isLoading, error 
               disabled={page * PAGE_SIZE >= total}
               onClick={() => setPage((p) => p + 1)}
             >
-              Sonraki
+              Next
             </Button>
           </div>
         </div>

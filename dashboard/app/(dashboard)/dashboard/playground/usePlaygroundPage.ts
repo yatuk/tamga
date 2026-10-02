@@ -78,7 +78,7 @@ export function usePlaygroundPage() {
 
   async function runSimulate() {
     if (!prompt.trim()) {
-      toast.error("Prompt boş");
+      toast.error("Prompt is empty");
       return;
     }
     setRunning(true);
@@ -86,7 +86,7 @@ export function usePlaygroundPage() {
       const res = await api.simulatePolicy(adminKey, effectiveYaml, prompt);
       setResult(res);
     } catch (e) {
-      toast.error("Simulate hatası", (e as Error).message);
+      toast.error("Simulation failed", (e as Error).message);
     } finally {
       setRunning(false);
     }
@@ -136,7 +136,7 @@ export function usePlaygroundPage() {
 
   async function runBatch() {
     if (batchSamples.length === 0) {
-      toast.error("Red team boş", "Önce örnek yükleyin veya CSV seçin");
+      toast.error("Red team set is empty", "Load the samples or pick a CSV first");
       return;
     }
     setBatchRunning(true);

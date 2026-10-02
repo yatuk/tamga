@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { OVERVIEW_PALETTE, overviewTrafficBarConfig } from "./overviewConstants";
 import { OverviewProviderPie, OverviewTrafficChart } from "./overviewDynamicCharts";
 import { useOverviewContext } from "./OverviewContext";
-import { toUpperLocale } from "@/lib/utils/tr-string";
+import { toUpperEn } from "@/lib/utils/case";
 import { humanizeFindingType } from "@/lib/humanize";
 
 export function OverviewViewPartB() {
@@ -17,9 +17,9 @@ export function OverviewViewPartB() {
     <div className="grid gap-4 lg:grid-cols-3">
       <Card className="lg:col-span-2">
         <CardHeader>
-          <div className="text-[10px] uppercase tracking-[0.18em] text-fg-muted">TRAFFIC // {toUpperLocale(range)}</div>
-          <CardTitle>Trafik trendi</CardTitle>
-          <CardDescription>İstek, engellenen ve maskelenen trendi</CardDescription>
+          <div className="text-[10px] uppercase tracking-[0.18em] text-fg-muted">TRAFFIC // {toUpperEn(range)}</div>
+          <CardTitle>Traffic trend</CardTitle>
+          <CardDescription>Requests, blocked and redacted over time</CardDescription>
         </CardHeader>
         <CardContent>
           <OverviewTrafficChart data={sevenDayData} config={overviewTrafficBarConfig} />
@@ -28,8 +28,8 @@ export function OverviewViewPartB() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Risk dağılımı</CardTitle>
-          <CardDescription>Provider ve finding görünümü</CardDescription>
+          <CardTitle>Risk distribution</CardTitle>
+          <CardDescription>By provider and by finding</CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="providers">
@@ -39,7 +39,7 @@ export function OverviewViewPartB() {
             </TabsList>
             <TabsContent value="providers" className="space-y-3">
               {providerPieData.length === 0 ? (
-                <p className="py-10 text-center text-sm text-muted-foreground">Veri yok.</p>
+                <p className="py-10 text-center text-sm text-muted-foreground">No data.</p>
               ) : (
                 <OverviewProviderPie data={providerPieData} config={providerPieConfig} />
               )}

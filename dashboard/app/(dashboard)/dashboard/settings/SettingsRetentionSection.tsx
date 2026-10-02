@@ -12,11 +12,11 @@ type Props = {
 export function SettingsRetentionSection({ retention, setRetention, saveRetention }: Props) {
   return (
     <div>
-      <TerminalFrame title="Saklama Ayarları">
+      <TerminalFrame title="Retention">
         <div className="space-y-3 p-3">
           <div className="text-[11px] text-fg-muted">
-            {"//"} Dashboard üstünde uygulanan görsel gün sınırı. Veritabanı retention&apos;u proxy yapılandırmasında tanımlanır; bu
-            tercih yalnızca UI filtreleri için kullanılır.
+            {"//"} Day limit applied in the dashboard only. Database retention is set in the proxy configuration; this
+            preference affects UI filters only.
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <label className="text-[10px] uppercase tracking-wide text-fg-muted">DAYS</label>
@@ -29,7 +29,7 @@ export function SettingsRetentionSection({ retention, setRetention, saveRetentio
               className="h-9 w-28 rounded-sm border border-border bg-surface-card px-2 text-sm text-fg focus:outline-none"
             />
             <Button className="cursor-pointer rounded-sm bg-status-critical text-white hover:bg-status-critical" onClick={saveRetention}>
-              Kaydet
+              Save
             </Button>
           </div>
         </div>

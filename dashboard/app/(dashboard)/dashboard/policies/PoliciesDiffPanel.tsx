@@ -12,10 +12,10 @@ export function PoliciesDiffPanel({ originalYaml, draft }: Props) {
   const diff = computeUnifiedDiff(originalYaml, draft);
 
   return (
-    <TerminalFrame title="Politika Farkı">
+    <TerminalFrame title="Policy diff">
       <pre className="max-h-[460px] overflow-auto bg-surface-card p-3 text-[12px] leading-5">
         {diff.length === 0 ? (
-          <span className="text-fg-muted">Değişiklik yok.</span>
+          <span className="text-fg-muted">No changes.</span>
         ) : (
           diff.map((line, i) => (
             <div

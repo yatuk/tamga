@@ -5,7 +5,7 @@
 // recent-events panel. The chip's `title` attribute shows the OWASP
 // label so analysts can learn the taxonomy without leaving the table.
 
-import { toLowerEn } from "@/lib/utils/tr-string";
+import { toLowerEn } from "@/lib/utils/case";
 
 export type OwaspCode = {
   code: string;

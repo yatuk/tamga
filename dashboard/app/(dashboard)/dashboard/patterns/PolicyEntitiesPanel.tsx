@@ -107,7 +107,7 @@ export function PolicyEntitiesPanel() {
               className={`${inputCls} h-16 font-mono`}
               value={sampleText}
               onChange={(e) => setSampleText(e.target.value)}
-              placeholder="Paste sample text, e.g. müşteri FIB-12345678 kaydı"
+              placeholder="Paste sample text, e.g. customer ACME-12345678 record"
             />
             <Button
               variant="outline"
@@ -164,7 +164,7 @@ export function PolicyEntitiesPanel() {
               className={inputCls}
               value={draft.description}
               onChange={(e) => setDraft({ ...draft, description: e.target.value })}
-              placeholder="Fibabanka müşteri numarası"
+              placeholder="Customer number"
             />
           </div>
           <div className="grid grid-cols-2 gap-2">

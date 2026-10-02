@@ -9,7 +9,7 @@ type Props = {
 
 export function PoliciesHistoryPanel({ adminKey }: Props) {
   return (
-    <TerminalFrame title="Politika Geçmişi">
+    <TerminalFrame title="Policy history">
       <div className="space-y-3 p-3">
         <PolicyDiff adminKey={adminKey} />
       </div>

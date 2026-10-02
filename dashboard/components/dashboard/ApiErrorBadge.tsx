@@ -4,7 +4,7 @@ import { useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { AlertTriangle, Copy, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { toLowerEn } from "@/lib/utils/tr-string";
+import { toLowerEn } from "@/lib/utils/case";
 
 interface ApiErrorBadgeProps {
   error?: Error | string | null;

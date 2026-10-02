@@ -98,10 +98,10 @@ export function CustomEntityForm({ adminKey }: { adminKey: string }) {
           </span>
         </div>
         {isLoading ? (
-          <div className="px-4 py-3 text-xs text-fg-muted">Yükleniyor…</div>
+          <div className="px-4 py-3 text-xs text-fg-muted">Loading…</div>
         ) : items.length === 0 ? (
           <div className="px-4 py-3 text-xs text-fg-muted">
-            Henüz custom entity yok. Aşağıdan ekle.
+            No custom entities yet. Add one below.
           </div>
         ) : (
           <table className="w-full text-xs">
@@ -133,7 +133,7 @@ export function CustomEntityForm({ adminKey }: { adminKey: string }) {
                       onClick={() => deleteMut.mutate(ce.name)}
                       disabled={deleteMut.isPending}
                     >
-                      Sil
+                      Delete
                     </Button>
                   </td>
                 </tr>
@@ -146,7 +146,7 @@ export function CustomEntityForm({ adminKey }: { adminKey: string }) {
       {/* Add form */}
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 rounded-sm border border-border bg-surface-subtle/50 p-4">
         <span className="text-[11px] uppercase tracking-widest text-fg-muted">
-          Yeni Custom Entity
+          New custom entity
         </span>
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
@@ -195,7 +195,7 @@ export function CustomEntityForm({ adminKey }: { adminKey: string }) {
           </div>
         </div>
         <div className="space-y-1">
-          <label className="block text-[10px] uppercase tracking-widest text-fg-muted">Description (opsiyonel)</label>
+          <label className="block text-[10px] uppercase tracking-widest text-fg-muted">Description (optional)</label>
           <input
             {...register("description")}
             className="w-full rounded-sm border border-border-strong bg-surface-card px-2 py-1.5 text-xs text-fg placeholder:text-fg-muted focus:outline-none focus:ring-1 focus:ring-ring"
@@ -210,7 +210,7 @@ export function CustomEntityForm({ adminKey }: { adminKey: string }) {
           className="cursor-pointer rounded-sm bg-status-critical text-white hover:bg-status-critical"
           disabled={createMut.isPending}
         >
-          {createMut.isPending ? "Ekleniyor…" : "Entity Ekle"}
+          {createMut.isPending ? "Adding…" : "Add entity"}
         </Button>
       </form>
     </div>

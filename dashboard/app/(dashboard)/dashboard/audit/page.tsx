@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { RefreshCw, ShieldCheck, ShieldAlert } from "lucide-react";
 import { api, type AuditEntry } from "@/lib/api";
-import { toLowerEn } from "@/lib/utils/tr-string";
+import { toLowerEn } from "@/lib/utils/case";
 import { humanizeAuditKind } from "@/lib/humanize";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -134,7 +134,7 @@ export default function AuditPage() {
       <PageHeader
         eyebrow="ADMINISTRATION // AUDIT TRAIL"
         title="Audit"
-        subtitle={`${filtered.length} / ${data?.total ?? 0} kayıt · sistem-içi aksiyonlar`}
+        subtitle={`${filtered.length} / ${data?.total ?? 0} records · in-system actions`}
         actions={
           <div className="flex items-center gap-2">
             <Badge className={`rounded-sm border text-[10px] ${chainBadge}`}>
@@ -244,7 +244,7 @@ export default function AuditPage() {
       <div className="grid gap-3 lg:grid-cols-[1fr_360px]">
         <div>
           <TerminalFrame
-            title="Denetim Kaydı"
+            title="Audit log"
             status={
               <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
                 {filtered.length} rows
@@ -260,7 +260,7 @@ export default function AuditPage() {
               </div>
             ) : filtered.length === 0 ? (
               <div className="flex h-[300px] items-center justify-center rounded-sm border border-border bg-surface-subtle/50 text-xs text-fg-muted">
-                denetim kaydı yok
+                No audit records
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -304,10 +304,10 @@ export default function AuditPage() {
         </div>
 
         <div>
-          <TerminalFrame filename={selected ? humanizeAuditKind(selected.kind) : "Denetim Detayı"}>
+          <TerminalFrame filename={selected ? humanizeAuditKind(selected.kind) : "Audit detail"}>
             {!selected ? (
               <div className="p-6 text-center text-xs text-fg-muted">
-                Detay için bir satır seçin…
+                Select a row to see its detail…
               </div>
             ) : (
               <div className="space-y-2 p-3 text-xs text-fg-muted">

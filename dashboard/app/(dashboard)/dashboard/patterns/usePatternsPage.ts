@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type CustomPattern, type PatternKind } from "@/lib/api";
 import { toast } from "@/lib/toast";
-import { toLowerEn } from "@/lib/utils/tr-string";
+import { toLowerEn } from "@/lib/utils/case";
 import { EMPTY_DRAFT, type Draft } from "./_constants";
 import { useAdminKey } from "@/hooks/useAdminKey";
 

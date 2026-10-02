@@ -31,11 +31,11 @@ export function SettingsWebhooksSection({ hookList, createHook, removeHook, test
       >
         <div className="space-y-3 p-3">
           <div className="text-[11px] text-fg-muted">
-            {"//"} Raw outbound JSON POST hooks. Preset entegrasyonlar için{" "}
+            {"//"} Raw outbound JSON POST hooks. For preset integrations use the{" "}
             <Link href="/dashboard/integrations" className="text-fg-muted underline">
               Integrations
             </Link>{" "}
-            sekmesini kullanın.
+            tab.
           </div>
           <CreateWebhookInline onCreate={createHook} />
           {!hookList || hookList.items.length === 0 ? (

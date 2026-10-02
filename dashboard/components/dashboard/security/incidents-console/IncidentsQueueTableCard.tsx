@@ -20,7 +20,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { TerminalFrame } from "@/components/dashboard/TerminalFrame";
 import type { SecurityEvent } from "@/lib/api";
 import type { IncidentsConsoleModel } from "@/hooks/security/useSecurityIncidentsConsole";
-import { toUpperLocale } from "@/lib/utils/tr-string";
+import { toUpperEn } from "@/lib/utils/case";
 import { primarySeverity, relativeTime } from "@/lib/security/security-events-model";
 import { actionClass, severityClass } from "@/lib/badges";
 
@@ -117,12 +117,12 @@ function GridRow({
 
       {/* Severity */}
       <div className={cell("")}>
-        <Badge className={severityClass(sev)}>{toUpperLocale(sev)}</Badge>
+        <Badge className={severityClass(sev)}>{toUpperEn(sev)}</Badge>
       </div>
 
       {/* Action */}
       <div className={cell("")}>
-        <Badge className={actionClass(event.action)}>{toUpperLocale(event.action || "—")}</Badge>
+        <Badge className={actionClass(event.action)}>{toUpperEn(event.action || "—")}</Badge>
       </div>
 
       {/* Entity — stacked provider/model + request_id */}
@@ -301,7 +301,7 @@ export function IncidentsQueueTableCard({ m, onFpClick }: { m: IncidentsConsoleM
           )}
         </div>
         <CardDescription className="text-fg-muted">
-          Severity ve aksiyona gore onceliklendirilmis son olaylar.
+          Recent incidents ordered by severity and action.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -313,7 +313,7 @@ export function IncidentsQueueTableCard({ m, onFpClick }: { m: IncidentsConsoleM
         </div>
 
         {m.isLoading ? (
-          <div className="pt-2 text-sm text-[var(--text-secondary)]">Yukleniyor...</div>
+          <div className="pt-2 text-sm text-[var(--text-secondary)]">Loading…</div>
         ) : m.error ? (
           <div className="pt-2 text-sm text-[var(--status-block)]">
             Events alinamadi: {(m.error as Error).message}
@@ -321,7 +321,7 @@ export function IncidentsQueueTableCard({ m, onFpClick }: { m: IncidentsConsoleM
         ) : m.filtered.length === 0 ? (
           <div className="rounded-sm border border-border bg-surface-card p-6 text-center text-sm text-fg-muted">
             <div className="text-[11px] uppercase tracking-[0.18em] text-fg-muted">no incident matches</div>
-            <div className="mt-2 text-fg-muted">Filtreye uygun olay yok.</div>
+            <div className="mt-2 text-fg-muted">No incidents match the filters.</div>
           </div>
         ) : (
           <>

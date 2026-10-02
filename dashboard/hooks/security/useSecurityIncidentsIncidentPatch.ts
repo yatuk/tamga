@@ -47,7 +47,7 @@ export function useSecurityIncidentsIncidentPatch(L: SecurityIncidentsDataLayer)
           assignee: next.assignee,
           reason: next.reason,
         })
-        .catch((err) => toast.error(`Olay güncellenemedi: ${String(err?.message || err)}`));
+        .catch((err) => toast.error(`Could not update the incident: ${String(err?.message || err)}`));
     }
   };
 
@@ -71,8 +71,8 @@ export function useSecurityIncidentsIncidentPatch(L: SecurityIncidentsDataLayer)
       ),
     );
     const failed = results.filter((r) => r.status === "rejected").length;
-    if (failed > 0) toast.error(`${failed}/${ids.length} benzer olay sunucuda güncellenemedi`);
-    else toast.success(`${ids.length} benzer olay suppress edildi`);
+    if (failed > 0) toast.error(`${failed}/${ids.length} similar incidents could not be updated on the server`);
+    else toast.success(`${ids.length} similar incidents suppressed`);
   };
 
   return {

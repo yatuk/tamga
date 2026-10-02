@@ -22,10 +22,10 @@ export function SettingsAccessSection({ draft, setDraft, saved, saveAdminKey, ke
   return (
     <>
       <div>
-        <TerminalFrame title="Yönetici Anahtarı">
+        <TerminalFrame title="Admin key">
           <div className="space-y-3 p-3">
             <div className="text-[11px] text-fg-muted">
-              Bu anahtar tarayıcıda saklanır; Tamga Proxy admin endpoint&apos;lerini çağırmak için kullanılır.
+              Stored in this browser and used to call the Tamga proxy admin endpoints.
             </div>
             <div className="flex flex-col gap-2 sm:flex-row">
               <label htmlFor="admin-key-input" className="sr-only">Admin Key</label>
@@ -38,7 +38,7 @@ export function SettingsAccessSection({ draft, setDraft, saved, saveAdminKey, ke
                 className="h-10 flex-1 rounded-sm border border-border bg-surface-card px-3 text-sm text-fg focus:border-status-critical/40 focus:outline-none"
               />
               <Button className="cursor-pointer rounded-sm bg-status-critical text-white hover:bg-status-critical" onClick={saveAdminKey}>
-                Kaydet
+                Save
               </Button>
             </div>
             <Badge className="rounded-sm border-border-strong bg-surface-subtle text-[10px] text-fg-muted">
@@ -50,7 +50,7 @@ export function SettingsAccessSection({ draft, setDraft, saved, saveAdminKey, ke
 
       <div>
         <TerminalFrame
-          title="API Anahtarları"
+          title="API keys"
           status={
             <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
               {keyList?.items.length ?? 0} rows

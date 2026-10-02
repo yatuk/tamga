@@ -17,12 +17,10 @@ import { TerminalFrame } from "@/components/dashboard/TerminalFrame";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/lib/toast";
-import { useTranslation } from "@/lib/i18n";
-import { toUpperLocale } from "@/lib/utils/tr-string";
+import { toUpperEn } from "@/lib/utils/case";
 import type { IntegrationGuide } from "../_data/guides";
 
 function CopyButton({ text }: { text: string }) {
-  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   return (
     <button
@@ -31,7 +29,7 @@ function CopyButton({ text }: { text: string }) {
         try {
           await navigator.clipboard.writeText(text);
           setCopied(true);
-          toast.success(t("guide.copied"));
+          toast.success("Copied");
           setTimeout(() => setCopied(false), 1400);
         } catch {
           toast.error("Copy failed");
@@ -40,7 +38,7 @@ function CopyButton({ text }: { text: string }) {
       className="inline-flex h-6 items-center gap-1 rounded-sm border border-border bg-surface-subtle px-2 text-[10px] uppercase tracking-wide text-fg-muted hover:bg-surface-card"
     >
       {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-      {copied ? t("guide.copied") : t("guide.copy")}
+      {copied ? "Copied" : "Copy"}
     </button>
   );
 }
@@ -60,19 +58,18 @@ function CodeBlock({ lang, content }: { lang: string; content: string }) {
 }
 
 export function GuideView({ guide }: { guide: IntegrationGuide }) {
-  const { t } = useTranslation();
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
         <Link href="/dashboard/integrations" className="inline-flex items-center gap-1 hover:text-fg-subtle">
-          <ArrowLeft className="h-3 w-3" /> {t("guide.back")}
+          <ArrowLeft className="h-3 w-3" /> Back to integrations
         </Link>
         <ChevronRight className="h-3 w-3 text-fg-muted" />
         <span className="text-fg-muted">{guide.name}</span>
       </div>
 
       <PageHeader
-        eyebrow={`ADMINISTRATION // INTEGRATIONS // ${toUpperLocale(guide.kind)}`}
+        eyebrow={`ADMINISTRATION // INTEGRATIONS // ${toUpperEn(guide.kind)}`}
         title={`${guide.name} setup guide`}
         subtitle={guide.overview}
         actions={
@@ -82,7 +79,7 @@ export function GuideView({ guide }: { guide: IntegrationGuide }) {
             </span>
             <Link href={`/dashboard/integrations?connect=${guide.kind}`} className="inline-flex">
               <Button className="cursor-pointer rounded-sm bg-status-critical text-white hover:bg-status-critical">
-                <Plug className="mr-1 h-3.5 w-3.5" /> {t("guide.connect_cta")}
+                <Plug className="mr-1 h-3.5 w-3.5" /> Connect now
               </Button>
             </Link>
           </div>
@@ -119,7 +116,7 @@ export function GuideView({ guide }: { guide: IntegrationGuide }) {
             <div>
               <section className="rounded-sm border border-border bg-surface-card p-4">
                 <div className="mb-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
-                  {t("guide.prereq")}
+                  Prerequisites
                 </div>
                 <ul className="space-y-1.5 text-sm text-fg-muted">
                   {guide.prerequisites.map((p) => (
@@ -136,7 +133,7 @@ export function GuideView({ guide }: { guide: IntegrationGuide }) {
           <div>
             <section className="space-y-3">
               <div className="text-[10px] uppercase tracking-[0.18em] text-fg-muted">
-                {t("guide.steps")}
+                Setup steps
               </div>
               <ol className="space-y-3">
                 {guide.steps.map((s, i) => (
@@ -170,7 +167,7 @@ export function GuideView({ guide }: { guide: IntegrationGuide }) {
             <div>
               <section className="rounded-sm border border-border bg-surface-card p-4">
                 <div className="mb-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
-                  {t("guide.headers")}
+                  Required headers
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
@@ -215,7 +212,7 @@ export function GuideView({ guide }: { guide: IntegrationGuide }) {
           <div>
             <section className="rounded-sm border border-border bg-surface-card p-4">
               <div className="mb-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
-                {t("guide.gotchas")}
+                Caveats &amp; gotchas
               </div>
               <ul className="space-y-3">
                 {guide.gotchas.map((g) => (
@@ -268,7 +265,7 @@ export function GuideView({ guide }: { guide: IntegrationGuide }) {
               href={`/dashboard/integrations?connect=${guide.kind}`}
               className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-sm bg-status-critical px-3 py-2 text-xs uppercase tracking-wide text-white hover:bg-status-critical"
             >
-              <Plug className="h-3.5 w-3.5" /> {t("guide.connect_cta")}
+              <Plug className="h-3.5 w-3.5" /> Connect now
             </Link>
           </div>
         </aside>

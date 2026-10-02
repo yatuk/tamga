@@ -16,7 +16,7 @@ export default function PlaygroundPage() {
       <PageHeader
         eyebrow="PLAYGROUND // POLICY SIMULATOR"
         title="Playground"
-        subtitle="canlı trafiği etkilemez · POST /api/v1/policies/simulate"
+        subtitle="does not affect live traffic · POST /api/v1/policies/simulate"
         actions={
           <>
             <Button

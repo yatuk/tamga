@@ -1,7 +1,7 @@
 import { type HTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
 import { actionClass, severityClass } from "@/lib/badges";
-import { toUpperEn, toLowerEn } from "@/lib/utils/tr-string";
+import { toUpperEn, toLowerEn } from "@/lib/utils/case";
 
 type BadgeProps = HTMLAttributes<HTMLSpanElement>;
 

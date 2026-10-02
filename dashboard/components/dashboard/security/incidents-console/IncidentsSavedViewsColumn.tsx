@@ -9,7 +9,7 @@ export function IncidentsSavedViewsColumn({ m }: { m: IncidentsConsoleModel }) {
     <Card className="h-full rounded-sm border-border bg-surface-card">
       <CardHeader className="pb-2">
         <CardTitle className="text-sm">Saved Views</CardTitle>
-        <CardDescription className="text-fg-muted">Hızlı triage filtre setleri</CardDescription>
+        <CardDescription className="text-fg-muted">Quick triage filter sets</CardDescription>
       </CardHeader>
       <CardContent className="space-y-2">
         <Button
@@ -20,7 +20,7 @@ export function IncidentsSavedViewsColumn({ m }: { m: IncidentsConsoleModel }) {
           Save current view
         </Button>
         {m.savedViews.length === 0 ? (
-          <div className="text-xs text-fg-muted">Henüz kayıtlı görünüm yok.</div>
+          <div className="text-xs text-fg-muted">No saved views yet.</div>
         ) : (
           m.savedViews.map((v) => (
             <div key={v.id} className="rounded-sm border border-border bg-surface-subtle p-2">

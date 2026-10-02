@@ -2,7 +2,7 @@
 
 import { motion, useReducedMotion } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
-import { toUpperEn } from "@/lib/utils/tr-string";
+import { toUpperEn } from "@/lib/utils/case";
 
 export function OverviewActionBadge({ action }: { action?: string }) {
   const reduce = useReducedMotion();

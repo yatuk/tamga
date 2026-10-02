@@ -5,7 +5,7 @@ import { type DashboardStatsV2, type MTTRStats, type SecurityEvent } from "@/lib
 import { pctDelta } from "@/components/common/Sparkline";
 import type { RangeMode } from "./overviewConstants";
 import { buildIncidentsHref, buildProviderPie, mapToTopArray } from "./overviewHelpers";
-import { toUpperEn, toLowerEn } from "@/lib/utils/tr-string";
+import { toUpperEn, toLowerEn } from "@/lib/utils/case";
 
 export function useOverviewDerived(
   stats: DashboardStatsV2 | undefined,

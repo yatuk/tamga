@@ -173,7 +173,7 @@ export function HuntingFilters({
           <span className="text-[10px] uppercase tracking-wide text-fg-muted">Q (request_id / payload)</span>
           <Input
               className="h-8 focus:border-status-critical"
-            placeholder="req_… veya findings içinde ara"
+            placeholder="req_… or search within findings"
             value={q}
             onChange={(e: ChangeEvent<HTMLInputElement>) => {
               setQ(e.target.value);
@@ -187,7 +187,7 @@ export function HuntingFilters({
             Save hunt
           </Button>
           <span className="text-[10px] text-fg-muted">
-            {isLoading || isFetching ? "Loading…" : `${total} eşleşme (sayfa ${page})`}
+            {isLoading || isFetching ? "Loading…" : `${total} matches (page ${page})`}
           </span>
         </div>
       </div>

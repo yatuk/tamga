@@ -3,7 +3,7 @@
 import { motion, useReducedMotion } from "framer-motion";
 import { Download, Pause, Play } from "lucide-react";
 import { primaryOwasp } from "@/lib/owasp-llm";
-import { toUpperEn, toUpperLocale } from "@/lib/utils/tr-string";
+import { toUpperEn } from "@/lib/utils/case";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,7 +39,7 @@ export function OverviewViewPartC() {
         <Card>
           <CardHeader>
             <CardTitle>Incident Queue (Recent)</CardTitle>
-            <CardDescription>Son 10 olay, analist onceligi icin siralanmis gorunum</CardDescription>
+            <CardDescription>Last 10 events, ordered by analyst priority</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="mb-3">
@@ -64,17 +64,17 @@ export function OverviewViewPartC() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Request ID</TableHead>
-                  <TableHead>Zaman</TableHead>
+                  <TableHead>Time</TableHead>
                   <TableHead>Provider</TableHead>
-                  <TableHead>Aksiyon</TableHead>
-                  <TableHead>Finding türü</TableHead>
+                  <TableHead>Action</TableHead>
+                  <TableHead>Finding type</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {searchedRecentEvents.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={5} className="text-fg-subtle dark:text-fg-subtle">
-                      Veri yok.
+                      No data.
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -161,8 +161,8 @@ export function OverviewViewPartC() {
                       className="block truncate text-fg-muted hover:text-fg"
                     >
                       {new Date(e.timestamp).toLocaleTimeString("tr-TR", { hour12: false })} {e.request_id.slice(0, 10)}{" "}
-                      {toUpperLocale(e.provider || "unknown")} {(e.model || "n/a").slice(0, 16)} {toUpperLocale(e.action || "PASS")}{" "}
-                      {toUpperLocale(e.findings?.[0]?.type || "-")} {Math.round(e.scan_latency_ms || 0)}ms {relTime(e.timestamp)}
+                      {toUpperEn(e.provider || "unknown")} {(e.model || "n/a").slice(0, 16)} {toUpperEn(e.action || "PASS")}{" "}
+                      {toUpperEn(e.findings?.[0]?.type || "-")} {Math.round(e.scan_latency_ms || 0)}ms {relTime(e.timestamp)}
                     </a>
                   ))}
                 </div>
@@ -173,7 +173,7 @@ export function OverviewViewPartC() {
       </div>
 
       <div className="text-xs text-fg-subtle dark:text-fg-subtle">
-        Uptime: {healthLoading ? "..." : `${health?.uptime_seconds ?? 0}s`} • Ortalama tarama:{" "}
+        Uptime: {healthLoading ? "..." : `${health?.uptime_seconds ?? 0}s`} • Average scan:{" "}
         {typeof derived.totals.avgLatencyMs === "number" ? `${derived.totals.avgLatencyMs.toFixed(2)}ms` : "—"}
       </div>
 

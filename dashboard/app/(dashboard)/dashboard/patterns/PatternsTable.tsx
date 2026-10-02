@@ -2,7 +2,7 @@
 
 import { Pencil, Trash2 } from "lucide-react";
 import type { CustomPattern } from "@/lib/api";
-import { toUpperLocale } from "@/lib/utils/tr-string";
+import { toUpperEn } from "@/lib/utils/case";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -79,7 +79,7 @@ export function PatternsTable({ items, isLoading, onEdit, onDelete, onToggleEnab
                     </td>
                     <td className="px-3 py-2">
                       <Badge className={`rounded-sm border text-[10px] ${sevClass(p.severity)}`}>
-                        {toUpperLocale(p.severity)}
+                        {toUpperEn(p.severity)}
                       </Badge>
                     </td>
                     <td className="px-3 py-2 tabular-nums text-[11px] text-fg-muted">

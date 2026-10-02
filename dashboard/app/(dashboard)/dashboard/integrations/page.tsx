@@ -16,7 +16,7 @@ export default function IntegrationsPage() {
       <PageHeader
         eyebrow="ADMINISTRATION // INTEGRATIONS"
         title="Integrations"
-        subtitle={`${hooks.length} bağlı · ${INTEGRATION_PRESETS.length} hazır şablon · tile başına ayrıntılı rehber`}
+        subtitle={`${hooks.length} connected · ${INTEGRATION_PRESETS.length} presets · step-by-step guide on each tile`}
       />
 
       <IntegrationsPresetGrid hooks={hooks} onConnect={(kind, name) => setDraft(openIntegrationDraft(kind, name))} />

@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { JsonInspector } from "@/components/dashboard/JsonInspector";
 import { primaryOwasp } from "@/lib/owasp-llm";
-import { toUpperLocale } from "@/lib/utils/tr-string";
+import { toUpperEn } from "@/lib/utils/case";
 import {
   primarySeverity,
   relativeTime,
@@ -107,8 +107,8 @@ export function IncidentDetailPanel({ event, m, onFpClick }: Props) {
         </div>
         {/* Severity + Action */}
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          <Badge className={severityClass(sev)}>{toUpperLocale(sev)}</Badge>
-          <Badge className={actionClass(event.action)}>{toUpperLocale(event.action || "—")}</Badge>
+          <Badge className={severityClass(sev)}>{toUpperEn(sev)}</Badge>
+          <Badge className={actionClass(event.action)}>{toUpperEn(event.action || "—")}</Badge>
           {owasp && (
             <span
               className="inline-flex items-center rounded-sm border border-border-strong bg-surface-subtle px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-fg-muted"

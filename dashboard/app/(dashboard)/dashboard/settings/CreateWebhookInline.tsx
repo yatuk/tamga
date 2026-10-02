@@ -52,7 +52,7 @@ export function CreateWebhookInline({ onCreate }: { onCreate: (payload: Omit<Web
         className="h-8 cursor-pointer rounded-sm bg-status-critical px-3 text-white hover:bg-status-critical"
         onClick={() => {
           if (!label.trim() || !url.trim()) {
-            toast.error("Label ve URL gerekli");
+            toast.error("Label and URL are required");
             return;
           }
           onCreate({

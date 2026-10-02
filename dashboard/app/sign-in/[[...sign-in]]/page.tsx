@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { toLowerEn } from "@/lib/utils/tr-string";
+import { toLowerEn } from "@/lib/utils/case";
 
 const ClerkSignIn = dynamic(
   async () => {
@@ -24,12 +24,12 @@ export default function SignInPage() {
     <main className="flex min-h-screen items-center justify-center bg-surface-card px-4 text-fg">
       <div className="w-full max-w-md rounded-sm border border-border bg-surface-card p-6">
         <h1 className="mb-1 text-xl font-semibold tracking-tight">Sign in</h1>
-        <p className="mb-4 text-sm text-fg-muted">Tamga SOC Console&apos;a erişim.</p>
+        <p className="mb-4 text-sm text-fg-muted">Access the Tamga SOC console.</p>
         {enabled ? (
           <ClerkSignIn />
         ) : (
           <div className="space-y-3 font-mono text-xs text-fg-muted">
-            <p>Clerk devre dışı (demo mod). Dashboard&apos;a devam etmek için:</p>
+            <p>Clerk is disabled (demo mode). To continue to the dashboard:</p>
             <Link
               href="/dashboard"
               className="inline-flex h-9 items-center rounded-sm bg-status-critical px-4 text-white hover:bg-status-critical"

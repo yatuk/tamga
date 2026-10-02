@@ -151,7 +151,7 @@ export function EventsBody({
         {/* Right table */}
         <div className="flex-1 min-w-0">
           <TerminalFrame
-            filename={`Olaylar · ${filters.range === "24h" ? "24 Saat" : filters.range === "7d" ? "7 Gün" : "30 Gün"}`}
+            filename={`Events · ${filters.range === "24h" ? "24 hours" : filters.range === "7d" ? "7 days" : "30 days"}`}
             status={
               <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
                 {events.length} shown {total > events.length ? `/ ${total} total` : ""}

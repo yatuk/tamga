@@ -47,10 +47,10 @@ export default function HuntingPage() {
     <div className="space-y-2">
       <PageHeader
         title="Threat hunting"
-        subtitle="Sunucu tarafı filtreler (PostgreSQL veya in-memory buffer). Sonuçları Incidents ile birleştirmek için satırdan derin link kullanın."
+        subtitle="Server-side filters (PostgreSQL or the in-memory buffer). Use the deep link on a row to continue in Incidents."
         actions={
           <Button variant="outline" size="sm" className="gap-1" onClick={() => refetch()} disabled={isFetching}>
-            Yenile
+            Refresh
           </Button>
         }
       />

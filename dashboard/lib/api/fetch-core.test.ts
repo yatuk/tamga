@@ -53,7 +53,7 @@ describe("fetchAPI", () => {
 
     // retry=0 so the catch block breaks immediately on the first throw.
     await expect(fetchAPI("/test", { retry: 0 })).rejects.toThrow(
-      "Admin key yanlış veya eksik",
+      "Admin key is wrong or missing",
     );
   });
 
@@ -62,7 +62,7 @@ describe("fetchAPI", () => {
     vi.stubGlobal("fetch", mock);
 
     await expect(fetchAPI("/test", { retry: 2 })).rejects.toThrow(
-      "Admin key yanlış veya eksik",
+      "Admin key is wrong or missing",
     );
     // retry=2 → 3 total attempts (0, 1, 2)
     expect(mock).toHaveBeenCalledTimes(3);

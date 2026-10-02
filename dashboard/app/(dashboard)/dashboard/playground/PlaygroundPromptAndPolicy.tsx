@@ -55,7 +55,7 @@ export function PlaygroundPromptAndPolicy({
       </div>
 
       <div>
-        <TerminalFrame title="Politika Kaynağı">
+        <TerminalFrame title="Policy source">
           <div className="space-y-2 p-3">
             <div className="text-[10px] uppercase tracking-[0.18em] text-fg-muted">POLICY SOURCE</div>
             <div className="flex flex-wrap gap-1">

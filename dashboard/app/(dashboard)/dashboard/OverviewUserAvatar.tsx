@@ -1,6 +1,6 @@
 "use client";
 
-import { toLowerEn } from "@/lib/utils/tr-string";
+import { toLowerEn } from "@/lib/utils/case";
 
 export function OverviewUserAvatar() {
   const pk = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || "";

@@ -151,7 +151,7 @@ export function TrafficBody({
 
       {/* Area chart */}
       <TerminalFrame
-        filename={`Trafik · ${range === "24h" ? "24 Saat" : range === "7d" ? "7 Gün" : "30 Gün"}`}
+        filename={`Traffic · ${range === "24h" ? "24 hours" : range === "7d" ? "7 days" : "30 days"}`}
         status={
           <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
             {chartData.length} pts
@@ -173,7 +173,7 @@ export function TrafficBody({
 
       {/* Provider + Finding side-by-side */}
       <div className="grid gap-3 lg:grid-cols-2">
-        <TerminalFrame title="Sağlayıcı Dağılımı">
+        <TerminalFrame title="Provider breakdown">
           <div className="space-y-2 p-3">
             {isLoading ? (
               Array.from({ length: 4 }).map((_, i) => (

@@ -4,7 +4,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { toast } from "@/lib/toast";
-import { toUpperEn, toLowerEn } from "@/lib/utils/tr-string";
+import { toUpperEn, toLowerEn } from "@/lib/utils/case";
 import { type ReportRange } from "./_constants";
 import { useAdminKey } from "@/hooks/useAdminKey";
 import { useCsvExport } from "@/hooks/useCsvExport";
@@ -186,10 +186,10 @@ export function useReportsPage() {
     try {
       const blob = await api.getOwaspPdfReport(adminKey, { range });
       downloadBlob(blob, `tamga-owasp-report-${range}.pdf`);
-      toast.success("OWASP PDF raporu indirildi");
+      toast.success("OWASP PDF report downloaded");
     } catch (err) {
-      const message = err instanceof Error ? err.message : "PDF oluşturulamadı";
-      toast.error("PDF hatası", message);
+      const message = err instanceof Error ? err.message : "Could not generate the PDF";
+      toast.error("PDF export failed", message);
     } finally {
       setIsExporting(false);
     }
@@ -212,10 +212,10 @@ export function useReportsPage() {
         period_hours: String(periodHours),
       });
       downloadBlob(blob, `tamga-incident-report-${range}.pdf`);
-      toast.success("Olay PDF raporu indirildi");
+      toast.success("Incident PDF report downloaded");
     } catch (err) {
-      const message = err instanceof Error ? err.message : "PDF oluşturulamadı";
-      toast.error("PDF hatası", message);
+      const message = err instanceof Error ? err.message : "Could not generate the PDF";
+      toast.error("PDF export failed", message);
     } finally {
       setIsExporting(false);
     }

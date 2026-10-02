@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { api } from "@/lib/api/client";
-import { toUpperLocale } from "@/lib/utils/tr-string";
+import { toUpperEn } from "@/lib/utils/case";
 import type { TimeRange } from "@/lib/types";
 
 export function ActiveModelsCard({
@@ -31,7 +31,7 @@ export function ActiveModelsCard({
     <Card>
       <CardHeader className="pb-2">
         <div className="text-[10px] uppercase tracking-[0.18em] text-fg-muted">
-          ACTIVE MODELS // {toUpperLocale(range)}
+          ACTIVE MODELS // {toUpperEn(range)}
         </div>
         <CardTitle className="text-sm">
           {isLoading ? "—" : `${families.length} famil${families.length === 1 ? "y" : "ies"} · ${models.length} model`}
@@ -39,9 +39,9 @@ export function ActiveModelsCard({
       </CardHeader>
       <CardContent className="space-y-3">
         {isLoading ? (
-          <div className="text-xs text-fg-muted">Yükleniyor…</div>
+          <div className="text-xs text-fg-muted">Loading…</div>
         ) : families.length === 0 ? (
-          <div className="text-xs text-fg-muted">Henüz veri yok.</div>
+          <div className="text-xs text-fg-muted">No data yet.</div>
         ) : (
           <>
             {/* Family bar chart */}

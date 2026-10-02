@@ -23,7 +23,7 @@ import { EvidenceLedger } from "@/components/dashboard/EvidenceLedger";
 import { ApiErrorBadge } from "@/components/dashboard/ApiErrorBadge";
 import { GlossaryPanel, GlossaryToggle } from "@/components/dashboard/GlossaryPanel";
 import { useOverviewContext } from "./OverviewContext";
-import { toUpperLocale } from "@/lib/utils/tr-string";
+import { toUpperEn } from "@/lib/utils/case";
 
 export function OverviewViewPartA() {
   const router = useRouter();
@@ -234,7 +234,7 @@ export function OverviewViewPartA() {
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
           {
-            label: `TOTAL REQUESTS // ${toUpperLocale(range)}`,
+            label: `TOTAL REQUESTS // ${toUpperEn(range)}`,
             value: animateStats ? formatInt(cTotal) : "—",
             href: incidentsDrill.traffic,
             spark: kpiSeries.total.series,
@@ -252,7 +252,7 @@ export function OverviewViewPartA() {
             spark: kpiSeries.blocked.series,
             delta: kpiSeries.blocked.delta,
             sparkColor: "var(--chart-2)",
-            source: "Politika Engelleme",
+            source: "Policy block",
             accent: "red" as const,
             live: true,
             tooltip: "Requests blocked by Tamga security policies (e.g., prompt injection, PII leak, jailbreak attempts). Does not reach the LLM.",
@@ -264,7 +264,7 @@ export function OverviewViewPartA() {
             spark: kpiSeries.redacted.series,
             delta: kpiSeries.redacted.delta,
             sparkColor: "var(--chart-4)",
-            source: "Politika Gizleme",
+            source: "Policy redact",
             accent: "amber" as const,
             tooltip: "Requests where sensitive data (PII, secrets, credentials) was redacted before forwarding to the LLM provider.",
           },
@@ -272,7 +272,7 @@ export function OverviewViewPartA() {
             label: "OPEN INCIDENTS",
             value: animateStats ? formatInt(openIncidents) : "—",
             href: incidentsDrill.openIncidents,
-            source: "Önceliklendirme",
+            source: "Triage",
             accent: "amber" as const,
             live: true,
             tooltip: "Currently open security incidents requiring analyst review and triage in the Incidents console.",
@@ -281,7 +281,7 @@ export function OverviewViewPartA() {
             label: "AVG INPUT RISK",
             value: animateStats ? `${formatInt(cRisk)}%` : "—",
             href: incidentsDrill.highRisk,
-            source: "Tarayıcı",
+            source: "Scanner",
             accent: "default" as const,
             tooltip: "Average input risk score across all requests (0-100%). Higher scores indicate more suspicious or high-risk prompts.",
           },
@@ -300,7 +300,7 @@ export function OverviewViewPartA() {
             label: "SHADOW AI",
             value: animateStats ? formatInt(shadowAIDetected) : "—",
             href: incidentsDrill.shadowAi,
-            source: "Bilinmeyen Sağlayıcı",
+            source: "Unknown provider",
             accent: "default" as const,
             tooltip: "Detected usage of unrecognized or unauthorized LLM providers not configured in the proxy routing table.",
           },
@@ -308,7 +308,7 @@ export function OverviewViewPartA() {
             label: "MTTR",
             value: mttrDisplay,
             href: incidentsDrill.mttr,
-            source: mttrTrendBadge ? `Trend: ${mttrTrendBadge}` : "Çözümleme",
+            source: mttrTrendBadge ? `Trend: ${mttrTrendBadge}` : "Resolution",
             accent: mttrTrendBadge === "improving" ? "emerald" as const : mttrTrendBadge === "worsening" ? "red" as const : "default" as const,
             tooltip: "Mean Time to Resolve — average time taken to close an incident from creation. Lower is better.",
           },
@@ -350,24 +350,24 @@ export function OverviewViewPartA() {
         <ActiveModelsCard adminKey={adminKey} range={range} />
         <Card className="lg:col-span-2">
           <CardHeader className="pb-3">
-            <CardTitle>Günlük maliyet limiti</CardTitle>
+            <CardTitle>Daily cost limit</CardTitle>
             <CardDescription>
-              Token ve USD bazlı günlük bütçe takibi. Limit aşımında proxy 402 hatası döner ve ilgili aksiyon event akışına kaydedilir.
+              Daily budget tracking in tokens and USD. Over the limit the proxy returns 402 and records the action in the event stream.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 text-xs">
             <div className="flex items-start gap-2">
               <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-fg-subtle" />
               <div>
-                <span className="font-medium text-fg">Günlük Token Limiti</span>
-                <p className="text-fg-subtle dark:text-fg-subtle">Her istek, model fiyatlandırmasına göre token bazında hesaplanır ve günlik kotaya eklenir.</p>
+                <span className="font-medium text-fg">Daily token limit</span>
+                <p className="text-fg-subtle dark:text-fg-subtle">Each request is counted in tokens at the model's price and added to the daily quota.</p>
               </div>
             </div>
             <div className="flex items-start gap-2">
               <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-fg-subtle" />
               <div>
-                <span className="font-medium text-fg">Günlük USD Bütçesi</span>
-                <p className="text-fg-subtle dark:text-fg-subtle">Token tüketiminin USD karşılığı izlenir. Günlük sayaç her gece 00:00 UTC&apos;de sıfırlanır.</p>
+                <span className="font-medium text-fg">Daily USD budget</span>
+                <p className="text-fg-subtle dark:text-fg-subtle">Token usage is tracked in USD. The daily counter resets at 00:00 UTC.</p>
               </div>
             </div>
           </CardContent>

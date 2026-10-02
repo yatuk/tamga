@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useMotionValueEvent, useScroll } from "framer-motion";
 import { api } from "@/lib/api";
-import { toLowerEn } from "@/lib/utils/tr-string";
+import { toLowerEn } from "@/lib/utils/case";
 
 type CommandEntry = {
   id: string;
