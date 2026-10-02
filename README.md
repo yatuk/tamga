@@ -24,7 +24,7 @@ prompt injection before anything leaves your network.
 [Docs](#documentation) ·
 [Status](#project-status)
 
-<img src="docs/demo/demo.gif" alt="Three requests through Tamga: an email address is redacted and forwarded, a card number and a prompt injection are blocked before they reach the provider" width="820" />
+<img src="docs/demo/demo.gif" alt="Four requests through Tamga: a clean prompt passes, an email address is redacted and forwarded, a card number and a prompt injection are blocked before they reach the provider" width="820" />
 
 </div>
 
