@@ -3,7 +3,7 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PoliciesDiffPanel } from "./PoliciesDiffPanel";
 import { PoliciesHistoryPanel } from "./PoliciesHistoryPanel";
-import { PoliciesMonacoEditor } from "./PoliciesMonacoEditor";
+import { PolicyEditor } from "./policy-editor";
 import { PoliciesSimulatePanel } from "./PoliciesSimulatePanel";
 import { CustomEntityForm } from "./CustomEntityForm";
 import { CompetitorsForm } from "./CompetitorsForm";
@@ -50,7 +50,7 @@ export function PoliciesAnimatedTabs({
       </TabsList>
 
       <TabsContent value="editor" className="mt-3 space-y-2">
-        <PoliciesMonacoEditor draft={draft} onChange={setDraft} />
+        <PolicyEditor draft={draft} onChange={setDraft} />
       </TabsContent>
 
       <TabsContent value="diff" className="mt-3">

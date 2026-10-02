@@ -45,7 +45,7 @@ export function SettingsProvidersSection({ health, adminKey }: Props) {
   return (
     <div>
       <div className="space-y-2">
-        <p className="text-sm text-(--text-secondary)">
+        <p className="text-sm text-muted-foreground">
           Circuit breaker state for the policy&apos;s <code className="text-xs text-fg-muted">providers.pools</code>.
           An open circuit receives no traffic; reset it manually after maintenance.
         </p>
