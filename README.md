@@ -24,7 +24,7 @@ prompt injection before anything leaves your network.
 [Docs](#documentation) ·
 [Status](#project-status)
 
-<img src="docs/incidents.png" alt="Tamga incident queue: blocked prompts with the rule that fired" width="820" />
+<img src="docs/demo/demo.gif" alt="Three requests through Tamga: an email address is redacted and forwarded, a card number and a prompt injection are blocked before they reach the provider" width="820" />
 
 </div>
 
@@ -127,6 +127,10 @@ schema are in [docs/architecture](docs/architecture/README.md).
 Also in the box: reversible PII tokenization (vault), per-key rate limits and
 token budgets, provider allowlists, a response cache, and a SOC dashboard with
 an incident queue. See [docs/operations.md](docs/operations.md).
+
+<p align="center">
+  <img src="docs/incidents.png" alt="Tamga incident queue: blocked prompts with the rule that fired" width="820" />
+</p>
 
 ## Benchmarks
 
