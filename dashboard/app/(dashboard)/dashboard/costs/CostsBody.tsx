@@ -104,7 +104,7 @@ export function CostsBody({
                 </button>
               ))}
             </div>
-            <Button
+            <Button variant="outline"
               className="cursor-pointer rounded-sm border border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card"
               onClick={exportCsv}
             >

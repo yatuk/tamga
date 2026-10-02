@@ -43,7 +43,7 @@ export function KeyRevealDialog({ revealed, onDismiss, onCopy }: Props) {
           >
             <Copy className="mr-1 h-3.5 w-3.5" /> Copy
           </Button>
-          <Button
+          <Button variant="outline"
             size="sm"
             className="cursor-pointer rounded-sm bg-status-pass text-white hover:bg-status-pass"
             onClick={onDismiss}

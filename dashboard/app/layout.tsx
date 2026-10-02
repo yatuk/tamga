@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Fira_Code, Inter } from "next/font/google";
+import { Barlow, Barlow_Condensed, JetBrains_Mono } from "next/font/google";
 import { cookies } from "next/headers";
 import "./globals.css";
 import { QueryProvider } from "@/lib/query-provider";
@@ -7,23 +7,27 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { toLowerEn } from "@/lib/utils/case";
 
-// display: "swap" keeps fallback text painted while Inter downloads,
-// eliminating the "blank text" CLS flash; preload + system fallback
-// stacks also reduce layout shift on first paint.
-const inter = Inter({
+// Same families as tamgaproxy.com. display: "swap" keeps fallback text
+// painted while the fonts download.
+const barlow = Barlow({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
-  variable: "--font-inter",
+  variable: "--font-barlow",
   display: "swap",
-  preload: true,
   fallback: ["system-ui", "Segoe UI", "Arial", "sans-serif"],
 });
-const firaCode = Fira_Code({
+const barlowCondensed = Barlow_Condensed({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-fira-code",
+  weight: ["600", "700", "800"],
+  variable: "--font-barlow-condensed",
   display: "swap",
-  preload: true,
+  fallback: ["Arial Narrow", "Arial", "sans-serif"],
+});
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500", "700"],
+  variable: "--font-jetbrains-mono",
+  display: "swap",
   fallback: ["ui-monospace", "SFMono-Regular", "Menlo", "Consolas", "monospace"],
 });
 
@@ -89,13 +93,13 @@ export default async function RootLayout({
   const pk = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || "";
   const clerkEnabled = pk && !toLowerEn(pk).includes("placeholder");
 
-  // Body background/text come from globals.css tokens (--surface-base / --fg);
-  // here we only carry the font variables + Inter so the shell stays token-driven.
-  const bodyClass = `${inter.variable} ${firaCode.variable} ${inter.className} bg-surface-base text-fg`;
+  // Colors and font families come from the tokens in globals.css; the body
+  // only carries the font variables.
+  const bodyClass = `${barlow.variable} ${barlowCondensed.variable} ${jetbrainsMono.variable} bg-background font-sans text-foreground antialiased`;
 
   if (!clerkEnabled) {
     return (
-      <html lang="tr" className={htmlClassName} suppressHydrationWarning>
+      <html lang="en" className={htmlClassName} suppressHydrationWarning>
         <body className={bodyClass}>
           <template
             data-impeccable-contract="3015f63b"
@@ -116,7 +120,7 @@ export default async function RootLayout({
 
   const { ClerkProvider } = await import("@clerk/nextjs");
   return (
-    <html lang="tr" className={htmlClassName} suppressHydrationWarning>
+    <html lang="en" className={htmlClassName} suppressHydrationWarning>
       <body className={bodyClass}>
         <template
           data-impeccable-contract="3015f63b"

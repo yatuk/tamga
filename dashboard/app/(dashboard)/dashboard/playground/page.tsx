@@ -19,19 +19,19 @@ export default function PlaygroundPage() {
         subtitle="does not affect live traffic · POST /api/v1/policies/simulate"
         actions={
           <>
-            <Button
+            <Button variant="outline"
               className="cursor-pointer rounded-sm border border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card"
               onClick={p.copyCurl}
             >
               <Copy className="mr-1 h-4 w-4" /> COPY CURL
             </Button>
-            <Button
+            <Button variant="outline"
               className="cursor-pointer rounded-sm border border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card"
               onClick={p.copyJson}
             >
               <Copy className="mr-1 h-4 w-4" /> COPY JSON
             </Button>
-            <Button
+            <Button variant="outline"
               className="cursor-pointer rounded-sm bg-status-critical text-white hover:bg-status-critical"
               onClick={p.runSimulate}
               disabled={p.running}

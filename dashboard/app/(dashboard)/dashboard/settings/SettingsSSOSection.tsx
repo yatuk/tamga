@@ -161,7 +161,7 @@ export function SettingsSSOSection({ config, loading, error, onSave }: Props) {
           </div>
 
           {/* Save Button */}
-          <Button
+          <Button variant="outline"
             className="h-9 cursor-pointer rounded-sm bg-status-pass text-white hover:bg-status-pass"
             onClick={handleSave}
             disabled={saving}

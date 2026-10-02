@@ -52,7 +52,7 @@ export function OverviewViewPartC() {
               />
             </div>
             <div className="mb-3 flex justify-end">
-              <Button
+              <Button variant="outline"
                 className="cursor-pointer border border-border-strong bg-white text-fg-muted hover:bg-surface-subtle dark:border-border dark:bg-surface-subtle dark:text-fg dark:hover:bg-surface-elevated"
                 onClick={exportRecentCsv}
               >
@@ -141,7 +141,7 @@ export function OverviewViewPartC() {
           }
         >
           <div className="flex items-center gap-3 px-3 py-2 text-xs">
-            <Button
+            <Button variant="outline"
               type="button"
               className="h-7 rounded-sm border border-border-strong bg-surface-subtle px-2 text-fg-muted hover:bg-surface-card"
               onClick={() => setTickerPaused((v) => !v)}

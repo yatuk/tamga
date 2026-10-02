@@ -122,13 +122,13 @@ export function IntegrationConnectModal({ draft, setDraft, createMut }: Props) {
           </label>
         </div>
         <div className="mt-4 flex items-center justify-end gap-2">
-          <Button
+          <Button variant="outline"
             className="cursor-pointer rounded-sm border border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card"
             onClick={() => setDraft(null)}
           >
             Cancel
           </Button>
-          <Button
+          <Button variant="outline"
             className="cursor-pointer rounded-sm bg-status-critical text-white hover:bg-status-critical"
             onClick={() => {
               if (!draft.url.trim()) {

@@ -104,7 +104,7 @@ export function PatternFormPanel({
               placeholder="paste sample text…"
             />
             <div className="mt-1 flex items-center justify-between">
-              <Button
+              <Button variant="outline"
                 className="cursor-pointer rounded-sm border border-border-strong bg-surface-subtle px-2 py-1 text-[11px] text-fg-muted hover:bg-surface-card"
                 onClick={onTest}
               >
@@ -121,14 +121,14 @@ export function PatternFormPanel({
 
           <div className="flex items-center justify-end gap-2 pt-1">
             {draft.id ? (
-              <Button
+              <Button variant="outline"
                 className="cursor-pointer rounded-sm border border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card"
                 onClick={() => setDraft(EMPTY_DRAFT)}
               >
                 Cancel
               </Button>
             ) : null}
-            <Button
+            <Button variant="outline"
               className="cursor-pointer rounded-sm bg-status-critical text-white hover:bg-status-critical"
               onClick={onSubmit}
               disabled={createPending || updatePending}

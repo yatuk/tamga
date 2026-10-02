@@ -37,7 +37,7 @@ export function DashboardCommandPalette({ open, onClose, query, onQueryChange, g
 
   return (
     <div
-      className="fixed inset-0 z-[70] flex items-start justify-center bg-surface-overlay p-4 pt-24"
+      className="fixed inset-0 z-70 flex items-start justify-center bg-surface-overlay p-4 pt-24"
       onClick={onClose}
       role="presentation"
     >

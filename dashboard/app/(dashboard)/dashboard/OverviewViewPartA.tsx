@@ -122,7 +122,7 @@ export function OverviewViewPartA() {
         actions={
           <>
             <GlossaryToggle onClick={() => setGlossaryOpen(true)} />
-            <Button
+            <Button variant="outline"
               className="cursor-pointer rounded-sm border border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card"
               onClick={refreshAll}
             >
@@ -191,10 +191,9 @@ export function OverviewViewPartA() {
                 onChange={(e) => setAdminKeyDraft(e.target.value)}
                 placeholder="X-Tamga-Admin-Key"
               />
-              <Button size="md" onClick={() => setAdminKey(adminKeyDraft)}>Connect</Button>
+              <Button variant="outline" onClick={() => setAdminKey(adminKeyDraft)}>Connect</Button>
               <Button
                 variant="outline"
-                size="md"
                 onClick={() => {
                   setAdminKey("");
                   setAdminKeyDraft("");

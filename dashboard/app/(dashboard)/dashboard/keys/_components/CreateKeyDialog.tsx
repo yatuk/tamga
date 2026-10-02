@@ -106,7 +106,7 @@ export function CreateKeyDialog({ open, onClose, onCreate, isPending }: Props) {
             >
               Cancel
             </Button>
-            <Button
+            <Button variant="outline"
               type="submit"
               size="sm"
               disabled={!label.trim() || isPending}

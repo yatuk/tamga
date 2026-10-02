@@ -50,7 +50,7 @@ function CodeBlock({ lang, content }: { lang: string; content: string }) {
         <span className="text-[10px] uppercase tracking-[0.18em] text-fg-muted">{lang}</span>
         <CopyButton text={content} />
       </div>
-      <pre className="overflow-x-auto px-3 py-2 text-[11px] leading-5 text-fg whitespace-pre-wrap break-words">
+      <pre className="overflow-x-auto px-3 py-2 text-[11px] leading-5 text-fg whitespace-pre-wrap wrap-break-word">
         {content}
       </pre>
     </div>
@@ -78,7 +78,7 @@ export function GuideView({ guide }: { guide: IntegrationGuide }) {
               <BadgeCheck className="h-3 w-3" /> verified {guide.lastVerified}
             </span>
             <Link href={`/dashboard/integrations?connect=${guide.kind}`} className="inline-flex">
-              <Button className="cursor-pointer rounded-sm bg-status-critical text-white hover:bg-status-critical">
+              <Button variant="outline" className="cursor-pointer rounded-sm bg-status-critical text-white hover:bg-status-critical">
                 <Plug className="mr-1 h-3.5 w-3.5" /> Connect now
               </Button>
             </Link>
@@ -203,7 +203,7 @@ export function GuideView({ guide }: { guide: IntegrationGuide }) {
               }
 
             >
-              <pre className="overflow-x-auto px-3 py-3 text-[11px] leading-5 text-fg whitespace-pre-wrap break-words">
+              <pre className="overflow-x-auto px-3 py-3 text-[11px] leading-5 text-fg whitespace-pre-wrap wrap-break-word">
                 {guide.payloadPreview.content}
               </pre>
             </TerminalFrame>

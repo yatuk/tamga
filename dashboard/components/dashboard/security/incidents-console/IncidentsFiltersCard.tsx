@@ -32,13 +32,13 @@ export function IncidentsFiltersCard({ m }: { m: IncidentsConsoleModel }) {
       <CardContent>
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <Badge className="rounded-sm border-border-strong bg-surface-subtle text-fg-muted">Presets</Badge>
-          <Button
+          <Button variant="outline"
             className="h-8 cursor-pointer rounded-sm border border-border-strong bg-surface-subtle px-2 text-xs text-fg-muted hover:bg-surface-card"
             onClick={() => m.applyPreset("critical-now")}
           >
             Critical Now
           </Button>
-          <Button
+          <Button variant="outline"
             className="h-8 cursor-pointer rounded-sm border border-border-strong bg-surface-subtle px-2 text-xs text-fg-muted hover:bg-surface-card"
             onClick={() => m.applyPreset("block-focused")}
           >

@@ -127,8 +127,8 @@ function GridRow({
 
       {/* Entity — stacked provider/model + request_id */}
       <div className="h-full flex flex-col justify-center px-2 overflow-hidden">
-        <div className="text-xs font-medium text-[var(--text-primary)] truncate">{entity}</div>
-        <div className="font-mono text-[11px] text-[var(--text-muted)] whitespace-nowrap truncate">
+        <div className="text-xs font-medium text-(--text-primary) truncate">{entity}</div>
+        <div className="font-mono text-[11px] text-(--text-muted) whitespace-nowrap truncate">
           {event.request_id.slice(0, 12)}
         </div>
       </div>
@@ -178,7 +178,7 @@ function GridRow({
           onClick={() => m.setIncidentState(event.request_id, { status: "Closed" })}>
           <Ban className="h-3.5 w-3.5" />
         </Button>
-        <Button variant="accent" size="icon-sm" title="False Positive" aria-label="False Positive"
+        <Button variant="outline" size="icon-sm" title="False Positive" aria-label="False Positive"
           onClick={() => onFpClick(event.request_id)}>
           <BadgeCheck className="h-3.5 w-3.5" />
         </Button>
@@ -306,16 +306,16 @@ export function IncidentsQueueTableCard({ m, onFpClick }: { m: IncidentsConsoleM
       </CardHeader>
       <CardContent>
         <div className="mb-3 flex justify-end">
-          <Button variant="outline" size="md" onClick={m.exportIncidentsCsv}>
+          <Button variant="outline" onClick={m.exportIncidentsCsv}>
             <Download className="mr-1 h-3.5 w-3.5" />
             Export CSV
           </Button>
         </div>
 
         {m.isLoading ? (
-          <div className="pt-2 text-sm text-[var(--text-secondary)]">Loading…</div>
+          <div className="pt-2 text-sm text-(--text-secondary)">Loading…</div>
         ) : m.error ? (
-          <div className="pt-2 text-sm text-[var(--status-block)]">
+          <div className="pt-2 text-sm text-(--status-block)">
             Events alinamadi: {(m.error as Error).message}
           </div>
         ) : m.filtered.length === 0 ? (
@@ -329,7 +329,7 @@ export function IncidentsQueueTableCard({ m, onFpClick }: { m: IncidentsConsoleM
               <div className="mb-2 flex flex-wrap items-center gap-2 rounded-sm border border-border-strong bg-surface-subtle p-2 text-xs">
                 <span className="text-fg-muted">{m.selectedIds.length} selected</span>
                 <Button variant="outline" size="sm" onClick={() => m.applyBulkStatus("Closed")}>Close Selected</Button>
-                <Button variant="accent" size="sm" onClick={() => { if (m.selectedIds.length > 0) onFpClick(m.selectedIds[0]); }}>Mark FP</Button>
+                <Button variant="outline" size="sm" onClick={() => { if (m.selectedIds.length > 0) onFpClick(m.selectedIds[0]); }}>Mark FP</Button>
                 <Button variant="outline" size="sm" onClick={m.bulkAssignMe}>Assign to me</Button>
                 <Button variant="outline" size="sm" onClick={() => m.setSelectedIds([])}>Clear</Button>
               </div>

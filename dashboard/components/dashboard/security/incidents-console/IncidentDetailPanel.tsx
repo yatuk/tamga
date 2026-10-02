@@ -164,31 +164,31 @@ export function IncidentDetailPanel({ event, m, onFpClick }: Props) {
       {/* Action bar */}
       <div className="border-t border-border px-3 py-2">
         <div className="flex flex-wrap items-center gap-1.5">
-          <Button
+          <Button variant="outline"
             className="h-7 cursor-pointer rounded-sm border border-border-strong bg-surface-subtle px-2 text-[11px] text-fg-muted hover:bg-surface-card"
             onClick={handleAck}
           >
             Ack
           </Button>
-          <Button
+          <Button variant="outline"
             className="h-7 cursor-pointer rounded-sm border border-border-strong bg-surface-subtle px-2 text-[11px] text-fg-muted hover:bg-surface-card"
             onClick={handleAssign}
           >
             Assign
           </Button>
-          <Button
+          <Button variant="outline"
             className="h-7 cursor-pointer rounded-sm border border-border-strong bg-surface-subtle px-2 text-[11px] text-fg-muted hover:bg-surface-card"
             onClick={handleClose}
           >
             Close
           </Button>
-          <Button
+          <Button variant="outline"
             className="h-7 cursor-pointer rounded-sm border border-status-medium/40 bg-status-medium/10 px-2 text-[11px] text-status-medium hover:bg-status-medium/20"
             onClick={handleFP}
           >
             FP
           </Button>
-          <Button
+          <Button variant="outline"
             className="h-7 cursor-pointer rounded-sm border border-border-strong bg-surface-subtle px-2 text-[11px] text-fg-muted hover:bg-surface-card"
             onClick={handleOpenPlayground}
             title="Test in Playground"

@@ -155,7 +155,7 @@ export function PlaygroundSimulateResult({ result, originalPrompt, loading = fal
                     </span>
                   </div>
                   {/* Highlighted text */}
-                  <div className="max-h-[200px] overflow-y-auto text-xs leading-relaxed whitespace-pre-wrap break-words">
+                  <div className="max-h-[200px] overflow-y-auto text-xs leading-relaxed whitespace-pre-wrap wrap-break-word">
                     {highlightMatches(originalPrompt, actionableFindings)}
                   </div>
                 </div>

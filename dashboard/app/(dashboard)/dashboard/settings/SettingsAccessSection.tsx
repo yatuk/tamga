@@ -37,7 +37,7 @@ export function SettingsAccessSection({ draft, setDraft, saved, saveAdminKey, ke
                 placeholder="X-Tamga-Admin-Key"
                 className="h-10 flex-1 rounded-sm border border-border bg-surface-card px-3 text-sm text-fg focus:border-status-critical/40 focus:outline-none"
               />
-              <Button className="cursor-pointer rounded-sm bg-status-critical text-white hover:bg-status-critical" onClick={saveAdminKey}>
+              <Button variant="outline" className="cursor-pointer rounded-sm bg-status-critical text-white hover:bg-status-critical" onClick={saveAdminKey}>
                 Save
               </Button>
             </div>
@@ -84,7 +84,7 @@ export function SettingsAccessSection({ draft, setDraft, saved, saveAdminKey, ke
                         <td className="px-2 py-1 text-fg-muted">{k.prefix}…</td>
                         <td className="px-2 py-1 text-[10px] text-fg-muted">{new Date(k.created_at).toLocaleString("tr-TR")}</td>
                         <td className="px-2 py-1 text-right">
-                          <Button
+                          <Button variant="outline"
                             className="h-7 cursor-pointer rounded-sm border border-border-strong bg-surface-subtle px-2 text-fg-muted hover:bg-status-critical hover:text-white"
                             onClick={() => removeKey(k.id)}
                           >

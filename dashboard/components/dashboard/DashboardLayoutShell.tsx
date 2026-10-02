@@ -87,7 +87,7 @@ export function DashboardLayoutShell({ children }: { children: React.ReactNode }
             </span>
           </div>
           <div className="flex items-center justify-end gap-2 px-1">
-            <Button
+            <Button variant="outline"
               onClick={() => setDesktopCollapsed((v) => !v)}
               className="cursor-pointer rounded-sm border border-border-strong bg-surface-subtle text-fg-muted transition-colors duration-150 hover:bg-surface-card"
               aria-label="Toggle sidebar width"
@@ -106,7 +106,7 @@ export function DashboardLayoutShell({ children }: { children: React.ReactNode }
               : "border-border"
           }`}
         >
-          <Button
+          <Button variant="outline"
             className="cursor-pointer rounded-sm border border-border-strong bg-surface-subtle text-fg-muted transition-colors duration-150 hover:bg-surface-card"
             onClick={() => setMobileOpen(true)}
             aria-label="Open menu"

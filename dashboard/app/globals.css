@@ -1,95 +1,118 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@import "tw-animate-css";
+@plugin "@tailwindcss/forms" {
+  strategy: "class";
+}
+
+@custom-variant dark (&:where(.dark, .dark *));
 
 /* ----------------------------------------------------------------------------
    Tamga theme tokens
-   ----------------------------------------------------------------------------
-   Implemented in OKLCH (perceptually uniform) per shadcn v4 guidance. OKLCH
-   gives us consistent steps across surface elevations without visible hue
-   shifts on modern screens. We keep legacy `--bg-*` / `--text-*` names as
-   aliases so existing components keep working while we migrate.
+
+   One identity with tamgaproxy.com: warm ink and paper surfaces, square
+   corners, Tamga red reserved for block / critical. The values below are the
+   source of truth; the @theme block maps them onto Tailwind utilities and
+   onto the shadcn/ui semantic names so generated components work unmodified.
 
    Surfaces follow a 4-step elevation scale:
-     base     — page background
-     subtle   — sections and sidebar
-     card     — card/panel interior
-     elevated — lifted surfaces (popovers, dialogs, sticky headers)
-     overlay  — modal scrim background
-
-   All accent hues are desaturated vs. their dashboard-chart counterparts so
-   they don't bloom when stacked (critical red, high amber, emerald success).
+     base     page background
+     subtle   sidebar, section bands
+     card     card and panel interior
+     elevated popovers, dialogs, sticky headers
 ---------------------------------------------------------------------------- */
+
+:root {
+  color-scheme: light;
+
+  --surface-base: #e7e8e2;
+  --surface-subtle: #dcddd6;
+  --surface-card: #f5f5ef;
+  --surface-elevated: #fbfbf6;
+  --surface-overlay: rgb(16 18 15 / 0.55);
+
+  --fg: #10120f;
+  --fg-muted: #41463f;
+  --fg-subtle: #626860;
+  --fg-faint: #7d837a;
+
+  --border: #c3c6bc;
+  --border-strong: #8b9187;
+  --border-subtle: #d5d7d0;
+  --ring: rgb(197 61 47 / 0.6);
+  --inner-highlight: 0 1px 0 0 rgb(255 255 255 / 0.55);
+
+  --brand: #c53d2f;
+  --brand-hover: #a72d23;
+  --brand-foreground: #fffaf3;
+
+  --status-critical: #a72d23;
+  --status-high: #9d5b20;
+  --status-medium: #7d671c;
+  --status-low: #315e7c;
+  --status-pass: #2d7259;
+
+  --chart-1: #315e7c;
+  --chart-2: #c53d2f;
+  --chart-3: #9d5b20;
+  --chart-4: #7d671c;
+  --chart-5: #2d7259;
+  --chart-6: #626860;
+}
 
 html.dark {
   color-scheme: dark;
 
-  /* --- Surfaces (dark theme; Tamga is a SOC tool) --- */
-  --surface-base: oklch(0.155 0.008 255);
-  --surface-subtle: oklch(0.185 0.009 255);
-  --surface-card: oklch(0.205 0.009 255);
-  --surface-elevated: oklch(0.235 0.01 255);
-  --surface-overlay: oklch(0.06 0 0 / 0.7);
+  --surface-base: #10120f;
+  --surface-subtle: #171a16;
+  --surface-card: #1d211b;
+  --surface-elevated: #242921;
+  --surface-overlay: rgb(0 0 0 / 0.72);
 
-  /* --- Foreground --- */
-  --fg: oklch(0.96 0.002 260);
-  --fg-muted: oklch(0.75 0.01 260);
-  --fg-subtle: oklch(0.6 0.01 260);
-  --fg-faint: oklch(0.48 0.01 260);
+  --fg: #f1f1e8;
+  --fg-muted: #c0c5ba;
+  --fg-subtle: #92998d;
+  --fg-faint: #70766c;
 
-  /* --- Border + ring --- */
-  --border: oklch(0.29 0.012 255);
-  --border-strong: oklch(0.39 0.014 255);
-  --border-subtle: oklch(0.245 0.01 255);
-  --ring: oklch(0.68 0.14 22 / 0.55);
-  --inner-highlight: 0 1px 0 0 oklch(1 0 0 / 0.03);
+  --border: #343a31;
+  --border-strong: #555d51;
+  --border-subtle: #282d26;
+  --ring: rgb(226 84 68 / 0.68);
+  --inner-highlight: 0 1px 0 0 rgb(255 255 255 / 0.035);
 
-  /* --- Brand / accent --- */
-  --accent: oklch(0.62 0.16 22);
-  --accent-hover: oklch(0.56 0.17 22);
-  --accent-foreground: oklch(0.99 0.005 260);
+  --brand: #e25444;
+  --brand-hover: #ee6a5b;
+  --brand-foreground: #130e0d;
 
-  /* --- Semantic (desaturated for dark) --- */
-  --status-critical: oklch(0.64 0.16 22);
-  --status-critical-bg: oklch(0.64 0.16 22 / 0.1);
-  --status-high: oklch(0.74 0.13 55);
-  --status-high-bg: oklch(0.74 0.13 55 / 0.1);
-  --status-medium: oklch(0.78 0.12 90);
-  --status-medium-bg: oklch(0.78 0.12 90 / 0.1);
-  --status-low: oklch(0.72 0.12 230);
-  --status-low-bg: oklch(0.72 0.12 230 / 0.1);
-  --status-pass: oklch(0.72 0.13 150);
-  --status-pass-bg: oklch(0.72 0.13 150 / 0.1);
+  --status-critical: #e5604f;
+  --status-high: #d9903f;
+  --status-medium: #d2a63c;
+  --status-low: #6fa8cf;
+  --status-pass: #75c9a4;
 
-  /* Raw OKLCH channels so Tailwind can emit `oklch(var(--x) / <alpha-value>)`.
-     A bare `var(--status-*)` token cannot take an opacity modifier (the `/10`,
-     `/40` suffix compiles to zero CSS), so severity/action badges rely on these
-     channel tokens for translucent borders and fills. */
-  --status-critical-ch: 0.64 0.16 22;
-  --status-high-ch: 0.74 0.13 55;
-  --status-medium-ch: 0.78 0.12 90;
-  --status-low-ch: 0.72 0.12 230;
-  --status-pass-ch: 0.72 0.13 150;
+  --chart-1: #6fa8cf;
+  --chart-2: #e25444;
+  --chart-3: #d9903f;
+  --chart-4: #d2a63c;
+  --chart-5: #75c9a4;
+  --chart-6: #92998d;
+}
+
+/* Derived tokens: same in both themes, they follow the values above. */
+:root {
+  --status-critical-bg: color-mix(in srgb, var(--status-critical) 12%, transparent);
+  --status-high-bg: color-mix(in srgb, var(--status-high) 12%, transparent);
+  --status-medium-bg: color-mix(in srgb, var(--status-medium) 12%, transparent);
+  --status-low-bg: color-mix(in srgb, var(--status-low) 12%, transparent);
+  --status-pass-bg: color-mix(in srgb, var(--status-pass) 12%, transparent);
 
   --status-block: var(--status-critical);
   --status-block-bg: var(--status-critical-bg);
-  --status-block-ch: var(--status-critical-ch);
   --status-redact: var(--status-medium);
   --status-redact-bg: var(--status-medium-bg);
-  --status-redact-ch: var(--status-medium-ch);
   --status-warn: var(--status-high);
   --status-warn-bg: var(--status-high-bg);
-  --status-warn-ch: var(--status-high-ch);
 
-  /* --- Chart tokens (Recharts / Tremor read these) --- */
-  --chart-1: oklch(0.72 0.12 230);
-  --chart-2: oklch(0.64 0.16 22);
-  --chart-3: oklch(0.74 0.13 55);
-  --chart-4: oklch(0.78 0.12 90);
-  --chart-5: oklch(0.72 0.13 150);
-  --chart-6: oklch(0.6 0.01 260);
-
-  /* --- Legacy aliases — kept so existing --bg-* / --text-* refs still work --- */
+  /* Legacy aliases, removed as pages migrate. */
   --bg-primary: var(--surface-base);
   --bg-secondary: var(--surface-base);
   --bg-tertiary: var(--surface-subtle);
@@ -101,71 +124,100 @@ html.dark {
   --border-default: var(--border);
 }
 
-/* Light theme — the :root default. next-themes toggles the `dark` class on
-   <html>; when it is absent these light tokens apply. Dark is the product
-   default, so the server emits class="dark" unless the cookie says "light". */
-:root {
-  color-scheme: light;
+@theme inline {
+  --font-sans: var(--font-barlow), system-ui, "Segoe UI", Arial, sans-serif;
+  --font-display: var(--font-barlow-condensed), var(--font-barlow), system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
-  --surface-base: oklch(0.975 0.006 85);
-  --surface-subtle: oklch(0.95 0.008 85);
-  --surface-card: oklch(0.992 0.004 85);
-  --surface-elevated: oklch(1 0.002 85);
-  --surface-overlay: oklch(0.2 0 0 / 0.45);
+  /* Square corners everywhere; rounded-full stays for dots and avatars. */
+  --radius-xs: 0;
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --radius-xl: 0;
+  --radius-2xl: 0;
 
-  --fg: oklch(0.18 0.008 260);
-  --fg-muted: oklch(0.38 0.01 260);
-  --fg-subtle: oklch(0.5 0.01 260);
-  --fg-faint: oklch(0.62 0.01 260);
+  --shadow-elevated: inset 0 1px 0 0 rgb(255 255 255 / 0.04), 0 20px 40px -20px rgb(0 0 0 / 0.6), 0 8px 16px -8px rgb(0 0 0 / 0.35);
+  --shadow-inner-hi: var(--inner-highlight);
 
-  --border: oklch(0.9 0.005 260);
-  --border-strong: oklch(0.82 0.007 260);
-  --border-subtle: oklch(0.95 0.004 260);
-  --ring: oklch(0.62 0.16 22 / 0.45);
-  --inner-highlight: none;
+  /* Tamga tokens */
+  --color-surface: var(--surface-base);
+  --color-surface-subtle: var(--surface-subtle);
+  --color-surface-card: var(--surface-card);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-surface-overlay: var(--surface-overlay);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-fg-faint: var(--fg-faint);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-border-subtle: var(--border-subtle);
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-foreground: var(--brand-foreground);
 
-  --accent: oklch(0.54 0.17 22);
-  --accent-hover: oklch(0.47 0.18 22);
-  --accent-foreground: oklch(0.99 0.005 260);
+  --color-status-critical: var(--status-critical);
+  --color-status-critical-bg: var(--status-critical-bg);
+  --color-status-high: var(--status-high);
+  --color-status-high-bg: var(--status-high-bg);
+  --color-status-medium: var(--status-medium);
+  --color-status-medium-bg: var(--status-medium-bg);
+  --color-status-low: var(--status-low);
+  --color-status-low-bg: var(--status-low-bg);
+  --color-status-pass: var(--status-pass);
+  --color-status-pass-bg: var(--status-pass-bg);
+  --color-status-block: var(--status-block);
+  --color-status-block-bg: var(--status-block-bg);
+  --color-status-redact: var(--status-redact);
+  --color-status-redact-bg: var(--status-redact-bg);
+  --color-status-warn: var(--status-warn);
+  --color-status-warn-bg: var(--status-warn-bg);
 
-  --status-critical: oklch(0.53 0.18 22);
-  --status-critical-bg: oklch(0.53 0.18 22 / 0.1);
-  --status-high: oklch(0.62 0.14 55);
-  --status-high-bg: oklch(0.62 0.14 55 / 0.1);
-  --status-medium: oklch(0.65 0.13 90);
-  --status-medium-bg: oklch(0.65 0.13 90 / 0.1);
-  --status-low: oklch(0.55 0.14 230);
-  --status-low-bg: oklch(0.55 0.14 230 / 0.1);
-  --status-pass: oklch(0.54 0.14 150);
-  --status-pass-bg: oklch(0.54 0.14 150 / 0.1);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
 
-  /* Raw OKLCH channels for `oklch(var(--x) / <alpha-value>)` opacity support
-     (see the dark-theme block for rationale). */
-  --status-critical-ch: 0.53 0.18 22;
-  --status-high-ch: 0.62 0.14 55;
-  --status-medium-ch: 0.65 0.13 90;
-  --status-low-ch: 0.55 0.14 230;
-  --status-pass-ch: 0.54 0.14 150;
+  /* shadcn/ui semantic names */
+  --color-background: var(--surface-base);
+  --color-foreground: var(--fg);
+  --color-card: var(--surface-card);
+  --color-card-foreground: var(--fg);
+  --color-popover: var(--surface-elevated);
+  --color-popover-foreground: var(--fg);
+  --color-primary: var(--fg);
+  --color-primary-foreground: var(--surface-base);
+  --color-secondary: var(--surface-elevated);
+  --color-secondary-foreground: var(--fg);
+  --color-muted: var(--surface-subtle);
+  --color-muted-foreground: var(--fg-subtle);
+  --color-accent: var(--surface-elevated);
+  --color-accent-foreground: var(--fg);
+  --color-destructive: var(--status-critical);
+  --color-input: var(--border-strong);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--surface-subtle);
+  --color-sidebar-foreground: var(--fg-muted);
+  --color-sidebar-primary: var(--brand);
+  --color-sidebar-primary-foreground: var(--brand-foreground);
+  --color-sidebar-accent: var(--surface-card);
+  --color-sidebar-accent-foreground: var(--fg);
+  --color-sidebar-border: var(--border);
+  --color-sidebar-ring: var(--ring);
+}
 
-  --status-block: var(--status-critical);
-  --status-block-bg: var(--status-critical-bg);
-  --status-block-ch: var(--status-critical-ch);
-  --status-redact: var(--status-medium);
-  --status-redact-bg: var(--status-medium-bg);
-  --status-redact-ch: var(--status-medium-ch);
-  --status-warn: var(--status-high);
-  --status-warn-bg: var(--status-high-bg);
-  --status-warn-ch: var(--status-high-ch);
-
-  --bg-primary: var(--surface-base);
-  --bg-secondary: var(--surface-base);
-  --bg-tertiary: var(--surface-subtle);
-  --bg-card: var(--surface-card);
-  --bg-sidebar: var(--surface-subtle);
-  --text-primary: var(--fg);
-  --text-secondary: var(--fg-muted);
-  --text-muted: var(--fg-subtle);
-  --border-default: var(--border);
+@layer base {
+  /* Tailwind 4 defaults borders to currentColor; keep the token as default. */
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--border);
+  }
 }
 
 html,
@@ -175,7 +227,7 @@ body {
 }
 
 body {
-  font-family: var(--font-inter), system-ui, sans-serif;
+  font-family: var(--font-sans);
   min-width: 320px;
 }
 
@@ -188,13 +240,13 @@ code,
 pre,
 kbd,
 samp {
-  font-family: var(--font-fira-code), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-family: var(--font-mono);
 }
 
 /* Lock digit widths inside any monospace surface (log rows, IDs, counters,
    hashes). Prevents column jitter when live data ticks. */
 .font-mono {
-  font-family: var(--font-fira-code), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
 
@@ -230,14 +282,13 @@ samp {
 
 /* ---------------- Text selection, caret, focus ring ---------------- */
 ::selection {
-  background: color-mix(in oklch, var(--accent) 45%, transparent);
+  background: color-mix(in oklch, var(--brand) 45%, transparent);
   color: var(--fg);
 }
 
 :focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
-  border-radius: 2px;
 }
 
 /* ---------------- Native form + scrollbar styling ---------------- */
@@ -256,7 +307,6 @@ body {
 }
 *::-webkit-scrollbar-thumb {
   background: var(--border);
-  border-radius: 8px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
@@ -267,7 +317,6 @@ body {
 
 /* ---------------- Helpers ---------------- */
 .security-data-surface {
-  border-radius: 0.75rem;
   border: 1px solid var(--border);
   background: var(--surface-card);
   box-shadow: var(--inner-highlight);
@@ -280,7 +329,7 @@ body {
 }
 
 .evidence-seal {
-  box-shadow: 0 0 0 1px color-mix(in oklch, var(--accent) 24%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in oklch, var(--brand) 24%, transparent);
 }
 
 .security-dense {

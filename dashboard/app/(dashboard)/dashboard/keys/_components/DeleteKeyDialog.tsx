@@ -52,7 +52,7 @@ export function DeleteKeyDialog({ target, onClose, onDelete, isPending }: Props)
           >
             Cancel
           </Button>
-          <Button
+          <Button variant="outline"
             size="sm"
             disabled={!confirmed || isPending}
             className="cursor-pointer rounded-sm bg-status-critical text-white hover:bg-status-critical"

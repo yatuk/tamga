@@ -94,7 +94,7 @@ export function FpReasonModal({
             >
               Cancel
             </Button>
-            <Button
+            <Button variant="outline"
               type="submit"
               size="sm"
               className="h-8 cursor-pointer rounded-sm border border-status-medium/40 bg-status-medium/10 px-3 text-xs text-status-medium hover:bg-status-medium/20"

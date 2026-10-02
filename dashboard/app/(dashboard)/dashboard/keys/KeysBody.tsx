@@ -80,7 +80,7 @@ export function KeysBody({
         title="API Keys & Access"
         subtitle={`${total} key${total !== 1 ? "s" : ""} · admin · write · read-only`}
         actions={
-          <Button
+          <Button variant="outline"
             className="cursor-pointer rounded-sm bg-status-pass text-white hover:bg-status-pass"
             onClick={() => setCreateOpen(true)}
           >

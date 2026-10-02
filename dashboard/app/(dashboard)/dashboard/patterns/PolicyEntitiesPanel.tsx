@@ -208,7 +208,7 @@ export function PolicyEntitiesPanel() {
               onChange={(e) => setDraft({ ...draft, confidence: Number(e.target.value) })}
             />
           </div>
-          <Button className="w-full" onClick={onSubmit} disabled={createMut.isPending}>
+          <Button variant="outline" className="w-full" onClick={onSubmit} disabled={createMut.isPending}>
             <Plus className="mr-1 h-3.5 w-3.5" />
             {createMut.isPending ? "Creating…" : "Create Entity"}
           </Button>

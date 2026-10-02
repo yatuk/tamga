@@ -24,7 +24,7 @@ export function PoliciesSimulatePanel({ sample, onSampleChange, simulating, onSi
           placeholder="Sample prompt…"
         />
       </TerminalFrame>
-      <Button
+      <Button variant="outline"
         className="cursor-pointer rounded-sm bg-status-critical text-white hover:bg-status-critical"
         onClick={onSimulate}
         disabled={simulating}

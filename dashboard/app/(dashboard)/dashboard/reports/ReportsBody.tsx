@@ -96,13 +96,13 @@ export function ReportsBody({
                 </button>
               ))}
             </div>
-            <Button
+            <Button variant="outline"
               className="cursor-pointer rounded-sm border border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card print:hidden"
               onClick={exportBlockedCsv}
             >
               <Download className="mr-1 h-4 w-4" /> CSV
             </Button>
-            <Button
+            <Button variant="outline"
               className="cursor-pointer rounded-sm border border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card print:hidden"
               disabled={isExporting}
               onClick={exportOwaspPdf}
@@ -110,7 +110,7 @@ export function ReportsBody({
               {isExporting ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <FileDown className="mr-1 h-4 w-4" />}
               OWASP PDF
             </Button>
-            <Button
+            <Button variant="outline"
               className="cursor-pointer rounded-sm border border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card print:hidden"
               disabled={isExporting}
               onClick={exportIncidentPdf}

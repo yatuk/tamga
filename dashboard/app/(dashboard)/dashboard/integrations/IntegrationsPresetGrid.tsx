@@ -55,7 +55,7 @@ function PresetCard({
             Docs <ExternalLink className="h-3 w-3" />
           </a>
         </div>
-        <Button
+        <Button variant="outline"
           className="cursor-pointer rounded-sm bg-status-critical text-white hover:bg-status-critical"
           onClick={() => onConnect(preset.kind, preset.name)}
         >

@@ -25,7 +25,7 @@ export function CreateApiKeyInline({ onCreate }: { onCreate: (label: string, sco
         <option value="write">write</option>
         <option value="admin">admin</option>
       </select>
-      <Button
+      <Button variant="outline"
         className="h-8 cursor-pointer rounded-sm bg-status-critical px-3 text-white hover:bg-status-critical"
         onClick={() => {
           onCreate(label, scope);

@@ -12,7 +12,7 @@ export function IncidentsSavedViewsColumn({ m }: { m: IncidentsConsoleModel }) {
         <CardDescription className="text-fg-muted">Quick triage filter sets</CardDescription>
       </CardHeader>
       <CardContent className="space-y-2">
-        <Button
+        <Button variant="outline"
           type="button"
           className="h-8 w-full cursor-pointer rounded-sm border border-border-strong bg-surface-subtle px-2 text-xs text-fg-muted hover:bg-surface-card"
           onClick={() => m.saveCurrentView()}

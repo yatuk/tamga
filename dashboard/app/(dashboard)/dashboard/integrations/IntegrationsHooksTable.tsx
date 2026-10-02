@@ -112,13 +112,13 @@ export function IntegrationsHooksTable({ hooks, onTest, onDelete, onConnect }: P
                     </td>
                     <td className="px-3 py-2 text-right">
                       <div className="inline-flex gap-1">
-                        <Button
+                        <Button variant="outline"
                           className="cursor-pointer rounded-sm border border-border-strong bg-surface-subtle px-2 py-1 text-fg-muted hover:bg-surface-card"
                           onClick={() => onTest(h.id)}
                         >
                           <CheckCircle2 className="h-3.5 w-3.5" />
                         </Button>
-                        <Button
+                        <Button variant="outline"
                           className="cursor-pointer rounded-sm border border-status-critical bg-status-critical/30 px-2 py-1 text-status-critical hover:bg-status-critical/40"
                           onClick={() => {
                             onDelete(h.id);

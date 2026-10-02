@@ -205,7 +205,7 @@ export function CustomEntityForm({ adminKey }: { adminKey: string }) {
         {createMut.error && (
           <p className="text-[11px] text-status-critical">{createMut.error.message}</p>
         )}
-        <Button
+        <Button variant="outline"
           type="submit"
           className="cursor-pointer rounded-sm bg-status-critical text-white hover:bg-status-critical"
           disabled={createMut.isPending}

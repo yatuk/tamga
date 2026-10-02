@@ -48,7 +48,7 @@ export function CreateWebhookInline({ onCreate }: { onCreate: (payload: Omit<Web
         className="h-8 w-16 rounded-sm border border-border bg-surface-card px-2 text-xs text-fg focus:outline-none"
       />
       <span className="text-[10px] uppercase tracking-wide text-fg-muted">blocks/min</span>
-      <Button
+      <Button variant="outline"
         className="h-8 cursor-pointer rounded-sm bg-status-critical px-3 text-white hover:bg-status-critical"
         onClick={() => {
           if (!label.trim() || !url.trim()) {

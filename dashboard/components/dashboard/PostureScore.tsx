@@ -102,7 +102,7 @@ export default function PostureScore({
         <div
           aria-hidden
           className={cn(
-            "pointer-events-none absolute inset-0 bg-gradient-to-b to-transparent",
+            "pointer-events-none absolute inset-0 bg-linear-to-b to-transparent",
             TONE[tone].tint,
           )}
         />

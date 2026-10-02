@@ -45,7 +45,7 @@ export function SettingsProvidersSection({ health, adminKey }: Props) {
   return (
     <div>
       <div className="space-y-2">
-        <p className="text-sm text-[var(--text-secondary)]">
+        <p className="text-sm text-(--text-secondary)">
           Circuit breaker state for the policy&apos;s <code className="text-xs text-fg-muted">providers.pools</code>.
           An open circuit receives no traffic; reset it manually after maintenance.
         </p>
@@ -100,7 +100,7 @@ export function SettingsProvidersSection({ health, adminKey }: Props) {
                             {p.failure_reason ? ` (${p.failure_reason})` : ""}
                           </div>
                         </div>
-                        <Button
+                        <Button variant="outline"
                           type="button"
                           disabled={busy || !adminKey}
                           className="h-8 shrink-0 cursor-pointer rounded-sm border border-border-strong bg-surface-subtle px-2 text-[11px] text-fg hover:bg-surface-card disabled:opacity-50"
