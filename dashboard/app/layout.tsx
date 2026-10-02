@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Barlow, Barlow_Condensed, JetBrains_Mono } from "next/font/google";
 import { cookies } from "next/headers";
 import "./globals.css";
+import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { QueryProvider } from "@/lib/query-provider";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
@@ -118,7 +119,9 @@ export default async function RootLayout({
             defaultTheme={defaultTheme}
             enableSystem={true}
           >
-            <QueryProvider>{children}</QueryProvider>
+            <NuqsAdapter>
+              <QueryProvider>{children}</QueryProvider>
+            </NuqsAdapter>
             <Toaster richColors position="bottom-right" />
           </ThemeProvider>
         </body>
@@ -140,7 +143,9 @@ export default async function RootLayout({
             defaultTheme={defaultTheme}
             enableSystem={true}
           >
-            <QueryProvider>{children}</QueryProvider>
+            <NuqsAdapter>
+              <QueryProvider>{children}</QueryProvider>
+            </NuqsAdapter>
             <Toaster richColors position="bottom-right" />
           </ThemeProvider>
         </ClerkProvider>

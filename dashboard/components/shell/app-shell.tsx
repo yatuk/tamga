@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { ServerCrash } from "lucide-react";
+import { SkeletonRows } from "@/components/app/states";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppHeader } from "./app-header";
@@ -28,7 +29,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {health.up === false ? <ProxyDownBanner reason={health.reason} /> : null}
           <AppHeader health={health} onOpenPalette={() => setPaletteOpen(true)} />
           <main id="main" tabIndex={-1} className="mx-auto w-full max-w-[1600px] flex-1 px-4 py-5 outline-none sm:px-6 lg:px-8">
-            {children}
+            {/* Pages read filters from the URL, which suspends during prerender. */}
+            <Suspense fallback={<SkeletonRows rows={8} />}>{children}</Suspense>
           </main>
         </SidebarInset>
         <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />

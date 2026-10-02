@@ -92,3 +92,11 @@ global.ResizeObserver = vi.fn().mockImplementation(() => ({
 // ── scrollTo mock (virtual scroller) ────────────────────────────────────
 Element.prototype.scrollTo = vi.fn();
 Element.prototype.scrollIntoView = vi.fn();
+
+// Page hooks keep their time range in the URL through nuqs, which needs an
+// adapter. Hook tests only care about the value, so plain state stands in;
+// hooks/useRangeParam.test.tsx covers the real hook.
+vi.mock("@/hooks/useRangeParam", async () => {
+  const { useState } = await import("react");
+  return { useRangeParam: (initial: string) => useState(initial) };
+});

@@ -5,13 +5,14 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type { TimeRange } from "@/lib/types";
 import { useAdminKey } from "@/hooks/useAdminKey";
+import { useRangeParam } from "@/hooks/useRangeParam";
 
 // Detection trends over time. Defaults to a 30-day / daily view, which is
 // DB-backed (daily_stats) rather than the in-memory recent buffer, so
 // "this month" numbers are accurate.
 export function useTrendsPage() {
   const [adminKey] = useAdminKey();
-  const [range, setRange] = useState<TimeRange>("30d");
+  const [range, setRange] = useRangeParam("30d");
 
   const bucket = range === "24h" || range === "1h" ? "hour" : "day";
 

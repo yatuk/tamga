@@ -7,10 +7,11 @@ import type { DailyCostRow, CostBreakdownRow } from "@/lib/api/client";
 import { useAdminKey } from "@/hooks/useAdminKey";
 import { useCsvExport } from "@/hooks/useCsvExport";
 import type { TimeRange } from "@/lib/types";
+import { useRangeParam } from "@/hooks/useRangeParam";
 
 export function useCostsPage() {
   const [adminKey] = useAdminKey();
-  const [range, setRange] = useState<TimeRange>("7d");
+  const [range, setRange] = useRangeParam("7d");
 
   // Fetch pricing table.
   const { data: pricingData, isLoading: pricingLoading } = useQuery({

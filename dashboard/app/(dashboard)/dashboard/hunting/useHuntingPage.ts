@@ -10,6 +10,7 @@ import { PAGE_SIZE } from "./_constants";
 import { useAdminKey } from "@/hooks/useAdminKey";
 import type { TimeRange } from "@/lib/types";
 import { loadHunts, saveHunt as apiSaveHunt, deleteHunt as apiDeleteHunt } from "./huntingStorage";
+import { useRangeParam } from "@/hooks/useRangeParam";
 
 export function useHuntingPage() {
   const [adminKey] = useAdminKey();
@@ -22,7 +23,7 @@ export function useHuntingPage() {
   const [category, setCategory] = useState("");
   const [technique, setTechnique] = useState("");
   const [q, setQ] = useState("");
-  const [range, setRange] = useState<TimeRange>("7d");
+  const [range, setRange] = useRangeParam("7d");
   const [savedHunts, setSavedHunts] = useState<SavedHunt[]>([]);
   const [huntsLoading, setHuntsLoading] = useState(true);
 

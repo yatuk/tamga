@@ -10,6 +10,7 @@ import { type RangeMode } from "./overviewConstants";
 import { useOverviewDerived } from "./useOverviewDerived";
 import { useAdminKey } from "@/hooks/useAdminKey";
 import { useCsvExport } from "@/hooks/useCsvExport";
+import { useRangeParam } from "@/hooks/useRangeParam";
 
 export function useOverviewPage() {
   const router = useRouter();
@@ -20,7 +21,7 @@ export function useOverviewPage() {
     localDemo ? (process.env.NEXT_PUBLIC_ADMIN_KEY || "test-admin-key") : ""
   );
   const [adminKeyDraft, setAdminKeyDraft] = useState(adminKey);
-  const [range, setRange] = useState<RangeMode>("7d");
+  const [range, setRange] = useRangeParam("7d");
   const [tickerPaused, setTickerPaused] = useState(false);
   const [tickerIndex, setTickerIndex] = useState(0);
   const [showShortcuts, setShowShortcuts] = useState(false);

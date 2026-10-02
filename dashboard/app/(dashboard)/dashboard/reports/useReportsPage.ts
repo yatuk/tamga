@@ -8,10 +8,11 @@ import { toUpperEn, toLowerEn } from "@/lib/utils/case";
 import { type ReportRange } from "./_constants";
 import { useAdminKey } from "@/hooks/useAdminKey";
 import { useCsvExport } from "@/hooks/useCsvExport";
+import { useRangeParam } from "@/hooks/useRangeParam";
 
 export function useReportsPage() {
   const [adminKey] = useAdminKey();
-  const [range, setRange] = useState<ReportRange>("7d");
+  const [range, setRange] = useRangeParam("7d");
   const [isExporting, setIsExporting] = useState(false);
   const reportRef = useRef<HTMLDivElement | null>(null);
 

@@ -6,10 +6,11 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import type { TimeRange } from "@/lib/types";
 import { useAdminKey } from "@/hooks/useAdminKey";
+import { useRangeParam } from "@/hooks/useRangeParam";
 
 export function useLatencyPage() {
   const [adminKey] = useAdminKey();
-  const [range, setRange] = useState<TimeRange>("24h");
+  const [range, setRange] = useRangeParam("24h");
 
   const { data: health, isLoading: healthLoading, error: healthError } = useQuery({
     queryKey: ["tamga-latency-health", adminKey],

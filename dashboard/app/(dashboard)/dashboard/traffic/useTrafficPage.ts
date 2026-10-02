@@ -6,10 +6,11 @@ import { api } from "@/lib/api";
 import type { TimeRange } from "@/lib/types";
 import { useAdminKey } from "@/hooks/useAdminKey";
 import { useCsvExport } from "@/hooks/useCsvExport";
+import { useRangeParam } from "@/hooks/useRangeParam";
 
 export function useTrafficPage() {
   const [adminKey] = useAdminKey();
-  const [range, setRange] = useState<TimeRange>("7d");
+  const [range, setRange] = useRangeParam("7d");
 
   const { data: stats, isLoading: statsLoading, error: statsError } = useQuery({
     queryKey: ["tamga-traffic-stats", adminKey, range],
