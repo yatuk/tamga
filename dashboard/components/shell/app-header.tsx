@@ -17,6 +17,7 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import { findNavItem } from "./nav";
 import type { ProxyHealth } from "./use-proxy-health";
+import { UserMenu } from "./user-menu";
 
 export function AppHeader({ health, onOpenPalette }: { health: ProxyHealth; onOpenPalette: () => void }) {
   const pathname = usePathname();
@@ -66,6 +67,7 @@ export function AppHeader({ health, onOpenPalette }: { health: ProxyHealth; onOp
           <Search />
         </Button>
         <ThemeToggle />
+        <UserMenu />
       </div>
     </header>
   );

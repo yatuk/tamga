@@ -13,6 +13,6 @@ export const OVERVIEW_PALETTE = [
 
 export const overviewTrafficBarConfig = {
   total: { label: "Total", color: "var(--chart-1)" },
-  blocked: { label: "Engellenen", color: "var(--chart-2)" },
-  redacted: { label: "Maskelenen", color: "var(--chart-3)" },
+  blocked: { label: "Blocked", color: "var(--chart-2)" },
+  redacted: { label: "Redacted", color: "var(--chart-3)" },
 } satisfies ChartConfig;

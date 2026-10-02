@@ -35,7 +35,6 @@ export function OverviewTrafficChart({
         <Bar
           dataKey="total"
           fill="var(--color-total)"
-          radius={[4, 4, 0, 0]}
           isAnimationActive
           animationDuration={850}
           animationEasing="ease-out"
@@ -43,7 +42,6 @@ export function OverviewTrafficChart({
         <Bar
           dataKey="blocked"
           fill="var(--color-blocked)"
-          radius={[4, 4, 0, 0]}
           isAnimationActive
           animationDuration={900}
           animationEasing="ease-out"
@@ -51,7 +49,6 @@ export function OverviewTrafficChart({
         <Bar
           dataKey="redacted"
           fill="var(--color-redacted)"
-          radius={[4, 4, 0, 0]}
           isAnimationActive
           animationDuration={950}
           animationEasing="ease-out"

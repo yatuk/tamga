@@ -1,7 +1,5 @@
-"use client";
-
-import { DashboardOverviewClient } from "./DashboardOverviewClient";
+import { OverviewView } from "./overview-view";
 
 export default function DashboardPage() {
-  return <DashboardOverviewClient />;
+  return <OverviewView />;
 }
