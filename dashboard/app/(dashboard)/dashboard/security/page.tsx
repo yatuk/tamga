@@ -1,7 +1,5 @@
-"use client";
+import { IncidentsView } from "@/components/incidents/incidents-view";
 
-import { SecurityIncidentsConsole } from "@/components/dashboard/security/SecurityIncidentsConsole";
-
-export default function SecurityEventsPage() {
-  return <SecurityIncidentsConsole />;
+export default function IncidentsPage() {
+  return <IncidentsView />;
 }
