@@ -6,11 +6,8 @@ test.describe("product dashboard", () => {
     await page.goto("/dashboard");
 
     await expect(page.getByRole("heading", { name: "Security overview" })).toBeVisible();
-    await expect(page.getByRole("group", { name: "Time range" })).toBeVisible();
-
-    // Without an admin key the page says so and points at Settings.
-    await expect(page.getByText("Admin key required")).toBeVisible();
-    await expect(page.getByRole("link", { name: "Open settings" })).toBeVisible();
+    await expect(page.getByRole("radio", { name: "7d" })).toBeChecked();
+    await expect(page.getByRole("button", { name: "Refresh" })).toBeVisible();
 
     const hasHorizontalOverflow = await page.evaluate(
       () => document.documentElement.scrollWidth > window.innerWidth + 1,

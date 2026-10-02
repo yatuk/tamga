@@ -21,7 +21,7 @@ test.describe("Event Explorer", () => {
 
   test("filter by block action updates URL", async ({ page }) => {
     await page.goto("/dashboard/events");
-    await page.getByRole("group", { name: "Filter by action" }).getByRole("button", { name: /block/i }).click();
+    await page.getByRole("button", { name: "block", exact: true }).click();
     await expect(page).toHaveURL(/action=block/);
   });
 

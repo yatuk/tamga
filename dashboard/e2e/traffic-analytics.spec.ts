@@ -9,14 +9,15 @@ test.describe("Traffic Analytics", () => {
 
   test("page loads with metric cards", async ({ page }) => {
     await page.goto("/dashboard/traffic");
-    await expect(page.getByRole("heading", { name: /traffic/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /traffic/i, level: 1 })).toBeVisible();
   });
 
   test("time range switch updates content", async ({ page }) => {
     await page.goto("/dashboard/traffic");
-    // Click 24h range button
-    const btn24h = page.getByRole("button", { name: "24h" });
-    await btn24h.click();
-    await expect(btn24h).toHaveClass(/bg-emerald-600/);
+    const range24h = page.getByRole("radio", { name: "24h" });
+    await range24h.click();
+    await expect(range24h).toBeChecked();
+    // The window is part of the URL, so the view can be shared.
+    await expect(page).toHaveURL(/range=24h/);
   });
 });

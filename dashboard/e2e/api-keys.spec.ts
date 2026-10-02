@@ -9,7 +9,7 @@ test.describe("API Keys", () => {
 
   test("page loads and shows keys table", async ({ page }) => {
     await page.goto("/dashboard/keys");
-    await expect(page.getByRole("heading", { name: /api keys/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /api keys/i, level: 1 })).toBeVisible();
   });
 
   test("create key dialog opens", async ({ page }) => {
