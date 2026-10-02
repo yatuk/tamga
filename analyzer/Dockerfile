@@ -1,22 +1,37 @@
-FROM python:3.11-slim
+# ── Build stage: compilers and wheels stay here ─────────────────────────────
+FROM python:3.11-slim AS builder
 
-# Build stage — compile deps, install heavy packages.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user early so pip/wheels are owned correctly.
-RUN groupadd -r tamga && useradd -r -g tamga -d /app -s /sbin/nologin tamga
-
-WORKDIR /app
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt && \
+# The analyzer runs on CPU. llm-guard pulls in torch, and the default PyPI
+# wheel bundles the CUDA runtime (several GB of nvidia-* packages). The PyTorch
+# CPU index serves "+cpu" builds, which pip prefers for the same version.
+RUN pip install --no-cache-dir \
+        --extra-index-url https://download.pytorch.org/whl/cpu \
+        -r requirements.txt && \
     python -m spacy download en_core_web_sm
 
-COPY . .
+# ── Runtime stage ───────────────────────────────────────────────────────────
+FROM python:3.11-slim
 
-RUN chown -R tamga:tamga /app
+# /app is the service user's home and must be writable: transformers caches
+# downloaded models under ~/.cache.
+RUN groupadd -r tamga && useradd -r -g tamga -d /app -s /sbin/nologin tamga && \
+    mkdir -p /app && chown tamga:tamga /app
+
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH" \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+COPY --chown=tamga:tamga . .
 
 USER tamga
 
