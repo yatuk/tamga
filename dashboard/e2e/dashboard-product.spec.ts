@@ -24,7 +24,7 @@ test.describe("product dashboard", () => {
     await page.goto("/dashboard");
 
     await expect(page.getByText("PROXY UNREACHABLE")).toBeVisible();
-    await page.getByRole("button", { name: "Open menu" }).click();
+    await page.getByRole("button", { name: "Toggle navigation" }).click();
     await expect(page.getByRole("link", { name: "Incidents" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Event explorer" })).toBeVisible();
 
