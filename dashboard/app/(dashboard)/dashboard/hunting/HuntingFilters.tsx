@@ -4,7 +4,7 @@ import type { ChangeEvent } from "react";
 import { BookmarkPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { TerminalFrame } from "@/components/dashboard/TerminalFrame";
+import { Panel } from "@/components/app/panel";
 
 import type { TimeRange } from "@/lib/types";
 
@@ -62,7 +62,7 @@ export function HuntingFilters({
   isFetching,
 }: Props) {
   return (
-    <TerminalFrame title="Arama Sorgusu">
+    <Panel title="Arama Sorgusu">
       <div className="space-y-3 p-3">
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           <label className="space-y-1">
@@ -191,6 +191,6 @@ export function HuntingFilters({
           </span>
         </div>
       </div>
-    </TerminalFrame>
+    </Panel>
   );
 }

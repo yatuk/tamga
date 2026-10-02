@@ -1,6 +1,6 @@
 "use client";
 
-import { PageHeader } from "@/components/dashboard/PageHeader";
+import { PageHeader } from "@/components/app/page-header";
 import { API_BASE, SETTINGS_TABS } from "./_constants";
 import { SettingsAccessSection } from "./SettingsAccessSection";
 import { SettingsRetentionSection } from "./SettingsRetentionSection";
@@ -42,9 +42,8 @@ export default function SettingsPage() {
   return (
     <div className="space-y-2">
       <PageHeader
-        eyebrow="ADMINISTRATION // SETTINGS"
         title="Settings"
-        subtitle={`${API_BASE} · proxy ${health?.proxy || "unknown"} · db ${dbStatus}`}
+        description={`${API_BASE} · proxy ${health?.proxy || "unknown"} · db ${dbStatus}`}
         actions={
           <div className="flex flex-wrap items-center gap-1">
             <SettingsStatusChip label="PROXY" value={health?.proxy || "?"} good={health?.proxy === "up"} />

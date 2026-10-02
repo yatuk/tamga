@@ -1,6 +1,6 @@
 "use client";
 
-import { TerminalFrame } from "@/components/dashboard/TerminalFrame";
+import { Panel } from "@/components/app/panel";
 import { computeUnifiedDiff } from "./policyUtils";
 
 type Props = {
@@ -12,7 +12,7 @@ export function PoliciesDiffPanel({ originalYaml, draft }: Props) {
   const diff = computeUnifiedDiff(originalYaml, draft);
 
   return (
-    <TerminalFrame title="Policy diff">
+    <Panel title="Policy diff">
       <pre className="max-h-[460px] overflow-auto bg-surface-card p-3 text-[12px] leading-5">
         {diff.length === 0 ? (
           <span className="text-fg-muted">No changes.</span>
@@ -34,6 +34,6 @@ export function PoliciesDiffPanel({ originalYaml, draft }: Props) {
           ))
         )}
       </pre>
-    </TerminalFrame>
+    </Panel>
   );
 }

@@ -1,9 +1,9 @@
 "use client";
 
 import { Download } from "lucide-react";
-import { PageHeader } from "@/components/dashboard/PageHeader";
-import { TerminalFrame } from "@/components/dashboard/TerminalFrame";
-import { MetricStat } from "@/components/dashboard/MetricStat";
+import { PageHeader } from "@/components/app/page-header";
+import { Panel } from "@/components/app/panel";
+import { Stat } from "@/components/app/stat";
 import { Button } from "@/components/ui/button";
 import { formatInt } from "@/lib/utils/format";
 import { TrafficAreaChart } from "./_components/TrafficAreaChart";
@@ -60,9 +60,8 @@ export function TrafficBody({
   return (
     <div className="space-y-2">
       <PageHeader
-        eyebrow={`ANALYTICS // TRAFFIC · ${range}`}
         title="Traffic & Routing"
-        subtitle="request volume · provider breakdown · model usage · finding types"
+        description="request volume · provider breakdown · model usage · finding types"
         actions={
           <>
             <div className="inline-flex overflow-hidden rounded-sm border border-border-strong">
@@ -108,33 +107,28 @@ export function TrafficBody({
           ))
         ) : (
           <>
-            <MetricStat
+            <Stat
               label="TOTAL REQUESTS"
               value={formatInt(totalRequests)}
-              source="stats"
             />
-            <MetricStat
+            <Stat
               label="BLOCKED"
               value={formatInt(blockedRequests)}
-              accent="red"
-              source="stats"
+              tone="critical"
             />
-            <MetricStat
+            <Stat
               label="PASS RATE"
               value={`${passRate}%`}
-              accent="emerald"
-              source="stats"
+              tone="pass"
             />
-            <MetricStat
+            <Stat
               label="WARNED"
               value={formatInt(warnedRequests)}
-              accent="amber"
-              source="stats"
+              tone="warn"
             />
-            <MetricStat
+            <Stat
               label="REQ/SEC"
               value={requestsPerSecond.toFixed(2)}
-              source="derived"
             />
           </>
         )}
@@ -145,14 +139,14 @@ export function TrafficBody({
         <div className="flex items-center gap-2 rounded-sm border border-border bg-surface-card px-3 py-2 text-[10px] text-fg-muted">
           <span className="uppercase tracking-[0.12em]">Peak Hour</span>
           <span className="font-mono text-fg-muted">{peakHour.time}</span>
-          <span className="font-mono tabular-nums text-status-medium">{peakHour.count.toLocaleString()} requests</span>
+          <span className="font-mono tabular-nums text-status-medium">{peakHour.count.toLocaleString("en-US")} requests</span>
         </div>
       ) : null}
 
       {/* Area chart */}
-      <TerminalFrame
-        filename={`Traffic · ${range === "24h" ? "24 hours" : range === "7d" ? "7 days" : "30 days"}`}
-        status={
+      <Panel
+        title={`Traffic · ${range === "24h" ? "24 hours" : range === "7d" ? "7 days" : "30 days"}`}
+        aside={
           <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
             {chartData.length} pts
           </span>
@@ -169,11 +163,11 @@ export function TrafficBody({
             <TrafficAreaChart data={chartData} config={TRAFFIC_CHART_CONFIG} />
           )}
         </div>
-      </TerminalFrame>
+      </Panel>
 
       {/* Provider + Finding side-by-side */}
       <div className="grid gap-3 lg:grid-cols-2">
-        <TerminalFrame title="Provider breakdown">
+        <Panel title="Provider breakdown">
           <div className="space-y-2 p-3">
             {isLoading ? (
               Array.from({ length: 4 }).map((_, i) => (
@@ -203,9 +197,9 @@ export function TrafficBody({
               ))
             )}
           </div>
-        </TerminalFrame>
+        </Panel>
 
-        <TerminalFrame title="Finding types">
+        <Panel title="Finding types">
           <div className="space-y-2 p-3">
             {isLoading ? (
               Array.from({ length: 4 }).map((_, i) => (
@@ -229,14 +223,14 @@ export function TrafficBody({
               ))
             )}
           </div>
-        </TerminalFrame>
+        </Panel>
       </div>
 
       {/* Top-5 endpoints */}
       {topEndpoints.length > 0 && !isLoading ? (
-        <TerminalFrame
+        <Panel
           title="TOP ENDPOINTS"
-          status={<span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">{topEndpoints.length} shown</span>}
+          aside={<span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">{topEndpoints.length} shown</span>}
         >
           <div className="space-y-2 p-3">
             {topEndpoints.map(([name, count], i) => (
@@ -251,7 +245,7 @@ export function TrafficBody({
               />
             ))}
           </div>
-        </TerminalFrame>
+        </Panel>
       ) : null}
 
       {/* Model usage donut */}

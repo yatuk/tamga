@@ -2,7 +2,7 @@
 
 import { X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { ActionBadge, SeverityBadge } from "@/components/common/badges";
+import { ActionBadge, SeverityBadge } from "@/components/app/status-badge";
 import {formatInt,  formatMs } from "@/lib/utils/format";
 import type { SecurityEventDetail } from "@/lib/api/types-core";
 
@@ -84,7 +84,7 @@ export function EventDetailSheet({ event, isLoading, onClose }: Props) {
               <div className="flex justify-between">
                 <span className="text-fg-subtle">Timestamp</span>
                 <span className="font-mono text-fg-muted">
-                  {new Date(event.timestamp).toLocaleString(undefined)}
+                  {new Date(event.timestamp).toLocaleString("en-GB")}
                 </span>
               </div>
               <div className="flex justify-between">

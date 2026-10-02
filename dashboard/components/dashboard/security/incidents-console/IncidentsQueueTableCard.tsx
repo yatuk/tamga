@@ -17,7 +17,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { TerminalFrame } from "@/components/dashboard/TerminalFrame";
+import { Panel } from "@/components/app/panel";
 import type { SecurityEvent } from "@/lib/api";
 import type { IncidentsConsoleModel } from "@/hooks/security/useSecurityIncidentsConsole";
 import { toUpperEn } from "@/lib/utils/case";
@@ -335,9 +335,9 @@ export function IncidentsQueueTableCard({ m, onFpClick }: { m: IncidentsConsoleM
               </div>
             )}
 
-            <TerminalFrame
+            <Panel
               title="Incidents"
-              status={
+              aside={
                 <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
                   {rows.length} visible · {m.eventsFeed.length} loaded / {m.total} total
                   {m.isFetchingNextPage ? " · loading…" : ""}
@@ -401,7 +401,7 @@ export function IncidentsQueueTableCard({ m, onFpClick }: { m: IncidentsConsoleM
                   <span><kbd className="rounded-sm border border-border-strong px-1 py-px text-[9px]">Esc</kbd> clear</span>
                 </div>
               )}
-            </TerminalFrame>
+            </Panel>
           </>
         )}
       </CardContent>

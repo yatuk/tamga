@@ -3,7 +3,7 @@
 import type { RefObject } from "react";
 import { Play, Upload } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { TerminalFrame } from "@/components/dashboard/TerminalFrame";
+import { Panel } from "@/components/app/panel";
 import type { PolicySource } from "./_constants";
 import type { RedTeamRow, RedTeamSample } from "./playgroundData";
 import { playgroundActionClass } from "./playgroundUi";
@@ -46,9 +46,9 @@ export function PlaygroundRedTeamPanel({
 }: Props) {
   return (
     <div>
-      <TerminalFrame
+      <Panel
         title="Red Team Batch"
-        status={
+        aside={
           <div className="flex items-center gap-1 px-2">
             <input ref={fileInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={onUploadCsv} />
             <button
@@ -184,7 +184,7 @@ export function PlaygroundRedTeamPanel({
             </div>
           )}
         </div>
-      </TerminalFrame>
+      </Panel>
     </div>
   );
 }

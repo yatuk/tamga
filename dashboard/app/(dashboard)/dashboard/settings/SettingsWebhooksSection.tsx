@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Trash, Webhook as WebhookIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { TerminalFrame } from "@/components/dashboard/TerminalFrame";
+import { Panel } from "@/components/app/panel";
 import { type Webhook } from "@/lib/api";
 import { CreateWebhookInline } from "./CreateWebhookInline";
 
@@ -20,9 +20,9 @@ type Props = {
 export function SettingsWebhooksSection({ hookList, createHook, removeHook, testHook }: Props) {
   return (
     <div>
-      <TerminalFrame
+      <Panel
         title="Webhooklar"
-        status={
+        aside={
           <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
             {hookList?.items.length ?? 0} hooks
           </span>
@@ -77,7 +77,7 @@ export function SettingsWebhooksSection({ hookList, createHook, removeHook, test
             </div>
           )}
         </div>
-      </TerminalFrame>
+      </Panel>
     </div>
   );
 }

@@ -8,10 +8,10 @@ import { toUpperEn } from "@/lib/utils/case";
 import { humanizeFindingType } from "@/lib/humanize";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ActionBadge } from "@/components/common/badges";
-import { PageHeader } from "@/components/dashboard/PageHeader";
-import { TerminalFrame } from "@/components/dashboard/TerminalFrame";
-import { MetricStat } from "@/components/dashboard/MetricStat";
+import { ActionBadge } from "@/components/app/status-badge";
+import { PageHeader } from "@/components/app/page-header";
+import { Panel } from "@/components/app/panel";
+import { Stat } from "@/components/app/stat";
 import { BudgetBurnCard } from "@/components/dashboard/BudgetBurnCard";
 import { CHART_CONFIG, type ReportRange } from "./_constants";
 import { ReportsBarRow } from "./ReportsBarRow";
@@ -77,9 +77,8 @@ export function ReportsBody({
   return (
     <div ref={reportRef} className="space-y-2">
       <PageHeader
-        eyebrow={`ANALYTICS // REPORTS · ${toUpperEn(range)}`}
         title="SOC Reporting"
-        subtitle="live KPIs · executive summary · export"
+        description="live KPIs · executive summary · export"
         actions={
           <>
             <div className="inline-flex overflow-hidden rounded-sm border border-border-strong">
@@ -124,10 +123,10 @@ export function ReportsBody({
 
       <div>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          <MetricStat label="TOTAL REQUESTS" value={stats?.total_requests ?? 0} source="stats" />
-          <MetricStat label="BLOCKED" value={stats?.blocked_requests ?? 0} accent="red" source="stats" />
-          <MetricStat label="REDACTED" value={stats?.redacted_requests ?? 0} accent="amber" source="stats" />
-          <MetricStat label="AVG INPUT RISK" value={`${stats?.avg_input_risk_pct ?? 0}%`} source="stats" />
+          <Stat label="TOTAL REQUESTS" value={stats?.total_requests ?? 0} />
+          <Stat label="BLOCKED" value={stats?.blocked_requests ?? 0} tone="critical" />
+          <Stat label="REDACTED" value={stats?.redacted_requests ?? 0} tone="warn" />
+          <Stat label="AVG INPUT RISK" value={`${stats?.avg_input_risk_pct ?? 0}%`} />
         </div>
       </div>
 
@@ -270,9 +269,9 @@ export function ReportsBody({
       </div>
 
       <div>
-        <TerminalFrame
-          filename={`Traffic · ${range === "24h" ? "24 hours" : range === "7d" ? "7 days" : "30 days"}`}
-          status={
+        <Panel
+          title={`Traffic · ${range === "24h" ? "24 hours" : range === "7d" ? "7 days" : "30 days"}`}
+          aside={
             <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
               {chartData.length} pts
             </span>
@@ -286,12 +285,12 @@ export function ReportsBody({
               <ReportsAreaChart data={chartData} config={CHART_CONFIG} />
             )}
           </div>
-        </TerminalFrame>
+        </Panel>
       </div>
 
       <div className="grid gap-3 lg:grid-cols-2">
         <div>
-          <TerminalFrame title="Top findings">
+          <Panel title="Top findings">
             <div className="space-y-2 p-3">
               {topFindingEntries.length === 0 ? (
                 <div className="py-6 text-center text-xs text-fg-muted">no findings</div>
@@ -309,13 +308,13 @@ export function ReportsBody({
                 ))
               )}
             </div>
-          </TerminalFrame>
+          </Panel>
         </div>
 
         <div>
-          <TerminalFrame
+          <Panel
             title="Blocked events"
-            status={
+            aside={
               <Badge className="rounded-sm border border-status-critical/40 bg-status-critical/10 text-[10px] uppercase text-status-critical">
                 {recentBlocked.length} BLOCK
               </Badge>
@@ -343,7 +342,7 @@ export function ReportsBody({
                 ))
               )}
             </div>
-          </TerminalFrame>
+          </Panel>
         </div>
       </div>
 

@@ -7,8 +7,8 @@ import { Sparkline } from "@/components/common/Sparkline";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { PageHeader } from "@/components/dashboard/PageHeader";
-import { MetricStat } from "@/components/dashboard/MetricStat";
+import { PageHeader } from "@/components/app/page-header";
+import { Stat } from "@/components/app/stat";
 import { BudgetBurnCard } from "@/components/dashboard/BudgetBurnCard";
 import { ActiveModelsCard } from "@/components/dashboard/ActiveModelsCard";
 import PostureScore from "@/components/dashboard/PostureScore";
@@ -118,7 +118,7 @@ export function OverviewViewPartA() {
     <div className="space-y-7">
       <PageHeader
         title="Security overview"
-        subtitle={<>Operational posture for the last <span className="font-medium text-fg">{range}</span> · refreshed {refreshClock}</>}
+        description={<>Operational posture for the last <span className="font-medium text-fg">{range}</span> · refreshed {refreshClock}</>}
         actions={
           <>
             <GlossaryToggle onClick={() => setGlossaryOpen(true)} />
@@ -240,7 +240,7 @@ export function OverviewViewPartA() {
             delta: kpiSeries.total.delta,
             sparkColor: "var(--chart-1)",
             source: "Proxy",
-            accent: "default" as const,
+            tone: "default" as const,
             live: true,
             tooltip: "Total API requests proxied through Tamga in the selected time range, including passed, blocked, and redacted.",
           },
@@ -252,7 +252,7 @@ export function OverviewViewPartA() {
             delta: kpiSeries.blocked.delta,
             sparkColor: "var(--chart-2)",
             source: "Policy block",
-            accent: "red" as const,
+            tone: "critical" as const,
             live: true,
             tooltip: "Requests blocked by Tamga security policies (e.g., prompt injection, PII leak, jailbreak attempts). Does not reach the LLM.",
           },
@@ -264,7 +264,7 @@ export function OverviewViewPartA() {
             delta: kpiSeries.redacted.delta,
             sparkColor: "var(--chart-4)",
             source: "Policy redact",
-            accent: "amber" as const,
+            tone: "warn" as const,
             tooltip: "Requests where sensitive data (PII, secrets, credentials) was redacted before forwarding to the LLM provider.",
           },
           {
@@ -272,7 +272,7 @@ export function OverviewViewPartA() {
             value: animateStats ? formatInt(openIncidents) : "—",
             href: incidentsDrill.openIncidents,
             source: "Triage",
-            accent: "amber" as const,
+            tone: "warn" as const,
             live: true,
             tooltip: "Currently open security incidents requiring analyst review and triage in the Incidents console.",
           },
@@ -281,7 +281,7 @@ export function OverviewViewPartA() {
             value: animateStats ? `${formatInt(cRisk)}%` : "—",
             href: incidentsDrill.highRisk,
             source: "Scanner",
-            accent: "default" as const,
+            tone: "default" as const,
             tooltip: "Average input risk score across all requests (0-100%). Higher scores indicate more suspicious or high-risk prompts.",
           },
           {
@@ -292,7 +292,7 @@ export function OverviewViewPartA() {
             delta: kpiSeries.scanP95.delta,
             sparkColor: "var(--chart-3)",
             source: "Proxy P95",
-            accent: "default" as const,
+            tone: "default" as const,
             tooltip: "95th percentile of end-to-end scan latency across all scanners. 95% of requests complete faster than this value.",
           },
           {
@@ -300,7 +300,7 @@ export function OverviewViewPartA() {
             value: animateStats ? formatInt(shadowAIDetected) : "—",
             href: incidentsDrill.shadowAi,
             source: "Unknown provider",
-            accent: "default" as const,
+            tone: "default" as const,
             tooltip: "Detected usage of unrecognized or unauthorized LLM providers not configured in the proxy routing table.",
           },
           {
@@ -308,19 +308,17 @@ export function OverviewViewPartA() {
             value: mttrDisplay,
             href: incidentsDrill.mttr,
             source: mttrTrendBadge ? `Trend: ${mttrTrendBadge}` : "Resolution",
-            accent: mttrTrendBadge === "improving" ? "emerald" as const : mttrTrendBadge === "worsening" ? "red" as const : "default" as const,
+            tone: mttrTrendBadge === "improving" ? "pass" as const : mttrTrendBadge === "worsening" ? "critical" as const : "default" as const,
             tooltip: "Mean Time to Resolve — average time taken to close an incident from creation. Lower is better.",
           },
         ].map((card, _i) => (
           <div key={card.label}>
-            <MetricStat
+            <Stat
               label={card.label}
               value={card.value}
-              source={card.source}
-              accent={card.accent}
+              tone={card.tone}
               delta={typeof card.delta === "number" ? card.delta : undefined}
               onClick={() => router.push(card.href)}
-              live={"live" in card ? card.live : false}
               tooltip={"tooltip" in card ? (card as { tooltip: string }).tooltip : undefined}
               sparkline={
                 card.spark && card.spark.length > 1 ? (

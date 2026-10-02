@@ -6,9 +6,9 @@ import { toUpperEn } from "@/lib/utils/case";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { EmptyState } from "@/components/dashboard/EmptyState";
-import { SkeletonTable } from "@/components/common/SkeletonRow";
-import { TerminalFrame } from "@/components/dashboard/TerminalFrame";
+import { EmptyState } from "@/components/app/states";
+import { SkeletonRows } from "@/components/app/states";
+import { Panel } from "@/components/app/panel";
 import { sevClass } from "./_constants";
 
 type Props = {
@@ -24,9 +24,9 @@ const COLSPAN = 8;
 export function PatternsTable({ items, isLoading, onEdit, onDelete, onToggleEnabled }: Props) {
   return (
     <div>
-      <TerminalFrame
+      <Panel
         title="Patterns"
-        status={
+        aside={
           <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
             {items.length} rows
           </span>
@@ -51,7 +51,7 @@ export function PatternsTable({ items, isLoading, onEdit, onDelete, onToggleEnab
               {isLoading ? (
                 <tr>
                   <td className="px-3 py-0" colSpan={COLSPAN}>
-                    <SkeletonTable rows={6} cols={COLSPAN} />
+                    <SkeletonRows rows={6} />
                   </td>
                 </tr>
               ) : items.length === 0 ? (
@@ -119,7 +119,7 @@ export function PatternsTable({ items, isLoading, onEdit, onDelete, onToggleEnab
             </tbody>
           </table>
         </div>
-      </TerminalFrame>
+      </Panel>
     </div>
   );
 }

@@ -8,12 +8,12 @@ import { toUpperEn } from "@/lib/utils/case";
 import { humanizeFindingType } from "@/lib/humanize";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { SeverityBadge } from "@/components/common/badges";
+import { SeverityBadge } from "@/components/app/status-badge";
 import { severityClass } from "@/lib/badges";
-import { EmptyState } from "@/components/dashboard/EmptyState";
-import { MetricStat } from "@/components/dashboard/MetricStat";
-import { SkeletonTable } from "@/components/common/SkeletonRow";
-import { TerminalFrame } from "@/components/dashboard/TerminalFrame";
+import { EmptyState } from "@/components/app/states";
+import { Stat } from "@/components/app/stat";
+import { SkeletonRows } from "@/components/app/states";
+import { Panel } from "@/components/app/panel";
 import { PAGE_SIZE } from "./_constants";
 
 type Props = {
@@ -161,11 +161,10 @@ export function HuntingResults({ events, total, page, setPage, isLoading, error 
       {hasResults && !isLoading && findingTypeCounts.length > 0 && (
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {findingTypeCounts.map(([type, count]) => (
-            <MetricStat
+            <Stat
               key={type}
               label={humanizeFindingType(type)}
               value={count}
-              source="findings"
             />
           ))}
         </div>
@@ -207,9 +206,9 @@ export function HuntingResults({ events, total, page, setPage, isLoading, error 
         </div>
       )}
 
-      <TerminalFrame title="Search results">
+      <Panel title="Search results">
         {isLoading ? (
-          <SkeletonTable rows={8} cols={6} />
+          <SkeletonRows rows={8} />
         ) : (
           <div className="overflow-x-auto">
             {events.length === 0 ? (
@@ -375,7 +374,7 @@ export function HuntingResults({ events, total, page, setPage, isLoading, error 
             </Button>
           </div>
         </div>
-      </TerminalFrame>
+      </Panel>
     </>
   );
 }

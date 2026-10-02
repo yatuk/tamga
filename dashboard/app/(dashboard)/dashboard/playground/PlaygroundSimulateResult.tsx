@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import type { PolicySimulateResult } from "@/lib/api";
 import { toUpperEn } from "@/lib/utils/case";
 import { Badge } from "@/components/ui/badge";
-import { TerminalFrame } from "@/components/dashboard/TerminalFrame";
+import { Panel } from "@/components/app/panel";
 import { playgroundActionClass, playgroundSeverityClass } from "./playgroundUi";
 
 type Props = {
@@ -107,9 +107,9 @@ export function PlaygroundSimulateResult({ result, originalPrompt, loading = fal
 
   return (
     <div>
-      <TerminalFrame
+      <Panel
         title="Simulation result"
-        status={
+        aside={
           <Badge className={`rounded-sm border text-[10px] uppercase tracking-[0.18em] ${playgroundActionClass(result?.action || "")}`}>
             {result?.action || "—"}
           </Badge>
@@ -207,7 +207,7 @@ export function PlaygroundSimulateResult({ result, originalPrompt, loading = fal
             )}
           </div>
         )}
-      </TerminalFrame>
+      </Panel>
     </div>
   );
 }

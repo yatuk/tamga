@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { TerminalFrame } from "@/components/dashboard/TerminalFrame";
+import { Panel } from "@/components/app/panel";
 import { buildIncidentsHref, relTime } from "./overviewHelpers";
 import { OverviewActionBadge } from "./OverviewActionBadge";
 import { useOverviewContext } from "./OverviewContext";
@@ -128,9 +128,9 @@ export function OverviewViewPartC() {
       </div>
 
       <div>
-        <TerminalFrame
+        <Panel
           title="Tamga Proxy"
-          status={
+          aside={
             <span className="inline-flex items-center gap-1.5 px-2 text-[10px] uppercase tracking-[0.18em] text-status-pass">
               <span
                 className={reduce ? "h-1.5 w-1.5 rounded-full bg-status-pass" : "h-1.5 w-1.5 animate-pulse rounded-full bg-status-pass"}
@@ -169,7 +169,7 @@ export function OverviewViewPartC() {
               )}
             </div>
           </div>
-        </TerminalFrame>
+        </Panel>
       </div>
 
       <div className="text-xs text-fg-subtle dark:text-fg-subtle">

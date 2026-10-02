@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { AlertTriangle, RotateCcw } from "lucide-react";
-import { TerminalFrame } from "@/components/dashboard/TerminalFrame";
+import { Panel } from "@/components/app/panel";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import type { DashboardHealthDetailed } from "@/lib/api/types-core";
@@ -59,11 +59,11 @@ export function SettingsProvidersSection({ health, adminKey }: Props) {
         ) : (
           <div className="space-y-3">
             {pools.map((pl) => (
-              <TerminalFrame
+              <Panel
                 key={pl.pool}
                 title={`${toUpperEn(pl.pool.charAt(0)) + pl.pool.slice(1)} pool`}
 
-                status={
+                aside={
                   <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
                     {pl.healthy_count}/{pl.total_count} healthy
                   </span>
@@ -114,7 +114,7 @@ export function SettingsProvidersSection({ health, adminKey }: Props) {
                     );
                   })}
                 </div>
-              </TerminalFrame>
+              </Panel>
             ))}
           </div>
         )}

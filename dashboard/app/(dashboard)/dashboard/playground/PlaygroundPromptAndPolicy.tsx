@@ -1,6 +1,6 @@
 "use client";
 
-import { TerminalFrame } from "@/components/dashboard/TerminalFrame";
+import { Panel } from "@/components/app/panel";
 import type { PolicySource } from "./_constants";
 import { PLAYGROUND_SNIPPETS } from "./playgroundData";
 
@@ -26,9 +26,9 @@ export function PlaygroundPromptAndPolicy({
   return (
     <div className="grid gap-3 lg:grid-cols-2">
       <div>
-        <TerminalFrame
+        <Panel
           title="Prompt Girdisi"
-          status={
+          aside={
             <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">{prompt.length} chars</span>
           }
 
@@ -51,11 +51,11 @@ export function PlaygroundPromptAndPolicy({
               </button>
             ))}
           </div>
-        </TerminalFrame>
+        </Panel>
       </div>
 
       <div>
-        <TerminalFrame title="Policy source">
+        <Panel title="Policy source">
           <div className="space-y-2 p-3">
             <div className="text-[10px] uppercase tracking-[0.18em] text-fg-muted">POLICY SOURCE</div>
             <div className="flex flex-wrap gap-1">
@@ -87,7 +87,7 @@ export function PlaygroundPromptAndPolicy({
               </pre>
             )}
           </div>
-        </TerminalFrame>
+        </Panel>
       </div>
     </div>
   );

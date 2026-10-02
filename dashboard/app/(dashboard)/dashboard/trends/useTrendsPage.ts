@@ -46,7 +46,7 @@ export function useTrendsPage() {
   const chartData = useMemo(
     () =>
       points.map((p) => ({
-        time: new Date(p.t).toLocaleDateString(undefined, {
+        time: new Date(p.t).toLocaleDateString("en-GB", {
           month: "short",
           day: "2-digit",
         }),

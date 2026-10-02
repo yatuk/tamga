@@ -12,8 +12,8 @@ import {
   Plug,
   TriangleAlert,
 } from "lucide-react";
-import { PageHeader } from "@/components/dashboard/PageHeader";
-import { TerminalFrame } from "@/components/dashboard/TerminalFrame";
+import { PageHeader } from "@/components/app/page-header";
+import { Panel } from "@/components/app/panel";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/lib/toast";
@@ -69,9 +69,8 @@ export function GuideView({ guide }: { guide: IntegrationGuide }) {
       </div>
 
       <PageHeader
-        eyebrow={`ADMINISTRATION // INTEGRATIONS // ${toUpperEn(guide.kind)}`}
         title={`${guide.name} setup guide`}
-        subtitle={guide.overview}
+        description={guide.overview}
         actions={
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1 rounded-sm border border-status-pass/60 bg-status-pass/30 px-2 py-1 text-[10px] uppercase tracking-wide text-status-pass">
@@ -194,9 +193,9 @@ export function GuideView({ guide }: { guide: IntegrationGuide }) {
           ) : null}
 
           <div>
-            <TerminalFrame
-              filename={`payload.${guide.payloadPreview.lang}`}
-              status={
+            <Panel
+              title={`payload.${guide.payloadPreview.lang}`}
+              aside={
                 <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
                   preview
                 </span>
@@ -206,7 +205,7 @@ export function GuideView({ guide }: { guide: IntegrationGuide }) {
               <pre className="overflow-x-auto px-3 py-3 text-[11px] leading-5 text-fg whitespace-pre-wrap wrap-break-word">
                 {guide.payloadPreview.content}
               </pre>
-            </TerminalFrame>
+            </Panel>
           </div>
 
           <div>

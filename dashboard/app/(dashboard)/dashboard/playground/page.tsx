@@ -2,7 +2,7 @@
 
 import { Copy, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { PageHeader } from "@/components/dashboard/PageHeader";
+import { PageHeader } from "@/components/app/page-header";
 import { PlaygroundPromptAndPolicy } from "./PlaygroundPromptAndPolicy";
 import { PlaygroundRedTeamPanel } from "./PlaygroundRedTeamPanel";
 import { PlaygroundSimulateResult } from "./PlaygroundSimulateResult";
@@ -14,9 +14,8 @@ export default function PlaygroundPage() {
   return (
     <div className="space-y-2">
       <PageHeader
-        eyebrow="PLAYGROUND // POLICY SIMULATOR"
         title="Playground"
-        subtitle="does not affect live traffic · POST /api/v1/policies/simulate"
+        description="does not affect live traffic · POST /api/v1/policies/simulate"
         actions={
           <>
             <Button variant="outline"

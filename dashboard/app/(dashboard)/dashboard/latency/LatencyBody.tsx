@@ -2,9 +2,9 @@
 
 import { useMemo, useState } from "react";
 import { RefreshCw, RotateCw } from "lucide-react";
-import { PageHeader } from "@/components/dashboard/PageHeader";
-import { TerminalFrame } from "@/components/dashboard/TerminalFrame";
-import { MetricStat } from "@/components/dashboard/MetricStat";
+import { PageHeader } from "@/components/app/page-header";
+import { Panel } from "@/components/app/panel";
+import { Stat } from "@/components/app/stat";
 import { HealthScoreBadge } from "@/components/common/HealthScoreBadge";
 import { GlossaryToggle, GlossaryPanel } from "@/components/dashboard/GlossaryPanel";
 import { Button } from "@/components/ui/button";
@@ -61,9 +61,8 @@ export function LatencyBody({
   return (
     <div className="space-y-2">
       <PageHeader
-        eyebrow={`ANALYTICS // LATENCY · ${range}`}
         title="Latency & Performance"
-        subtitle={`P50 · P95 · P99 percentiles · uptime ${formatUptime(uptimeSeconds)}`}
+        description={`P50 · P95 · P99 percentiles · uptime ${formatUptime(uptimeSeconds)}`}
         actions={
           <>
             <GlossaryToggle onClick={() => setGlossaryOpen(true)} />
@@ -105,23 +104,20 @@ export function LatencyBody({
           ))
         ) : (
           <>
-            <MetricStat
+            <Stat
               label="P50 LATENCY"
               value={formatMs(p50)}
-              accent="emerald"
-              source="scanner"
+              tone="pass"
             />
-            <MetricStat
+            <Stat
               label="P95 LATENCY"
               value={formatMs(p95)}
-              accent="amber"
-              source="scanner"
+              tone="warn"
             />
-            <MetricStat
+            <Stat
               label="P99 LATENCY"
               value={formatMs(p99)}
-              accent="red"
-              source="scanner"
+              tone="critical"
             />
           </>
         )}
@@ -129,9 +125,9 @@ export function LatencyBody({
 
       {/* Percentile histogram bars */}
       {!isLoading && histogramBars.length > 0 ? (
-        <TerminalFrame
+        <Panel
           title="Latency Percentiles"
-          status={
+          aside={
             <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
               P50→P99
             </span>
@@ -155,14 +151,14 @@ export function LatencyBody({
               </div>
             ))}
           </div>
-        </TerminalFrame>
+        </Panel>
       ) : null}
 
       {/* Slowest endpoints */}
       {slowestEndpoints.length > 0 && !isLoading ? (
-        <TerminalFrame
+        <Panel
           title="SLOWEST TIME BUCKETS"
-          status={
+          aside={
             <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
               top 5 by P95 latency
             </span>
@@ -201,7 +197,7 @@ export function LatencyBody({
               </tbody>
             </table>
           </div>
-        </TerminalFrame>
+        </Panel>
       ) : null}
 
       {/* Scanner impact note */}
@@ -218,9 +214,9 @@ export function LatencyBody({
       ) : null}
 
       {/* Latency trend chart */}
-      <TerminalFrame
-        filename={`Latency · ${range === "24h" ? "24 hours" : range === "7d" ? "7 days" : "30 days"}`}
-        status={
+      <Panel
+        title={`Latency · ${range === "24h" ? "24 hours" : range === "7d" ? "7 days" : "30 days"}`}
+        aside={
           <span className="flex items-center gap-1 px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
             <RefreshCw className="h-3 w-3" /> 10s
           </span>
@@ -237,12 +233,12 @@ export function LatencyBody({
             <LatencyLineChart data={chartData} />
           )}
         </div>
-      </TerminalFrame>
+      </Panel>
 
       {/* Provider pool health */}
-      <TerminalFrame
+      <Panel
         title="Provider pool status"
-        status={
+        aside={
           <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
             {providerPools.length} providers
           </span>
@@ -334,7 +330,7 @@ export function LatencyBody({
             </table>
           )}
         </div>
-      </TerminalFrame>
+      </Panel>
       <GlossaryPanel open={glossaryOpen} onClose={() => setGlossaryOpen(false)} />
     </div>
   );

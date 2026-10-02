@@ -1,6 +1,6 @@
 "use client";
 
-import { TerminalFrame } from "@/components/dashboard/TerminalFrame";
+import { Panel } from "@/components/app/panel";
 import { PolicyDiff } from "@/components/dashboard/policies/PolicyDiff";
 
 type Props = {
@@ -9,10 +9,10 @@ type Props = {
 
 export function PoliciesHistoryPanel({ adminKey }: Props) {
   return (
-    <TerminalFrame title="Policy history">
+    <Panel title="Policy history">
       <div className="space-y-3 p-3">
         <PolicyDiff adminKey={adminKey} />
       </div>
-    </TerminalFrame>
+    </Panel>
   );
 }

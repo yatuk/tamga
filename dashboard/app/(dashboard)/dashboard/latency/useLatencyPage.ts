@@ -60,7 +60,7 @@ export function useLatencyPage() {
       .sort((a, b) => (b.scan_p95 ?? 0) - (a.scan_p95 ?? 0))
       .slice(0, 5)
       .map((p) => ({
-        time: new Date(p.t!).toLocaleString(undefined, {
+        time: new Date(p.t!).toLocaleString("en-GB", {
           month: "short",
           day: "2-digit",
           hour: "2-digit",
@@ -73,7 +73,7 @@ export function useLatencyPage() {
   const chartData = useMemo(
     () =>
       (ts?.points || []).map((p) => ({
-        time: new Date(p.t).toLocaleString(undefined, {
+        time: new Date(p.t).toLocaleString("en-GB", {
           month: "short",
           day: "2-digit",
           hour: "2-digit",

@@ -3,8 +3,8 @@
 import { CheckCircle2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { EmptyState } from "@/components/dashboard/EmptyState";
-import { TerminalFrame } from "@/components/dashboard/TerminalFrame";
+import { EmptyState } from "@/components/app/states";
+import { Panel } from "@/components/app/panel";
 import { formatSince } from "@/lib/utils/format";
 import type { Webhook } from "@/lib/api";
 import { integrationKindBadge } from "./integrationWebhookHelpers";
@@ -39,9 +39,9 @@ const COLSPAN = 8;
 export function IntegrationsHooksTable({ hooks, onTest, onDelete, onConnect }: Props) {
   return (
     <div>
-      <TerminalFrame
+      <Panel
         title="Connected Webhooks"
-        status={
+        aside={
           <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">{hooks.length} rows</span>
         }
 
@@ -94,7 +94,7 @@ export function IntegrationsHooksTable({ hooks, onTest, onDelete, onConnect }: P
                     <td className="px-3 py-2">
                       <span
                         className="inline-flex items-center gap-1.5"
-                        title={h.last_fired ? `Last delivery: ${new Date(h.last_fired).toLocaleString()}` : "No deliveries yet"}
+                        title={h.last_fired ? `Last delivery: ${new Date(h.last_fired).toLocaleString("en-GB")}` : "No deliveries yet"}
                       >
                         <span className={`inline-block h-2 w-2 rounded-full ${lastFiredDotClass(h.last_fired)}`} />
                         <span className="text-[10px] text-fg-subtle">
@@ -134,7 +134,7 @@ export function IntegrationsHooksTable({ hooks, onTest, onDelete, onConnect }: P
             </tbody>
           </table>
         </div>
-      </TerminalFrame>
+      </Panel>
     </div>
   );
 }

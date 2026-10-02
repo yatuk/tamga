@@ -2,7 +2,7 @@
 
 import { Plus, Play, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { TerminalFrame } from "@/components/dashboard/TerminalFrame";
+import { Panel } from "@/components/app/panel";
 import { usePolicyEntities } from "./usePolicyEntities";
 
 const inputCls =
@@ -46,7 +46,7 @@ export function PolicyEntitiesPanel() {
   return (
     <div className="grid gap-3 lg:grid-cols-[1fr_360px]">
       {/* Existing policy entities */}
-      <TerminalFrame filename="Policy Entities">
+      <Panel title="Policy Entities">
         <div className="p-3">
           <p className="mb-2 text-[11px] text-fg-muted">
             User-defined PII entities with an enforcement action. Applied by the
@@ -135,10 +135,10 @@ export function PolicyEntitiesPanel() {
             )}
           </div>
         </div>
-      </TerminalFrame>
+      </Panel>
 
       {/* Create form */}
-      <TerminalFrame filename="New Policy Entity">
+      <Panel title="New Policy Entity">
         <div className="space-y-3 p-3">
           <div>
             <label className={labelCls}>Name</label>
@@ -213,7 +213,7 @@ export function PolicyEntitiesPanel() {
             {createMut.isPending ? "Creating…" : "Create Entity"}
           </Button>
         </div>
-      </TerminalFrame>
+      </Panel>
     </div>
   );
 }

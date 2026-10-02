@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { TerminalFrame } from "@/components/dashboard/TerminalFrame";
+import { Panel } from "@/components/app/panel";
 
 type Props = {
   retention: string;
@@ -12,7 +12,7 @@ type Props = {
 export function SettingsRetentionSection({ retention, setRetention, saveRetention }: Props) {
   return (
     <div>
-      <TerminalFrame title="Retention">
+      <Panel title="Retention">
         <div className="space-y-3 p-3">
           <div className="text-[11px] text-fg-muted">
             {"//"} Day limit applied in the dashboard only. Database retention is set in the proxy configuration; this
@@ -33,7 +33,7 @@ export function SettingsRetentionSection({ retention, setRetention, saveRetentio
             </Button>
           </div>
         </div>
-      </TerminalFrame>
+      </Panel>
     </div>
   );
 }

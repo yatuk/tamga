@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { PageHeader } from "@/components/dashboard/PageHeader";
+import { PageHeader } from "@/components/app/page-header";
 import { ResizableSplitPane } from "@/components/dashboard/ResizableSplitPane";
 import { IncidentsFiltersCard } from "@/components/dashboard/security/incidents-console/IncidentsFiltersCard";
 import { IncidentsQueueTableCard } from "@/components/dashboard/security/incidents-console/IncidentsQueueTableCard";
@@ -34,9 +34,8 @@ export function SecurityIncidentsConsoleView({ m }: { m: IncidentsConsoleModel }
   return (
     <div className="space-y-2">
       <PageHeader
-        eyebrow="TRIAGE"
         title="Incidents"
-        subtitle={`${m.filtered.length} matching · triage ${m.triageFilter} · range ${m.timeRange}`}
+        description={`${m.filtered.length} matching · triage ${m.triageFilter} · range ${m.timeRange}`}
       />
 
       {/* Filters + saved views bar */}

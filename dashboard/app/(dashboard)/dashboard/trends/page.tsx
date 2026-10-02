@@ -1,8 +1,8 @@
 "use client";
 
-import { PageHeader } from "@/components/dashboard/PageHeader";
-import { MetricStat } from "@/components/dashboard/MetricStat";
-import { TerminalFrame } from "@/components/dashboard/TerminalFrame";
+import { PageHeader } from "@/components/app/page-header";
+import { Stat } from "@/components/app/stat";
+import { Panel } from "@/components/app/panel";
 import { VALID_TIMERANGES } from "@/lib/types";
 import { TrendsAreaChart } from "./TrendsAreaChart";
 import { useTrendsPage } from "./useTrendsPage";
@@ -17,9 +17,8 @@ export default function TrendsPage() {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <PageHeader
-          eyebrow="ANALYTICS // TRENDS"
           title="Detection Trends"
-          subtitle="Requests scanned, findings caught, and category mix over time"
+          description="Requests scanned, findings caught, and category mix over time"
         />
         <div className="flex gap-1">
           {VALID_TIMERANGES.filter((r) => r !== "1h").map((r) => (
@@ -39,12 +38,12 @@ export default function TrendsPage() {
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <MetricStat label="Requests scanned" value={totals.attempted.toLocaleString()} accent="default" />
-        <MetricStat label="Findings caught" value={totals.caught.toLocaleString()} accent="red" />
-        <MetricStat label="Catch rate" value={`${catchRate}%`} accent="emerald" />
+        <Stat label="Requests scanned" value={totals.attempted.toLocaleString("en-US")} />
+        <Stat label="Findings caught" value={totals.caught.toLocaleString("en-US")} tone="critical" />
+        <Stat label="Catch rate" value={`${catchRate}%`} tone="pass" />
       </div>
 
-      <TerminalFrame filename={`trend · ${range}`}>
+      <Panel title={`trend · ${range}`}>
         <div className="p-3">
           {isLoading ? (
             <p className="py-16 text-center text-xs text-fg-subtle">Loading…</p>
@@ -56,9 +55,9 @@ export default function TrendsPage() {
             <TrendsAreaChart data={chartData} />
           )}
         </div>
-      </TerminalFrame>
+      </Panel>
 
-      <TerminalFrame filename="findings by type">
+      <Panel title="findings by type">
         <div className="space-y-2 p-3">
           {byType.length === 0 ? (
             <p className="py-6 text-center text-xs text-fg-subtle">No findings in this window.</p>
@@ -77,7 +76,7 @@ export default function TrendsPage() {
             ))
           )}
         </div>
-      </TerminalFrame>
+      </Panel>
     </div>
   );
 }

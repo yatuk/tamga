@@ -3,8 +3,8 @@
 import { useRef, useCallback, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { SecurityEvent } from "@/lib/api/types-core";
-import { ActionBadge, SeverityBadge } from "@/components/common/badges";
-import { EmptyState } from "@/components/dashboard/EmptyState";
+import { ActionBadge, SeverityBadge } from "@/components/app/status-badge";
+import { EmptyState } from "@/components/app/states";
 import { formatSince } from "@/lib/utils/format";
 import { ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
 

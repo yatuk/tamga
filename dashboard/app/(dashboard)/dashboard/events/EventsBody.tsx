@@ -1,8 +1,8 @@
 "use client";
 
-import { PageHeader } from "@/components/dashboard/PageHeader";
-import { TerminalFrame } from "@/components/dashboard/TerminalFrame";
-import { MetricStat } from "@/components/dashboard/MetricStat";
+import { PageHeader } from "@/components/app/page-header";
+import { Panel } from "@/components/app/panel";
+import { Stat } from "@/components/app/stat";
 import { Button } from "@/components/ui/button";
 import { formatInt } from "@/lib/utils/format";
 import { EventsFiltersPanel } from "./_components/EventsFiltersPanel";
@@ -52,9 +52,8 @@ export function EventsBody({
   return (
     <div className="space-y-2">
       <PageHeader
-        eyebrow={`TRIAGE // EVENT EXPLORER · ${filters.range}`}
         title="Event Explorer"
-        subtitle={`raw event stream · search & filter · ${total} total`}
+        description={`raw event stream · search & filter · ${total} total`}
         actions={
           <div className="flex items-center gap-2">
             {/* SSE status badge */}
@@ -91,19 +90,19 @@ export function EventsBody({
           ))
         ) : (
           <>
-            <MetricStat label="TOTAL EVENTS" value={formatInt(total)} source="events" />
-            <MetricStat label="BLOCKED" value={formatInt(blockedCount)} accent="red" source="events" />
-            <MetricStat label="PASSED" value={formatInt(passedCount)} accent="emerald" source="events" />
-            <MetricStat label="PASS RATE" value={`${passRate}%`} accent={Number(passRate) < 50 ? "red" : Number(passRate) < 90 ? "amber" : "emerald"} source="events" />
+            <Stat label="TOTAL EVENTS" value={formatInt(total)} />
+            <Stat label="BLOCKED" value={formatInt(blockedCount)} tone="critical" />
+            <Stat label="PASSED" value={formatInt(passedCount)} tone="pass" />
+            <Stat label="PASS RATE" value={`${passRate}%`} tone={Number(passRate) < 50 ? "critical" : Number(passRate) < 90 ? "warn" : "pass"} />
           </>
         )}
       </div>
 
       {/* Mini bar chart — event volume by hour */}
       {timeseriesData.length > 0 && !isLoading ? (
-        <TerminalFrame
+        <Panel
           title="Event Volume by Hour"
-          status={<span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">{timeseriesData.length} buckets</span>}
+          aside={<span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">{timeseriesData.length} buckets</span>}
         >
           <div className="p-3">
             <div className="flex items-end gap-px h-[80px]">
@@ -129,7 +128,7 @@ export function EventsBody({
               ) : null}
             </div>
           </div>
-        </TerminalFrame>
+        </Panel>
       ) : null}
 
       <div className="flex gap-4">
@@ -150,9 +149,9 @@ export function EventsBody({
 
         {/* Right table */}
         <div className="flex-1 min-w-0">
-          <TerminalFrame
-            filename={`Events · ${filters.range === "24h" ? "24 hours" : filters.range === "7d" ? "7 days" : "30 days"}`}
-            status={
+          <Panel
+            title={`Events · ${filters.range === "24h" ? "24 hours" : filters.range === "7d" ? "7 days" : "30 days"}`}
+            aside={
               <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
                 {events.length} shown {total > events.length ? `/ ${total} total` : ""}
               </span>
@@ -177,7 +176,7 @@ export function EventsBody({
                 </Button>
               </div>
             ) : null}
-          </TerminalFrame>
+          </Panel>
         </div>
       </div>
 

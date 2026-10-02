@@ -2,10 +2,10 @@
 
 import { useMemo } from "react";
 import { Plus, Trash2, Copy, AlertTriangle, Check } from "lucide-react";
-import { PageHeader } from "@/components/dashboard/PageHeader";
-import { TerminalFrame } from "@/components/dashboard/TerminalFrame";
-import { EmptyState } from "@/components/dashboard/EmptyState";
-import { SkeletonTable } from "@/components/common/SkeletonRow";
+import { PageHeader } from "@/components/app/page-header";
+import { Panel } from "@/components/app/panel";
+import { EmptyState } from "@/components/app/states";
+import { SkeletonRows } from "@/components/app/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CreateKeyDialog } from "./_components/CreateKeyDialog";
@@ -76,9 +76,8 @@ export function KeysBody({
   return (
     <div className="space-y-2">
       <PageHeader
-        eyebrow="SYSTEM // API KEYS"
         title="API Keys & Access"
-        subtitle={`${total} key${total !== 1 ? "s" : ""} · admin · write · read-only`}
+        description={`${total} key${total !== 1 ? "s" : ""} · admin · write · read-only`}
         actions={
           <Button variant="outline"
             className="cursor-pointer rounded-sm bg-status-pass text-white hover:bg-status-pass"
@@ -122,9 +121,9 @@ export function KeysBody({
         </div>
       )}
 
-      <TerminalFrame
+      <Panel
         title="API Keys"
-        status={
+        aside={
           <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
             {total} keys
           </span>
@@ -132,7 +131,7 @@ export function KeysBody({
       >
         <div className="overflow-x-auto">
           {isLoading ? (
-            <SkeletonTable rows={5} cols={7} />
+            <SkeletonRows rows={5} />
           ) : apiKeys.length === 0 ? (
             <EmptyState
               icon="database"
@@ -237,7 +236,7 @@ export function KeysBody({
             </table>
           )}
         </div>
-      </TerminalFrame>
+      </Panel>
 
       {/* Dialogs */}
       <CreateKeyDialog

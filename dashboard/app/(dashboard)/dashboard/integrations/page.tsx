@@ -1,6 +1,6 @@
 "use client";
 
-import { PageHeader } from "@/components/dashboard/PageHeader";
+import { PageHeader } from "@/components/app/page-header";
 import { INTEGRATION_PRESETS } from "./integrationPresets";
 import { IntegrationConnectModal } from "./IntegrationConnectModal";
 import { IntegrationsHooksTable } from "./IntegrationsHooksTable";
@@ -14,9 +14,8 @@ export default function IntegrationsPage() {
   return (
     <div className="space-y-2">
       <PageHeader
-        eyebrow="ADMINISTRATION // INTEGRATIONS"
         title="Integrations"
-        subtitle={`${hooks.length} connected · ${INTEGRATION_PRESETS.length} presets · step-by-step guide on each tile`}
+        description={`${hooks.length} connected · ${INTEGRATION_PRESETS.length} presets · step-by-step guide on each tile`}
       />
 
       <IntegrationsPresetGrid hooks={hooks} onConnect={(kind, name) => setDraft(openIntegrationDraft(kind, name))} />

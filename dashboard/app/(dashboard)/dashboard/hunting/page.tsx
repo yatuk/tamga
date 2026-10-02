@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { PageHeader } from "@/components/dashboard/PageHeader";
+import { PageHeader } from "@/components/app/page-header";
 import { HuntingFilters } from "./HuntingFilters";
 import { HuntingResults } from "./HuntingResults";
 import { SavedHuntsPanel } from "./SavedHuntsPanel";
@@ -47,7 +47,7 @@ export default function HuntingPage() {
     <div className="space-y-2">
       <PageHeader
         title="Threat hunting"
-        subtitle="Server-side filters (PostgreSQL or the in-memory buffer). Use the deep link on a row to continue in Incidents."
+        description="Server-side filters (PostgreSQL or the in-memory buffer). Use the deep link on a row to continue in Incidents."
         actions={
           <Button variant="outline" size="sm" className="gap-1" onClick={() => refetch()} disabled={isFetching}>
             Refresh

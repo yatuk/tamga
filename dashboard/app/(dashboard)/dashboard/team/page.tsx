@@ -5,10 +5,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, UserCog, User as UserIcon } from "lucide-react";
 import { api, type TeamMember, type TeamRole } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
-import { PageHeader } from "@/components/dashboard/PageHeader";
-import { EmptyState } from "@/components/dashboard/EmptyState";
-import { SkeletonTable } from "@/components/common/SkeletonRow";
-import { TerminalFrame } from "@/components/dashboard/TerminalFrame";
+import { PageHeader } from "@/components/app/page-header";
+import { EmptyState } from "@/components/app/states";
+import { SkeletonRows } from "@/components/app/states";
+import { Panel } from "@/components/app/panel";
 import { toast } from "@/lib/toast";
 import { useAdminKey } from "@/hooks/useAdminKey";
 
@@ -72,9 +72,8 @@ export default function TeamPage() {
   return (
     <div className="space-y-2">
       <PageHeader
-        eyebrow="ADMINISTRATION // TEAM"
         title="Team"
-        subtitle={
+        description={
           <span>
             {counts.total} members · admin {counts.admin} · analyst {counts.analyst} · viewer {counts.viewer}{" "}
             {clerkOK ? "· Clerk connected" : "· Clerk not configured"}
@@ -158,9 +157,9 @@ export default function TeamPage() {
       )}
 
       <div>
-        <TerminalFrame
+        <Panel
           title="Team Members"
-          status={
+          aside={
             <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
               {items.length} members
             </span>
@@ -181,7 +180,7 @@ export default function TeamPage() {
                 {isLoading ? (
                   <tr>
                     <td className="px-3 py-0" colSpan={4}>
-                      <SkeletonTable rows={5} cols={4} />
+                      <SkeletonRows rows={5} />
                     </td>
                   </tr>
                 ) : items.length === 0 ? (
@@ -253,7 +252,7 @@ export default function TeamPage() {
                         </div>
                       </td>
                       <td className="px-3 py-2 text-[10px] text-fg-muted">
-                        {m.updated_at ? new Date(m.updated_at).toLocaleString() : "—"}
+                        {m.updated_at ? new Date(m.updated_at).toLocaleString("en-GB") : "—"}
                       </td>
                     </tr>
                   ))
@@ -261,7 +260,7 @@ export default function TeamPage() {
               </tbody>
             </table>
           </div>
-        </TerminalFrame>
+        </Panel>
       </div>
 
       <div>

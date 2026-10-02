@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { TerminalFrame } from "@/components/dashboard/TerminalFrame";
+import { Panel } from "@/components/app/panel";
 import { PolicySnippetsBar } from "@/components/dashboard/policies/PolicySnippets";
 
 const MonacoEditor = dynamic(() => import("@monaco-editor/react").then((m) => m.default), {
@@ -20,9 +20,9 @@ export function PoliciesMonacoEditor({ draft, onChange }: Props) {
   return (
     <>
       <PolicySnippetsBar draft={draft} onApply={onChange} />
-      <TerminalFrame
+      <Panel
         title="Policy YAML"
-        status={
+        aside={
           <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
             {draft.split("\n").length} lines
           </span>
@@ -42,7 +42,7 @@ export function PoliciesMonacoEditor({ draft, onChange }: Props) {
             scrollBeyondLastLine: false,
           }}
         />
-      </TerminalFrame>
+      </Panel>
     </>
   );
 }

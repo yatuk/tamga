@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { Eye, EyeOff, ExternalLink } from "lucide-react";
-import { TerminalFrame } from "@/components/dashboard/TerminalFrame";
+import { Panel } from "@/components/app/panel";
 import { getSeverityBadge, getActionBadge } from "@/lib/badges";
 
 interface Competitor {
@@ -83,7 +83,7 @@ export function CompetitorsForm({ adminKey }: Props) {
   const competitors = data?.competitors ?? [];
 
   return (
-    <TerminalFrame title="Rakip Modeller">
+    <Panel title="Rakip Modeller">
       <div className="space-y-2 p-3">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -232,6 +232,6 @@ export function CompetitorsForm({ adminKey }: Props) {
           </div>
         )}
       </div>
-    </TerminalFrame>
+    </Panel>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { TerminalFrame } from "@/components/dashboard/TerminalFrame";
+import { Panel } from "@/components/app/panel";
 import { SettingsStatusChip } from "./SettingsStatusChip";
 
 type Health = Awaited<ReturnType<typeof import("@/lib/api").api.getHealthDetailed>>;
@@ -38,7 +38,7 @@ export function SettingsRuntimeSection({ health, runtime }: Props) {
           />
         </div>
 
-        <TerminalFrame title="Runtime status">
+        <Panel title="Runtime status">
           <div className="space-y-1 p-3 text-xs text-fg-muted">
             <div>
               version: <span className="text-fg">{runtime?.version || "—"}</span>
@@ -57,7 +57,7 @@ export function SettingsRuntimeSection({ health, runtime }: Props) {
               endpoint: <code>/api/v1/health/detail</code>
             </div>
           </div>
-        </TerminalFrame>
+        </Panel>
       </div>
     </div>
   );

@@ -1,10 +1,10 @@
 "use client";
 
 import { Download } from "lucide-react";
-import { PageHeader } from "@/components/dashboard/PageHeader";
-import { TerminalFrame } from "@/components/dashboard/TerminalFrame";
-import { MetricStat } from "@/components/dashboard/MetricStat";
-import { EmptyState } from "@/components/dashboard/EmptyState";
+import { PageHeader } from "@/components/app/page-header";
+import { Panel } from "@/components/app/panel";
+import { Stat } from "@/components/app/stat";
+import { EmptyState } from "@/components/app/states";
 import { formatInt } from "@/lib/utils/format";
 import { Button } from "@/components/ui/button";
 import type { TimeRange } from "@/lib/types";
@@ -83,9 +83,8 @@ export function CostsBody({
   return (
     <div className="space-y-2">
       <PageHeader
-        eyebrow={`ANALYTICS // TOKEN COSTS · ${range}`}
         title="Token Burn & Costs"
-        subtitle="daily spend · per-model billing · budget tracking"
+        description="daily spend · per-model billing · budget tracking"
         actions={
           <>
             <div className="inline-flex overflow-hidden rounded-sm border border-border-strong">
@@ -119,8 +118,7 @@ export function CostsBody({
           icon="database"
           title="Billing data unavailable"
           description="Failed to load cost data. Check your admin key and proxy connection."
-          actionLabel="Retry"
-          onAction={() => window.location.reload()}
+          action={{ label: "Retry", onClick: () => window.location.reload() }}
         />
       ) : null}
 
@@ -135,27 +133,23 @@ export function CostsBody({
           ))
         ) : (
           <>
-            <MetricStat
+            <Stat
               label="TODAY'S BURN"
               value={`${formatTokens(tokensToday)} · ${formatCost(costToday)}`}
-              source="budget"
               sparkline={sparklineEl}
             />
-            <MetricStat
+            <Stat
               label="DAILY LIMIT"
               value={`${formatTokens(limitTokens)} · ${formatCost(limitCost)}`}
-              source="budget"
             />
-            <MetricStat
+            <Stat
               label="REMAINING"
               value={`${remainingPct}%`}
-              accent={Number(remainingPct) < 20 ? "red" : Number(remainingPct) < 50 ? "amber" : "emerald"}
-              source="budget"
+              tone={Number(remainingPct) < 20 ? "critical" : Number(remainingPct) < 50 ? "warn" : "pass"}
             />
-            <MetricStat
+            <Stat
               label="MTD · PROJECTED"
               value={`${formatCost(mtdTotalUSD)} · ${formatCost(projectedMonthlyUSD)}`}
-              source="billing"
             />
           </>
         )}
@@ -165,24 +159,22 @@ export function CostsBody({
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         {!isLoading && (
           <>
-            <MetricStat
+            <Stat
               label="COST PER REQUEST"
               value={costPerReqStr}
-              source="derived"
             />
-            <MetricStat
+            <Stat
               label="AVG TOKENS / REQ"
               value={avgTokensStr}
-              source="derived"
             />
           </>
         )}
       </div>
 
       {/* Token consumption trend */}
-      <TerminalFrame
+      <Panel
         title="Token Consumption"
-        status={
+        aside={
           <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
             {chartData.length} pts
           </span>
@@ -199,12 +191,12 @@ export function CostsBody({
             <SimpleTokenChart data={chartData} />
           )}
         </div>
-      </TerminalFrame>
+      </Panel>
 
       {/* Per-model cost breakdown */}
-      <TerminalFrame
+      <Panel
         title="Model Costs"
-        status={
+        aside={
           <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-subtle">
             est. total: {formatCost(totalCostEstimate)}
           </span>
@@ -270,13 +262,13 @@ export function CostsBody({
         <div className="border-t border-border px-3 py-2 text-[10px] text-fg-subtle">
           Pricing as of June 2026. Costs are server-side estimates — verify with provider invoices.
         </div>
-      </TerminalFrame>
+      </Panel>
 
       {/* Model family stacked bar */}
       {modelFamilyBars.length > 0 && !isLoading ? (
-        <TerminalFrame
+        <Panel
           title="Model Family Distribution"
-          status={
+          aside={
             <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
               {modelFamilyBars.length} families
             </span>
@@ -305,14 +297,14 @@ export function CostsBody({
               ))}
             </div>
           </div>
-        </TerminalFrame>
+        </Panel>
       ) : null}
 
       {/* Daily breakdown table */}
       {dailyRows.length > 0 && (
-        <TerminalFrame
+        <Panel
           title="Daily Breakdown"
-          status={
+          aside={
             <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-subtle">
               {dailyRows.length} rows
             </span>
@@ -367,7 +359,7 @@ export function CostsBody({
               </tbody>
             </table>
           </div>
-        </TerminalFrame>
+        </Panel>
       )}
     </div>
   );
@@ -389,7 +381,7 @@ function SimpleTokenChart({
           <div
             key={i}
             className="group relative flex-1 min-w-[2px]"
-            title={`${d.time}: ${formatInt(d.total)} total, ${d.blocked.toLocaleString()} blocked`}
+            title={`${d.time}: ${formatInt(d.total)} total, ${d.blocked.toLocaleString("en-US")} blocked`}
           >
             <div
               className="absolute bottom-0 left-0 right-0 rounded-t-sm bg-surface-subtle"

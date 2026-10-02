@@ -1,11 +1,11 @@
 "use client";
 
 import { useMemo } from "react";
-import { MetricStat } from "@/components/dashboard/MetricStat";
-import { PageHeader } from "@/components/dashboard/PageHeader";
-import { EmptyState } from "@/components/dashboard/EmptyState";
+import { Stat } from "@/components/app/stat";
+import { PageHeader } from "@/components/app/page-header";
+import { EmptyState } from "@/components/app/states";
 import { HealthScoreBadge } from "@/components/common/HealthScoreBadge";
-import { TerminalFrame } from "@/components/dashboard/TerminalFrame";
+import { Panel } from "@/components/app/panel";
 import { Badge } from "@/components/ui/badge";
 import type { ScannerPoolPageData } from "./useScannerPoolPage";
 
@@ -70,9 +70,8 @@ export function ScannerPoolBody({
   return (
     <div>
       <PageHeader
-        eyebrow="SYSTEM"
         title="Scanner Pool"
-        subtitle={`Pipeline mode: ${pipelineMode}`}
+        description={`Pipeline mode: ${pipelineMode}`}
         actions={
           pool ? (
             <HealthScoreBadge score={poolHealthScore} label="pool" size="sm" showScore />
@@ -108,23 +107,22 @@ export function ScannerPoolBody({
         <>
           {/* Metric cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <MetricStat
+            <Stat
               label="Active Workers"
               value={`${pool.workersActive} / ${pool.workersActive + pool.workersIdle}`}
-              accent="emerald"
-              live
+              tone="pass"
             />
-            <MetricStat
+            <Stat
               label="Jobs Completed"
-              value={pool.jobsCompleted.toLocaleString()}
-              accent="emerald"
+              value={pool.jobsCompleted.toLocaleString("en-US")}
+              tone="pass"
             />
-            <MetricStat
+            <Stat
               label="Jobs Failed"
-              value={pool.jobsFailed.toLocaleString()}
-              accent={pool.jobsFailed > 0 ? "red" : "default"}
+              value={pool.jobsFailed.toLocaleString("en-US")}
+              tone={pool.jobsFailed > 0 ? "critical" : "default"}
             />
-            <MetricStat
+            <Stat
               label="Scanners Registered"
               value={scannerCount.toString()}
             />
@@ -132,42 +130,41 @@ export function ScannerPoolBody({
 
           {/* Second row: utilization + throughput + shed + queue bar */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <MetricStat
+            <Stat
               label="Utilization"
               value={`${(pool.utilization * 100).toFixed(1)}%`}
-              accent={
+              tone={
                 pool.utilization > 0.8
-                  ? "red"
+                  ? "critical"
                   : pool.utilization > 0.5
-                    ? "amber"
-                    : "emerald"
+                    ? "warn"
+                    : "pass"
               }
             />
-            <MetricStat
+            <Stat
               label="Jobs Submitted"
-              value={pool.jobsSubmitted.toLocaleString()}
+              value={pool.jobsSubmitted.toLocaleString("en-US")}
             />
-            <MetricStat
+            <Stat
               label="Jobs Shed"
-              value={pool.jobsShed.toLocaleString()}
-              accent={pool.jobsShed > 0 ? "red" : "default"}
+              value={pool.jobsShed.toLocaleString("en-US")}
+              tone={pool.jobsShed > 0 ? "critical" : "default"}
               tooltip={
                 shedRate > 0
                   ? `Shed rate: ${shedRate.toFixed(1)}% of submitted jobs`
                   : "No jobs have been shed"
               }
             />
-            <MetricStat
+            <Stat
               label="Queue Depth"
               value={`${pool.queueDepth} / ${pool.queueSize}`}
-              accent={
+              tone={
                 queueFillPct >= 80
-                  ? "red"
+                  ? "critical"
                   : queueFillPct >= 50
-                    ? "amber"
-                    : "emerald"
+                    ? "warn"
+                    : "pass"
               }
-              live
             />
           </div>
 
@@ -189,7 +186,7 @@ export function ScannerPoolBody({
                 ))}
               </div>
               <div className="mt-1 text-[10px] text-fg-subtle text-right">
-                {pool.jobsCompleted > 0 ? `${pool.jobsCompleted.toLocaleString()} completed` : "no data yet"}
+                {pool.jobsCompleted > 0 ? `${pool.jobsCompleted.toLocaleString("en-US")} completed` : "no data yet"}
               </div>
             </div>
 
@@ -271,7 +268,7 @@ export function ScannerPoolBody({
 
           {/* Per-scanner latency table */}
           {Object.keys(pool.perScannerDurationMs).length > 0 && (
-            <TerminalFrame
+            <Panel
               title="Per-Scanner Mean Latency"
             >
               <div className="overflow-x-auto">
@@ -299,17 +296,17 @@ export function ScannerPoolBody({
                   </tbody>
                 </table>
               </div>
-            </TerminalFrame>
+            </Panel>
           )}
 
           {/* All-clear when no per-scanner data yet */}
           {Object.keys(pool.perScannerDurationMs).length === 0 && (
-            <TerminalFrame title="Per-Scanner Mean Latency">
+            <Panel title="Per-Scanner Mean Latency">
               <div className="px-4 py-8 text-center text-sm text-fg-subtle">
                 No scan jobs completed yet. Per-scanner latency will appear here
                 once the pool processes requests.
               </div>
-            </TerminalFrame>
+            </Panel>
           )}
         </>
       )}

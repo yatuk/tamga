@@ -73,7 +73,7 @@ export function useCostsPage() {
   const chartData = useMemo(
     () =>
       (ts?.points || []).map((p) => ({
-        time: new Date(p.t).toLocaleString(undefined, {
+        time: new Date(p.t).toLocaleString("en-GB", {
           month: "short",
           day: "2-digit",
           hour: "2-digit",

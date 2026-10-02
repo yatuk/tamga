@@ -4,8 +4,8 @@ import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
 import { API_BASE } from "@/lib/api/fetch-core";
 import { Badge } from "@/components/ui/badge";
-import { TerminalFrame } from "@/components/dashboard/TerminalFrame";
-import { EmptyState } from "@/components/dashboard/EmptyState";
+import { Panel } from "@/components/app/panel";
+import { EmptyState } from "@/components/app/states";
 import type { ReportRange } from "./_constants";
 
 type Row = { type: string; count: number; pct: number; code: string; note: string };
@@ -20,9 +20,9 @@ export function ReportsOwaspAndCompliance({ owaspCoverageRows, range, adminKey }
   return (
     <div>
       <div className="grid gap-3 lg:grid-cols-2">
-        <TerminalFrame
+        <Panel
           title="OWASP LLM Coverage"
-          status={
+          aside={
             <Badge className="rounded-sm border border-border-strong bg-surface-subtle text-[10px] uppercase text-fg-muted">
               heuristic map
             </Badge>
@@ -75,11 +75,11 @@ export function ReportsOwaspAndCompliance({ owaspCoverageRows, range, adminKey }
               OWASP LLM Top 10 reference →
             </Link>
           </div>
-        </TerminalFrame>
+        </Panel>
 
-        <TerminalFrame
+        <Panel
           title="Compliance Evidence"
-          status={<ShieldCheck className="h-3.5 w-3.5 text-status-pass" aria-hidden />}
+          aside={<ShieldCheck className="h-3.5 w-3.5 text-status-pass" aria-hidden />}
 
         >
           <div className="space-y-3 p-3 text-xs text-fg-muted">
@@ -126,7 +126,7 @@ export function ReportsOwaspAndCompliance({ owaspCoverageRows, range, adminKey }
               </li>
             </ul>
           </div>
-        </TerminalFrame>
+        </Panel>
       </div>
     </div>
   );

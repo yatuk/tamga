@@ -4,7 +4,7 @@ import type { Dispatch, SetStateAction } from "react";
 import { ArrowRight, Plus } from "lucide-react";
 import type { PatternSeverity } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { TerminalFrame } from "@/components/dashboard/TerminalFrame";
+import { Panel } from "@/components/app/panel";
 import { EMPTY_DRAFT, type Draft } from "./_constants";
 
 type Props = {
@@ -36,7 +36,7 @@ export function PatternFormPanel({
 }: Props) {
   return (
     <div>
-      <TerminalFrame filename={draft.id ? `Edit pattern: ${draft.id}` : "New pattern"}>
+      <Panel title={draft.id ? `Edit pattern: ${draft.id}` : "New pattern"}>
         <div className="space-y-3 p-3">
           <div>
             <label className="text-[10px] uppercase tracking-[0.16em] text-fg-muted">Name</label>
@@ -138,7 +138,7 @@ export function PatternFormPanel({
             </Button>
           </div>
         </div>
-      </TerminalFrame>
+      </Panel>
     </div>
   );
 }

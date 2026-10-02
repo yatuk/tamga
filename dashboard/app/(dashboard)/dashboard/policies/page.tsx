@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { PageHeader } from "@/components/dashboard/PageHeader";
+import { PageHeader } from "@/components/app/page-header";
 import { PoliciesAnimatedTabs } from "./PoliciesAnimatedTabs";
 import { usePoliciesPage } from "./usePoliciesPage";
 
@@ -32,9 +32,8 @@ export default function PoliciesPage() {
   return (
     <div className="space-y-2">
       <PageHeader
-        eyebrow={`POLICY CONTROL // ${(activePolicy?.name as string | undefined) || "default"}`}
         title="Policy Editor"
-        subtitle={
+        description={
           <>
             v{(activePolicy?.version as string | undefined) ?? "—"} · last reload{" "}
             {typeof activePolicy?.updated_at === "string"

@@ -113,7 +113,7 @@ export function useEventsPage() {
   const timeseriesData = useMemo(
     () =>
       (ts?.points ?? []).map((p) => ({
-        time: new Date(p.t).toLocaleString(undefined, { hour: "2-digit", minute: "2-digit" }),
+        time: new Date(p.t).toLocaleString("en-GB", { hour: "2-digit", minute: "2-digit" }),
         count: p.total,
       })),
     [ts],

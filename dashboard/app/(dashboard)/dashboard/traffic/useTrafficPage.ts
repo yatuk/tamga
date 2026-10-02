@@ -55,7 +55,7 @@ export function useTrafficPage() {
   const chartData = useMemo(
     () =>
       (ts?.points || []).map((p) => ({
-        time: new Date(p.t).toLocaleString(undefined, {
+        time: new Date(p.t).toLocaleString("en-GB", {
           month: "short",
           day: "2-digit",
           hour: "2-digit",
@@ -113,7 +113,7 @@ export function useTrafficPage() {
     if (!ts?.points || ts.points.length === 0) return null;
     const maxPoint = ts.points.reduce((prev, curr) => (curr.total > prev.total ? curr : prev));
     return {
-      time: new Date(maxPoint.t).toLocaleString(undefined, { month: "short", day: "2-digit", hour: "2-digit" }),
+      time: new Date(maxPoint.t).toLocaleString("en-GB", { month: "short", day: "2-digit", hour: "2-digit" }),
       count: maxPoint.total,
     };
   }, [ts]);

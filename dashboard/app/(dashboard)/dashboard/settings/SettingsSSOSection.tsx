@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Globe, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { TerminalFrame } from "@/components/dashboard/TerminalFrame";
+import { Panel } from "@/components/app/panel";
 import { toast } from "@/lib/toast";
 import { type SSOSettings } from "@/lib/api/client";
 
@@ -25,14 +25,14 @@ export function SettingsSSOSection({ config, loading, error, onSave }: Props) {
   if (loading) {
     return (
       <div>
-        <TerminalFrame title="Enterprise SSO">
+        <Panel title="Enterprise SSO">
           <div className="space-y-3 p-3 animate-pulse">
             <div className="h-4 w-2/3 rounded-sm bg-surface-subtle" />
             <div className="h-10 w-full rounded-sm bg-surface-subtle" />
             <div className="h-10 w-full rounded-sm bg-surface-subtle" />
             <div className="h-10 w-full rounded-sm bg-surface-subtle" />
           </div>
-        </TerminalFrame>
+        </Panel>
       </div>
     );
   }
@@ -40,14 +40,14 @@ export function SettingsSSOSection({ config, loading, error, onSave }: Props) {
   if (error) {
     return (
       <div>
-        <TerminalFrame title="Enterprise SSO">
+        <Panel title="Enterprise SSO">
           <div className="space-y-3 p-3">
             <Badge className="rounded-sm border-status-critical/30 bg-status-critical/10 text-[10px] text-status-critical">
               LOAD ERROR
             </Badge>
             <div className="text-xs text-fg-muted">{error}</div>
           </div>
-        </TerminalFrame>
+        </Panel>
       </div>
     );
   }
@@ -72,9 +72,9 @@ export function SettingsSSOSection({ config, loading, error, onSave }: Props) {
 
   return (
     <div>
-      <TerminalFrame
+      <Panel
         title="Enterprise SSO"
-        status={
+        aside={
           <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
             <Globe className="mr-1 inline h-3 w-3" />
             {enabled ? providerType.toUpperCase() : "DISABLED"}
@@ -175,7 +175,7 @@ export function SettingsSSOSection({ config, loading, error, onSave }: Props) {
             )}
           </Button>
         </div>
-      </TerminalFrame>
+      </Panel>
     </div>
   );
 }

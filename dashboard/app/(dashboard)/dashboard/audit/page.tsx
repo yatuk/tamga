@@ -8,10 +8,10 @@ import { toLowerEn } from "@/lib/utils/case";
 import { humanizeAuditKind } from "@/lib/humanize";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { PageHeader } from "@/components/dashboard/PageHeader";
-import { MetricStat } from "@/components/dashboard/MetricStat";
-import { SkeletonTable } from "@/components/common/SkeletonRow";
-import { TerminalFrame } from "@/components/dashboard/TerminalFrame";
+import { PageHeader } from "@/components/app/page-header";
+import { Stat } from "@/components/app/stat";
+import { SkeletonRows } from "@/components/app/states";
+import { Panel } from "@/components/app/panel";
 import { useAdminKey } from "@/hooks/useAdminKey";
 
 function kindClass(k: string) {
@@ -132,9 +132,8 @@ export default function AuditPage() {
   return (
     <div className="space-y-2">
       <PageHeader
-        eyebrow="ADMINISTRATION // AUDIT TRAIL"
         title="Audit"
-        subtitle={`${filtered.length} / ${data?.total ?? 0} records · in-system actions`}
+        description={`${filtered.length} / ${data?.total ?? 0} records · in-system actions`}
         actions={
           <div className="flex items-center gap-2">
             <Badge className={`rounded-sm border text-[10px] ${chainBadge}`}>
@@ -206,9 +205,9 @@ export default function AuditPage() {
 
       {/* 3-card metric row */}
       <div className="grid gap-2 sm:grid-cols-3">
-        <MetricStat label="TOTAL ENTRIES" value={data?.total ?? 0} source="audit" />
-        <MetricStat label="UNIQUE ACTORS" value={uniqueActorCount} source="audit" />
-        <MetricStat label="UNIQUE KINDS" value={kinds.length} source="audit" />
+        <Stat label="TOTAL ENTRIES" value={data?.total ?? 0} />
+        <Stat label="UNIQUE ACTORS" value={uniqueActorCount} />
+        <Stat label="UNIQUE KINDS" value={kinds.length} />
       </div>
 
       {/* Kind distribution bar chart */}
@@ -243,9 +242,9 @@ export default function AuditPage() {
 
       <div className="grid gap-3 lg:grid-cols-[1fr_360px]">
         <div>
-          <TerminalFrame
+          <Panel
             title="Audit log"
-            status={
+            aside={
               <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
                 {filtered.length} rows
               </span>
@@ -253,7 +252,7 @@ export default function AuditPage() {
 
           >
             {isLoading ? (
-              <SkeletonTable rows={8} cols={4} />
+              <SkeletonRows rows={8} />
             ) : error ? (
               <div className="p-6 text-xs text-status-critical" role="alert">
                 audit log failed: {(error as Error).message}
@@ -300,11 +299,11 @@ export default function AuditPage() {
                 </table>
               </div>
             )}
-          </TerminalFrame>
+          </Panel>
         </div>
 
         <div>
-          <TerminalFrame filename={selected ? humanizeAuditKind(selected.kind) : "Audit detail"}>
+          <Panel title={selected ? humanizeAuditKind(selected.kind) : "Audit detail"}>
             {!selected ? (
               <div className="p-6 text-center text-xs text-fg-muted">
                 Select a row to see its detail…
@@ -335,7 +334,7 @@ export default function AuditPage() {
                 </div>
               </div>
             )}
-          </TerminalFrame>
+          </Panel>
         </div>
       </div>
     </div>

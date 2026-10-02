@@ -3,7 +3,7 @@
 import { Trash } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { TerminalFrame } from "@/components/dashboard/TerminalFrame";
+import { Panel } from "@/components/app/panel";
 import { CreateApiKeyInline } from "./CreateApiKeyInline";
 
 type KeyList = NonNullable<Awaited<ReturnType<typeof import("@/lib/api").api.listApiKeys>>>;
@@ -22,7 +22,7 @@ export function SettingsAccessSection({ draft, setDraft, saved, saveAdminKey, ke
   return (
     <>
       <div>
-        <TerminalFrame title="Admin key">
+        <Panel title="Admin key">
           <div className="space-y-3 p-3">
             <div className="text-[11px] text-fg-muted">
               Stored in this browser and used to call the Tamga proxy admin endpoints.
@@ -45,13 +45,13 @@ export function SettingsAccessSection({ draft, setDraft, saved, saveAdminKey, ke
               {saved ? "ADMIN KEY STORED" : "ADMIN KEY EMPTY"}
             </Badge>
           </div>
-        </TerminalFrame>
+        </Panel>
       </div>
 
       <div>
-        <TerminalFrame
+        <Panel
           title="API keys"
-          status={
+          aside={
             <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
               {keyList?.items.length ?? 0} rows
             </span>
@@ -98,7 +98,7 @@ export function SettingsAccessSection({ draft, setDraft, saved, saveAdminKey, ke
               </div>
             )}
           </div>
-        </TerminalFrame>
+        </Panel>
       </div>
     </>
   );

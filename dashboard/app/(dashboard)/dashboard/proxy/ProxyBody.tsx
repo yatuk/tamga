@@ -2,9 +2,9 @@
 
 import { RefreshCw, Info, Tag } from "lucide-react";
 import { useMemo, useState } from "react";
-import { PageHeader } from "@/components/dashboard/PageHeader";
-import { TerminalFrame } from "@/components/dashboard/TerminalFrame";
-import { MetricStat } from "@/components/dashboard/MetricStat";
+import { PageHeader } from "@/components/app/page-header";
+import { Panel } from "@/components/app/panel";
+import { Stat } from "@/components/app/stat";
 import { HealthScoreBadge } from "@/components/common/HealthScoreBadge";
 import { GlossaryToggle, GlossaryPanel } from "@/components/dashboard/GlossaryPanel";
 import { Badge } from "@/components/ui/badge";
@@ -54,9 +54,8 @@ export function ProxyBody({
   return (
     <div className="space-y-2">
       <PageHeader
-        eyebrow="SYSTEM // PROXY STATUS"
         title="Proxy Status"
-        subtitle="runtime health · component status · uptime · version"
+        description="runtime health · component status · uptime · version"
         actions={
           <div className="flex items-center gap-1.5">
             <GlossaryToggle onClick={() => setGlossaryOpen(true)} />
@@ -126,36 +125,32 @@ export function ProxyBody({
           ))
         ) : (
           <>
-            <MetricStat
+            <Stat
               label="SCANNERS"
               value={health?.scanner_count ?? "—"}
-              source="runtime"
             />
-            <MetricStat
+            <Stat
               label="DATABASE"
               value={health?.database === "connected" ? "Connected" : health?.database ?? "—"}
-              accent={health?.database === "connected" ? "emerald" : "red"}
-              source="health"
+              tone={health?.database === "connected" ? "pass" : "critical"}
             />
-            <MetricStat
+            <Stat
               label="TLS"
               value={detail?.tls_enabled ? "Enabled" : "Disabled"}
-              accent={detail?.tls_enabled ? "emerald" : "default"}
-              source="config"
+              tone={detail?.tls_enabled ? "pass" : "default"}
             />
-            <MetricStat
+            <Stat
               label="TRACE UI"
               value={detail?.trace_ui_url ? "Available" : "—"}
-              source="config"
             />
           </>
         )}
       </div>
 
       {/* Component status table */}
-      <TerminalFrame
+      <Panel
         title="Component Health"
-        status={
+        aside={
           <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
             {componentRows.length} components
           </span>
@@ -211,7 +206,7 @@ export function ProxyBody({
             </table>
           )}
         </div>
-      </TerminalFrame>
+      </Panel>
       <GlossaryPanel open={glossaryOpen} onClose={() => setGlossaryOpen(false)} />
     </div>
   );

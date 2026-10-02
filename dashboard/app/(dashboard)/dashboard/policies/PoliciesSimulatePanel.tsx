@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { TerminalFrame } from "@/components/dashboard/TerminalFrame";
+import { Panel } from "@/components/app/panel";
 import type { PolicySimulateResult } from "@/lib/api";
 
 type Props = {
@@ -16,14 +16,14 @@ type Props = {
 export function PoliciesSimulatePanel({ sample, onSampleChange, simulating, onSimulate, simResult }: Props) {
   return (
     <div className="space-y-3">
-      <TerminalFrame title="Simulation input">
+      <Panel title="Simulation input">
         <textarea
           className="block min-h-[120px] w-full resize-y bg-surface-card p-3 text-xs text-fg focus:outline-none"
           value={sample}
           onChange={(e) => onSampleChange(e.target.value)}
           placeholder="Sample prompt…"
         />
-      </TerminalFrame>
+      </Panel>
       <Button variant="outline"
         className="cursor-pointer rounded-sm bg-status-critical text-white hover:bg-status-critical"
         onClick={onSimulate}
@@ -33,9 +33,9 @@ export function PoliciesSimulatePanel({ sample, onSampleChange, simulating, onSi
       </Button>
       {simResult ? (
         <div>
-          <TerminalFrame
+          <Panel
             title="Simulation result"
-            status={
+            aside={
               <Badge
                 className={`rounded-sm border text-[10px] uppercase tracking-[0.18em] ${
                   simResult.action === "BLOCK"
@@ -71,7 +71,7 @@ export function PoliciesSimulatePanel({ sample, onSampleChange, simulating, onSi
                 </div>
               )}
             </div>
-          </TerminalFrame>
+          </Panel>
         </div>
       ) : null}
     </div>

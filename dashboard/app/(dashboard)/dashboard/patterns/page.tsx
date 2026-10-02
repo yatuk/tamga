@@ -1,6 +1,6 @@
 "use client";
 
-import { PageHeader } from "@/components/dashboard/PageHeader";
+import { PageHeader } from "@/components/app/page-header";
 import { PatternFormPanel } from "./PatternFormPanel";
 import { PatternsTable } from "./PatternsTable";
 import { PolicyEntitiesPanel } from "./PolicyEntitiesPanel";
@@ -28,9 +28,8 @@ export default function PatternsPage() {
   return (
     <div className="space-y-2">
       <PageHeader
-        eyebrow="PROTECTION // CUSTOM PATTERNS"
         title="Custom Patterns"
-        subtitle={`${items.length} user-defined rules · live after a scanner reload`}
+        description={`${items.length} user-defined rules · live after a scanner reload`}
       />
 
       <div className="grid gap-3 lg:grid-cols-[1fr_360px]">
@@ -70,9 +69,8 @@ export default function PatternsPage() {
       </div>
 
       <PageHeader
-        eyebrow="PROTECTION // POLICY ENTITIES"
         title="Policy Entities"
-        subtitle="Named PII entities with an enforcement action — define your own, test against the active policy"
+        description="Named PII entities with an enforcement action — define your own, test against the active policy"
       />
       <PolicyEntitiesPanel />
     </div>
