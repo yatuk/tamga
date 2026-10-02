@@ -70,7 +70,7 @@ export default function PoliciesPage() {
         <div className="rounded-sm border border-border bg-surface-card p-4 space-y-2" role="status" aria-label="Loading policy editor">
           <div className="h-8 w-48 animate-pulse rounded bg-surface-subtle" />
           <div className="h-[400px] animate-pulse rounded bg-surface-subtle" />
-          <span className="sr-only">Loading policy editor...</span>
+          <span className="sr-only">Loading policy editor…</span>
         </div>
       ) : error ? (
         <div className="rounded-sm border border-status-critical/30 bg-status-critical/10 p-4 text-xs text-status-critical" role="alert">

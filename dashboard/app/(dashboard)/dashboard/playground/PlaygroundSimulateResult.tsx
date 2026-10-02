@@ -120,7 +120,7 @@ export function PlaygroundSimulateResult({ result, originalPrompt, loading = fal
           <div className="p-6 space-y-2" role="status" aria-label="Running simulation">
             <div className="h-4 w-48 animate-pulse rounded bg-surface-subtle" />
             <div className="h-[160px] animate-pulse rounded bg-surface-subtle" />
-            <span className="sr-only">Running simulation...</span>
+            <span className="sr-only">Running simulation…</span>
           </div>
         ) : !result ? (
           <div className="p-6 text-center text-xs text-fg-muted">

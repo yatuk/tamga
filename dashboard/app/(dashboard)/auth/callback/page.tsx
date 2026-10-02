@@ -77,7 +77,7 @@ export default function AuthCallbackPage() {
     <div className="flex min-h-screen items-center justify-center bg-surface-subtle dark:bg-surface-base">
       <div className="text-center">
         <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4 border-border-strong border-t-border-strong dark:border-border-strong dark:border-t-border-subtle" />
-        <p className="text-sm text-fg-subtle">Completing sign-in...</p>
+        <p className="text-sm text-fg-subtle">Completing sign-in…</p>
       </div>
     </div>
   );

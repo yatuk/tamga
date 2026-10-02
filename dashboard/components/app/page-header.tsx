@@ -15,7 +15,7 @@ export function PageHeader({ title, description, actions, className }: PageHeade
   return (
     <div className={cn("flex flex-wrap items-end justify-between gap-x-6 gap-y-3 border-b pb-4", className)}>
       <div className="min-w-0">
-        <h1 className="font-display text-3xl leading-none font-extrabold tracking-wide text-foreground uppercase">
+        <h1 className="font-display text-3xl leading-none font-extrabold tracking-wide text-foreground uppercase text-balance">
           {title}
         </h1>
         {description ? <p className="mt-2 text-sm text-muted-foreground">{description}</p> : null}

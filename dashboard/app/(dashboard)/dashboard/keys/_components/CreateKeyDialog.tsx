@@ -112,7 +112,7 @@ export function CreateKeyDialog({ open, onClose, onCreate, isPending }: Props) {
               disabled={!label.trim() || isPending}
               className="cursor-pointer rounded-sm bg-status-pass text-white hover:bg-status-pass"
             >
-              {isPending ? "Creating..." : "Create"}
+              {isPending ? "Creating…" : "Create"}
             </Button>
           </div>
         </form>

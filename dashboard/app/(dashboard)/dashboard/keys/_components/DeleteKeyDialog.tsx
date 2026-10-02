@@ -58,7 +58,7 @@ export function DeleteKeyDialog({ target, onClose, onDelete, isPending }: Props)
             className="cursor-pointer rounded-sm bg-status-critical text-white hover:bg-status-critical"
             onClick={() => onDelete(target.id)}
           >
-            {isPending ? "Revoking..." : "Revoke Key"}
+            {isPending ? "Revoking…" : "Revoke Key"}
           </Button>
         </div>
       </div>

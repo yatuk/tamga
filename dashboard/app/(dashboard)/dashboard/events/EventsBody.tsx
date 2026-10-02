@@ -16,11 +16,11 @@ type Props = ReturnType<typeof useEventsPage>;
 function sseStatusIndicator(status: SSEStatus): { color: string; label: string } {
   switch (status) {
     case "connecting":
-      return { color: "bg-zinc-400 animate-pulse", label: "Connecting..." };
+      return { color: "bg-fg-faint motion-safe:animate-pulse", label: "Connecting…" };
     case "open":
       return { color: "bg-status-pass", label: "" };
     case "error":
-      return { color: "bg-status-medium", label: "Reconnecting..." };
+      return { color: "bg-status-medium", label: "Reconnecting…" };
     case "closed":
       return { color: "bg-status-critical", label: "Disconnected" };
   }

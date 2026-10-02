@@ -202,7 +202,7 @@ export function ScannerPoolBody({
               </div>
               <div className="h-1.5 rounded-sm bg-surface-subtle overflow-hidden">
                 <div
-                  className="h-full rounded-sm transition-all"
+                  className="h-full transition-[width]"
                   style={{
                     width: `${Math.min(100, shedRate)}%`,
                     backgroundColor:
@@ -228,7 +228,7 @@ export function ScannerPoolBody({
             </div>
             <div className="h-2 rounded-sm bg-surface-subtle overflow-hidden">
               <div
-                className={`h-full rounded-sm transition-all ${queueColor}`}
+                className={`h-full transition-[width] ${queueColor}`}
                 style={{ width: `${queueFillPct}%` }}
               />
             </div>

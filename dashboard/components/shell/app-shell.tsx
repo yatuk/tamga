@@ -17,11 +17,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <TooltipProvider delayDuration={200}>
       <SidebarProvider>
+        <a
+          href="#main"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:border focus:bg-background focus:px-3 focus:py-2 focus:text-sm"
+        >
+          Skip to content
+        </a>
         <AppSidebar health={health} />
         <SidebarInset className="min-w-0">
           {health.up === false ? <ProxyDownBanner reason={health.reason} /> : null}
           <AppHeader health={health} onOpenPalette={() => setPaletteOpen(true)} />
-          <div className="mx-auto w-full max-w-[1600px] flex-1 px-4 py-5 sm:px-6 lg:px-8">{children}</div>
+          <main id="main" tabIndex={-1} className="mx-auto w-full max-w-[1600px] flex-1 px-4 py-5 outline-none sm:px-6 lg:px-8">
+            {children}
+          </main>
         </SidebarInset>
         <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
       </SidebarProvider>

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Barlow, Barlow_Condensed, JetBrains_Mono } from "next/font/google";
 import { cookies } from "next/headers";
 import "./globals.css";
@@ -79,6 +79,14 @@ export const metadata: Metadata = {
     index: true,
     follow: true,
   },
+};
+
+// Tints the browser chrome to match the page background in each theme.
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: dark)", color: "#10120f" },
+    { media: "(prefers-color-scheme: light)", color: "#e7e8e2" },
+  ],
 };
 
 export default async function RootLayout({

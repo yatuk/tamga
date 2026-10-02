@@ -61,7 +61,7 @@ export function IncidentsFiltersCard({ m }: { m: IncidentsConsoleModel }) {
             ref={m.searchInputRef}
             value={m.searchText}
             onChange={(e) => m.setSearchText(e.target.value)}
-            placeholder="Search request/provider/model... (/)"
+            placeholder="Search request/provider/model… (/)"
             className="h-8 min-w-[240px] rounded-sm border border-border-strong bg-surface-subtle px-2 text-xs text-fg placeholder:text-fg-muted"
           />
         </div>
