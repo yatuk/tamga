@@ -28,21 +28,21 @@ function PresetCard({
     <div className="flex h-full flex-col justify-between gap-3 rounded-sm border border-border bg-surface-card p-3 hover:border-border-strong">
       <div>
         <div className="flex items-center gap-2">
-          <Badge className={`rounded-sm border text-[10px] uppercase ${integrationKindBadge(preset.kind)}`}>
+          <Badge className={`rounded-sm border text-xs uppercase ${integrationKindBadge(preset.kind)}`}>
             {preset.kind}
           </Badge>
-          <span className="text-[10px] uppercase tracking-wide text-fg-muted">
+          <span className="text-xs uppercase tracking-wide text-fg-muted">
             {connected > 0 ? `${connected} connected` : "not connected"}
           </span>
         </div>
         <div className="mt-2 text-sm font-medium text-fg">{preset.name}</div>
-        <div className="text-[11px] text-fg-muted">{"//"} {preset.blurb}</div>
+        <div className="text-xs text-fg-muted">{"//"} {preset.blurb}</div>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-3">
           <Link
             href={`/dashboard/integrations/${preset.kind}`}
-            className="inline-flex items-center gap-1 text-[11px] text-fg-muted hover:text-fg"
+            className="inline-flex items-center gap-1 text-xs text-fg-muted hover:text-fg"
           >
             <BookOpen className="h-3 w-3" /> Setup guide
           </Link>
@@ -50,13 +50,13 @@ function PresetCard({
             href={preset.docs}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1 text-[11px] text-fg-muted hover:text-fg-subtle"
+            className="inline-flex items-center gap-1 text-xs text-fg-muted hover:text-fg-subtle"
           >
             Docs <ExternalLink className="h-3 w-3" />
           </a>
         </div>
         <Button variant="outline"
-          className="cursor-pointer rounded-sm bg-status-critical text-white hover:bg-status-critical"
+          className="rounded-sm bg-status-critical text-white hover:bg-status-critical"
           onClick={() => onConnect(preset.kind, preset.name)}
         >
           <Plug className="mr-1 h-3.5 w-3.5" /> Connect
@@ -89,7 +89,7 @@ export function IntegrationsPresetGrid({ hooks, onConnect }: Props) {
           <button
             type="button"
             onClick={() => setShowAll((v) => !v)}
-            className="inline-flex cursor-pointer items-center gap-1 text-[10px] text-fg-muted hover:text-fg-muted dark:hover:text-fg"
+            className="inline-flex items-center gap-1 text-xs text-fg-muted hover:text-fg-muted"
           >
             {showAll ? (
               <ChevronDown className="h-3 w-3" />

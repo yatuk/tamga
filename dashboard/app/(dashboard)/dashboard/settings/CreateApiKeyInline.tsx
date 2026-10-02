@@ -4,29 +4,30 @@ import { useState } from "react";
 import { Key } from "lucide-react";
 import { type ApiKey } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 
 export function CreateApiKeyInline({ onCreate }: { onCreate: (label: string, scope: ApiKey["scope"]) => void }) {
   const [label, setLabel] = useState("");
   const [scope, setScope] = useState<ApiKey["scope"]>("read");
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <input
+      <Input
         value={label}
         onChange={(e) => setLabel(e.target.value)}
         id="apikey-label-input" placeholder="label"
-        className="h-8 w-28 rounded-sm border border-border bg-surface-card px-2 text-xs text-fg focus:outline-none"
+        className="w-28"
       />
-      <select
+      <NativeSelect
         value={scope}
         onChange={(e) => setScope(e.target.value as ApiKey["scope"])}
-        className="h-8 cursor-pointer rounded-sm border border-border bg-surface-card px-2 text-xs text-fg focus:outline-none"
       >
-        <option value="read">read</option>
-        <option value="write">write</option>
-        <option value="admin">admin</option>
-      </select>
+        <NativeSelectOption value="read">read</NativeSelectOption>
+        <NativeSelectOption value="write">write</NativeSelectOption>
+        <NativeSelectOption value="admin">admin</NativeSelectOption>
+      </NativeSelect>
       <Button variant="outline"
-        className="h-8 cursor-pointer rounded-sm bg-status-critical px-3 text-white hover:bg-status-critical"
+        className="h-8 rounded-sm bg-status-critical px-3 text-white hover:bg-status-critical"
         onClick={() => {
           onCreate(label, scope);
           setLabel("");

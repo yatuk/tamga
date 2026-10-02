@@ -12,7 +12,7 @@ type Props = {
 export function SavedHuntsPanel({ savedHunts, onApply, onDelete }: Props) {
   return (
     <div className="rounded-sm border border-border bg-surface-card/60 p-3">
-      <div className="mb-2 flex items-center gap-2 text-[10px] uppercase tracking-wide text-fg-muted">
+      <div className="mb-2 flex items-center gap-2 text-xs uppercase tracking-wide text-fg-muted">
         <Crosshair className="h-3 w-3" />
         Saved hunts
       </div>
@@ -26,11 +26,11 @@ export function SavedHuntsPanel({ savedHunts, onApply, onDelete }: Props) {
                 <button
                   type="button"
                   onClick={() => onApply(h)}
-                  className="block w-full text-left text-[11px] text-fg hover:text-white"
+                  className="block w-full text-left text-xs text-fg hover:text-white"
                 >
                   {h.name}
                 </button>
-                <div className="mt-0.5 text-[9px] text-fg-subtle dark:text-fg-subtle">
+                <div className="mt-0.5 text-xs text-fg-subtle">
                   {new Date(h.updated_at).toLocaleString("en-GB")}
                 </div>
               </div>

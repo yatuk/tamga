@@ -35,7 +35,7 @@ export function ApiErrorBadge({ error, className = "" }: ApiErrorBadgeProps) {
       <button
         type="button"
         onClick={() => setShowDetail(!showDetail)}
-        className="group inline-flex cursor-pointer items-center gap-1"
+        className="group inline-flex items-center gap-1"
       >
         <Badge className="rounded-sm border border-status-critical/30 bg-status-critical/10 text-status-critical hover:bg-status-critical/20 transition-colors">
           <AlertTriangle className="mr-1 h-3 w-3" />
@@ -52,13 +52,13 @@ export function ApiErrorBadge({ error, className = "" }: ApiErrorBadgeProps) {
         >
           {/* Header */}
           <div className="flex items-center justify-between border-b border-border px-3 py-2">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-status-critical">
+            <span className="text-xs font-semibold uppercase tracking-[0.1em] text-status-critical">
               Error Detail
             </span>
             <button
               type="button"
               onClick={() => setShowDetail(false)}
-              className="rounded-sm p-0.5 text-fg-muted hover:text-fg-muted dark:hover:text-fg"
+              className="rounded-sm p-0.5 text-fg-muted hover:text-fg-muted"
             >
               <X className="h-3 w-3" />
             </button>
@@ -67,19 +67,19 @@ export function ApiErrorBadge({ error, className = "" }: ApiErrorBadgeProps) {
           {/* Body */}
           <div className="space-y-2 p-3">
             <div>
-              <div className="text-[9px] uppercase tracking-[0.1em] text-fg-muted">Message</div>
-              <p className="mt-0.5 text-[11px] text-fg-subtle">{message}</p>
+              <div className="text-xs uppercase tracking-[0.1em] text-fg-muted">Message</div>
+              <p className="mt-0.5 text-xs text-fg-subtle">{message}</p>
             </div>
             <div>
-              <div className="text-[9px] uppercase tracking-[0.1em] text-fg-muted">Diagnosis</div>
-              <p className="mt-0.5 text-[10px] text-fg-muted">{diagnosis}</p>
+              <div className="text-xs uppercase tracking-[0.1em] text-fg-muted">Diagnosis</div>
+              <p className="mt-0.5 text-xs text-fg-muted">{diagnosis}</p>
             </div>
             <button
               type="button"
               onClick={() => {
                 navigator.clipboard.writeText(message).catch(() => {});
               }}
-              className="inline-flex items-center gap-1 rounded-sm border border-border bg-surface-subtle px-2 py-1 text-[10px] text-fg-muted hover:bg-surface-card transition-colors"
+              className="inline-flex items-center gap-1 rounded-sm border border-border bg-surface-subtle px-2 py-1 text-xs text-fg-muted hover:bg-surface-card transition-colors"
             >
               <Copy className="h-3 w-3" />
               Copy error

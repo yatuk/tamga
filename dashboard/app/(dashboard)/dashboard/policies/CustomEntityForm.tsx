@@ -15,6 +15,8 @@ import {
 } from "@/components/ui/select";
 import { api } from "@/lib/api/client";
 import type { CustomEntity } from "@/lib/api/types-core";
+import { Input } from "@/components/ui/input";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 
 function isValidRegex(pattern: string): boolean {
   try {
@@ -93,7 +95,7 @@ export function CustomEntityForm({ adminKey }: { adminKey: string }) {
       {/* Entity list */}
       <div className="rounded-sm border border-border bg-surface-subtle/50">
         <div className="border-b border-border px-4 py-2">
-          <span className="text-[11px] uppercase tracking-widest text-fg-muted">
+          <span className="text-xs uppercase tracking-widest text-fg-muted">
             Custom Entities ({items.length})
           </span>
         </div>
@@ -104,71 +106,69 @@ export function CustomEntityForm({ adminKey }: { adminKey: string }) {
             No custom entities yet. Add one below.
           </div>
         ) : (
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="px-4 py-2 text-left font-normal text-fg-muted">Name</th>
-                <th className="px-4 py-2 text-left font-normal text-fg-muted">Pattern</th>
-                <th className="px-4 py-2 text-left font-normal text-fg-muted">Severity</th>
-                <th className="px-4 py-2 text-left font-normal text-fg-muted">Action</th>
-                <th className="px-4 py-2" />
-              </tr>
-            </thead>
-            <tbody>
+          <Table className="w-full">
+            <TableHeader>
+              <TableRow>
+                <TableHead className="text-left">Name</TableHead>
+                <TableHead className="text-left">Pattern</TableHead>
+                <TableHead className="text-left">Severity</TableHead>
+                <TableHead className="text-left">Action</TableHead>
+                <TableHead />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {items.map((ce) => (
-                <tr key={ce.name} className="border-b border-border/50 last:border-0">
-                  <td className="px-4 py-2 text-fg">{ce.name}</td>
-                  <td className="px-4 py-2 max-w-[200px] truncate text-fg-muted">
+                <TableRow key={ce.name}>
+                  <TableCell>{ce.name}</TableCell>
+                  <TableCell className="max-w-[200px] truncate">
                     {ce.pattern}
-                  </td>
-                  <td className="px-4 py-2">
+                  </TableCell>
+                  <TableCell>
                     <SeverityBadge severity={ce.severity} />
-                  </td>
-                  <td className="px-4 py-2 uppercase text-fg-muted">{ce.action}</td>
-                  <td className="px-4 py-2 text-right">
+                  </TableCell>
+                  <TableCell className="uppercase">{ce.action}</TableCell>
+                  <TableCell className="text-right">
                     <Button
                       size="sm"
                       variant="ghost"
-                      className="h-6 cursor-pointer rounded-sm px-2 text-[10px] text-status-critical hover:bg-status-critical/10 hover:text-status-critical"
+                      className="h-6 rounded-sm px-2 text-xs text-status-critical hover:bg-status-critical/10 hover:text-status-critical"
                       onClick={() => deleteMut.mutate(ce.name)}
                       disabled={deleteMut.isPending}
                     >
                       Delete
                     </Button>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         )}
       </div>
 
       {/* Add form */}
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 rounded-sm border border-border bg-surface-subtle/50 p-4">
-        <span className="text-[11px] uppercase tracking-widest text-fg-muted">
+        <span className="text-xs uppercase tracking-widest text-fg-muted">
           New custom entity
         </span>
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
-            <label className="block text-[10px] uppercase tracking-widest text-fg-muted">Name *</label>
-            <input
+            <label className="block text-xs uppercase tracking-widest text-fg-muted">Name *</label>
+            <Input
               {...register("name")}
-              className="w-full rounded-sm border border-border-strong bg-surface-card px-2 py-1.5 text-xs text-fg placeholder:text-fg-muted focus:outline-none focus:ring-1 focus:ring-ring"
-              placeholder="ProjectMercury"
-            />
-            {errors.name && <p className="text-[10px] text-status-critical">{errors.name.message}</p>}
+              className="w-full"
+              placeholder="ProjectMercury" aria-label="ProjectMercury" />
+            {errors.name && <p className="text-xs text-status-critical">{errors.name.message}</p>}
           </div>
           <div className="space-y-1">
-            <label className="block text-[10px] uppercase tracking-widest text-fg-muted">Pattern (regex) *</label>
-            <input
+            <label className="block text-xs uppercase tracking-widest text-fg-muted">Pattern (regex) *</label>
+            <Input
               {...register("pattern")}
-              className="w-full rounded-sm border border-border-strong bg-surface-card px-2 py-1.5 text-xs text-fg placeholder:text-fg-muted focus:outline-none focus:ring-1 focus:ring-ring"
-              placeholder="Project[ -]?Mercury"
-            />
-            {errors.pattern && <p className="text-[10px] text-status-critical">{errors.pattern.message}</p>}
+              className="w-full"
+              placeholder="Project[ -]?Mercury" aria-label="Project[ -]?Mercury" />
+            {errors.pattern && <p className="text-xs text-status-critical">{errors.pattern.message}</p>}
           </div>
           <div className="space-y-1">
-            <label className="block text-[10px] uppercase tracking-widest text-fg-muted">Severity</label>
+            <label className="block text-xs uppercase tracking-widest text-fg-muted">Severity</label>
             <Select value={watchedSeverity} onValueChange={(v) => setValue("severity", v as CustomEntityFormValues["severity"])}>
               <SelectTrigger className="rounded-sm border-border-strong bg-surface-card text-xs text-fg">
                 <SelectValue />
@@ -181,7 +181,7 @@ export function CustomEntityForm({ adminKey }: { adminKey: string }) {
             </Select>
           </div>
           <div className="space-y-1">
-            <label className="block text-[10px] uppercase tracking-widest text-fg-muted">Action</label>
+            <label className="block text-xs uppercase tracking-widest text-fg-muted">Action</label>
             <Select value={watchedAction} onValueChange={(v) => setValue("action", v as "block" | "redact" | "warn" | "log")}>
               <SelectTrigger className="rounded-sm border-border-strong bg-surface-card text-xs text-fg">
                 <SelectValue />
@@ -195,19 +195,18 @@ export function CustomEntityForm({ adminKey }: { adminKey: string }) {
           </div>
         </div>
         <div className="space-y-1">
-          <label className="block text-[10px] uppercase tracking-widest text-fg-muted">Description (optional)</label>
-          <input
+          <label className="block text-xs uppercase tracking-widest text-fg-muted">Description (optional)</label>
+          <Input
             {...register("description")}
-            className="w-full rounded-sm border border-border-strong bg-surface-card px-2 py-1.5 text-xs text-fg placeholder:text-fg-muted focus:outline-none focus:ring-1 focus:ring-ring"
-            placeholder="Confidential project code name"
-          />
+            className="w-full"
+            placeholder="Confidential project code name" aria-label="Confidential project code name" />
         </div>
         {createMut.error && (
-          <p className="text-[11px] text-status-critical">{createMut.error.message}</p>
+          <p className="text-xs text-status-critical">{createMut.error.message}</p>
         )}
         <Button variant="outline"
           type="submit"
-          className="cursor-pointer rounded-sm bg-status-critical text-white hover:bg-status-critical"
+          className="rounded-sm bg-status-critical text-white hover:bg-status-critical"
           disabled={createMut.isPending}
         >
           {createMut.isPending ? "Adding…" : "Add entity"}

@@ -23,7 +23,7 @@ export function PoliciesMonacoEditor({ draft, onChange }: Props) {
       <Panel
         title="Policy YAML"
         aside={
-          <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
+          <span className="px-2 text-xs uppercase tracking-[0.18em] text-fg-muted">
             {draft.split("\n").length} lines
           </span>
         }

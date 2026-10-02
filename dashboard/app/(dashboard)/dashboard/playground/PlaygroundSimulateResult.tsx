@@ -6,6 +6,7 @@ import { toUpperEn } from "@/lib/utils/case";
 import { Badge } from "@/components/ui/badge";
 import { Panel } from "@/components/app/panel";
 import { playgroundActionClass, playgroundSeverityClass } from "./playgroundUi";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 
 type Props = {
   result: PolicySimulateResult | null;
@@ -110,7 +111,7 @@ export function PlaygroundSimulateResult({ result, originalPrompt, loading = fal
       <Panel
         title="Simulation result"
         aside={
-          <Badge className={`rounded-sm border text-[10px] uppercase tracking-[0.18em] ${playgroundActionClass(result?.action || "")}`}>
+          <Badge className={`rounded-sm border text-xs uppercase tracking-[0.18em] ${playgroundActionClass(result?.action || "")}`}>
             {result?.action || "—"}
           </Badge>
         }
@@ -129,19 +130,19 @@ export function PlaygroundSimulateResult({ result, originalPrompt, loading = fal
         ) : (
           <div className="space-y-4 p-3">
             {/* Policy info */}
-            <div className="text-[10px] uppercase tracking-[0.14em] text-fg-muted">
+            <div className="text-xs uppercase tracking-[0.14em] text-fg-muted">
               policy: {result.policy_name} @ {result.policy_version} · findings {result.findings.length}
             </div>
 
             {/* ── Diff view: original text with highlighted matches ── */}
             {originalPrompt && actionableFindings.length > 0 && (
               <div className="space-y-1.5">
-                <div className="text-[9px] uppercase tracking-[0.14em] text-fg-muted">
+                <div className="text-xs uppercase tracking-[0.14em] text-fg-muted">
                   Content Analysis
                 </div>
                 <div className="relative rounded-sm border border-border bg-surface-subtle p-3">
                   {/* Legend */}
-                  <div className="mb-2 flex items-center gap-3 text-[9px]">
+                  <div className="mb-2 flex items-center gap-3 text-xs">
                     <span className="inline-flex items-center gap-1">
                       <span className="h-2 w-2 rounded-sm bg-status-critical/50" />
                       <span className="text-fg-muted">Blocked</span>
@@ -167,42 +168,42 @@ export function PlaygroundSimulateResult({ result, originalPrompt, loading = fal
               <div className="text-xs text-fg-muted">no findings</div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-surface-subtle text-[10px] uppercase tracking-wide text-fg-muted">
-                    <tr>
-                      <th className="px-2 py-1">Type</th>
-                      <th className="px-2 py-1">Category</th>
-                      <th className="px-2 py-1">Severity</th>
-                      <th className="px-2 py-1">Confidence</th>
-                      <th className="px-2 py-1">Action</th>
-                      <th className="px-2 py-1">Match</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                <Table className="w-full text-left">
+                  <TableHeader className="uppercase">
+                    <TableRow>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Severity</TableHead>
+                      <TableHead>Confidence</TableHead>
+                      <TableHead>Action</TableHead>
+                      <TableHead>Match</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {result.findings.map((f, i) => (
-                      <tr key={i} className="border-t border-border hover:bg-surface-subtle/60">
-                        <td className="px-2 py-1 text-fg">{f.type}</td>
-                        <td className="px-2 py-1 text-fg-muted">{f.category}</td>
-                        <td className="px-2 py-1">
-                          <Badge className={`rounded-sm border text-[10px] ${playgroundSeverityClass(f.severity)}`}>
+                      <TableRow key={i}>
+                        <TableCell>{f.type}</TableCell>
+                        <TableCell>{f.category}</TableCell>
+                        <TableCell>
+                          <Badge className={`rounded-sm border text-xs ${playgroundSeverityClass(f.severity)}`}>
                             {toUpperEn(f.severity || "—")}
                           </Badge>
-                        </td>
-                        <td className="px-2 py-1 tabular-nums text-fg-muted">
+                        </TableCell>
+                        <TableCell className="tabular-nums">
                           {Math.round((f.confidence || 0) * 100)}%
-                        </td>
-                        <td className="px-2 py-1">
-                          <Badge className={`rounded-sm border text-[10px] ${playgroundActionClass(f.action)}`}>
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={`rounded-sm border text-xs ${playgroundActionClass(f.action)}`}>
                             {toUpperEn(f.action || "—")}
                           </Badge>
-                        </td>
-                        <td className="px-2 py-1 text-fg-muted">
+                        </TableCell>
+                        <TableCell>
                           {f.match ? f.match.slice(0, 40) : "—"}
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
             )}
           </div>

@@ -64,7 +64,7 @@ export default function SettingsPage() {
             key={t.id}
             type="button"
             onClick={() => setTab(t.id)}
-            className={`cursor-pointer px-3 py-1.5 text-xs uppercase tracking-wide ${
+            className={` px-3 py-1.5 text-xs uppercase tracking-wide ${
               tab === t.id ? "bg-status-pass text-white" : "text-fg-muted hover:bg-surface-subtle hover:text-fg"
             }`}
           >

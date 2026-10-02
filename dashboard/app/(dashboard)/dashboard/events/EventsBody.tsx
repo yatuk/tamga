@@ -57,14 +57,14 @@ export function EventsBody({
         actions={
           <div className="flex items-center gap-2">
             {/* SSE status badge */}
-            <div className="flex items-center gap-1.5 text-[10px] text-fg-subtle">
+            <div className="flex items-center gap-1.5 text-xs text-fg-subtle">
               <span
                 className={`inline-block h-2 w-2 rounded-full ${sse.color}`}
               />
               {sse.label || (
                 <button
                   type="button"
-                  className="cursor-pointer font-mono text-status-pass hover:text-status-pass"
+                  className="font-mono text-status-pass hover:text-status-pass"
                   onClick={resetCounter}
                   title="Click to reset counter"
                 >
@@ -102,7 +102,7 @@ export function EventsBody({
       {timeseriesData.length > 0 && !isLoading ? (
         <Panel
           title="Event Volume by Hour"
-          aside={<span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">{timeseriesData.length} buckets</span>}
+          aside={<span className="px-2 text-xs uppercase tracking-[0.18em] text-fg-muted">{timeseriesData.length} buckets</span>}
         >
           <div className="p-3">
             <div className="flex items-end gap-px h-[80px]">
@@ -119,7 +119,7 @@ export function EventsBody({
                 );
               })}
             </div>
-            <div className="mt-2 flex justify-between text-[10px] text-fg-subtle">
+            <div className="mt-2 flex justify-between text-xs text-fg-subtle">
               {timeseriesData.length > 0 ? (
                 <>
                   <span>{timeseriesData[0]?.time ?? ""}</span>
@@ -152,7 +152,7 @@ export function EventsBody({
           <Panel
             title={`Events · ${filters.range === "24h" ? "24 hours" : filters.range === "7d" ? "7 days" : "30 days"}`}
             aside={
-              <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
+              <span className="px-2 text-xs uppercase tracking-[0.18em] text-fg-muted">
                 {events.length} shown {total > events.length ? `/ ${total} total` : ""}
               </span>
             }
@@ -169,7 +169,7 @@ export function EventsBody({
                 <Button
                   size="sm"
                   variant="outline"
-                  className="w-full cursor-pointer rounded-sm border-border-strong text-[10px] uppercase"
+                  className="w-full rounded-sm border-border-strong text-xs uppercase"
                   onClick={loadMore}
                 >
                   Load more ({total - events.length} remaining)

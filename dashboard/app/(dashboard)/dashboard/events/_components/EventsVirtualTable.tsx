@@ -112,7 +112,7 @@ export function EventsVirtualTable({
               aria-expanded={isExpanded}
               data-index={virtualRow.index}
               ref={virtualizer.measureElement}
-              className={`absolute left-0 right-0 flex flex-col border-b border-border-subtle dark:border-border text-xs ${
+              className={`absolute left-0 right-0 flex flex-col border-b border-border-subtle  text-xs ${
                 isSelected
                   ? "bg-status-pass/5 border-status-pass/20"
                   : ""
@@ -123,7 +123,7 @@ export function EventsVirtualTable({
               }}
             >
               <div
-                className="flex cursor-pointer items-center gap-2 px-3 hover:bg-surface-subtle whitespace-nowrap"
+                className="flex items-center gap-2 px-3 hover:bg-surface-subtle whitespace-nowrap"
                 style={{ height: `${ROW_HEIGHT}px`, minHeight: `${ROW_HEIGHT}px` }}
                 onClick={() => handleRowClick(e.request_id)}
                 onKeyDown={(evt) => { if (evt.key === "Enter" || evt.key === " ") { evt.preventDefault(); handleRowClick(e.request_id); } }}
@@ -132,7 +132,7 @@ export function EventsVirtualTable({
               >
                 <button
                   type="button"
-                  className="w-5 shrink-0 flex items-center justify-center text-fg-subtle hover:text-fg-muted dark:hover:text-fg-subtle"
+                  className="w-5 shrink-0 flex items-center justify-center text-fg-subtle hover:text-fg-muted"
                   onClick={(evt) => {
                     evt.stopPropagation();
                     toggleExpand(e.request_id);
@@ -168,31 +168,31 @@ export function EventsVirtualTable({
               {/* Expanded detail area */}
               {isExpanded && (
                 <div
-                  className="bg-surface-subtle/30 border-l-2 border-status-pass px-3 py-2 text-[11px]"
+                  className="bg-surface-subtle/30 border-l-2 border-status-pass px-3 py-2 text-xs"
                   style={{ minHeight: `${EXPANDED_HEIGHT - ROW_HEIGHT}px` }}
                 >
                   {e.findings && e.findings.length > 0 ? (
                     <>
-                      <div className="text-[10px] uppercase tracking-wide text-fg-subtle mb-1.5">
+                      <div className="text-xs uppercase tracking-wide text-fg-subtle mb-1.5">
                         Top {Math.min(e.findings.length, MAX_EXPANDED_FINDINGS)} Finding{Math.min(e.findings.length, MAX_EXPANDED_FINDINGS) !== 1 ? "s" : ""}
                       </div>
                       {e.findings.slice(0, MAX_EXPANDED_FINDINGS).map((f, fi) => (
                         <div
                           key={fi}
-                          className="flex items-center gap-2 py-1 border-b border-border-subtle dark:border-border last:border-0"
+                          className="flex items-center gap-2 py-1 border-b border-border-subtle last:border-0"
                         >
                           <span className="w-20 shrink-0 text-fg-muted">
                             {f.type || "—"}
                           </span>
                           <SeverityBadge severity={f.severity} />
-                          <span className="flex-1 truncate font-mono text-[10px] text-fg-subtle">
+                          <span className="flex-1 truncate font-mono text-xs text-fg-subtle">
                             {truncateMatch(f.match, MAX_MATCH_CHARS)}
                           </span>
                         </div>
                       ))}
                       <button
                         type="button"
-                        className="mt-2 inline-flex items-center gap-1 text-status-pass dark:text-status-pass hover:underline text-[10px]"
+                        className="mt-2 inline-flex items-center gap-1 text-status-pass hover:underline text-xs"
                         onClick={(evt) => { evt.stopPropagation(); onSelectEvent(e.request_id); }}
                       >
                         View full details

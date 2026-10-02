@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/app/panel";
+import { Input } from "@/components/ui/input";
 
 type Props = {
   retention: string;
@@ -14,21 +15,21 @@ export function SettingsRetentionSection({ retention, setRetention, saveRetentio
     <div>
       <Panel title="Retention">
         <div className="space-y-3 p-3">
-          <div className="text-[11px] text-fg-muted">
+          <div className="text-xs text-fg-muted">
             {"//"} Day limit applied in the dashboard only. Database retention is set in the proxy configuration; this
             preference affects UI filters only.
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <label className="text-[10px] uppercase tracking-wide text-fg-muted">DAYS</label>
-            <input
+            <label className="text-xs uppercase tracking-wide text-fg-muted">DAYS</label>
+            <Input
               type="number"
               min={1}
               max={365}
               value={retention}
               onChange={(e) => setRetention(e.target.value)}
-              className="h-9 w-28 rounded-sm border border-border bg-surface-card px-2 text-sm text-fg focus:outline-none"
+              className="w-28"
             />
-            <Button variant="outline" className="cursor-pointer rounded-sm bg-status-critical text-white hover:bg-status-critical" onClick={saveRetention}>
+            <Button variant="outline" className="rounded-sm bg-status-critical text-white hover:bg-status-critical" onClick={saveRetention}>
               Save
             </Button>
           </div>

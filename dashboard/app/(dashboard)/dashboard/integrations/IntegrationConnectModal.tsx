@@ -11,6 +11,8 @@ import { toUpperEn } from "@/lib/utils/case";
 import { INTEGRATION_PRESETS } from "./integrationPresets";
 import { integrationKindBadge } from "./integrationWebhookHelpers";
 import type { IntegrationDraft } from "./integrationDraft";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 
 type Props = {
   draft: IntegrationDraft;
@@ -24,34 +26,34 @@ export function IntegrationConnectModal({ draft, setDraft, createMut }: Props) {
       <div className="w-full max-w-md rounded-sm border border-border bg-surface-card p-4 shadow-xl">
         <div className="mb-3 flex items-center justify-between">
           <div>
-            <div className="text-[10px] uppercase tracking-[0.18em] text-fg-muted">CONNECT</div>
+            <div className="text-xs uppercase tracking-[0.18em] text-fg-muted">CONNECT</div>
             <div className="text-sm text-fg">{draft.kind}</div>
           </div>
           <div className="flex items-center gap-2">
             <Link
               href={`/dashboard/integrations/${draft.kind}`}
-              className="inline-flex items-center gap-1 rounded-sm border border-border-strong bg-surface-subtle px-2 py-1 text-[10px] uppercase tracking-wide text-fg-muted hover:bg-surface-card"
+              className="inline-flex items-center gap-1 rounded-sm border border-border-strong bg-surface-subtle px-2 py-1 text-xs uppercase tracking-wide text-fg-muted hover:bg-surface-card"
             >
               <BookOpen className="h-3 w-3" /> Guide
             </Link>
-            <Badge className={`rounded-sm border text-[10px] uppercase ${integrationKindBadge(draft.kind)}`}>
+            <Badge className={`rounded-sm border text-xs uppercase ${integrationKindBadge(draft.kind)}`}>
               {draft.kind}
             </Badge>
           </div>
         </div>
         <div className="space-y-3">
           <div>
-            <label className="text-[10px] uppercase tracking-[0.16em] text-fg-muted">Label</label>
-            <input
-              className="mt-1 w-full rounded-sm border border-border bg-surface-card px-2 py-1.5 text-xs text-fg focus:border-status-critical/40 focus:outline-none"
+            <label className="text-xs uppercase tracking-[0.16em] text-fg-muted">Label</label>
+            <Input
+              className="mt-1 w-full"
               value={draft.label}
               onChange={(e) => setDraft({ ...draft, label: e.target.value })}
             />
           </div>
           <div>
-            <label className="text-[10px] uppercase tracking-[0.16em] text-fg-muted">URL</label>
-            <input
-              className="mt-1 w-full rounded-sm border border-border bg-surface-card px-2 py-1.5 text-xs text-fg focus:border-status-critical/40 focus:outline-none"
+            <label className="text-xs uppercase tracking-[0.16em] text-fg-muted">URL</label>
+            <Input
+              className="mt-1 w-full"
               value={draft.url}
               onChange={(e) => setDraft({ ...draft, url: e.target.value })}
               placeholder={INTEGRATION_PRESETS.find((p) => p.kind === draft.kind)?.urlHint}
@@ -60,33 +62,31 @@ export function IntegrationConnectModal({ draft, setDraft, createMut }: Props) {
           {draft.kind === "jira" ? (
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-[10px] uppercase tracking-[0.16em] text-fg-muted">Project key</label>
-                <input
-                  className="mt-1 w-full rounded-sm border border-border bg-surface-card px-2 py-1.5 text-xs text-fg focus:border-status-critical/40 focus:outline-none"
+                <label className="text-xs uppercase tracking-[0.16em] text-fg-muted">Project key</label>
+                <Input
+                  className="mt-1 w-full"
                   value={draft.projectKey}
                   onChange={(e) => setDraft({ ...draft, projectKey: toUpperEn(e.target.value) })}
-                  placeholder="SEC"
-                />
+                  placeholder="SEC" aria-label="SEC" />
               </div>
               <div>
-                <label className="text-[10px] uppercase tracking-[0.16em] text-fg-muted">Issue type</label>
-                <input
-                  className="mt-1 w-full rounded-sm border border-border bg-surface-card px-2 py-1.5 text-xs text-fg focus:border-status-critical/40 focus:outline-none"
+                <label className="text-xs uppercase tracking-[0.16em] text-fg-muted">Issue type</label>
+                <Input
+                  className="mt-1 w-full"
                   value={draft.issueType}
                   onChange={(e) => setDraft({ ...draft, issueType: e.target.value })}
-                  placeholder="Task"
-                />
+                  placeholder="Task" aria-label="Task" />
               </div>
             </div>
           ) : null}
           {draft.kind === "pagerduty" || draft.kind === "opsgenie" ? (
             <div>
-              <label className="text-[10px] uppercase tracking-[0.16em] text-fg-muted">
+              <label className="text-xs uppercase tracking-[0.16em] text-fg-muted">
                 {draft.kind === "pagerduty" ? "Routing key (integration key)" : "API key (GenieKey)"}
               </label>
-              <input
+              <Input
                 type="password"
-                className="mt-1 w-full rounded-sm border border-border bg-surface-card px-2 py-1.5 text-xs text-fg focus:border-status-critical/40 focus:outline-none"
+                className="mt-1 w-full"
                 value={draft.authToken}
                 onChange={(e) => setDraft({ ...draft, authToken: e.target.value })}
                 placeholder={
@@ -94,7 +94,7 @@ export function IntegrationConnectModal({ draft, setDraft, createMut }: Props) {
                 }
                 autoComplete="off"
               />
-              <p className="mt-1 text-[10px] text-fg-muted">
+              <p className="mt-1 text-xs text-fg-muted">
                 {draft.kind === "pagerduty"
                   ? "Injected into the JSON body as routing_key (Events API v2 requirement)."
                   : "Injected as Authorization: GenieKey <token> at request time."}
@@ -102,34 +102,34 @@ export function IntegrationConnectModal({ draft, setDraft, createMut }: Props) {
             </div>
           ) : null}
           <div>
-            <label className="text-[10px] uppercase tracking-[0.16em] text-fg-muted">
+            <label className="text-xs uppercase tracking-[0.16em] text-fg-muted">
               Extra Headers (one per line, &ldquo;Key: Value&rdquo;)
             </label>
-            <textarea
-              className="mt-1 block min-h-[70px] w-full resize-y rounded-sm border border-border bg-surface-card px-2 py-1.5 text-[11px] text-fg focus:outline-none"
+            <Textarea
+              className="mt-1 min-h-[70px] w-full resize-y"
               value={draft.headers}
               onChange={(e) => setDraft({ ...draft, headers: e.target.value })}
             />
           </div>
-          <label className="flex cursor-pointer items-center gap-2 text-[11px] text-fg-muted">
+          <label className="flex items-center gap-2 text-xs text-fg-muted">
             <input
               type="checkbox"
               checked={draft.enabled}
               onChange={(e) => setDraft({ ...draft, enabled: e.target.checked })}
-              className="h-3.5 w-3.5 cursor-pointer accent-status-critical"
+              className="h-3.5 w-3.5 accent-status-critical"
             />
             enabled
           </label>
         </div>
         <div className="mt-4 flex items-center justify-end gap-2">
           <Button variant="outline"
-            className="cursor-pointer rounded-sm border border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card"
+            className="rounded-sm border border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card"
             onClick={() => setDraft(null)}
           >
             Cancel
           </Button>
           <Button variant="outline"
-            className="cursor-pointer rounded-sm bg-status-critical text-white hover:bg-status-critical"
+            className="rounded-sm bg-status-critical text-white hover:bg-status-critical"
             onClick={() => {
               if (!draft.url.trim()) {
                 toast.error("URL required");

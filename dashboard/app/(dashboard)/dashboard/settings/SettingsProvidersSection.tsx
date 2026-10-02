@@ -64,7 +64,7 @@ export function SettingsProvidersSection({ health, adminKey }: Props) {
                 title={`${toUpperEn(pl.pool.charAt(0)) + pl.pool.slice(1)} pool`}
 
                 aside={
-                  <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
+                  <span className="px-2 text-xs uppercase tracking-[0.18em] text-fg-muted">
                     {pl.healthy_count}/{pl.total_count} healthy
                   </span>
                 }
@@ -91,7 +91,7 @@ export function SettingsProvidersSection({ health, adminKey }: Props) {
                               </span>
                             ) : null}
                           </div>
-                          <div className="text-[11px] text-fg-muted">
+                          <div className="text-xs text-fg-muted">
                             req window: {p.requests_in_window ?? "—"} · success rate:{" "}
                             {typeof p.success_rate_observed === "number"
                               ? `${(p.success_rate_observed * 100).toFixed(1)}%`
@@ -103,7 +103,7 @@ export function SettingsProvidersSection({ health, adminKey }: Props) {
                         <Button variant="outline"
                           type="button"
                           disabled={busy || !adminKey}
-                          className="h-8 shrink-0 cursor-pointer rounded-sm border border-border-strong bg-surface-subtle px-2 text-[11px] text-fg hover:bg-surface-card disabled:opacity-50"
+                          className="h-8 shrink-0 rounded-sm border border-border-strong bg-surface-subtle px-2 text-xs text-fg hover:bg-surface-card disabled:opacity-50"
                           onClick={() => void resetCircuit(pl.pool, p.name)}
                           title="Reset the breaker counters (new circuit instance)"
                         >

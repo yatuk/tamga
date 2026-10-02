@@ -12,7 +12,7 @@ export function ReportsBarRow({
   const pct = total > 0 ? Math.round((value / total) * 100) : 0;
   return (
     <div className="space-y-1">
-      <div className="flex items-center justify-between text-[11px]">
+      <div className="flex items-center justify-between text-xs">
         <span className="truncate text-fg-muted">{label}</span>
         <span className="tabular-nums text-fg-muted">
           {value} <span className="text-fg-muted">({pct}%)</span>

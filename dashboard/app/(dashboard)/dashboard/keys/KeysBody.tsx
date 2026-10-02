@@ -13,6 +13,7 @@ import { KeyRevealDialog } from "./_components/KeyRevealDialog";
 import { DeleteKeyDialog } from "./_components/DeleteKeyDialog";
 import { formatSince } from "@/lib/utils/format";
 import type { useKeysPage } from "./useKeysPage";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 
 type Props = ReturnType<typeof useKeysPage>;
 
@@ -80,7 +81,7 @@ export function KeysBody({
         description={`${total} key${total !== 1 ? "s" : ""} · admin · write · read-only`}
         actions={
           <Button variant="outline"
-            className="cursor-pointer rounded-sm bg-status-pass text-white hover:bg-status-pass"
+            className="rounded-sm bg-status-pass text-white hover:bg-status-pass"
             onClick={() => setCreateOpen(true)}
           >
             <Plus className="mr-1 h-4 w-4" /> New API Key
@@ -97,13 +98,13 @@ export function KeysBody({
       {/* Scope distribution summary */}
       {!isLoading && apiKeys.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[10px] uppercase tracking-[0.12em] text-fg-subtle mr-1">
+          <span className="text-xs uppercase tracking-[0.12em] text-fg-subtle mr-1">
             Scope Distribution
           </span>
           {(["admin", "write", "read"] as const).map((scope) => (
             <Badge
               key={scope}
-              className={`rounded-sm border text-[10px] uppercase ${SCOPE_SUMMARY_CLASS[scope]}`}
+              className={`rounded-sm border text-xs uppercase ${SCOPE_SUMMARY_CLASS[scope]}`}
             >
               {scopeCounts[scope]} {scope}
             </Badge>
@@ -124,7 +125,7 @@ export function KeysBody({
       <Panel
         title="API Keys"
         aside={
-          <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
+          <span className="px-2 text-xs uppercase tracking-[0.18em] text-fg-muted">
             {total} keys
           </span>
         }
@@ -144,96 +145,95 @@ export function KeysBody({
               }}
             />
           ) : (
-            <table className="w-full table-fixed text-xs">
-              <thead>
-                <tr className="border-b border-border text-fg-muted">
-                  <th className="px-3 py-2 text-left font-medium text-[10px] uppercase tracking-[0.12em] w-[15%]">
+            <Table className="w-full">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-left font-medium uppercase w-[15%]">
                     Name
-                  </th>
-                  <th className="px-3 py-2 text-left font-medium text-[10px] uppercase tracking-[0.12em] w-[80px]">
+                  </TableHead>
+                  <TableHead className="text-left font-medium uppercase w-[80px]">
                     Scope
-                  </th>
-                  <th className="px-3 py-2 text-left font-medium text-[10px] uppercase tracking-[0.12em]">
+                  </TableHead>
+                  <TableHead className="text-left font-medium uppercase">
                     Key
-                  </th>
-                  <th className="px-3 py-2 text-right font-medium text-[10px] uppercase tracking-[0.12em] w-[110px]">
+                  </TableHead>
+                  <TableHead className="text-right font-medium uppercase w-[110px]">
                     Age
-                  </th>
-                  <th className="px-3 py-2 text-right font-medium text-[10px] uppercase tracking-[0.12em] w-[110px]">
+                  </TableHead>
+                  <TableHead className="text-right font-medium uppercase w-[110px]">
                     Created
-                  </th>
-                  <th className="px-3 py-2 text-right font-medium text-[10px] uppercase tracking-[0.12em] w-[110px]">
+                  </TableHead>
+                  <TableHead className="text-right font-medium uppercase w-[110px]">
                     Last Used
-                  </th>
-                  <th className="px-3 py-2 text-center font-medium text-[10px] uppercase tracking-[0.12em] w-[90px]">
+                  </TableHead>
+                  <TableHead className="text-center font-medium uppercase w-[90px]">
                     Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {apiKeys.map((key) => {
                   const age = daysAgo(key.created_at);
                   return (
-                    <tr
+                    <TableRow
                       key={key.id}
-                      className="text-fg-muted hover:bg-surface-subtle"
                     >
-                      <td className="px-3 py-2 font-mono text-fg truncate whitespace-nowrap">
+                      <TableCell className="font-mono truncate whitespace-nowrap">
                         {key.label}
-                      </td>
-                      <td className="px-3 py-2 whitespace-nowrap">
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">
                         <Badge
-                          className={`rounded-sm border text-[10px] uppercase ${SCOPE_BADGE[key.scope] ?? SCOPE_BADGE.read}`}
+                          className={`rounded-sm border text-xs uppercase ${SCOPE_BADGE[key.scope] ?? SCOPE_BADGE.read}`}
                         >
                           {key.scope}
                         </Badge>
-                      </td>
-                      <td className="px-3 py-2">
+                      </TableCell>
+                      <TableCell>
                         <div className="flex items-center gap-1.5 min-w-0">
                           <code className="font-mono text-fg-subtle truncate">{key.prefix}••••</code>
                           <button
                             type="button"
-                            className="cursor-pointer rounded-sm p-0.5 shrink-0 relative"
+                            className="rounded-sm p-0.5 shrink-0 relative"
                             onClick={() => copyToClipboard(key.prefix, key.id)}
                             title="Copy prefix" aria-label="Copy key prefix"
                           >
                             {copiedId === key.id ? (
                               <Check className="h-3 w-3 text-status-pass" />
                             ) : (
-                              <Copy className="h-3 w-3 text-fg-subtle hover:text-fg-muted dark:hover:text-fg-subtle" />
+                              <Copy className="h-3 w-3 text-fg-subtle hover:text-fg-muted" />
                             )}
                           </button>
                           {copiedId === key.id && (
-                            <span className="text-[10px] text-status-pass animate-in fade-in">
+                            <span className="text-xs text-status-pass animate-in fade-in">
                               Copied!
                             </span>
                           )}
                         </div>
-                      </td>
-                      <td className={`px-3 py-2 text-right font-mono whitespace-nowrap ${ageColor(age)}`}>
+                      </TableCell>
+                      <TableCell className={`px-3 py-2 text-right font-mono whitespace-nowrap ${ageColor(age)}`}>
                         {age < 1 ? "today" : `${age}d`}
-                      </td>
-                      <td className="px-3 py-2 text-right text-fg-subtle whitespace-nowrap">
+                      </TableCell>
+                      <TableCell className="text-right whitespace-nowrap">
                         {formatSince(key.created_at)}
-                      </td>
-                      <td className="px-3 py-2 text-right text-fg-subtle whitespace-nowrap">
+                      </TableCell>
+                      <TableCell className="text-right whitespace-nowrap">
                         {formatSince(key.last_used)}
-                      </td>
-                      <td className="px-3 py-2 text-center whitespace-nowrap">
+                      </TableCell>
+                      <TableCell className="text-center whitespace-nowrap">
                         <Button
                           size="sm"
                           variant="outline"
-                          className="h-6 cursor-pointer rounded-sm border-status-critical/30 bg-status-critical/5 text-[10px] uppercase text-status-critical hover:bg-status-critical/10"
+                          className="h-6 rounded-sm border-status-critical/30 bg-status-critical/5 text-xs uppercase text-status-critical hover:bg-status-critical/10"
                           onClick={() => setDeleteTarget({ id: key.id, label: key.label })}
                         >
                           <Trash2 className="mr-1 h-3 w-3" /> Revoke
                         </Button>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           )}
         </div>
       </Panel>

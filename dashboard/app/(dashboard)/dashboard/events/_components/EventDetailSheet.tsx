@@ -28,7 +28,7 @@ export function EventDetailSheet({ event, isLoading, onClose }: Props) {
           </h2>
           <button
             onClick={onClose}
-            className="cursor-pointer rounded-sm p-1 text-fg-subtle hover:bg-surface-subtle"
+            className="rounded-sm p-1 text-fg-subtle hover:bg-surface-subtle"
             type="button"
             aria-label="Close detail panel"
           >
@@ -51,7 +51,7 @@ export function EventDetailSheet({ event, isLoading, onClose }: Props) {
         </h2>
         <button
           onClick={onClose}
-          className="cursor-pointer rounded-sm p-1 text-fg-subtle hover:bg-surface-subtle"
+          className="rounded-sm p-1 text-fg-subtle hover:bg-surface-subtle"
           type="button"
         >
           <X className="h-4 w-4" />
@@ -71,7 +71,7 @@ export function EventDetailSheet({ event, isLoading, onClose }: Props) {
         <div className="p-4 space-y-4">
           {/* Metadata */}
           <div>
-            <h3 className="mb-2 text-[10px] uppercase tracking-[0.14em] text-fg-muted">
+            <h3 className="mb-2 text-xs uppercase tracking-[0.14em] text-fg-muted">
               Metadata
             </h3>
             <div className="space-y-1.5 text-xs">
@@ -124,7 +124,7 @@ export function EventDetailSheet({ event, isLoading, onClose }: Props) {
 
           {/* Findings */}
           <div>
-            <h3 className="mb-2 text-[10px] uppercase tracking-[0.14em] text-fg-muted">
+            <h3 className="mb-2 text-xs uppercase tracking-[0.14em] text-fg-muted">
               Findings ({event.findings.length})
             </h3>
             {event.findings.length === 0 ? (
@@ -144,7 +144,7 @@ export function EventDetailSheet({ event, isLoading, onClose }: Props) {
                         ) : null}
                       </span>
                       <Badge
-                        className={`rounded-sm border text-[10px] uppercase ${confidenceBadge(f.confidence)}`}
+                        className={`rounded-sm border text-xs uppercase ${confidenceBadge(f.confidence)}`}
                       >
                         {Math.round(f.confidence * 100)}%
                       </Badge>
@@ -166,7 +166,7 @@ export function EventDetailSheet({ event, isLoading, onClose }: Props) {
           {/* Token usage */}
           {(event.input_tokens != null || event.output_tokens != null) ? (
             <div>
-              <h3 className="mb-2 text-[10px] uppercase tracking-[0.14em] text-fg-muted">
+              <h3 className="mb-2 text-xs uppercase tracking-[0.14em] text-fg-muted">
                 Token Usage
               </h3>
               <div className="flex gap-4 text-xs">

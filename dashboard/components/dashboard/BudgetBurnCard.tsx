@@ -74,10 +74,10 @@ export function BudgetBurnCard({ adminKey, className }: BudgetBurnCardProps) {
       )}
     >
       <div className="flex items-center justify-between">
-        <div className="text-[10px] uppercase tracking-[0.14em] text-fg-muted">
+        <div className="text-xs uppercase tracking-[0.14em] text-fg-muted">
           Budget Burn
         </div>
-        <span className="text-[10px] text-fg-muted">
+        <span className="text-xs text-fg-muted">
           {stats.day || new Date().toISOString().slice(0, 10)}
         </span>
       </div>
@@ -127,7 +127,7 @@ export function BudgetBurnCard({ adminKey, className }: BudgetBurnCardProps) {
 
         <div className="min-w-0 flex-1 space-y-2">
           <div>
-            <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.14em] text-fg-muted">
+            <div className="flex items-center gap-1.5 text-xs uppercase tracking-[0.14em] text-fg-muted">
               <Zap className="h-3 w-3" />
               tokens
             </div>
@@ -142,7 +142,7 @@ export function BudgetBurnCard({ adminKey, className }: BudgetBurnCardProps) {
             </div>
           </div>
           <div>
-            <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.14em] text-fg-muted">
+            <div className="flex items-center gap-1.5 text-xs uppercase tracking-[0.14em] text-fg-muted">
               <DollarSign className="h-3 w-3" />
               cost
             </div>
@@ -160,15 +160,15 @@ export function BudgetBurnCard({ adminKey, className }: BudgetBurnCardProps) {
       </div>
 
       {error ? (
-        <div className="mt-3 text-[10px] text-status-critical">
+        <div className="mt-3 text-xs text-status-critical">
           budget endpoint unreachable
         </div>
       ) : isLoading ? (
-        <div className="mt-3 text-[10px] text-fg-muted">
+        <div className="mt-3 text-xs text-fg-muted">
           syncing...
         </div>
       ) : stats.note ? (
-        <div className="mt-3 text-[10px] text-status-medium/80">
+        <div className="mt-3 text-xs text-status-medium/80">
           {stats.note}
         </div>
       ) : null}

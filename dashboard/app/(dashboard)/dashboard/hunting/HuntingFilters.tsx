@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Panel } from "@/components/app/panel";
 
 import type { TimeRange } from "@/lib/types";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 
 type Props = {
   action: string;
@@ -66,7 +67,7 @@ export function HuntingFilters({
       <div className="space-y-3 p-3">
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           <label className="space-y-1">
-            <span className="text-[10px] uppercase tracking-wide text-fg-muted">Action</span>
+            <span className="text-xs uppercase tracking-wide text-fg-muted">Action</span>
             <Input
               className="h-8 focus:border-status-critical"
               placeholder="BLOCK, REDACT…"
@@ -78,17 +79,16 @@ export function HuntingFilters({
             />
           </label>
           <label className="space-y-1">
-            <span className="text-[10px] uppercase tracking-wide text-fg-muted">Provider</span>
-            <input
-              className="h-8 w-full rounded-sm border border-border-strong bg-surface-card px-2 text-xs text-fg outline-none focus:border-status-critical disabled:opacity-50"
+            <span className="text-xs uppercase tracking-wide text-fg-muted">Provider</span>
+            <Input
+              className="w-full"
               placeholder="openai, shadow…"
               value={provider}
               disabled={shadow}
               onChange={(e: ChangeEvent<HTMLInputElement>) => {
                 setProvider(e.target.value);
                 resetPage();
-              }}
-            />
+              }} aria-label="openai, shadow" />
           </label>
           <label className="flex items-end gap-2 pb-1">
             <input
@@ -101,27 +101,27 @@ export function HuntingFilters({
               }}
               className="accent-status-critical"
             />
-            <span className="text-[11px] text-fg-muted">Shadow providers only</span>
+            <span className="text-xs text-fg-muted">Shadow providers only</span>
           </label>
           <label className="space-y-1">
-            <span className="text-[10px] uppercase tracking-wide text-fg-muted">Range</span>
-            <select
-              className="h-8 w-full rounded-sm border border-border-strong bg-surface-card px-2 text-xs text-fg"
+            <span className="text-xs uppercase tracking-wide text-fg-muted">Range</span>
+            <NativeSelect
+              className="w-full"
               value={range}
               onChange={(e) => {
                 setRange(e.target.value as TimeRange);
                 resetPage();
               }}
             >
-              <option value="24h">24h</option>
-              <option value="7d">7d</option>
-              <option value="30d">30d</option>
-            </select>
+              <NativeSelectOption value="24h">24h</NativeSelectOption>
+              <NativeSelectOption value="7d">7d</NativeSelectOption>
+              <NativeSelectOption value="30d">30d</NativeSelectOption>
+            </NativeSelect>
           </label>
         </div>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           <label className="space-y-1">
-            <span className="text-[10px] uppercase tracking-wide text-fg-muted">Finding type</span>
+            <span className="text-xs uppercase tracking-wide text-fg-muted">Finding type</span>
             <Input
               className="h-8 focus:border-status-critical"
               placeholder="pii, injection…"
@@ -133,7 +133,7 @@ export function HuntingFilters({
             />
           </label>
           <label className="space-y-1">
-            <span className="text-[10px] uppercase tracking-wide text-fg-muted">Severity</span>
+            <span className="text-xs uppercase tracking-wide text-fg-muted">Severity</span>
             <Input
               className="h-8 focus:border-status-critical"
               placeholder="high, critical…"
@@ -145,7 +145,7 @@ export function HuntingFilters({
             />
           </label>
           <label className="space-y-1">
-            <span className="text-[10px] uppercase tracking-wide text-fg-muted">Category</span>
+            <span className="text-xs uppercase tracking-wide text-fg-muted">Category</span>
             <Input
               className="h-8 focus:border-status-critical"
               placeholder="substring"
@@ -157,7 +157,7 @@ export function HuntingFilters({
             />
           </label>
           <label className="space-y-1">
-            <span className="text-[10px] uppercase tracking-wide text-fg-muted">Technique / OWASP</span>
+            <span className="text-xs uppercase tracking-wide text-fg-muted">Technique / OWASP</span>
             <Input
               className="h-8 focus:border-status-critical"
               placeholder="LLM01, metadata…"
@@ -170,7 +170,7 @@ export function HuntingFilters({
           </label>
         </div>
         <label className="block space-y-1">
-          <span className="text-[10px] uppercase tracking-wide text-fg-muted">Q (request_id / payload)</span>
+          <span className="text-xs uppercase tracking-wide text-fg-muted">Q (request_id / payload)</span>
           <Input
               className="h-8 focus:border-status-critical"
             placeholder="req_… or search within findings"
@@ -186,7 +186,7 @@ export function HuntingFilters({
             <BookmarkPlus className="h-3.5 w-3.5" />
             Save hunt
           </Button>
-          <span className="text-[10px] text-fg-muted">
+          <span className="text-xs text-fg-muted">
             {isLoading || isFetching ? "Loading…" : `${total} matches (page ${page})`}
           </span>
         </div>

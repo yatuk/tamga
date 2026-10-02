@@ -23,14 +23,14 @@ export function SettingsWebhooksSection({ hookList, createHook, removeHook, test
       <Panel
         title="Webhooklar"
         aside={
-          <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
+          <span className="px-2 text-xs uppercase tracking-[0.18em] text-fg-muted">
             {hookList?.items.length ?? 0} hooks
           </span>
         }
 
       >
         <div className="space-y-3 p-3">
-          <div className="text-[11px] text-fg-muted">
+          <div className="text-xs text-fg-muted">
             {"//"} Raw outbound JSON POST hooks. For preset integrations use the{" "}
             <Link href="/dashboard/integrations" className="text-fg-muted underline">
               Integrations
@@ -49,24 +49,24 @@ export function SettingsWebhooksSection({ hookList, createHook, removeHook, test
                 >
                   <WebhookIcon className="h-3.5 w-3.5 text-fg-muted" />
                   <span className="text-fg">{w.label}</span>
-                  <Badge className="rounded-sm border-border-strong bg-surface-subtle text-[10px] text-fg-muted">{w.kind}</Badge>
+                  <Badge className="rounded-sm border-border-strong bg-surface-subtle text-xs text-fg-muted">{w.kind}</Badge>
                   <Badge
-                    className={`rounded-sm border text-[10px] ${
+                    className={`rounded-sm border text-xs ${
                       w.enabled ? "border-status-pass/30 bg-status-pass/10 text-status-pass" : "border-border-strong bg-surface-subtle text-fg-muted"
                     }`}
                   >
                     {w.enabled ? "enabled" : "disabled"}
                   </Badge>
-                  <span className="truncate text-[11px] text-fg-muted">{w.url}</span>
+                  <span className="truncate text-xs text-fg-muted">{w.url}</span>
                   <div className="ml-auto flex items-center gap-1">
                     <Button variant="outline"
-                      className="h-7 cursor-pointer rounded-sm border border-border-strong bg-surface-card px-2 text-fg-muted hover:bg-surface-card"
+                      className="h-7 rounded-sm border border-border-strong bg-surface-card px-2 text-fg-muted hover:bg-surface-card"
                       onClick={() => testHook(w.id)}
                     >
                       Test
                     </Button>
                     <Button variant="outline"
-                      className="h-7 cursor-pointer rounded-sm border border-border-strong bg-surface-card px-2 text-fg-muted hover:bg-status-critical hover:text-white"
+                      className="h-7 rounded-sm border border-border-strong bg-surface-card px-2 text-fg-muted hover:bg-status-critical hover:text-white"
                       onClick={() => removeHook(w.id)}
                     >
                       <Trash className="h-3.5 w-3.5" />

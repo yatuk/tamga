@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Panel } from "@/components/app/panel";
 import { toast } from "@/lib/toast";
 import { type SSOSettings } from "@/lib/api/client";
+import { Input } from "@/components/ui/input";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 
 type Props = {
   config: SSOSettings | undefined;
@@ -42,7 +44,7 @@ export function SettingsSSOSection({ config, loading, error, onSave }: Props) {
       <div>
         <Panel title="Enterprise SSO">
           <div className="space-y-3 p-3">
-            <Badge className="rounded-sm border-status-critical/30 bg-status-critical/10 text-[10px] text-status-critical">
+            <Badge className="rounded-sm border-status-critical/30 bg-status-critical/10 text-xs text-status-critical">
               LOAD ERROR
             </Badge>
             <div className="text-xs text-fg-muted">{error}</div>
@@ -75,59 +77,57 @@ export function SettingsSSOSection({ config, loading, error, onSave }: Props) {
       <Panel
         title="Enterprise SSO"
         aside={
-          <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
+          <span className="px-2 text-xs uppercase tracking-[0.18em] text-fg-muted">
             <Globe className="mr-1 inline h-3 w-3" />
             {enabled ? providerType.toUpperCase() : "DISABLED"}
           </span>
         }
       >
         <div className="space-y-3 p-3">
-          <div className="text-[11px] text-fg-muted">
+          <div className="text-xs text-fg-muted">
             SAML 2.0 or OpenID Connect (OIDC) enterprise SSO. Requires Clerk Enterprise plan.
           </div>
 
           {/* Provider Type */}
           <div>
-            <label className="mb-1 block text-[10px] uppercase tracking-wide text-fg-muted">
+            <label className="mb-1 block text-xs uppercase tracking-wide text-fg-muted">
               Provider Type
             </label>
-            <select
+            <NativeSelect
               value={providerType}
               onChange={(e) => setProviderType(e.target.value)}
-              className="h-10 w-full rounded-sm border border-border bg-surface-card px-3 text-sm text-fg focus:border-status-pass/40 focus:outline-none"
+              className="w-full"
             >
-              <option value="">None (Disabled)</option>
-              <option value="saml">SAML 2.0</option>
-              <option value="oidc">OpenID Connect (OIDC)</option>
-            </select>
+              <NativeSelectOption value="">None (Disabled)</NativeSelectOption>
+              <NativeSelectOption value="saml">SAML 2.0</NativeSelectOption>
+              <NativeSelectOption value="oidc">OpenID Connect (OIDC)</NativeSelectOption>
+            </NativeSelect>
           </div>
 
           {/* Metadata URL */}
           <div>
-            <label className="mb-1 block text-[10px] uppercase tracking-wide text-fg-muted">
+            <label className="mb-1 block text-xs uppercase tracking-wide text-fg-muted">
               Metadata URL
             </label>
-            <input
+            <Input
               type="url"
               value={metadataUrl}
               onChange={(e) => setMetadataUrl(e.target.value)}
               placeholder="https://idp.example.com/metadata"
-              className="h-10 w-full rounded-sm border border-border bg-surface-card px-3 text-sm text-fg focus:border-status-pass/40 focus:outline-none"
-            />
+              className="w-full" aria-label="https://idp.example.com/metadata" />
           </div>
 
           {/* Domain */}
           <div>
-            <label className="mb-1 block text-[10px] uppercase tracking-wide text-fg-muted">
+            <label className="mb-1 block text-xs uppercase tracking-wide text-fg-muted">
               Domain
             </label>
-            <input
+            <Input
               type="text"
               value={domain}
               onChange={(e) => setDomain(e.target.value)}
               placeholder="example.com"
-              className="h-10 w-full rounded-sm border border-border bg-surface-card px-3 text-sm text-fg focus:border-status-pass/40 focus:outline-none"
-            />
+              className="w-full" aria-label="example.com" />
           </div>
 
           {/* Enabled Toggle */}
@@ -147,7 +147,7 @@ export function SettingsSSOSection({ config, loading, error, onSave }: Props) {
           {/* Status Chips */}
           <div className="flex flex-wrap gap-2">
             <Badge
-              className={`rounded-sm border text-[10px] ${
+              className={`rounded-sm border text-xs ${
                 enabled
                   ? "border-status-pass/30 bg-status-pass/10 text-status-pass"
                   : "border-border-strong bg-surface-subtle text-fg-muted"
@@ -155,14 +155,14 @@ export function SettingsSSOSection({ config, loading, error, onSave }: Props) {
             >
               {enabled ? "ENABLED" : "DISABLED"}
             </Badge>
-            <Badge className="rounded-sm border-border-strong bg-surface-subtle text-[10px] text-fg-muted">
+            <Badge className="rounded-sm border-border-strong bg-surface-subtle text-xs text-fg-muted">
               {providerType ? providerType.toUpperCase() : "NONE"}
             </Badge>
           </div>
 
           {/* Save Button */}
           <Button variant="outline"
-            className="h-9 cursor-pointer rounded-sm bg-status-pass text-white hover:bg-status-pass"
+            className="h-9 rounded-sm bg-status-pass text-white hover:bg-status-pass"
             onClick={handleSave}
             disabled={saving}
           >

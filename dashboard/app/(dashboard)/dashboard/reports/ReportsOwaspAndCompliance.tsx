@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Panel } from "@/components/app/panel";
 import { EmptyState } from "@/components/app/states";
 import type { ReportRange } from "./_constants";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 
 type Row = { type: string; count: number; pct: number; code: string; note: string };
 
@@ -23,7 +24,7 @@ export function ReportsOwaspAndCompliance({ owaspCoverageRows, range, adminKey }
         <Panel
           title="OWASP LLM Coverage"
           aside={
-            <Badge className="rounded-sm border border-border-strong bg-surface-subtle text-[10px] uppercase text-fg-muted">
+            <Badge className="rounded-sm border border-border-strong bg-surface-subtle text-xs uppercase text-fg-muted">
               heuristic map
             </Badge>
           }
@@ -36,42 +37,42 @@ export function ReportsOwaspAndCompliance({ owaspCoverageRows, range, adminKey }
               Audit export.
             </p>
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-[11px]">
-                <thead>
-                  <tr className="border-b border-border text-fg-muted">
-                    <th className="py-1 pr-2">Finding type</th>
-                    <th className="py-1 pr-2">Count</th>
-                    <th className="py-1 pr-2">OWASP hint</th>
-                    <th className="py-1">Note</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table className="w-full text-left">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Finding type</TableHead>
+                    <TableHead>Count</TableHead>
+                    <TableHead>OWASP hint</TableHead>
+                    <TableHead>Note</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {owaspCoverageRows.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="py-6">
+                    <TableRow>
+                      <TableCell colSpan={4}>
                         <EmptyState
                           icon="shield"
                           title="No findings detected"
                           description="Findings breakdown will appear once the proxy detects PII, secrets, or injection attempts. Ensure scanners are enabled in your policy."
                         />
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ) : (
                     owaspCoverageRows.map((row) => (
-                      <tr key={row.type} className="border-b border-border text-fg-muted">
-                        <td className="py-1 pr-2">{row.type}</td>
-                        <td className="py-1 pr-2">
+                      <TableRow key={row.type}>
+                        <TableCell>{row.type}</TableCell>
+                        <TableCell>
                           {row.count} <span className="text-fg-muted">({row.pct}%)</span>
-                        </td>
-                        <td className="py-1 pr-2 text-status-medium">{row.code}</td>
-                        <td className="py-1 text-fg-muted">{row.note}</td>
-                      </tr>
+                        </TableCell>
+                        <TableCell className="text-status-medium">{row.code}</TableCell>
+                        <TableCell>{row.note}</TableCell>
+                      </TableRow>
                     ))
                   )}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
-            <Link href="/docs/owasp-llm" className="inline-block text-[10px] text-fg-subtle hover:text-status-low hover:underline">
+            <Link href="/docs/owasp-llm" className="inline-block text-xs text-fg-subtle hover:text-status-low hover:underline">
               OWASP LLM Top 10 reference →
             </Link>
           </div>
@@ -83,7 +84,7 @@ export function ReportsOwaspAndCompliance({ owaspCoverageRows, range, adminKey }
 
         >
           <div className="space-y-3 p-3 text-xs text-fg-muted">
-            <p className="text-[10px] uppercase tracking-wide text-fg-muted">KVKK / audit evidence</p>
+            <p className="text-xs uppercase tracking-wide text-fg-muted">KVKK / audit evidence</p>
             <ul className="list-inside list-disc space-y-1">
               <li>
                 <Link className="text-fg-subtle hover:text-status-low hover:underline" href="https://tamgaproxy.com/trust">
@@ -111,7 +112,7 @@ export function ReportsOwaspAndCompliance({ owaspCoverageRows, range, adminKey }
                   CSV export (events)
                 </a>
                 {adminKey ? (
-                  <span className="ml-1 text-[10px] text-fg-muted">(admin key in the query string)</span>
+                  <span className="ml-1 text-xs text-fg-muted">(admin key in the query string)</span>
                 ) : null}
               </li>
               <li>

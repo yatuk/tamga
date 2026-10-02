@@ -122,7 +122,7 @@ export function OverviewView() {
       {header}
 
       <section aria-labelledby="posture-heading" className="flex flex-wrap items-center gap-x-4 gap-y-2 border bg-card px-4 py-3">
-        <h2 id="posture-heading" className="font-mono text-[11px] tracking-[0.14em] text-muted-foreground uppercase">
+        <h2 id="posture-heading" className="font-mono text-xs tracking-[0.14em] text-muted-foreground uppercase">
           Risk posture
         </h2>
         <StatusBadge tone={state.tone}>{state.label}</StatusBadge>
@@ -252,7 +252,7 @@ export function OverviewView() {
                   />
                 ))}
               </div>
-              <dl className="mt-2 flex flex-wrap gap-x-4 gap-y-1 font-mono text-[11px] text-muted-foreground">
+              <dl className="mt-2 flex flex-wrap gap-x-4 gap-y-1 font-mono text-xs text-muted-foreground">
                 {SEVERITIES.map((s) => (
                   <div key={s} className="flex items-center gap-1.5">
                     <span className="size-1.5" style={{ background: `var(--status-${s})` }} aria-hidden />
@@ -378,7 +378,7 @@ export function OverviewView() {
       </div>
 
       {health?.uptime_seconds ? (
-        <p className="font-mono text-[11px] text-fg-faint">
+        <p className="font-mono text-xs text-fg-faint">
           proxy uptime {formatInt(Math.round(health.uptime_seconds / 60))} min
           {typeof totals.avgLatencyMs === "number" ? ` · average scan ${totals.avgLatencyMs.toFixed(2)} ms` : ""}
         </p>

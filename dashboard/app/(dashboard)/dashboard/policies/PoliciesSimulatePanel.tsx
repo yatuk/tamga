@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Panel } from "@/components/app/panel";
 import type { PolicySimulateResult } from "@/lib/api";
+import { Textarea } from "@/components/ui/textarea";
 
 type Props = {
   sample: string;
@@ -17,15 +18,14 @@ export function PoliciesSimulatePanel({ sample, onSampleChange, simulating, onSi
   return (
     <div className="space-y-3">
       <Panel title="Simulation input">
-        <textarea
-          className="block min-h-[120px] w-full resize-y bg-surface-card p-3 text-xs text-fg focus:outline-none"
+        <Textarea
+          className="min-h-[120px] w-full resize-y"
           value={sample}
           onChange={(e) => onSampleChange(e.target.value)}
-          placeholder="Sample prompt…"
-        />
+          placeholder="Sample prompt…" aria-label="Sample prompt" />
       </Panel>
       <Button variant="outline"
-        className="cursor-pointer rounded-sm bg-status-critical text-white hover:bg-status-critical"
+        className="rounded-sm bg-status-critical text-white hover:bg-status-critical"
         onClick={onSimulate}
         disabled={simulating}
       >
@@ -37,7 +37,7 @@ export function PoliciesSimulatePanel({ sample, onSampleChange, simulating, onSi
             title="Simulation result"
             aside={
               <Badge
-                className={`rounded-sm border text-[10px] uppercase tracking-[0.18em] ${
+                className={`rounded-sm border text-xs uppercase tracking-[0.18em] ${
                   simResult.action === "BLOCK"
                     ? "border-status-critical/40 bg-status-critical/10 text-status-critical"
                     : simResult.action === "REDACT"
@@ -51,7 +51,7 @@ export function PoliciesSimulatePanel({ sample, onSampleChange, simulating, onSi
 
           >
             <div className="space-y-2 p-3 text-xs text-fg">
-              <div className="text-[10px] uppercase tracking-[0.14em] text-fg-muted">
+              <div className="text-xs uppercase tracking-[0.14em] text-fg-muted">
                 policy: {simResult.policy_name} @ {simResult.policy_version}
               </div>
               {simResult.findings.length === 0 ? (

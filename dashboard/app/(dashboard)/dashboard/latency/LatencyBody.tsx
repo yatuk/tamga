@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import type { TimeRange } from "@/lib/types";
 import type { useLatencyPage } from "./useLatencyPage";
 import { formatMs, formatRate, formatSince, formatUptime } from "@/lib/utils/format";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 
 const P95_THRESHOLD_MS = 2000; // P95 above 2s is considered slow
 
@@ -25,7 +26,7 @@ function stateBadge(state: string) {
         ? "border-status-medium/40 bg-status-medium/10 text-status-medium"
         : "border-status-critical/40 bg-status-critical/10 text-status-critical";
   return (
-    <Badge className={`rounded-sm border text-[10px] uppercase ${cls}`}>
+    <Badge className={`rounded-sm border text-xs uppercase ${cls}`}>
       {state}
     </Badge>
   );
@@ -71,7 +72,7 @@ export function LatencyBody({
               {(["24h", "7d", "30d"] as TimeRange[]).map((r) => (
                 <button
                   key={r}
-                  className={`cursor-pointer px-3 py-1 text-xs ${
+                  className={` px-3 py-1 text-xs ${
                     range === r
                       ? "bg-status-pass text-white"
                       : "bg-surface-card text-fg-muted hover:bg-surface-subtle"
@@ -128,7 +129,7 @@ export function LatencyBody({
         <Panel
           title="Latency Percentiles"
           aside={
-            <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
+            <span className="px-2 text-xs uppercase tracking-[0.18em] text-fg-muted">
               P50→P99
             </span>
           }
@@ -136,7 +137,7 @@ export function LatencyBody({
           <div className="p-4 space-y-3">
             {histogramBars.map((bar) => (
               <div key={bar.label} className="space-y-1">
-                <div className="flex items-center justify-between text-[11px]">
+                <div className="flex items-center justify-between text-xs">
                   <span className="font-mono text-fg-muted">{bar.label}</span>
                   <span className="ml-2 shrink-0 tabular-nums text-fg-subtle font-mono">
                     {formatMs(bar.ms)}
@@ -159,50 +160,49 @@ export function LatencyBody({
         <Panel
           title="SLOWEST TIME BUCKETS"
           aside={
-            <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
+            <span className="px-2 text-xs uppercase tracking-[0.18em] text-fg-muted">
               top 5 by P95 latency
             </span>
           }
         >
           <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-border text-fg-muted">
-                  <th className="px-3 py-2 text-left font-medium text-[10px] uppercase tracking-[0.12em]">
+            <Table className="w-full">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-left font-medium uppercase">
                     Time
-                  </th>
-                  <th className="px-3 py-2 text-right font-medium text-[10px] uppercase tracking-[0.12em]">
+                  </TableHead>
+                  <TableHead className="text-right font-medium uppercase">
                     P95 Latency
-                  </th>
-                  <th className="px-3 py-2 text-right font-medium text-[10px] uppercase tracking-[0.12em]">
+                  </TableHead>
+                  <TableHead className="text-right font-medium uppercase">
                     Requests
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {slowestEndpoints.map((ep, i) => (
-                  <tr
+                  <TableRow
                     key={i}
-                    className="text-fg-muted hover:bg-surface-subtle"
                   >
-                    <td className="px-3 py-2 font-mono">{ep.time}</td>
-                    <td className="px-3 py-2 text-right tabular-nums font-mono text-status-medium">
+                    <TableCell className="font-mono">{ep.time}</TableCell>
+                    <TableCell className="text-right tabular-nums font-mono text-status-medium">
                       {formatMs(ep.p95)}
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums text-fg-subtle">
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
                       {ep.requests}
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         </Panel>
       ) : null}
 
       {/* Scanner impact note */}
       {scannerCount > 0 && !isLoading ? (
-        <div className="flex items-center gap-2 rounded-sm border border-border bg-surface-card px-3 py-2 text-[10px] text-fg-muted">
+        <div className="flex items-center gap-2 rounded-sm border border-border bg-surface-card px-3 py-2 text-xs text-fg-muted">
           <span className="uppercase tracking-[0.12em]">Scanner Impact</span>
           <span className="font-mono text-fg-muted">
             {scannerCount} active scanner{scannerCount !== 1 ? "s" : ""}
@@ -217,7 +217,7 @@ export function LatencyBody({
       <Panel
         title={`Latency · ${range === "24h" ? "24 hours" : range === "7d" ? "7 days" : "30 days"}`}
         aside={
-          <span className="flex items-center gap-1 px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
+          <span className="flex items-center gap-1 px-2 text-xs uppercase tracking-[0.18em] text-fg-muted">
             <RefreshCw className="h-3 w-3" /> 10s
           </span>
         }
@@ -239,7 +239,7 @@ export function LatencyBody({
       <Panel
         title="Provider pool status"
         aside={
-          <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
+          <span className="px-2 text-xs uppercase tracking-[0.18em] text-fg-muted">
             {providerPools.length} providers
           </span>
         }
@@ -256,64 +256,63 @@ export function LatencyBody({
               no provider pool data available
             </div>
           ) : (
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-border text-fg-muted">
-                  <th className="px-3 py-2 text-left font-medium text-[10px] uppercase tracking-[0.12em]">
+            <Table className="w-full">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-left font-medium uppercase">
                     Provider
-                  </th>
-                  <th className="px-3 py-2 text-left font-medium text-[10px] uppercase tracking-[0.12em]">
+                  </TableHead>
+                  <TableHead className="text-left font-medium uppercase">
                     State
-                  </th>
-                  <th className="px-3 py-2 text-right font-medium text-[10px] uppercase tracking-[0.12em]">
+                  </TableHead>
+                  <TableHead className="text-right font-medium uppercase">
                     P95
-                  </th>
-                  <th className="px-3 py-2 text-right font-medium text-[10px] uppercase tracking-[0.12em]">
+                  </TableHead>
+                  <TableHead className="text-right font-medium uppercase">
                     Success
-                  </th>
-                  <th className="px-3 py-2 text-right font-medium text-[10px] uppercase tracking-[0.12em]">
+                  </TableHead>
+                  <TableHead className="text-right font-medium uppercase">
                     Reqs
-                  </th>
-                  <th className="px-3 py-2 text-right font-medium text-[10px] uppercase tracking-[0.12em]">
+                  </TableHead>
+                  <TableHead className="text-right font-medium uppercase">
                     Last Failure
-                  </th>
-                  <th className="px-3 py-2 text-center font-medium text-[10px] uppercase tracking-[0.12em]">
+                  </TableHead>
+                  <TableHead className="text-center font-medium uppercase">
                     Reset
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {providerPools.map((p) => (
-                  <tr
+                  <TableRow
                     key={`${p.pool}-${p.name}`}
-                    className="text-fg-muted hover:bg-surface-subtle"
                   >
-                    <td className="px-3 py-2 font-mono">
+                    <TableCell className="font-mono">
                       {p.name}
                       <span className="ml-1 text-fg-subtle">({p.pool})</span>
-                    </td>
-                    <td className="px-3 py-2">{stateBadge(p.state)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums font-mono">
+                    </TableCell>
+                    <TableCell>{stateBadge(p.state)}</TableCell>
+                    <TableCell className="text-right tabular-nums font-mono">
                       {formatMs(p.p95LatencyMs)}
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums font-mono">
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums font-mono">
                       {formatRate(p.successRate)}
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums text-fg-subtle">
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
                       {p.requestsInWindow ?? "—"}
-                    </td>
-                    <td className="px-3 py-2 text-right text-fg-subtle">
+                    </TableCell>
+                    <TableCell className="text-right">
                       {formatSince(p.lastFailure)}
                       {p.failureReason ? (
                         <span className="ml-1 text-status-critical">· {p.failureReason}</span>
                       ) : null}
-                    </td>
-                    <td className="px-3 py-2 text-center">
+                    </TableCell>
+                    <TableCell className="text-center">
                       {(p.state === "HALF" || p.state === "OPEN" || p.state === "CLOSED" || p.state === "degraded") ? (
                         <Button
                           size="sm"
                           variant="outline"
-                          className="h-6 cursor-pointer rounded-sm border-border-strong bg-surface-subtle text-[10px] uppercase text-fg-muted hover:bg-surface-card"
+                          className="h-6 rounded-sm border-border-strong bg-surface-subtle text-xs uppercase text-fg-muted hover:bg-surface-card"
                           onClick={() =>
                             circuitReset.mutate({ pool: p.pool, endpoint: p.name })
                           }
@@ -323,11 +322,11 @@ export function LatencyBody({
                           {circuitReset.isPending ? "..." : "Reset"}
                         </Button>
                       ) : null}
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           )}
         </div>
       </Panel>

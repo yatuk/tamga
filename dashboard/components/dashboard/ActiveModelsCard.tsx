@@ -30,7 +30,7 @@ export function ActiveModelsCard({
   return (
     <Card>
       <CardHeader className="pb-2">
-        <div className="text-[10px] uppercase tracking-[0.18em] text-fg-muted">
+        <div className="text-xs uppercase tracking-[0.18em] text-fg-muted">
           ACTIVE MODELS // {toUpperEn(range)}
         </div>
         <CardTitle className="text-sm">
@@ -50,7 +50,7 @@ export function ActiveModelsCard({
                 const pct = total > 0 ? Math.round((count / total) * 100) : 0;
                 return (
                   <div key={fam} className="space-y-0.5">
-                    <div className="flex justify-between text-[10px] text-fg-muted">
+                    <div className="flex justify-between text-xs text-fg-muted">
                       <span>{fam}</span>
                       <span>{count} ({pct}%)</span>
                     </div>
@@ -68,12 +68,12 @@ export function ActiveModelsCard({
             {/* Top models list */}
             {models.length > 0 && (
               <div className="border-t border-border pt-2">
-                <div className="mb-1.5 text-[9px] uppercase tracking-widest text-fg-muted">
+                <div className="mb-1.5 text-xs uppercase tracking-widest text-fg-muted">
                   Top models
                 </div>
                 <div className="space-y-1">
                   {models.map(([model, count]) => (
-                    <div key={model} className="flex justify-between text-[10px]">
+                    <div key={model} className="flex justify-between text-xs">
                       <span className="truncate text-fg-muted">{model}</span>
                       <span className="ml-2 shrink-0 text-fg-muted">{count}</span>
                     </div>

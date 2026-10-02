@@ -16,6 +16,7 @@ import type {
   TriageFilter,
   TypeFilter,
 } from "@/lib/security/security-events-model";
+import { Input } from "@/components/ui/input";
 
 export function IncidentsFiltersCard({ m }: { m: IncidentsConsoleModel }) {
   return (
@@ -33,13 +34,13 @@ export function IncidentsFiltersCard({ m }: { m: IncidentsConsoleModel }) {
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <Badge className="rounded-sm border-border-strong bg-surface-subtle text-fg-muted">Presets</Badge>
           <Button variant="outline"
-            className="h-8 cursor-pointer rounded-sm border border-border-strong bg-surface-subtle px-2 text-xs text-fg-muted hover:bg-surface-card"
+            className="h-8 rounded-sm border border-border-strong bg-surface-subtle px-2 text-xs text-fg-muted hover:bg-surface-card"
             onClick={() => m.applyPreset("critical-now")}
           >
             Critical Now
           </Button>
           <Button variant="outline"
-            className="h-8 cursor-pointer rounded-sm border border-border-strong bg-surface-subtle px-2 text-xs text-fg-muted hover:bg-surface-card"
+            className="h-8 rounded-sm border border-border-strong bg-surface-subtle px-2 text-xs text-fg-muted hover:bg-surface-card"
             onClick={() => m.applyPreset("block-focused")}
           >
             Block Focused
@@ -57,13 +58,12 @@ export function IncidentsFiltersCard({ m }: { m: IncidentsConsoleModel }) {
               </button>
             ))}
           </div>
-          <input
+          <Input
             ref={m.searchInputRef}
             value={m.searchText}
             onChange={(e) => m.setSearchText(e.target.value)}
             placeholder="Search request/provider/model… (/)"
-            className="h-8 min-w-[240px] rounded-sm border border-border-strong bg-surface-subtle px-2 text-xs text-fg placeholder:text-fg-muted"
-          />
+            className="min-w-[240px]" aria-label="Search request/provider/model… (/)" />
         </div>
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-8">
           <Select
@@ -178,12 +178,10 @@ export function IncidentsFiltersCard({ m }: { m: IncidentsConsoleModel }) {
             </SelectContent>
           </Select>
 
-          <input
+          <Input
             value={m.requestIdFilter}
             onChange={(e) => m.setRequestIdFilter(e.target.value.trim())}
-            placeholder="Filter by request ID"
-            className="h-10 rounded-sm border border-border-strong bg-surface-subtle px-3 text-xs text-fg placeholder:text-fg-muted"
-          />
+            placeholder="Filter by request ID" aria-label="Filter by request ID" />
         </div>
       </CardContent>
     </Card>

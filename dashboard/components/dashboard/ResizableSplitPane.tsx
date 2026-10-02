@@ -83,7 +83,7 @@ export function ResizableSplitPane({
 
       {/* Drag handle */}
       <div
-        className="shrink-0 w-1 cursor-col-resize bg-surface-subtle hover:bg-status-critical/60 dark:hover:bg-status-critical/60 transition-colors duration-150"
+        className="shrink-0 w-1 cursor-col-resize bg-surface-subtle hover:bg-status-critical/60 transition-colors duration-150"
         onMouseDown={onMouseDown}
         role="separator"
         aria-orientation="vertical"

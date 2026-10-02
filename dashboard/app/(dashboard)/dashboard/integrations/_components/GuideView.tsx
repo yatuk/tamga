@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "@/lib/toast";
 import { toUpperEn } from "@/lib/utils/case";
 import type { IntegrationGuide } from "../_data/guides";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -35,7 +36,7 @@ function CopyButton({ text }: { text: string }) {
           toast.error("Copy failed");
         }
       }}
-      className="inline-flex h-6 items-center gap-1 rounded-sm border border-border bg-surface-subtle px-2 text-[10px] uppercase tracking-wide text-fg-muted hover:bg-surface-card"
+      className="inline-flex h-6 items-center gap-1 rounded-sm border border-border bg-surface-subtle px-2 text-xs uppercase tracking-wide text-fg-muted hover:bg-surface-card"
     >
       {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
       {copied ? "Copied" : "Copy"}
@@ -47,10 +48,10 @@ function CodeBlock({ lang, content }: { lang: string; content: string }) {
   return (
     <div className="mt-3 rounded-sm border border-border bg-surface-card">
       <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
-        <span className="text-[10px] uppercase tracking-[0.18em] text-fg-muted">{lang}</span>
+        <span className="text-xs uppercase tracking-[0.18em] text-fg-muted">{lang}</span>
         <CopyButton text={content} />
       </div>
-      <pre className="overflow-x-auto px-3 py-2 text-[11px] leading-5 text-fg whitespace-pre-wrap wrap-break-word">
+      <pre className="overflow-x-auto px-3 py-2 text-xs leading-5 text-fg whitespace-pre-wrap wrap-break-word">
         {content}
       </pre>
     </div>
@@ -60,7 +61,7 @@ function CodeBlock({ lang, content }: { lang: string; content: string }) {
 export function GuideView({ guide }: { guide: IntegrationGuide }) {
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
+      <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-fg-muted">
         <Link href="/dashboard/integrations" className="inline-flex items-center gap-1 hover:text-fg-subtle">
           <ArrowLeft className="h-3 w-3" /> Back to integrations
         </Link>
@@ -73,11 +74,11 @@ export function GuideView({ guide }: { guide: IntegrationGuide }) {
         description={guide.overview}
         actions={
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1 rounded-sm border border-status-pass/60 bg-status-pass/30 px-2 py-1 text-[10px] uppercase tracking-wide text-status-pass">
+            <span className="inline-flex items-center gap-1 rounded-sm border border-status-pass/60 bg-status-pass/30 px-2 py-1 text-xs uppercase tracking-wide text-status-pass">
               <BadgeCheck className="h-3 w-3" /> verified {guide.lastVerified}
             </span>
             <Link href={`/dashboard/integrations?connect=${guide.kind}`} className="inline-flex">
-              <Button variant="outline" className="cursor-pointer rounded-sm bg-status-critical text-white hover:bg-status-critical">
+              <Button variant="outline" className="rounded-sm bg-status-critical text-white hover:bg-status-critical">
                 <Plug className="mr-1 h-3.5 w-3.5" /> Connect now
               </Button>
             </Link>
@@ -89,7 +90,7 @@ export function GuideView({ guide }: { guide: IntegrationGuide }) {
         <div className="space-y-4">
           <div>
             <section className="rounded-sm border border-border bg-surface-card p-4">
-              <div className="mb-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
+              <div className="mb-2 text-xs uppercase tracking-[0.18em] text-fg-muted">
                 Overview
               </div>
               <p className="text-sm leading-6 text-fg-muted">{guide.overview}</p>
@@ -101,7 +102,7 @@ export function GuideView({ guide }: { guide: IntegrationGuide }) {
                       href={d.href}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center gap-1 rounded-sm border border-border bg-surface-subtle px-2 py-1 text-[11px] text-fg-muted hover:bg-surface-card"
+                      className="inline-flex items-center gap-1 rounded-sm border border-border bg-surface-subtle px-2 py-1 text-xs text-fg-muted hover:bg-surface-card"
                     >
                       {d.label} <ExternalLink className="h-3 w-3" />
                     </a>
@@ -114,7 +115,7 @@ export function GuideView({ guide }: { guide: IntegrationGuide }) {
           {guide.prerequisites.length > 0 ? (
             <div>
               <section className="rounded-sm border border-border bg-surface-card p-4">
-                <div className="mb-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
+                <div className="mb-2 text-xs uppercase tracking-[0.18em] text-fg-muted">
                   Prerequisites
                 </div>
                 <ul className="space-y-1.5 text-sm text-fg-muted">
@@ -131,7 +132,7 @@ export function GuideView({ guide }: { guide: IntegrationGuide }) {
 
           <div>
             <section className="space-y-3">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-fg-muted">
+              <div className="text-xs uppercase tracking-[0.18em] text-fg-muted">
                 Setup steps
               </div>
               <ol className="space-y-3">
@@ -141,7 +142,7 @@ export function GuideView({ guide }: { guide: IntegrationGuide }) {
                     className="rounded-sm border border-border bg-surface-card p-4"
                   >
                     <div className="flex items-start gap-3">
-                      <div className="mt-0.5 inline-flex h-6 w-6 flex-none items-center justify-center rounded-sm border border-border-strong bg-surface-subtle text-[11px] text-fg-muted">
+                      <div className="mt-0.5 inline-flex h-6 w-6 flex-none items-center justify-center rounded-sm border border-border-strong bg-surface-subtle text-xs text-fg-muted">
                         {String(i + 1).padStart(2, "0")}
                       </div>
                       <div className="min-w-0 flex-1">
@@ -165,28 +166,28 @@ export function GuideView({ guide }: { guide: IntegrationGuide }) {
           {guide.headers && guide.headers.length > 0 ? (
             <div>
               <section className="rounded-sm border border-border bg-surface-card p-4">
-                <div className="mb-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
+                <div className="mb-2 text-xs uppercase tracking-[0.18em] text-fg-muted">
                   Required headers
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-surface-subtle text-[10px] uppercase tracking-wide text-fg-muted">
-                      <tr>
-                        <th className="px-3 py-1.5">Key</th>
-                        <th className="px-3 py-1.5">Value hint</th>
-                        <th className="px-3 py-1.5">Note</th>
-                      </tr>
-                    </thead>
-                    <tbody>
+                  <Table className="w-full text-left">
+                    <TableHeader className="uppercase">
+                      <TableRow>
+                        <TableHead>Key</TableHead>
+                        <TableHead>Value hint</TableHead>
+                        <TableHead>Note</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                       {guide.headers.map((h) => (
-                        <tr key={h.key} className="border-t border-border">
-                          <td className="px-3 py-1.5 text-fg">{h.key}</td>
-                          <td className="px-3 py-1.5 text-fg-muted">{h.valueHint}</td>
-                          <td className="px-3 py-1.5 text-fg-muted">{h.note ?? "—"}</td>
-                        </tr>
+                        <TableRow key={h.key}>
+                          <TableCell>{h.key}</TableCell>
+                          <TableCell>{h.valueHint}</TableCell>
+                          <TableCell>{h.note ?? "—"}</TableCell>
+                        </TableRow>
                       ))}
-                    </tbody>
-                  </table>
+                    </TableBody>
+                  </Table>
                 </div>
               </section>
             </div>
@@ -196,13 +197,13 @@ export function GuideView({ guide }: { guide: IntegrationGuide }) {
             <Panel
               title={`payload.${guide.payloadPreview.lang}`}
               aside={
-                <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
+                <span className="px-2 text-xs uppercase tracking-[0.18em] text-fg-muted">
                   preview
                 </span>
               }
 
             >
-              <pre className="overflow-x-auto px-3 py-3 text-[11px] leading-5 text-fg whitespace-pre-wrap wrap-break-word">
+              <pre className="overflow-x-auto px-3 py-3 text-xs leading-5 text-fg whitespace-pre-wrap wrap-break-word">
                 {guide.payloadPreview.content}
               </pre>
             </Panel>
@@ -210,7 +211,7 @@ export function GuideView({ guide }: { guide: IntegrationGuide }) {
 
           <div>
             <section className="rounded-sm border border-border bg-surface-card p-4">
-              <div className="mb-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
+              <div className="mb-2 text-xs uppercase tracking-[0.18em] text-fg-muted">
                 Caveats &amp; gotchas
               </div>
               <ul className="space-y-3">
@@ -233,27 +234,27 @@ export function GuideView({ guide }: { guide: IntegrationGuide }) {
         <aside className="space-y-4">
           <div>
             <section className="rounded-sm border border-border bg-surface-card p-4">
-              <div className="mb-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
+              <div className="mb-2 text-xs uppercase tracking-[0.18em] text-fg-muted">
                 Summary
               </div>
               <div className="space-y-2 text-xs">
                 <div>
-                  <span className="text-[10px] uppercase tracking-wide text-fg-muted">kind</span>
+                  <span className="text-xs uppercase tracking-wide text-fg-muted">kind</span>
                   <div>
-                    <Badge className={`rounded-sm border text-[10px] uppercase ${guide.badge}`}>
+                    <Badge className={`rounded-sm border text-xs uppercase ${guide.badge}`}>
                       {guide.kind}
                     </Badge>
                   </div>
                 </div>
                 <div>
-                  <span className="text-[10px] uppercase tracking-wide text-fg-muted">url pattern</span>
-                  <div className="mt-1 break-all rounded-sm border border-border bg-black/40 px-2 py-1 text-[11px] text-fg-muted">
+                  <span className="text-xs uppercase tracking-wide text-fg-muted">url pattern</span>
+                  <div className="mt-1 break-all rounded-sm border border-border bg-black/40 px-2 py-1 text-xs text-fg-muted">
                     {guide.urlHint}
                   </div>
                 </div>
                 <div>
-                  <span className="text-[10px] uppercase tracking-wide text-fg-muted">last verified</span>
-                  <div className="text-[11px] text-fg-muted">{guide.lastVerified}</div>
+                  <span className="text-xs uppercase tracking-wide text-fg-muted">last verified</span>
+                  <div className="text-xs text-fg-muted">{guide.lastVerified}</div>
                 </div>
               </div>
             </section>
@@ -262,7 +263,7 @@ export function GuideView({ guide }: { guide: IntegrationGuide }) {
           <div>
             <Link
               href={`/dashboard/integrations?connect=${guide.kind}`}
-              className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-sm bg-status-critical px-3 py-2 text-xs uppercase tracking-wide text-white hover:bg-status-critical"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-sm bg-status-critical px-3 py-2 text-xs uppercase tracking-wide text-white hover:bg-status-critical"
             >
               <Plug className="h-3.5 w-3.5" /> Connect now
             </Link>

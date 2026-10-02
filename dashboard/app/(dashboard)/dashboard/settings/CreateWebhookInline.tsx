@@ -5,6 +5,8 @@ import { Plus } from "lucide-react";
 import { type Webhook } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/lib/toast";
+import { Input } from "@/components/ui/input";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 
 export function CreateWebhookInline({ onCreate }: { onCreate: (payload: Omit<Webhook, "id" | "created_at">) => void }) {
   const [label, setLabel] = useState("");
@@ -13,43 +15,42 @@ export function CreateWebhookInline({ onCreate }: { onCreate: (payload: Omit<Web
   const [blocksPerMin, setBlocksPerMin] = useState("5");
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <input
+      <Input
         value={label}
         onChange={(e) => setLabel(e.target.value)}
         id="webhook-label-input" placeholder="label"
-        className="h-8 w-24 rounded-sm border border-border bg-surface-card px-2 text-xs text-fg focus:outline-none"
+        className="w-24"
       />
-      <input
+      <Input
         value={url}
         onChange={(e) => setUrl(e.target.value)}
         id="webhook-url-input" placeholder="https://…"
-        className="h-8 w-72 rounded-sm border border-border bg-surface-card px-2 text-xs text-fg focus:outline-none"
+        className="w-72"
       />
-      <select
+      <NativeSelect
         value={kind}
         onChange={(e) => setKind(e.target.value as Webhook["kind"])}
-        className="h-8 cursor-pointer rounded-sm border border-border bg-surface-card px-2 text-xs text-fg focus:outline-none"
       >
-        <option value="generic">generic</option>
-        <option value="slack">slack</option>
-        <option value="teams">teams</option>
-        <option value="splunk_hec">splunk_hec</option>
-        <option value="sentinel">sentinel</option>
-        <option value="qradar">qradar</option>
-        <option value="datadog">datadog</option>
-        <option value="jira">jira</option>
-        <option value="pagerduty">pagerduty</option>
-        <option value="opsgenie">opsgenie</option>
-        <option value="servicenow">servicenow</option>
-      </select>
-      <input
+        <NativeSelectOption value="generic">generic</NativeSelectOption>
+        <NativeSelectOption value="slack">slack</NativeSelectOption>
+        <NativeSelectOption value="teams">teams</NativeSelectOption>
+        <NativeSelectOption value="splunk_hec">splunk_hec</NativeSelectOption>
+        <NativeSelectOption value="sentinel">sentinel</NativeSelectOption>
+        <NativeSelectOption value="qradar">qradar</NativeSelectOption>
+        <NativeSelectOption value="datadog">datadog</NativeSelectOption>
+        <NativeSelectOption value="jira">jira</NativeSelectOption>
+        <NativeSelectOption value="pagerduty">pagerduty</NativeSelectOption>
+        <NativeSelectOption value="opsgenie">opsgenie</NativeSelectOption>
+        <NativeSelectOption value="servicenow">servicenow</NativeSelectOption>
+      </NativeSelect>
+      <Input
         value={blocksPerMin}
         onChange={(e) => setBlocksPerMin(e.target.value)}
-        className="h-8 w-16 rounded-sm border border-border bg-surface-card px-2 text-xs text-fg focus:outline-none"
+        className="w-16"
       />
-      <span className="text-[10px] uppercase tracking-wide text-fg-muted">blocks/min</span>
+      <span className="text-xs uppercase tracking-wide text-fg-muted">blocks/min</span>
       <Button variant="outline"
-        className="h-8 cursor-pointer rounded-sm bg-status-critical px-3 text-white hover:bg-status-critical"
+        className="h-8 rounded-sm bg-status-critical px-3 text-white hover:bg-status-critical"
         onClick={() => {
           if (!label.trim() || !url.trim()) {
             toast.error("Label and URL are required");

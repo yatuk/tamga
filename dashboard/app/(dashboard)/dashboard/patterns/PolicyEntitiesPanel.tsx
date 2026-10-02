@@ -4,11 +4,15 @@ import { Plus, Play, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/app/panel";
 import { usePolicyEntities } from "./usePolicyEntities";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 
 const inputCls =
-  "mt-1 w-full rounded-sm border border-border bg-surface-card px-2 py-1.5 text-xs text-fg focus:border-status-critical/40 focus:outline-none";
+  "mt-1 w-full rounded-sm border border-border bg-surface-card px-2 py-1.5 text-xs text-fg focus:border-status-critical/40 ";
 const labelCls =
-  "text-[10px] uppercase tracking-[0.16em] text-fg-muted";
+  "text-xs uppercase tracking-[0.16em] text-fg-muted";
 
 function actionClass(action: string) {
   switch (action.toUpperCase()) {
@@ -48,7 +52,7 @@ export function PolicyEntitiesPanel() {
       {/* Existing policy entities */}
       <Panel title="Policy Entities">
         <div className="p-3">
-          <p className="mb-2 text-[11px] text-fg-muted">
+          <p className="mb-2 text-xs text-fg-muted">
             User-defined PII entities with an enforcement action. Applied by the
             custom scanner and persisted in the active policy.
           </p>
@@ -60,31 +64,30 @@ export function PolicyEntitiesPanel() {
             </p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-[11px]">
-                <thead>
-                  <tr className="border-b border-border text-fg-muted">
-                    <th className="py-1 pr-2">Name</th>
-                    <th className="py-1 pr-2">Pattern</th>
-                    <th className="py-1 pr-2">Action</th>
-                    <th className="py-1 pr-2">Severity</th>
-                    <th className="py-1 pr-2">Conf.</th>
-                    <th className="py-1"></th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table className="w-full text-left">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Pattern</TableHead>
+                    <TableHead>Action</TableHead>
+                    <TableHead>Severity</TableHead>
+                    <TableHead>Conf.</TableHead>
+                    <TableHead></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {items.map((e) => (
-                    <tr
+                    <TableRow
                       key={e.name}
-                      className="border-b border-border-subtle dark:border-border text-fg-muted"
                     >
-                      <td className="py-1 pr-2 font-medium">{e.name}</td>
-                      <td className="py-1 pr-2 font-mono text-[10px] text-fg-subtle">{e.pattern}</td>
-                      <td className={`py-1 pr-2 font-medium ${actionClass(e.action)}`}>
+                      <TableCell className="font-medium">{e.name}</TableCell>
+                      <TableCell className="font-mono">{e.pattern}</TableCell>
+                      <TableCell className={`py-1 pr-2 font-medium ${actionClass(e.action)}`}>
                         {e.action.toUpperCase()}
-                      </td>
-                      <td className="py-1 pr-2">{e.severity}</td>
-                      <td className="py-1 pr-2">{e.confidence ?? "—"}</td>
-                      <td className="py-1">
+                      </TableCell>
+                      <TableCell>{e.severity}</TableCell>
+                      <TableCell>{e.confidence ?? "—"}</TableCell>
+                      <TableCell>
                         <button
                           aria-label={`delete ${e.name}`}
                           className="text-fg-subtle hover:text-status-critical"
@@ -92,23 +95,22 @@ export function PolicyEntitiesPanel() {
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
           )}
 
           {/* Test against active policy */}
           <div className="mt-4 border-t border-border pt-3">
             <label className={labelCls}>Test against active policy</label>
-            <textarea
+            <Textarea
               className={`${inputCls} h-16 font-mono`}
               value={sampleText}
               onChange={(e) => setSampleText(e.target.value)}
-              placeholder="Paste sample text, e.g. customer ACME-12345678 record"
-            />
+              placeholder="Paste sample text, e.g. customer ACME-12345678 record" aria-label="Paste sample text, e.g. customer ACME-12345678 record" />
             <Button
               variant="outline"
               size="sm"
@@ -120,7 +122,7 @@ export function PolicyEntitiesPanel() {
               {simulating ? "Running…" : "Simulate"}
             </Button>
             {simResult && (
-              <div className="mt-2 rounded-sm border border-border p-2 text-[11px]">
+              <div className="mt-2 rounded-sm border border-border p-2 text-xs">
                 <div className="text-fg-muted">
                   action: <span className={actionClass(simResult.action)}>{simResult.action}</span> ·{" "}
                   {simResult.findings.length} finding(s)
@@ -142,58 +144,55 @@ export function PolicyEntitiesPanel() {
         <div className="space-y-3 p-3">
           <div>
             <label className={labelCls}>Name</label>
-            <input
+            <Input
               className={inputCls}
               value={draft.name}
               onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-              placeholder="fib_musteri_no"
-            />
+              placeholder="fib_musteri_no" aria-label="fib_musteri_no" />
           </div>
           <div>
             <label className={labelCls}>Pattern (regex)</label>
-            <input
+            <Input
               className={`${inputCls} font-mono`}
               value={draft.pattern}
               onChange={(e) => setDraft({ ...draft, pattern: e.target.value })}
-              placeholder="ACME-\d{8}"
-            />
+              placeholder="ACME-\d{8}" aria-label="ACME-\d{8}" />
           </div>
           <div>
             <label className={labelCls}>Description</label>
-            <input
+            <Input
               className={inputCls}
               value={draft.description}
               onChange={(e) => setDraft({ ...draft, description: e.target.value })}
-              placeholder="Customer number"
-            />
+              placeholder="Customer number" aria-label="Customer number" />
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className={labelCls}>Action</label>
-              <select
+              <NativeSelect
                 className={inputCls}
                 value={draft.action}
                 onChange={(e) => setDraft({ ...draft, action: e.target.value })}
               >
-                <option value="BLOCK">BLOCK</option>
-                <option value="REDACT">REDACT</option>
-                <option value="WARN">WARN</option>
-              </select>
+                <NativeSelectOption value="BLOCK">BLOCK</NativeSelectOption>
+                <NativeSelectOption value="REDACT">REDACT</NativeSelectOption>
+                <NativeSelectOption value="WARN">WARN</NativeSelectOption>
+              </NativeSelect>
             </div>
             <div>
               <label className={labelCls}>Severity</label>
-              <select
+              <NativeSelect
                 className={inputCls}
                 value={draft.severity}
                 onChange={(e) =>
                   setDraft({ ...draft, severity: e.target.value as typeof draft.severity })
                 }
               >
-                <option value="critical">critical</option>
-                <option value="high">high</option>
-                <option value="medium">medium</option>
-                <option value="low">low</option>
-              </select>
+                <NativeSelectOption value="critical">critical</NativeSelectOption>
+                <NativeSelectOption value="high">high</NativeSelectOption>
+                <NativeSelectOption value="medium">medium</NativeSelectOption>
+                <NativeSelectOption value="low">low</NativeSelectOption>
+              </NativeSelect>
             </div>
           </div>
           <div>

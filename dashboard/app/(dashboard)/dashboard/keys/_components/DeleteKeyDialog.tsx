@@ -24,14 +24,14 @@ export function DeleteKeyDialog({ target, onClose, onDelete, isPending }: Props)
           <button
             aria-label="Close dialog"
             onClick={onClose}
-            className="cursor-pointer rounded-sm p-1 text-fg-subtle hover:bg-surface-subtle"
+            className="rounded-sm p-1 text-fg-subtle hover:bg-surface-subtle"
             type="button"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        <p className="mb-3 text-[11px] text-fg-subtle">
+        <p className="mb-3 text-xs text-fg-subtle">
           This action is permanent. Type the key name <span className="font-mono text-fg-muted">{target.label}</span> to confirm.
         </p>
 
@@ -47,7 +47,7 @@ export function DeleteKeyDialog({ target, onClose, onDelete, isPending }: Props)
           <Button
             variant="outline"
             size="sm"
-            className="cursor-pointer rounded-sm"
+            className="rounded-sm"
             onClick={onClose}
           >
             Cancel
@@ -55,7 +55,7 @@ export function DeleteKeyDialog({ target, onClose, onDelete, isPending }: Props)
           <Button variant="outline"
             size="sm"
             disabled={!confirmed || isPending}
-            className="cursor-pointer rounded-sm bg-status-critical text-white hover:bg-status-critical"
+            className="rounded-sm bg-status-critical text-white hover:bg-status-critical"
             onClick={() => onDelete(target.id)}
           >
             {isPending ? "Revoking…" : "Revoke Key"}

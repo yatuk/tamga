@@ -10,6 +10,7 @@ import { GlossaryToggle, GlossaryPanel } from "@/components/dashboard/GlossaryPa
 import { Badge } from "@/components/ui/badge";
 import { formatUptime } from "@/lib/utils/format";
 import type { useProxyPage } from "./useProxyPage";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 
 type Props = ReturnType<typeof useProxyPage>;
 
@@ -25,7 +26,7 @@ function statusBadge(status: "ok" | "warning" | "error" | "disabled") {
   const label =
     status === "ok" ? "OK" : status === "warning" ? "WARN" : status === "disabled" ? "OFF" : "ERR";
   return (
-    <Badge className={`rounded-sm border text-[10px] uppercase ${cls}`}>
+    <Badge className={`rounded-sm border text-xs uppercase ${cls}`}>
       {label}
     </Badge>
   );
@@ -60,7 +61,7 @@ export function ProxyBody({
           <div className="flex items-center gap-1.5">
             <GlossaryToggle onClick={() => setGlossaryOpen(true)} />
             <HealthScoreBadge score={aggregateScore} label="health" size="sm" showScore />
-            <span className="text-[10px] uppercase tracking-[0.14em] text-fg-subtle">
+            <span className="text-xs uppercase tracking-[0.14em] text-fg-subtle">
               <RefreshCw className="h-3 w-3 inline mr-0.5" /> 15s
             </span>
           </div>
@@ -104,7 +105,7 @@ export function ProxyBody({
                 Uptime: {formatUptime(health?.uptime_seconds ?? 0)}
               </span>
               {detail?.version ? (
-                <span className="inline-flex items-center gap-1 rounded-sm border border-border-strong/30 bg-surface-subtle0/10 px-2 py-0.5 font-mono text-[11px] text-fg-subtle">
+                <span className="inline-flex items-center gap-1 rounded-sm border border-border-strong/30 bg-surface-subtle0/10 px-2 py-0.5 font-mono text-xs text-fg-subtle">
                   <Tag className="h-3 w-3 text-fg-subtle" />
                   {detail.version}
                 </span>
@@ -151,7 +152,7 @@ export function ProxyBody({
       <Panel
         title="Component Health"
         aside={
-          <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
+          <span className="px-2 text-xs uppercase tracking-[0.18em] text-fg-muted">
             {componentRows.length} components
           </span>
         }
@@ -164,46 +165,45 @@ export function ProxyBody({
               ))}
             </div>
           ) : (
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-border text-fg-muted">
-                  <th className="px-3 py-2 text-left font-medium text-[10px] uppercase tracking-[0.12em]">
+            <Table className="w-full">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-left font-medium uppercase">
                     Component
-                  </th>
-                  <th className="px-3 py-2 text-left font-medium text-[10px] uppercase tracking-[0.12em]">
+                  </TableHead>
+                  <TableHead className="text-left font-medium uppercase">
                     Status
-                  </th>
-                  <th className="px-3 py-2 text-left font-medium text-[10px] uppercase tracking-[0.12em]">
+                  </TableHead>
+                  <TableHead className="text-left font-medium uppercase">
                     Details
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {componentRows.map((r) => (
-                  <tr
+                  <TableRow
                     key={r.component}
-                    className="text-fg-muted hover:bg-surface-subtle"
                   >
-                    <td className="px-3 py-2 font-mono text-fg">
+                    <TableCell className="font-mono">
                       {r.component}
-                    </td>
-                    <td className="px-3 py-2">{statusBadge(r.status)}</td>
-                    <td className="px-3 py-2">
+                    </TableCell>
+                    <TableCell>{statusBadge(r.status)}</TableCell>
+                    <TableCell>
                       <span className="font-mono text-fg-subtle">{r.detail}</span>
                       {r.dependsOn ? (
                         <span
-                          className="ml-2 inline-flex items-center gap-0.5 text-[10px] text-fg-muted cursor-help"
+                          className="ml-2 inline-flex items-center gap-0.5 text-xs text-fg-muted cursor-help"
                           title={`Depends on: ${r.dependsOn}`}
                           aria-label={`Depends on: ${r.dependsOn}`}
                         >
                           <Info className="h-3 w-3" />
                         </span>
                       ) : null}
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           )}
         </div>
       </Panel>

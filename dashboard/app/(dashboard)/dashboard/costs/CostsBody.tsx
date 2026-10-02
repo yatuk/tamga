@@ -9,6 +9,7 @@ import { formatInt } from "@/lib/utils/format";
 import { Button } from "@/components/ui/button";
 import type { TimeRange } from "@/lib/types";
 import type { useCostsPage } from "./useCostsPage";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 
 function formatCost(usd: number): string {
   if (usd === 0) return "$0";
@@ -91,7 +92,7 @@ export function CostsBody({
               {(["24h", "7d", "30d"] as TimeRange[]).map((r) => (
                 <button
                   key={r}
-                  className={`cursor-pointer px-3 py-1 text-xs ${
+                  className={` px-3 py-1 text-xs ${
                     range === r
                       ? "bg-status-pass text-white"
                       : "bg-surface-card text-fg-muted hover:bg-surface-subtle"
@@ -104,7 +105,7 @@ export function CostsBody({
               ))}
             </div>
             <Button variant="outline"
-              className="cursor-pointer rounded-sm border border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card"
+              className="rounded-sm border border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card"
               onClick={exportCsv}
             >
               <Download className="mr-1 h-4 w-4" /> CSV
@@ -175,7 +176,7 @@ export function CostsBody({
       <Panel
         title="Token Consumption"
         aside={
-          <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
+          <span className="px-2 text-xs uppercase tracking-[0.18em] text-fg-muted">
             {chartData.length} pts
           </span>
         }
@@ -197,7 +198,7 @@ export function CostsBody({
       <Panel
         title="Model Costs"
         aside={
-          <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-subtle">
+          <span className="px-2 text-xs uppercase tracking-[0.18em] text-fg-subtle">
             est. total: {formatCost(totalCostEstimate)}
           </span>
         }
@@ -214,52 +215,51 @@ export function CostsBody({
               No usage data for this period
             </div>
           ) : (
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-border text-fg-muted">
-                  <th className="px-3 py-2 text-left font-medium text-[10px] uppercase tracking-[0.12em]">
+            <Table className="w-full">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-left font-medium uppercase">
                     Model
-                  </th>
-                  <th className="px-3 py-2 text-right font-medium text-[10px] uppercase tracking-[0.12em]">
+                  </TableHead>
+                  <TableHead className="text-right font-medium uppercase">
                     Tokens
-                  </th>
-                  <th className="px-3 py-2 text-right font-medium text-[10px] uppercase tracking-[0.12em]">
+                  </TableHead>
+                  <TableHead className="text-right font-medium uppercase">
                     Est. Cost
-                  </th>
-                  <th className="px-3 py-2 text-right font-medium text-[10px] uppercase tracking-[0.12em]">
+                  </TableHead>
+                  <TableHead className="text-right font-medium uppercase">
                     % of Total
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {modelCostRows.map((r) => {
                   const pct =
                     totalCostEstimate > 0
                       ? ((r.cost / totalCostEstimate) * 100).toFixed(1)
                       : "0.0";
                   return (
-                    <tr
+                    <TableRow
                       key={r.model}
-                      className="text-fg-muted hover:bg-surface-subtle"
                     >
-                      <td className="px-3 py-2 font-mono">{r.model}</td>
-                      <td className="px-3 py-2 text-right tabular-nums font-mono">
+                      <TableCell className="font-mono">{r.model}</TableCell>
+                      <TableCell className="text-right tabular-nums font-mono">
                         {formatTokens(r.tokens)}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums font-mono">
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums font-mono">
                         {formatCost(r.cost)}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums text-fg-subtle">
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
                         {pct}%
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           )}
         </div>
-        <div className="border-t border-border px-3 py-2 text-[10px] text-fg-subtle">
+        <div className="border-t border-border px-3 py-2 text-xs text-fg-subtle">
           Pricing as of June 2026. Costs are server-side estimates — verify with provider invoices.
         </div>
       </Panel>
@@ -269,7 +269,7 @@ export function CostsBody({
         <Panel
           title="Model Family Distribution"
           aside={
-            <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
+            <span className="px-2 text-xs uppercase tracking-[0.18em] text-fg-muted">
               {modelFamilyBars.length} families
             </span>
           }
@@ -289,7 +289,7 @@ export function CostsBody({
             {/* Legend */}
             <div className="flex flex-wrap gap-3">
               {modelFamilyBars.map((f) => (
-                <div key={f.family} className="flex items-center gap-1.5 text-[10px]">
+                <div key={f.family} className="flex items-center gap-1.5 text-xs">
                   <span className={`h-2 w-2 shrink-0 rounded-sm ${f.color}`} />
                   <span className="text-fg-muted">{f.family}</span>
                   <span className="font-mono tabular-nums text-fg-subtle">{f.pct}%</span>
@@ -305,59 +305,58 @@ export function CostsBody({
         <Panel
           title="Daily Breakdown"
           aside={
-            <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-subtle">
+            <span className="px-2 text-xs uppercase tracking-[0.18em] text-fg-subtle">
               {dailyRows.length} rows
             </span>
           }
         >
           <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-border text-fg-muted">
-                  <th className="px-3 py-2 text-left font-medium text-[10px] uppercase tracking-[0.12em]">
+            <Table className="w-full">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-left font-medium uppercase">
                     Date
-                  </th>
-                  <th className="px-3 py-2 text-left font-medium text-[10px] uppercase tracking-[0.12em]">
+                  </TableHead>
+                  <TableHead className="text-left font-medium uppercase">
                     Provider
-                  </th>
-                  <th className="px-3 py-2 text-left font-medium text-[10px] uppercase tracking-[0.12em]">
+                  </TableHead>
+                  <TableHead className="text-left font-medium uppercase">
                     Model
-                  </th>
-                  <th className="px-3 py-2 text-right font-medium text-[10px] uppercase tracking-[0.12em]">
+                  </TableHead>
+                  <TableHead className="text-right font-medium uppercase">
                     Input Tokens
-                  </th>
-                  <th className="px-3 py-2 text-right font-medium text-[10px] uppercase tracking-[0.12em]">
+                  </TableHead>
+                  <TableHead className="text-right font-medium uppercase">
                     Output Tokens
-                  </th>
-                  <th className="px-3 py-2 text-right font-medium text-[10px] uppercase tracking-[0.12em]">
+                  </TableHead>
+                  <TableHead className="text-right font-medium uppercase">
                     Cost USD
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {dailyRows.map((r, i) => (
-                  <tr
+                  <TableRow
                     key={`${r.date}-${r.provider}-${r.model}-${i}`}
-                    className="text-fg-muted hover:bg-surface-subtle"
                   >
-                    <td className="px-3 py-2 font-mono text-fg-subtle">
+                    <TableCell className="font-mono">
                       {r.date}
-                    </td>
-                    <td className="px-3 py-2 font-mono">{r.provider}</td>
-                    <td className="px-3 py-2 font-mono">{r.model}</td>
-                    <td className="px-3 py-2 text-right tabular-nums font-mono">
+                    </TableCell>
+                    <TableCell className="font-mono">{r.provider}</TableCell>
+                    <TableCell className="font-mono">{r.model}</TableCell>
+                    <TableCell className="text-right tabular-nums font-mono">
                       {formatTokens(r.input_tokens)}
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums font-mono">
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums font-mono">
                       {formatTokens(r.output_tokens)}
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums font-mono">
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums font-mono">
                       {formatCost(r.cost_usd)}
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         </Panel>
       )}

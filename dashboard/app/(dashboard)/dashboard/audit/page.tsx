@@ -13,6 +13,9 @@ import { Stat } from "@/components/app/stat";
 import { SkeletonRows } from "@/components/app/states";
 import { Panel } from "@/components/app/panel";
 import { useAdminKey } from "@/hooks/useAdminKey";
+import { Input } from "@/components/ui/input";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 
 function kindClass(k: string) {
   if (k.startsWith("policy.")) return "border-status-medium/40 bg-status-medium/10 text-status-medium";
@@ -136,7 +139,7 @@ export default function AuditPage() {
         description={`${filtered.length} / ${data?.total ?? 0} records · in-system actions`}
         actions={
           <div className="flex items-center gap-2">
-            <Badge className={`rounded-sm border text-[10px] ${chainBadge}`}>
+            <Badge className={`rounded-sm border text-xs ${chainBadge}`}>
               {chainOk ? (
                 <ShieldCheck className="mr-1 h-3 w-3" />
               ) : (
@@ -149,7 +152,7 @@ export default function AuditPage() {
             <Button
               size="sm"
               variant="secondary"
-              className="h-7 cursor-pointer rounded-sm border border-border-strong bg-surface-card px-2 text-[11px] text-fg-muted hover:bg-surface-subtle"
+              className="h-7 rounded-sm border border-border-strong bg-surface-card px-2 text-xs text-fg-muted hover:bg-surface-subtle"
               onClick={() => {
                 refetchChain();
                 queryClient.invalidateQueries({ queryKey: ["tamga-audit", adminKey] });
@@ -167,37 +170,34 @@ export default function AuditPage() {
 
       <div>
         <div className="flex flex-wrap items-center gap-2 rounded-sm border border-border bg-surface-card p-2">
-          <input
+          <Input
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="actor, target, kind…"
-            className="h-8 w-64 rounded-sm border border-border bg-surface-card px-2 text-xs text-fg focus:border-status-critical/40 focus:outline-none"
-          />
-          <select
+            className="w-64" aria-label="actor, target, kind" />
+          <NativeSelect
             value={kind}
             onChange={(e) => setKind(e.target.value)}
-            className="h-8 cursor-pointer rounded-sm border border-border bg-surface-card px-2 text-xs text-fg focus:outline-none"
           >
-            <option value="">all kinds</option>
+            <NativeSelectOption value="">all kinds</NativeSelectOption>
             {kinds.map((k) => (
-              <option key={k} value={k}>
+              <NativeSelectOption key={k} value={k}>
                 {k}
-              </option>
+              </NativeSelectOption>
             ))}
-          </select>
-          <select
+          </NativeSelect>
+          <NativeSelect
             value={actor}
             onChange={(e) => setActor(e.target.value)}
-            className="h-8 cursor-pointer rounded-sm border border-border bg-surface-card px-2 text-xs text-fg focus:outline-none"
           >
-            <option value="">all actors</option>
+            <NativeSelectOption value="">all actors</NativeSelectOption>
             {actors.map((a) => (
-              <option key={a} value={a}>
+              <NativeSelectOption key={a} value={a}>
                 {a}
-              </option>
+              </NativeSelectOption>
             ))}
-          </select>
-          <Badge className="rounded-sm border-border-strong bg-surface-subtle text-[10px] text-fg-muted">
+          </NativeSelect>
+          <Badge className="rounded-sm border-border-strong bg-surface-subtle text-xs text-fg-muted">
             {filtered.length} / {data?.total ?? 0}
           </Badge>
         </div>
@@ -213,7 +213,7 @@ export default function AuditPage() {
       {/* Kind distribution bar chart */}
       {Object.keys(kindCounts).length > 0 && (
         <div className="rounded-sm border border-border bg-surface-card p-3">
-          <div className="mb-2 text-[10px] uppercase tracking-[0.14em] text-fg-muted">
+          <div className="mb-2 text-xs uppercase tracking-[0.14em] text-fg-muted">
             Kind Distribution
           </div>
           <div className="space-y-1.5">
@@ -222,16 +222,16 @@ export default function AuditPage() {
               .slice(0, 12)
               .map(([k, count]) => (
                 <div key={k} className="flex items-center gap-2">
-                  <span className="w-36 truncate text-[10px] text-fg-muted">
+                  <span className="w-36 truncate text-xs text-fg-muted">
                     {humanizeAuditKind(k)}
                   </span>
-                  <div className="h-3 flex-1 rounded-sm bg-surface-subtle dark:bg-surface-elevated">
+                  <div className="h-3 flex-1 rounded-sm bg-surface-subtle">
                     <div
                       className={`h-full rounded-sm ${kindBarColor(k)}`}
                       style={{ width: `${Math.max((count / maxKindCount) * 100, 2)}%` }}
                     />
                   </div>
-                  <span className="w-8 text-right text-[10px] tabular-nums text-fg-muted">
+                  <span className="w-8 text-right text-xs tabular-nums text-fg-muted">
                     {count}
                   </span>
                 </div>
@@ -245,7 +245,7 @@ export default function AuditPage() {
           <Panel
             title="Audit log"
             aside={
-              <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
+              <span className="px-2 text-xs uppercase tracking-[0.18em] text-fg-muted">
                 {filtered.length} rows
               </span>
             }
@@ -263,40 +263,40 @@ export default function AuditPage() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full table-fixed text-left text-xs">
-                  <thead className="bg-surface-subtle text-[10px] uppercase tracking-wide text-fg-muted">
-                    <tr>
-                      <th className="px-3 py-2">Time</th>
-                      <th className="px-3 py-2">Kind</th>
-                      <th className="px-3 py-2">Actor</th>
-                      <th className="px-3 py-2">Target</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                <Table className="w-full text-left">
+                  <TableHeader className="uppercase">
+                    <TableRow>
+                      <TableHead>Time</TableHead>
+                      <TableHead>Kind</TableHead>
+                      <TableHead>Actor</TableHead>
+                      <TableHead>Target</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {filtered.map((it, idx) => (
-                      <tr
+                      <TableRow
                         key={`${it.timestamp}-${idx}`}
                         onClick={() => setSelected(it)}
-                        className={`cursor-pointer border-t border-l-2 border-border text-fg hover:bg-surface-subtle/60 ${kindBorderColor(it.kind)} ${
+                        className={` border-t border-l-2 border-border text-fg hover:bg-surface-subtle/60 ${kindBorderColor(it.kind)} ${
                           selected === it ? "bg-surface-subtle" : ""
                         }`}
                       >
-                        <td className="px-3 py-1.5 text-[10px] text-fg-muted whitespace-nowrap">
+                        <TableCell className="whitespace-nowrap">
                           {new Date(it.timestamp).toLocaleString("en-GB")}
-                        </td>
-                        <td className="px-3 py-1.5 whitespace-nowrap">
-                          <Badge className={`rounded-sm border text-[10px] ${kindClass(it.kind)}`}>
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          <Badge className={`rounded-sm border text-xs ${kindClass(it.kind)}`}>
                             {humanizeAuditKind(it.kind)}
                           </Badge>
-                        </td>
-                        <td className="px-3 py-1.5 text-fg-muted">{it.actor || "—"}</td>
-                        <td className="max-w-[260px] truncate px-3 py-1.5 text-fg-muted">
+                        </TableCell>
+                        <TableCell>{it.actor || "—"}</TableCell>
+                        <TableCell className="max-w-[260px] truncate">
                           {it.target || "—"}
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
             )}
           </Panel>
@@ -311,10 +311,10 @@ export default function AuditPage() {
             ) : (
               <div className="space-y-2 p-3 text-xs text-fg-muted">
                 <div className="flex items-center justify-between gap-2">
-                  <Badge className={`rounded-sm border text-[10px] ${kindClass(selected.kind)}`}>
+                  <Badge className={`rounded-sm border text-xs ${kindClass(selected.kind)}`}>
                     {selected.kind}
                   </Badge>
-                  <span className="text-[10px] text-fg-muted">
+                  <span className="text-xs text-fg-muted">
                     {new Date(selected.timestamp).toLocaleString("en-GB")}
                   </span>
                 </div>
@@ -327,8 +327,8 @@ export default function AuditPage() {
                   <span className="text-fg">{selected.target || "—"}</span>
                 </div>
                 <div>
-                  <div className="mb-1 text-[10px] uppercase tracking-wide text-fg-muted">DETAIL</div>
-                  <pre className="max-h-[360px] overflow-auto rounded-sm border border-border bg-surface-subtle p-2 text-[10px] leading-4 text-fg-muted">
+                  <div className="mb-1 text-xs uppercase tracking-wide text-fg-muted">DETAIL</div>
+                  <pre className="max-h-[360px] overflow-auto rounded-sm border border-border bg-surface-subtle p-2 text-xs leading-4 text-fg-muted">
                     {selected.detail ? JSON.stringify(selected.detail, null, 2) : "—"}
                   </pre>
                 </div>

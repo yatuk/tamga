@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api, type PolicyRevision } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { GitCompareArrows, Clock3, User2 } from "lucide-react";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 
 // Myers-style LCS diff is overkill for YAML policy files that are
 // typically under 200 lines. A simple two-pointer line-walk that
@@ -134,7 +135,7 @@ export function PolicyDiff({ adminKey }: { adminKey: string }) {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3">
-        <div className="inline-flex items-center gap-2 text-[11px] uppercase tracking-wide text-fg-muted">
+        <div className="inline-flex items-center gap-2 text-xs uppercase tracking-wide text-fg-muted">
           <GitCompareArrows className="h-3.5 w-3.5" aria-hidden /> Compare
         </div>
         <RevisionPicker
@@ -150,10 +151,10 @@ export function PolicyDiff({ adminKey }: { adminKey: string }) {
           onChange={setRightId}
           revisions={sorted}
         />
-        <Badge className="ml-auto rounded-sm border-status-pass/50 bg-status-pass/20 font-mono text-[11px] text-status-pass">
+        <Badge className="ml-auto rounded-sm border-status-pass/50 bg-status-pass/20 font-mono text-xs text-status-pass">
           +{stats.plus}
         </Badge>
-        <Badge className="rounded-sm border-status-critical/50 bg-status-critical/20 font-mono text-[11px] text-status-critical">
+        <Badge className="rounded-sm border-status-critical/50 bg-status-critical/20 font-mono text-xs text-status-critical">
           −{stats.minus}
         </Badge>
       </div>
@@ -164,7 +165,7 @@ export function PolicyDiff({ adminKey }: { adminKey: string }) {
       </div>
 
       <div className="overflow-hidden rounded-sm border border-border bg-surface-card">
-        <div className="grid grid-cols-[3rem_1fr] font-mono text-[11px]">
+        <div className="grid grid-cols-[3rem_1fr] font-mono text-xs">
           {diff.map((op, idx) => {
             const bg =
               op.kind === "+"
@@ -203,19 +204,18 @@ function RevisionPicker({
   revisions: PolicyRevision[];
 }) {
   return (
-    <label className="inline-flex items-center gap-2 text-[11px] text-fg-muted">
+    <label className="inline-flex items-center gap-2 text-xs text-fg-muted">
       <span className="text-fg-muted">{label}</span>
-      <select
+      <NativeSelect
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="h-8 rounded-sm border border-border-strong bg-surface-card px-2 text-xs text-fg focus:outline-none"
       >
         {revisions.map((rev) => (
-          <option key={rev.id} value={rev.id}>
+          <NativeSelectOption key={rev.id} value={rev.id}>
             {revisionLabel(rev)} {rev.message ? `— ${rev.message}` : ""}
-          </option>
+          </NativeSelectOption>
         ))}
-      </select>
+      </NativeSelect>
     </label>
   );
 }
@@ -230,7 +230,7 @@ function RevisionCard({ rev, title }: { rev: PolicyRevision | undefined; title: 
   }
   return (
     <div className="rounded-sm border border-border bg-surface-card p-3 text-xs text-fg-muted">
-      <div className="text-[10px] uppercase tracking-wide text-fg-muted">{title}</div>
+      <div className="text-xs uppercase tracking-wide text-fg-muted">{title}</div>
       <div className="mt-1 flex flex-wrap items-center gap-3 text-fg">
         <span className="font-mono">{rev.id.slice(0, 10)}</span>
         {rev.message ? <span>· {rev.message}</span> : null}

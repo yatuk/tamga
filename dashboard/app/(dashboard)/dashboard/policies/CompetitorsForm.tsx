@@ -88,20 +88,20 @@ export function CompetitorsForm({ adminKey }: Props) {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-[11px] uppercase tracking-[0.14em] text-status-critical">
+            <p className="text-xs uppercase tracking-[0.14em] text-status-critical">
               Competitor Intelligence
             </p>
             <p className="mt-1 text-xs text-fg-subtle">
               Detects competitor brand and product mentions in LLM prompts.
               Configure via{" "}
-              <code className="rounded-sm bg-surface-subtle px-1 font-mono text-[11px] text-fg-muted">
+              <code className="rounded-sm bg-surface-subtle px-1 font-mono text-xs text-fg-muted">
                 competitors
               </code>{" "}
               block in policy YAML.
             </p>
           </div>
           {data && (
-            <span className="text-[10px] text-fg-subtle">
+            <span className="text-xs text-fg-subtle">
               {data.name} v{data.version}
             </span>
           )}
@@ -128,9 +128,9 @@ export function CompetitorsForm({ adminKey }: Props) {
             <p className="text-xs text-fg-subtle">
               No competitors configured.
             </p>
-            <p className="mt-1 text-[11px] text-fg-muted dark:text-fg-subtle">
+            <p className="mt-1 text-xs text-fg-muted">
               Add a{" "}
-              <code className="rounded-sm bg-surface-subtle px-1 font-mono text-[10px]">
+              <code className="rounded-sm bg-surface-subtle px-1 font-mono text-xs">
                 competitors:
               </code>{" "}
               block to your policy YAML to enable competitor detection.
@@ -139,7 +139,7 @@ export function CompetitorsForm({ adminKey }: Props) {
               href="https://github.com/tamga-dev/tamga/blob/dev/tamga/docs/benchmarks/README.md"
               target="_blank"
               rel="noreferrer"
-              className="mt-3 inline-flex items-center gap-1.5 rounded-sm border border-border dark:border-border-strong bg-surface-subtle px-3 py-1.5 text-[11px] text-fg-muted hover:text-fg transition-colors"
+              className="mt-3 inline-flex items-center gap-1.5 rounded-sm border border-border bg-surface-subtle px-3 py-1.5 text-xs text-fg-muted hover:text-fg transition-colors"
             >
               See example policy
               <ExternalLink className="h-3 w-3" />
@@ -174,13 +174,13 @@ export function CompetitorsForm({ adminKey }: Props) {
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       <span
-                        className={`inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 text-[10px] uppercase ${sev.cls}`}
+                        className={`inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 text-xs uppercase ${sev.cls}`}
                       >
                         <SevIcon className="h-2.5 w-2.5" />
                         {c.severity}
                       </span>
                       <span
-                        className={`inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 text-[10px] uppercase ${act.cls}`}
+                        className={`inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 text-xs uppercase ${act.cls}`}
                       >
                         <ActIcon className="h-2.5 w-2.5" />
                         {c.action}
@@ -195,7 +195,7 @@ export function CompetitorsForm({ adminKey }: Props) {
                         {c.patterns.map((p, i) => (
                           <code
                             key={i}
-                            className="rounded-sm bg-surface-subtle px-1.5 py-0.5 font-mono text-[10px] text-fg-muted"
+                            className="rounded-sm bg-surface-subtle px-1.5 py-0.5 font-mono text-xs text-fg-muted"
                           >
                             /{p}/
                           </code>
@@ -207,7 +207,7 @@ export function CompetitorsForm({ adminKey }: Props) {
                   {/* Description */}
                   {c.description && (
                     <div className="border-t border-border px-3 py-1.5">
-                      <p className="text-[11px] text-fg-subtle truncate">
+                      <p className="text-xs text-fg-subtle truncate">
                         {c.description}
                       </p>
                     </div>
@@ -220,7 +220,7 @@ export function CompetitorsForm({ adminKey }: Props) {
 
         {/* Footer stats */}
         {!isLoading && !error && competitors.length > 0 && (
-          <div className="flex items-center gap-3 border-t border-border pt-3 text-[10px] text-fg-subtle">
+          <div className="flex items-center gap-3 border-t border-border pt-3 text-xs text-fg-subtle">
             <span>
               {competitors.filter((c) => c.enabled).length} active
             </span>

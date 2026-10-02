@@ -6,6 +6,9 @@ import type { PatternSeverity } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/app/panel";
 import { EMPTY_DRAFT, type Draft } from "./_constants";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 
 type Props = {
   draft: Draft;
@@ -39,79 +42,77 @@ export function PatternFormPanel({
       <Panel title={draft.id ? `Edit pattern: ${draft.id}` : "New pattern"}>
         <div className="space-y-3 p-3">
           <div>
-            <label className="text-[10px] uppercase tracking-[0.16em] text-fg-muted">Name</label>
-            <input
-              className="mt-1 w-full rounded-sm border border-border bg-surface-card px-2 py-1.5 text-xs text-fg focus:border-status-critical/40 focus:outline-none"
+            <label className="text-xs uppercase tracking-[0.16em] text-fg-muted">Name</label>
+            <Input
+              className="mt-1 w-full"
               value={draft.name}
               onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-              placeholder="project-codename"
-            />
+              placeholder="project-codename" aria-label="project-codename" />
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-[10px] uppercase tracking-[0.16em] text-fg-muted">Kind</label>
-              <select
-                className="mt-1 w-full cursor-pointer rounded-sm border border-border bg-surface-card px-2 py-1.5 text-xs text-fg focus:outline-none"
+              <label className="text-xs uppercase tracking-[0.16em] text-fg-muted">Kind</label>
+              <NativeSelect
+                className="mt-1 w-full"
                 value={draft.kind}
                 onChange={(e) => setDraftKind(e.target.value as Draft["kind"])}
               >
-                <option value="regex">regex</option>
-                <option value="literal">literal</option>
-              </select>
+                <NativeSelectOption value="regex">regex</NativeSelectOption>
+                <NativeSelectOption value="literal">literal</NativeSelectOption>
+              </NativeSelect>
             </div>
             <div>
-              <label className="text-[10px] uppercase tracking-[0.16em] text-fg-muted">Severity</label>
-              <select
-                className="mt-1 w-full cursor-pointer rounded-sm border border-border bg-surface-card px-2 py-1.5 text-xs text-fg focus:outline-none"
+              <label className="text-xs uppercase tracking-[0.16em] text-fg-muted">Severity</label>
+              <NativeSelect
+                className="mt-1 w-full"
                 value={draft.severity}
                 onChange={(e) => setDraft({ ...draft, severity: e.target.value as PatternSeverity })}
               >
-                <option value="low">low</option>
-                <option value="medium">medium</option>
-                <option value="high">high</option>
-                <option value="critical">critical</option>
-              </select>
+                <NativeSelectOption value="low">low</NativeSelectOption>
+                <NativeSelectOption value="medium">medium</NativeSelectOption>
+                <NativeSelectOption value="high">high</NativeSelectOption>
+                <NativeSelectOption value="critical">critical</NativeSelectOption>
+              </NativeSelect>
             </div>
           </div>
           <div>
-            <label className="text-[10px] uppercase tracking-[0.16em] text-fg-muted">Pattern</label>
-            <textarea
-              className="mt-1 block min-h-[70px] w-full resize-y rounded-sm border border-border bg-surface-card px-2 py-1.5 text-xs text-fg focus:border-status-critical/40 focus:outline-none"
+            <label className="text-xs uppercase tracking-[0.16em] text-fg-muted">Pattern</label>
+            <Textarea
+              className="mt-1 min-h-[70px] w-full resize-y"
               value={draft.pattern}
               onChange={(e) => setDraft({ ...draft, pattern: e.target.value })}
               placeholder={draft.kind === "regex" ? "(?i)project-\\w+" : "ACME-SECRET"}
             />
             {compiledRegex === "invalid" ? (
-              <div className="mt-1 text-[10px] text-status-critical">invalid regex</div>
+              <div className="mt-1 text-xs text-status-critical">invalid regex</div>
             ) : null}
           </div>
-          <label className="flex cursor-pointer items-center gap-2 text-[11px] text-fg-muted">
+          <label className="flex items-center gap-2 text-xs text-fg-muted">
             <input
               type="checkbox"
               checked={draft.enabled}
               onChange={(e) => setDraft({ ...draft, enabled: e.target.checked })}
-              className="h-3.5 w-3.5 cursor-pointer accent-status-critical"
+              className="h-3.5 w-3.5 accent-status-critical"
             />
             enabled
           </label>
 
           <div className="rounded-sm border border-border bg-surface-subtle p-2">
-            <div className="text-[10px] uppercase tracking-[0.16em] text-fg-muted">INLINE TESTER</div>
-            <textarea
-              className="mt-1 block min-h-[60px] w-full resize-y rounded-sm border border-border bg-surface-card px-2 py-1.5 text-xs text-fg focus:outline-none"
+            <div className="text-xs uppercase tracking-[0.16em] text-fg-muted">INLINE TESTER</div>
+            <Textarea
+              className="mt-1 min-h-[60px] w-full resize-y"
               value={testInput}
               onChange={(e) => setTestInput(e.target.value)}
-              placeholder="paste sample text…"
-            />
+              placeholder="paste sample text…" aria-label="paste sample text" />
             <div className="mt-1 flex items-center justify-between">
               <Button variant="outline"
-                className="cursor-pointer rounded-sm border border-border-strong bg-surface-subtle px-2 py-1 text-[11px] text-fg-muted hover:bg-surface-card"
+                className="rounded-sm border border-border-strong bg-surface-subtle px-2 py-1 text-xs text-fg-muted hover:bg-surface-card"
                 onClick={onTest}
               >
                 Test
               </Button>
               {testMatch ? (
-                <span className="inline-flex items-center gap-1 text-[11px] text-fg-muted">
+                <span className="inline-flex items-center gap-1 text-xs text-fg-muted">
                   <ArrowRight className="h-3 w-3" aria-hidden />
                   {testMatch}
                 </span>
@@ -122,14 +123,14 @@ export function PatternFormPanel({
           <div className="flex items-center justify-end gap-2 pt-1">
             {draft.id ? (
               <Button variant="outline"
-                className="cursor-pointer rounded-sm border border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card"
+                className="rounded-sm border border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card"
                 onClick={() => setDraft(EMPTY_DRAFT)}
               >
                 Cancel
               </Button>
             ) : null}
             <Button variant="outline"
-              className="cursor-pointer rounded-sm bg-status-critical text-white hover:bg-status-critical"
+              className="rounded-sm bg-status-critical text-white hover:bg-status-critical"
               onClick={onSubmit}
               disabled={createPending || updatePending}
             >

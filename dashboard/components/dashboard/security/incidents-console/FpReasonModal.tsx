@@ -2,6 +2,7 @@
 
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 interface Props {
   open: boolean;
@@ -74,13 +75,13 @@ export function FpReasonModal({
 
         {/* Input */}
         <form onSubmit={handleSubmit}>
-          <input
+          <Input
             ref={inputRef}
             type="text"
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             placeholder={placeholder}
-            className="mt-4 w-full rounded-sm border border-border bg-surface-subtle px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus:border-border-strong focus:outline-none"
+            className="mt-4 w-full"
           />
 
           {/* Footer */}
@@ -90,14 +91,14 @@ export function FpReasonModal({
               variant="outline"
               size="sm"
               onClick={onClose}
-              className="h-8 cursor-pointer rounded-sm border-border-strong bg-transparent px-3 text-xs text-fg-subtle hover:bg-surface-subtle hover:text-fg"
+              className="h-8 rounded-sm border-border-strong bg-transparent px-3 text-xs text-fg-subtle hover:bg-surface-subtle hover:text-fg"
             >
               Cancel
             </Button>
             <Button variant="outline"
               type="submit"
               size="sm"
-              className="h-8 cursor-pointer rounded-sm border border-status-medium/40 bg-status-medium/10 px-3 text-xs text-status-medium hover:bg-status-medium/20"
+              className="h-8 rounded-sm border border-status-medium/40 bg-status-medium/10 px-3 text-xs text-status-medium hover:bg-status-medium/20"
             >
               {confirmLabel}
             </Button>

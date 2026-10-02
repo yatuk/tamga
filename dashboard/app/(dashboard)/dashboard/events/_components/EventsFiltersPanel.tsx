@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { TimeRange } from "@/lib/types";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 
 type ActionFilter = "pass" | "block" | "redact" | "warn";
 
@@ -46,14 +47,14 @@ export function EventsFiltersPanel({
     <div className="rounded-sm border border-border bg-surface-card p-3 space-y-4">
       {/* Action checkboxes */}
       <div>
-        <h4 className="mb-2 text-[10px] uppercase tracking-[0.14em] text-fg-muted">
+        <h4 className="mb-2 text-xs uppercase tracking-[0.14em] text-fg-muted">
           Action
         </h4>
         <div className="space-y-1.5">
           {ACTIONS.map((a) => (
             <label
               key={a.value}
-              className="flex cursor-pointer items-center gap-2 text-xs text-fg-muted hover:text-fg"
+              className="flex items-center gap-2 text-xs text-fg-muted hover:text-fg"
             >
               <Checkbox
                 checked={actions.includes(a.value)}
@@ -69,26 +70,26 @@ export function EventsFiltersPanel({
 
       {/* Provider select */}
       <div>
-        <h4 className="mb-2 text-[10px] uppercase tracking-[0.14em] text-fg-muted">
+        <h4 className="mb-2 text-xs uppercase tracking-[0.14em] text-fg-muted">
           Provider
         </h4>
-        <select
+        <NativeSelect
           value={provider}
           onChange={(e) => onProviderChange(e.target.value)}
-          className="w-full rounded-sm border border-border bg-surface-card px-2 py-1.5 text-xs text-fg-muted"
+          className="w-full"
         >
-          <option value="">All providers</option>
+          <NativeSelectOption value="">All providers</NativeSelectOption>
           {PROVIDERS.filter(Boolean).map((p) => (
-            <option key={p} value={p}>
+            <NativeSelectOption key={p} value={p}>
               {p}
-            </option>
+            </NativeSelectOption>
           ))}
-        </select>
+        </NativeSelect>
       </div>
 
       {/* Time range */}
       <div>
-        <h4 className="mb-2 text-[10px] uppercase tracking-[0.14em] text-fg-muted">
+        <h4 className="mb-2 text-xs uppercase tracking-[0.14em] text-fg-muted">
           Range
         </h4>
         <div className="inline-flex overflow-hidden rounded-sm border border-border">
@@ -96,7 +97,7 @@ export function EventsFiltersPanel({
             <button
               key={r}
               type="button"
-              className={`cursor-pointer px-2.5 py-1 text-xs ${
+              className={` px-2.5 py-1 text-xs ${
                 range === r
                   ? "bg-status-pass text-white"
                   : "bg-surface-card text-fg-muted hover:bg-surface-subtle"
@@ -114,7 +115,7 @@ export function EventsFiltersPanel({
         <Button
           size="sm"
           variant="outline"
-          className="w-full cursor-pointer rounded-sm border-border-strong text-[10px] uppercase"
+          className="w-full rounded-sm border-border-strong text-xs uppercase"
           onClick={onClearAll}
         >
           <X className="mr-1 h-3 w-3" /> Clear all

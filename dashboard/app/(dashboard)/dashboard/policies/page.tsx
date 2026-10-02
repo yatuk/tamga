@@ -44,20 +44,20 @@ export default function PoliciesPage() {
         actions={
           <>
             <Badge
-              className={`rounded-sm border text-[10px] uppercase tracking-[0.14em] ${
+              className={`rounded-sm border text-xs uppercase tracking-[0.14em] ${
                 isDirty ? "border-status-medium/40 bg-status-medium/10 text-status-medium" : "border-status-pass/30 bg-status-pass/10 text-status-pass"
               }`}
             >
               {isDirty ? "DRAFT" : "SYNCED"}
             </Badge>
-            <Button variant="outline" className="cursor-pointer rounded-sm bg-status-critical text-white hover:bg-status-critical" onClick={onSave} disabled={saving}>
+            <Button variant="outline" className="rounded-sm bg-status-critical text-white hover:bg-status-critical" onClick={onSave} disabled={saving}>
               {saving ? "Kaydediliyor…" : "Save & Reload"}
             </Button>
-            <Button variant="outline" className="cursor-pointer rounded-sm border border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card" onClick={onReload}>
+            <Button variant="outline" className="rounded-sm border border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card" onClick={onReload}>
               Reload disk
             </Button>
             <Button variant="outline"
-              className="cursor-pointer rounded-sm border border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card"
+              className="rounded-sm border border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card"
               onClick={() => setDraft(originalYaml)}
             >
               Reset draft

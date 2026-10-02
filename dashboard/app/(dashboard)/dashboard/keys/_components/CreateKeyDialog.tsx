@@ -43,7 +43,7 @@ export function CreateKeyDialog({ open, onClose, onCreate, isPending }: Props) {
           <button
             aria-label="Close dialog"
             onClick={onClose}
-            className="cursor-pointer rounded-sm p-1 text-fg-subtle hover:bg-surface-subtle"
+            className="rounded-sm p-1 text-fg-subtle hover:bg-surface-subtle"
             type="button"
           >
             <X className="h-4 w-4" />
@@ -52,7 +52,7 @@ export function CreateKeyDialog({ open, onClose, onCreate, isPending }: Props) {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-[11px] font-medium text-fg-muted mb-1">
+            <label className="block text-xs font-medium text-fg-muted mb-1">
               Name
             </label>
             <Input
@@ -66,14 +66,14 @@ export function CreateKeyDialog({ open, onClose, onCreate, isPending }: Props) {
           </div>
 
           <div>
-            <label className="block text-[11px] font-medium text-fg-muted mb-2">
+            <label className="block text-xs font-medium text-fg-muted mb-2">
               Scope
             </label>
             <div className="space-y-1.5">
               {SCOPES.map((s) => (
                 <label
                   key={s.value}
-                  className={`flex cursor-pointer items-start gap-2 rounded-sm border p-2 text-xs ${
+                  className={`flex  items-start gap-2 rounded-sm border p-2 text-xs ${
                     scope === s.value
                       ? "border-status-pass/40 bg-status-pass/5"
                       : "border-border hover:bg-surface-subtle"
@@ -101,7 +101,7 @@ export function CreateKeyDialog({ open, onClose, onCreate, isPending }: Props) {
               type="button"
               variant="outline"
               size="sm"
-              className="cursor-pointer rounded-sm"
+              className="rounded-sm"
               onClick={onClose}
             >
               Cancel
@@ -110,7 +110,7 @@ export function CreateKeyDialog({ open, onClose, onCreate, isPending }: Props) {
               type="submit"
               size="sm"
               disabled={!label.trim() || isPending}
-              className="cursor-pointer rounded-sm bg-status-pass text-white hover:bg-status-pass"
+              className="rounded-sm bg-status-pass text-white hover:bg-status-pass"
             >
               {isPending ? "Creating…" : "Create"}
             </Button>

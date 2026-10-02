@@ -85,7 +85,7 @@ export function ReportsBody({
               {(["24h", "7d", "30d"] as ReportRange[]).map((r) => (
                 <button
                   key={r}
-                  className={`cursor-pointer px-3 py-1 text-xs ${
+                  className={` px-3 py-1 text-xs ${
                     range === r ? "bg-status-pass text-white" : "bg-surface-card text-fg-muted hover:bg-surface-subtle"
                   }`}
                   onClick={() => setRange(r)}
@@ -96,13 +96,13 @@ export function ReportsBody({
               ))}
             </div>
             <Button variant="outline"
-              className="cursor-pointer rounded-sm border border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card print:hidden"
+              className="rounded-sm border border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card print:hidden"
               onClick={exportBlockedCsv}
             >
               <Download className="mr-1 h-4 w-4" /> CSV
             </Button>
             <Button variant="outline"
-              className="cursor-pointer rounded-sm border border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card print:hidden"
+              className="rounded-sm border border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card print:hidden"
               disabled={isExporting}
               onClick={exportOwaspPdf}
             >
@@ -110,7 +110,7 @@ export function ReportsBody({
               OWASP PDF
             </Button>
             <Button variant="outline"
-              className="cursor-pointer rounded-sm border border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card print:hidden"
+              className="rounded-sm border border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card print:hidden"
               disabled={isExporting}
               onClick={exportIncidentPdf}
             >
@@ -138,7 +138,7 @@ export function ReportsBody({
       <div className="grid gap-2 sm:grid-cols-2">
         {comparisonDelta ? (
           <div className="flex flex-col gap-1.5 rounded-sm border border-border bg-surface-card p-3">
-            <div className="text-[10px] uppercase tracking-[0.14em] text-fg-muted">
+            <div className="text-xs uppercase tracking-[0.14em] text-fg-muted">
               Period Comparison
             </div>
             <div className="flex items-center gap-3">
@@ -176,10 +176,10 @@ export function ReportsBody({
           </div>
         ) : (
           <div className="rounded-sm border border-border bg-surface-card p-3">
-            <div className="text-[10px] uppercase tracking-[0.14em] text-fg-muted">
+            <div className="text-xs uppercase tracking-[0.14em] text-fg-muted">
               Period Comparison
             </div>
-            <div className="mt-1 text-xs text-fg-subtle dark:text-fg-subtle">
+            <div className="mt-1 text-xs text-fg-subtle">
               Insufficient data for comparison
             </div>
           </div>
@@ -187,7 +187,7 @@ export function ReportsBody({
 
         {/* SLA compliance gauge */}
         <div className="flex flex-col gap-1.5 rounded-sm border border-border bg-surface-card p-3">
-          <div className="text-[10px] uppercase tracking-[0.14em] text-fg-muted">
+          <div className="text-xs uppercase tracking-[0.14em] text-fg-muted">
             SLA Compliance
           </div>
           {mttrData ? (
@@ -205,7 +205,7 @@ export function ReportsBody({
                   {mttrData.sla_compliance.toFixed(1)}%
                 </span>
               </div>
-              <div className="h-2 w-full rounded-sm bg-surface-subtle dark:bg-surface-elevated">
+              <div className="h-2 w-full rounded-sm bg-surface-subtle">
                 <div
                   className={`h-full rounded-sm ${
                     mttrData.sla_compliance >= 95
@@ -217,19 +217,19 @@ export function ReportsBody({
                   style={{ width: `${Math.min(mttrData.sla_compliance, 100)}%` }}
                 />
               </div>
-              <div className="text-[10px] text-fg-subtle dark:text-fg-subtle">
+              <div className="text-xs text-fg-subtle">
                 MTTR: {mttrData.overall_mttr_minutes.toFixed(1)} min
               </div>
             </>
           ) : (
-            <div className="mt-1 text-xs text-fg-subtle dark:text-fg-subtle">No SLA data</div>
+            <div className="mt-1 text-xs text-fg-subtle">No SLA data</div>
           )}
         </div>
       </div>
 
       {/* Executive summary */}
       <div className="rounded-sm border border-border bg-surface-card p-3">
-        <div className="mb-2 text-[10px] uppercase tracking-[0.14em] text-fg-muted">
+        <div className="mb-2 text-xs uppercase tracking-[0.14em] text-fg-muted">
           Executive Summary
         </div>
         <ul className="space-y-1 text-xs text-fg-muted">
@@ -272,7 +272,7 @@ export function ReportsBody({
         <Panel
           title={`Traffic · ${range === "24h" ? "24 hours" : range === "7d" ? "7 days" : "30 days"}`}
           aside={
-            <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
+            <span className="px-2 text-xs uppercase tracking-[0.18em] text-fg-muted">
               {chartData.length} pts
             </span>
           }
@@ -315,7 +315,7 @@ export function ReportsBody({
           <Panel
             title="Blocked events"
             aside={
-              <Badge className="rounded-sm border border-status-critical/40 bg-status-critical/10 text-[10px] uppercase text-status-critical">
+              <Badge className="rounded-sm border border-status-critical/40 bg-status-critical/10 text-xs uppercase text-status-critical">
                 {recentBlocked.length} BLOCK
               </Badge>
             }
@@ -331,10 +331,10 @@ export function ReportsBody({
                     className="rounded-sm border border-border bg-surface-subtle p-2 hover:border-border-strong"
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <div className="text-[11px] text-fg">{e.request_id.slice(0, 12)}</div>
+                      <div className="text-xs text-fg">{e.request_id.slice(0, 12)}</div>
                       <ActionBadge action={e.action} />
                     </div>
-                    <div className="mt-1 text-[10px] text-fg-muted">
+                    <div className="mt-1 text-xs text-fg-muted">
                       {e.provider || "unknown"} {e.model ? `· ${e.model}` : ""} ·{" "}
                       {new Date(e.timestamp).toLocaleString("en-GB")}
                     </div>

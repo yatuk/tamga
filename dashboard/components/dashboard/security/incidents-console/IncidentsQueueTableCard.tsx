@@ -42,7 +42,7 @@ function GridHeader({
   toggleSelectAllVisible: () => void;
 }) {
   const th = (label: string, extra = "") =>
-    `h-full flex items-center px-2 text-[10px] uppercase tracking-wide text-fg-muted ${extra}`;
+    `h-full flex items-center px-2 text-xs uppercase tracking-wide text-fg-muted ${extra}`;
 
   return (
     <div
@@ -101,7 +101,7 @@ function GridRow({
   return (
     <div
       style={rowStyle}
-      className={`grid ${GRID_COLS} ${GRID_MIN_W} h-[${ROW_HEIGHT_PX}px] max-h-[${ROW_HEIGHT_PX}px] min-h-[${ROW_HEIGHT_PX}px] overflow-hidden border-t border-border hover:bg-surface-subtle cursor-pointer ${isSelected ? "bg-surface-subtle/80 border-l-2 border-l-status-critical" : ""}`}
+      className={`grid ${GRID_COLS} ${GRID_MIN_W} h-[${ROW_HEIGHT_PX}px] max-h-[${ROW_HEIGHT_PX}px] min-h-[${ROW_HEIGHT_PX}px] overflow-hidden border-t border-border hover:bg-surface-subtle  ${isSelected ? "bg-surface-subtle/80 border-l-2 border-l-status-critical" : ""}`}
       onClick={() => m.setSelectedRow(idx)}
       role="row"
     >
@@ -128,7 +128,7 @@ function GridRow({
       {/* Entity — stacked provider/model + request_id */}
       <div className="h-full flex flex-col justify-center px-2 overflow-hidden">
         <div className="text-xs font-medium text-(--text-primary) truncate">{entity}</div>
-        <div className="font-mono text-[11px] text-(--text-muted) whitespace-nowrap truncate">
+        <div className="font-mono text-xs text-(--text-muted) whitespace-nowrap truncate">
           {event.request_id.slice(0, 12)}
         </div>
       </div>
@@ -138,7 +138,7 @@ function GridRow({
         <span className="font-mono text-xs text-fg-muted truncate">{findingSummary}</span>
         {owasp && (
           <span
-            className="inline-flex shrink-0 items-center rounded-sm border border-border-strong bg-surface-subtle px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-fg-muted"
+            className="inline-flex shrink-0 items-center rounded-sm border border-border-strong bg-surface-subtle px-1.5 py-0.5 font-mono text-xs uppercase tracking-wider text-fg-muted"
             title={`OWASP LLM Top 10 · ${owasp.label}`}
           >
             {owasp.code}
@@ -295,7 +295,7 @@ export function IncidentsQueueTableCard({ m, onFpClick }: { m: IncidentsConsoleM
         <div className="flex items-center justify-between">
           <CardTitle className="text-base">Incident Queue</CardTitle>
           {paused && (
-            <span className="inline-flex items-center gap-1 rounded-sm border border-status-medium/30 bg-status-medium/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-status-medium">
+            <span className="inline-flex items-center gap-1 rounded-sm border border-status-medium/30 bg-status-medium/10 px-2 py-0.5 text-xs font-medium uppercase tracking-wider text-status-medium">
               PAUSED
             </span>
           )}
@@ -320,7 +320,7 @@ export function IncidentsQueueTableCard({ m, onFpClick }: { m: IncidentsConsoleM
           </div>
         ) : m.filtered.length === 0 ? (
           <div className="rounded-sm border border-border bg-surface-card p-6 text-center text-sm text-fg-muted">
-            <div className="text-[11px] uppercase tracking-[0.18em] text-fg-muted">no incident matches</div>
+            <div className="text-xs uppercase tracking-[0.18em] text-fg-muted">no incident matches</div>
             <div className="mt-2 text-fg-muted">No incidents match the filters.</div>
           </div>
         ) : (
@@ -338,7 +338,7 @@ export function IncidentsQueueTableCard({ m, onFpClick }: { m: IncidentsConsoleM
             <Panel
               title="Incidents"
               aside={
-                <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
+                <span className="px-2 text-xs uppercase tracking-[0.18em] text-fg-muted">
                   {rows.length} visible · {m.eventsFeed.length} loaded / {m.total} total
                   {m.isFetchingNextPage ? " · loading…" : ""}
                 </span>
@@ -391,14 +391,14 @@ export function IncidentsQueueTableCard({ m, onFpClick }: { m: IncidentsConsoleM
 
               {/* Keyboard shortcuts footer — solid bg, sits below scroll area */}
               {rows.length > 0 && (
-                <div className="sticky bottom-0 z-10 border-t border-border bg-surface-subtle px-3 py-1.5 text-[10px] text-fg-muted flex flex-wrap gap-x-3 gap-y-0.5">
-                  <span><kbd className="rounded-sm border border-border-strong px-1 py-px text-[9px]">j</kbd>/<kbd className="rounded-sm border border-border-strong px-1 py-px text-[9px]">k</kbd> navigate</span>
-                  <span><kbd className="rounded-sm border border-border-strong px-1 py-px text-[9px]">Enter</kbd> detail</span>
-                  <span><kbd className="rounded-sm border border-border-strong px-1 py-px text-[9px]">x</kbd> select</span>
-                  <span><kbd className="rounded-sm border border-border-strong px-1 py-px text-[9px]">Shift+A</kbd> assign</span>
-                  <span><kbd className="rounded-sm border border-border-strong px-1 py-px text-[9px]">Shift+C</kbd> close</span>
-                  <span><kbd className="rounded-sm border border-border-strong px-1 py-px text-[9px]">Shift+F</kbd> false positive</span>
-                  <span><kbd className="rounded-sm border border-border-strong px-1 py-px text-[9px]">Esc</kbd> clear</span>
+                <div className="sticky bottom-0 z-10 border-t border-border bg-surface-subtle px-3 py-1.5 text-xs text-fg-muted flex flex-wrap gap-x-3 gap-y-0.5">
+                  <span><kbd className="rounded-sm border border-border-strong px-1 py-px text-xs">j</kbd>/<kbd className="rounded-sm border border-border-strong px-1 py-px text-xs">k</kbd> navigate</span>
+                  <span><kbd className="rounded-sm border border-border-strong px-1 py-px text-xs">Enter</kbd> detail</span>
+                  <span><kbd className="rounded-sm border border-border-strong px-1 py-px text-xs">x</kbd> select</span>
+                  <span><kbd className="rounded-sm border border-border-strong px-1 py-px text-xs">Shift+A</kbd> assign</span>
+                  <span><kbd className="rounded-sm border border-border-strong px-1 py-px text-xs">Shift+C</kbd> close</span>
+                  <span><kbd className="rounded-sm border border-border-strong px-1 py-px text-xs">Shift+F</kbd> false positive</span>
+                  <span><kbd className="rounded-sm border border-border-strong px-1 py-px text-xs">Esc</kbd> clear</span>
                 </div>
               )}
             </Panel>

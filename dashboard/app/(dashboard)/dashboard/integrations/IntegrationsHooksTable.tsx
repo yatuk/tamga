@@ -8,6 +8,7 @@ import { Panel } from "@/components/app/panel";
 import { formatSince } from "@/lib/utils/format";
 import type { Webhook } from "@/lib/api";
 import { integrationKindBadge } from "./integrationWebhookHelpers";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 
 type Props = {
   hooks: Webhook[];
@@ -42,28 +43,28 @@ export function IntegrationsHooksTable({ hooks, onTest, onDelete, onConnect }: P
       <Panel
         title="Connected Webhooks"
         aside={
-          <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">{hooks.length} rows</span>
+          <span className="px-2 text-xs uppercase tracking-[0.18em] text-fg-muted">{hooks.length} rows</span>
         }
 
       >
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-surface-subtle text-[10px] uppercase tracking-wide text-fg-muted">
-              <tr>
-                <th className="px-3 py-2">Kind</th>
-                <th className="px-3 py-2">Label</th>
-                <th className="px-3 py-2">URL</th>
-                <th className="px-3 py-2">Enabled</th>
-                <th className="px-3 py-2">Status</th>
-                <th className="px-3 py-2">Last Fired</th>
-                <th className="px-3 py-2">Delivered</th>
-                <th className="px-3 py-2 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table className="w-full text-left">
+            <TableHeader className="uppercase">
+              <TableRow>
+                <TableHead>Kind</TableHead>
+                <TableHead>Label</TableHead>
+                <TableHead>URL</TableHead>
+                <TableHead>Enabled</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Last Fired</TableHead>
+                <TableHead>Delivered</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {hooks.length === 0 ? (
-                <tr>
-                  <td className="px-3 py-0" colSpan={COLSPAN}>
+                <TableRow>
+                  <TableCell colSpan={COLSPAN}>
                     <EmptyState
                       icon="database"
                       title="No webhooks configured"
@@ -71,55 +72,55 @@ export function IntegrationsHooksTable({ hooks, onTest, onDelete, onConnect }: P
                       suggestion="Choose a preset from the grid above to get started with a guided setup."
                       action={onConnect ? { label: "Create Webhook", onClick: onConnect } : undefined}
                     />
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ) : (
                 hooks.map((h) => (
-                  <tr key={h.id} className="border-t border-border hover:bg-surface-subtle/60">
-                    <td className="px-3 py-2">
-                      <Badge className={`rounded-sm border text-[10px] ${integrationKindBadge(h.kind)}`}>{h.kind}</Badge>
-                    </td>
-                    <td className="px-3 py-2 text-fg">
+                  <TableRow key={h.id}>
+                    <TableCell>
+                      <Badge className={`rounded-sm border text-xs ${integrationKindBadge(h.kind)}`}>{h.kind}</Badge>
+                    </TableCell>
+                    <TableCell>
                       {h.label}
                       {h.kind === "jira" && h.project_key ? (
-                        <span className="ml-2 rounded-sm border border-status-low/60 bg-status-low/30 px-1 py-0.5 text-[10px] text-status-low">
+                        <span className="ml-2 rounded-sm border border-status-low/60 bg-status-low/30 px-1 py-0.5 text-xs text-status-low">
                           {h.project_key}/{h.issue_type || "Task"}
                         </span>
                       ) : null}
-                    </td>
-                    <td className="max-w-[280px] truncate px-3 py-2 text-[11px] text-fg-muted">{h.url}</td>
-                    <td className="px-3 py-2 text-[11px]">
+                    </TableCell>
+                    <TableCell className="max-w-[280px] truncate">{h.url}</TableCell>
+                    <TableCell>
                       {h.enabled ? <span className="text-status-pass">ON</span> : <span className="text-fg-muted">OFF</span>}
-                    </td>
-                    <td className="px-3 py-2">
+                    </TableCell>
+                    <TableCell>
                       <span
                         className="inline-flex items-center gap-1.5"
                         title={h.last_fired ? `Last delivery: ${new Date(h.last_fired).toLocaleString("en-GB")}` : "No deliveries yet"}
                       >
                         <span className={`inline-block h-2 w-2 rounded-full ${lastFiredDotClass(h.last_fired)}`} />
-                        <span className="text-[10px] text-fg-subtle">
+                        <span className="text-xs text-fg-subtle">
                           {h.last_fired ? "Active" : "—"}
                         </span>
                       </span>
-                    </td>
-                    <td className="px-3 py-2">
-                      <span className={`inline-flex items-center gap-1 text-[11px] ${lastFiredColor(h.last_fired)}`}>
+                    </TableCell>
+                    <TableCell>
+                      <span className={`inline-flex items-center gap-1 text-xs ${lastFiredColor(h.last_fired)}`}>
                         {h.last_fired ? formatSince(h.last_fired) : "Never"}
                       </span>
-                    </td>
-                    <td className="px-3 py-2 tabular-nums text-[11px] text-fg-subtle">
+                    </TableCell>
+                    <TableCell className="tabular-nums">
                       —
-                    </td>
-                    <td className="px-3 py-2 text-right">
+                    </TableCell>
+                    <TableCell className="text-right">
                       <div className="inline-flex gap-1">
                         <Button variant="outline"
-                          className="cursor-pointer rounded-sm border border-border-strong bg-surface-subtle px-2 py-1 text-fg-muted hover:bg-surface-card"
+                          className="rounded-sm border border-border-strong bg-surface-subtle px-2 py-1 text-fg-muted hover:bg-surface-card"
                           onClick={() => onTest(h.id)}
                         >
                           <CheckCircle2 className="h-3.5 w-3.5" />
                         </Button>
                         <Button variant="outline"
-                          className="cursor-pointer rounded-sm border border-status-critical bg-status-critical/30 px-2 py-1 text-status-critical hover:bg-status-critical/40"
+                          className="rounded-sm border border-status-critical bg-status-critical/30 px-2 py-1 text-status-critical hover:bg-status-critical/40"
                           onClick={() => {
                             onDelete(h.id);
                           }}
@@ -127,12 +128,12 @@ export function IntegrationsHooksTable({ hooks, onTest, onDelete, onConnect }: P
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))
               )}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       </Panel>
     </div>

@@ -57,14 +57,14 @@ export default function AuthCallbackPage() {
 
   if (error) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-surface-subtle dark:bg-surface-base">
-        <div className="w-full max-w-md rounded-lg border border-status-critical bg-white p-8 text-center shadow-sm dark:border-status-critical dark:bg-surface-subtle">
+      <div className="flex min-h-screen items-center justify-center bg-surface-subtle">
+        <div className="w-full max-w-md rounded-lg border border-status-critical bg-white p-8 text-center shadow-sm">
           <div className="mb-4 text-4xl" aria-hidden="true">&#x26A0;</div>
-          <h1 className="mb-2 text-xl font-bold text-status-critical dark:text-status-critical">Authentication Failed</h1>
+          <h1 className="mb-2 text-xl font-bold text-status-critical">Authentication Failed</h1>
           <p className="text-sm text-fg-muted">{error}</p>
           <button
             onClick={() => router.push("/login")}
-            className="mt-6 rounded-lg bg-surface-subtle px-4 py-2 text-sm font-medium text-white hover:bg-surface-elevated dark:bg-surface-subtle dark:text-fg"
+            className="mt-6 rounded-lg bg-surface-subtle px-4 py-2 text-sm font-medium text-white hover:bg-surface-elevated"
           >
             Try Again
           </button>
@@ -74,9 +74,9 @@ export default function AuthCallbackPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-surface-subtle dark:bg-surface-base">
+    <div className="flex min-h-screen items-center justify-center bg-surface-subtle">
       <div className="text-center">
-        <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4 border-border-strong border-t-border-strong dark:border-border-strong dark:border-t-border-subtle" />
+        <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4 border-border-strong border-t-border-strong" />
         <p className="text-sm text-fg-subtle">Completing sign-in…</p>
       </div>
     </div>

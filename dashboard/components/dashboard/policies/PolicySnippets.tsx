@@ -87,12 +87,12 @@ export function appendRateLimitTemplate(draft: string): string {
 export function PolicySnippetsBar({ draft, onApply }: { draft: string; onApply: (next: string) => void }) {
   return (
     <div className="flex flex-wrap gap-2 rounded-sm border border-border bg-surface-subtle/50 p-2">
-      <span className="w-full text-[10px] uppercase tracking-wide text-fg-muted">Quick templates</span>
+      <span className="w-full text-xs uppercase tracking-wide text-fg-muted">Quick templates</span>
       <Button
         type="button"
         variant="outline"
         size="sm"
-        className="h-7 border-border-strong text-[11px]"
+        className="h-7 border-border-strong text-xs"
         onClick={() => onApply(appendCustomEntity(draft))}
       >
         + Custom entity (regex)
@@ -101,7 +101,7 @@ export function PolicySnippetsBar({ draft, onApply }: { draft: string; onApply: 
         type="button"
         variant="outline"
         size="sm"
-        className="h-7 border-border-strong text-[11px]"
+        className="h-7 border-border-strong text-xs"
         onClick={() => onApply(strengthenInjection(draft))}
       >
         Injection → BLOCK
@@ -110,7 +110,7 @@ export function PolicySnippetsBar({ draft, onApply }: { draft: string; onApply: 
         type="button"
         variant="outline"
         size="sm"
-        className="h-7 border-border-strong text-[11px]"
+        className="h-7 border-border-strong text-xs"
         onClick={() => onApply(appendRateLimitTemplate(draft))}
       >
         + Rate limit

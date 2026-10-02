@@ -68,7 +68,7 @@ export function TrafficBody({
               {(["24h", "7d", "30d"] as TimeRange[]).map((r) => (
                 <button
                   key={r}
-                  className={`cursor-pointer px-3 py-1 text-xs ${
+                  className={` px-3 py-1 text-xs ${
                     range === r
                       ? "bg-status-pass text-white"
                       : "bg-surface-card text-fg-muted hover:bg-surface-subtle"
@@ -81,7 +81,7 @@ export function TrafficBody({
               ))}
             </div>
             <Button variant="outline"
-              className="cursor-pointer rounded-sm border border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card"
+              className="rounded-sm border border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card"
               onClick={exportCsv}
             >
               <Download className="mr-1 h-4 w-4" /> CSV
@@ -136,7 +136,7 @@ export function TrafficBody({
 
       {/* Peak indicator */}
       {peakHour && !isLoading ? (
-        <div className="flex items-center gap-2 rounded-sm border border-border bg-surface-card px-3 py-2 text-[10px] text-fg-muted">
+        <div className="flex items-center gap-2 rounded-sm border border-border bg-surface-card px-3 py-2 text-xs text-fg-muted">
           <span className="uppercase tracking-[0.12em]">Peak Hour</span>
           <span className="font-mono text-fg-muted">{peakHour.time}</span>
           <span className="font-mono tabular-nums text-status-medium">{peakHour.count.toLocaleString("en-US")} requests</span>
@@ -147,7 +147,7 @@ export function TrafficBody({
       <Panel
         title={`Traffic · ${range === "24h" ? "24 hours" : range === "7d" ? "7 days" : "30 days"}`}
         aside={
-          <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
+          <span className="px-2 text-xs uppercase tracking-[0.18em] text-fg-muted">
             {chartData.length} pts
           </span>
         }
@@ -230,7 +230,7 @@ export function TrafficBody({
       {topEndpoints.length > 0 && !isLoading ? (
         <Panel
           title="TOP ENDPOINTS"
-          aside={<span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">{topEndpoints.length} shown</span>}
+          aside={<span className="px-2 text-xs uppercase tracking-[0.18em] text-fg-muted">{topEndpoints.length} shown</span>}
         >
           <div className="space-y-2 p-3">
             {topEndpoints.map(([name, count], i) => (

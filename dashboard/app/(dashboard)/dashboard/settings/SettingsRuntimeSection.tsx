@@ -52,8 +52,8 @@ export function SettingsRuntimeSection({ health, runtime }: Props) {
             <div>
               uptime: <span className="text-fg">{runtime?.uptime_seconds ?? health?.uptime_seconds ?? 0}s</span>
             </div>
-            <div className="text-[11px] text-fg-muted">policy_path: {runtime?.policy_path ?? health?.policy_path ?? "—"}</div>
-            <div className="text-[11px] text-fg-muted">
+            <div className="text-xs text-fg-muted">policy_path: {runtime?.policy_path ?? health?.policy_path ?? "—"}</div>
+            <div className="text-xs text-fg-muted">
               endpoint: <code>/api/v1/health/detail</code>
             </div>
           </div>

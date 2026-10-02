@@ -15,6 +15,7 @@ import { Stat } from "@/components/app/stat";
 import { SkeletonRows } from "@/components/app/states";
 import { Panel } from "@/components/app/panel";
 import { PAGE_SIZE } from "./_constants";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 
 type Props = {
   events: SecurityEvent[];
@@ -129,27 +130,27 @@ export function HuntingResults({ events, total, page, setPage, isLoading, error 
           <span className="text-xs font-semibold text-fg">
             {total} results found
           </span>
-          <span className="text-[10px] text-fg-muted">·</span>
-          <Badge className="rounded-sm border border-status-critical/40 bg-status-critical/10 text-[10px] text-status-critical">
+          <span className="text-xs text-fg-muted">·</span>
+          <Badge className="rounded-sm border border-status-critical/40 bg-status-critical/10 text-xs text-status-critical">
             {severityCounts.critical} Critical
           </Badge>
-          <Badge className="rounded-sm border border-status-medium/40 bg-status-medium/10 text-[10px] text-status-medium">
+          <Badge className="rounded-sm border border-status-medium/40 bg-status-medium/10 text-xs text-status-medium">
             {severityCounts.high} High
           </Badge>
-          <Badge className="rounded-sm border border-status-medium/40 bg-status-medium/10 text-[10px] text-status-medium">
+          <Badge className="rounded-sm border border-status-medium/40 bg-status-medium/10 text-xs text-status-medium">
             {severityCounts.medium} Medium
           </Badge>
-          <Badge className="rounded-sm border border-border-strong/40 bg-surface-subtle0/10 text-[10px] text-fg-subtle">
+          <Badge className="rounded-sm border border-border-strong/40 bg-surface-subtle0/10 text-xs text-fg-subtle">
             {severityCounts.low} Low
           </Badge>
           {lastRunMeta && (
             <>
-              <span className="text-[10px] text-fg-muted">·</span>
-              <span className="flex items-center gap-1 text-[10px] text-fg-muted">
+              <span className="text-xs text-fg-muted">·</span>
+              <span className="flex items-center gap-1 text-xs text-fg-muted">
                 <Clock className="h-3 w-3" />
                 {lastRunMeta.latest.toLocaleString("en-GB")}
               </span>
-              <span className="text-[10px] text-fg-muted">
+              <span className="text-xs text-fg-muted">
                 {totalFindings} findings in {lastRunMeta.totalLatencyMs} ms
               </span>
             </>
@@ -173,13 +174,13 @@ export function HuntingResults({ events, total, page, setPage, isLoading, error 
       {/* Bulk-action toolbar */}
       {selectedRows.size > 0 && (
         <div className="flex items-center gap-2 rounded-sm border border-status-pass/30 bg-status-pass/5 px-3 py-2">
-          <span className="text-xs font-semibold text-status-pass dark:text-status-pass">
+          <span className="text-xs font-semibold text-status-pass">
             {selectedRows.size} selected
           </span>
           <Button
             size="sm"
             variant="outline"
-            className="rounded-sm border-border-strong text-[10px] h-7"
+            className="rounded-sm border-border-strong text-xs h-7"
             disabled
             title="Bulk tagging will be available in a future release"
           >
@@ -189,7 +190,7 @@ export function HuntingResults({ events, total, page, setPage, isLoading, error 
           <Button
             size="sm"
             variant="outline"
-            className="rounded-sm border-border-strong text-[10px] h-7 opacity-50"
+            className="rounded-sm border-border-strong text-xs h-7 opacity-50"
             disabled
             title="Bulk status change will be available in a future release"
           >
@@ -197,7 +198,7 @@ export function HuntingResults({ events, total, page, setPage, isLoading, error 
           </Button>
           <button
             type="button"
-            className="ml-auto text-fg-subtle hover:text-fg-muted dark:hover:text-fg-subtle"
+            className="ml-auto text-fg-subtle hover:text-fg-muted"
             onClick={clearSelection}
             aria-label="Clear selection"
           >
@@ -218,27 +219,27 @@ export function HuntingResults({ events, total, page, setPage, isLoading, error 
                 suggestion="Loosen the filters or widen the time range."
               />
             ) : (
-              <table className="w-full table-fixed border-collapse text-left text-xs">
-                <thead>
-                  <tr className="border-b border-border text-[10px] uppercase tracking-wide text-fg-muted">
-                    <th className="px-2 py-2 w-8">
+              <Table className="w-full text-left">
+                <TableHeader>
+                  <TableRow className="uppercase">
+                    <TableHead className="w-8">
                       <input
                         type="checkbox"
                         checked={selectedRows.size === events.length && events.length > 0}
                         onChange={toggleSelectAll}
-                        className="rounded-sm border-border dark:border-border-strong"
+                        className="rounded-sm border-border"
                         aria-label="Select all"
                       />
-                    </th>
-                    <th className="px-2 py-2 w-6" />
-                    <th className="px-2 py-2">request_id</th>
-                    <th className="px-2 py-2">action</th>
-                    <th className="px-2 py-2">severity</th>
-                    <th className="px-2 py-2">findings</th>
-                    <th className="px-2 py-2" />
-                  </tr>
-                </thead>
-                <tbody>
+                    </TableHead>
+                    <TableHead className="w-6" />
+                    <TableHead>request_id</TableHead>
+                    <TableHead>action</TableHead>
+                    <TableHead>severity</TableHead>
+                    <TableHead>findings</TableHead>
+                    <TableHead />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {events.map((ev) => {
                     const isExpanded = expandedRows.has(ev.request_id);
                     const isSelected = selectedRows.has(ev.request_id);
@@ -246,20 +247,20 @@ export function HuntingResults({ events, total, page, setPage, isLoading, error 
 
                     return (
                       <Fragment key={ev.request_id}>
-                        <tr className={`border-b border-border ${isSelected ? "bg-status-pass/5" : "hover:bg-surface-subtle/30"}`}>
-                          <td className="px-2 py-1.5">
+                        <TableRow className={`border-b border-border ${isSelected ? "bg-status-pass/5" : "hover:bg-surface-subtle/30"}`}>
+                          <TableCell>
                             <input
                               type="checkbox"
                               checked={isSelected}
                               onChange={() => toggleSelect(ev.request_id)}
-                              className="rounded-sm border-border dark:border-border-strong"
+                              className="rounded-sm border-border"
                               aria-label={`Select ${ev.request_id.slice(0, 10)}`}
                             />
-                          </td>
-                          <td className="px-0 py-1.5">
+                          </TableCell>
+                          <TableCell>
                             <button
                               type="button"
-                              className="flex items-center justify-center text-fg-subtle hover:text-fg-muted dark:hover:text-fg-subtle"
+                              className="flex items-center justify-center text-fg-subtle hover:text-fg-muted"
                               onClick={() => toggleExpand(ev.request_id)}
                               aria-label={isExpanded ? "Collapse row" : "Expand row"}
                             >
@@ -269,20 +270,20 @@ export function HuntingResults({ events, total, page, setPage, isLoading, error 
                                 <ChevronRight className="h-3.5 w-3.5" />
                               )}
                             </button>
-                          </td>
-                          <td className="px-2 py-1.5 font-mono text-fg min-w-[120px] max-w-[150px] truncate whitespace-nowrap">{ev.request_id}</td>
-                          <td className="px-2 py-1.5 whitespace-nowrap">
-                            <Badge className="rounded-sm border border-border-strong bg-surface-card text-[10px] text-fg-muted">
+                          </TableCell>
+                          <TableCell className="font-mono min-w-[120px] max-w-[150px] truncate whitespace-nowrap">{ev.request_id}</TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            <Badge className="rounded-sm border border-border-strong bg-surface-card text-xs text-fg-muted">
                               {toUpperEn(ev.action || "—")}
                             </Badge>
-                          </td>
-                          <td className="px-2 py-1.5">
+                          </TableCell>
+                          <TableCell>
                             <div className="flex gap-1 flex-wrap">
                               {sevs.length > 0 ? (
                                 sevs.map((s) => (
                                   <span
                                     key={s}
-                                    className={`inline-flex items-center rounded-sm border px-1.5 py-0.5 text-[9px] uppercase tracking-wide ${severityClass(s)}`}
+                                    className={`inline-flex items-center rounded-sm border px-1.5 py-0.5 text-xs uppercase tracking-wide ${severityClass(s)}`}
                                   >
                                     {s}
                                   </span>
@@ -291,27 +292,27 @@ export function HuntingResults({ events, total, page, setPage, isLoading, error 
                                 <span className="text-fg-subtle">—</span>
                               )}
                             </div>
-                          </td>
-                          <td className="px-2 py-1.5 text-fg-muted whitespace-nowrap">{ev.findings_count ?? ev.findings?.length ?? 0}</td>
-                          <td className="px-2 py-1.5 whitespace-nowrap">
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">{ev.findings_count ?? ev.findings?.length ?? 0}</TableCell>
+                          <TableCell className="whitespace-nowrap">
                             <Link
                               href={`/dashboard/security?request_id=${encodeURIComponent(ev.request_id)}`}
-                              className="inline-flex items-center gap-1 text-[10px] text-status-critical hover:underline"
+                              className="inline-flex items-center gap-1 text-xs text-status-critical hover:underline"
                             >
                               Incidents
                               <ExternalLink className="h-3 w-3" />
                             </Link>
-                          </td>
-                        </tr>
+                          </TableCell>
+                        </TableRow>
                         {/* Expanded row — shown as a separate row below the main row */}
                         {isExpanded && (
-                          <tr className="bg-surface-subtle/30 border-l-2 border-status-pass">
-                            <td colSpan={MAX_COLSPAN} className="px-3 py-2">
-                              <div className="text-[10px] uppercase tracking-wide text-fg-subtle mb-1.5">
+                          <TableRow>
+                            <TableCell colSpan={MAX_COLSPAN}>
+                              <div className="text-xs uppercase tracking-wide text-fg-subtle mb-1.5">
                                 Findings ({(ev.findings || []).length})
                               </div>
                               {(ev.findings || []).length === 0 ? (
-                                <div className="text-fg-subtle py-1 text-[11px]">
+                                <div className="text-fg-subtle py-1 text-xs">
                                   No findings in this event.
                                 </div>
                               ) : (
@@ -321,18 +322,18 @@ export function HuntingResults({ events, total, page, setPage, isLoading, error 
                                     return (
                                       <div
                                         key={fi}
-                                        className="flex items-center gap-2 py-1 border-b border-border-subtle dark:border-border last:border-0 text-[11px]"
+                                        className="flex items-center gap-2 py-1 border-b border-border-subtle last:border-0 text-xs"
                                       >
                                         <span className="w-20 shrink-0 text-fg-muted">
                                           {f.type || "—"}
                                         </span>
                                         <SeverityBadge severity={f.severity} />
                                         {confPct && (
-                                          <span className="text-[10px] tabular-nums text-fg-subtle w-10 shrink-0">
+                                          <span className="text-xs tabular-nums text-fg-subtle w-10 shrink-0">
                                             {confPct}
                                           </span>
                                         )}
-                                        <span className="flex-1 truncate font-mono text-[10px] text-fg-subtle">
+                                        <span className="flex-1 truncate font-mono text-xs text-fg-subtle">
                                           {truncateMatch(f.match, MAX_EXPANDED_CHARS)}
                                         </span>
                                       </div>
@@ -340,18 +341,18 @@ export function HuntingResults({ events, total, page, setPage, isLoading, error 
                                   })}
                                 </div>
                               )}
-                            </td>
-                          </tr>
+                            </TableCell>
+                          </TableRow>
                         )}
                       </Fragment>
                     );
                   })}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             )}
           </div>
         )}
-        <div className="flex items-center justify-between border-t border-border px-3 py-2 text-[10px] text-fg-muted">
+        <div className="flex items-center justify-between border-t border-border px-3 py-2 text-xs text-fg-muted">
           <span>
             {total} total · page {page} / {Math.max(1, Math.ceil(total / PAGE_SIZE))}
           </span>

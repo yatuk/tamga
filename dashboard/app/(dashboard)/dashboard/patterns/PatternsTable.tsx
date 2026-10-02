@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/app/states";
 import { SkeletonRows } from "@/components/app/states";
 import { Panel } from "@/components/app/panel";
 import { sevClass } from "./_constants";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 
 type Props = {
   items: CustomPattern[];
@@ -27,84 +28,84 @@ export function PatternsTable({ items, isLoading, onEdit, onDelete, onToggleEnab
       <Panel
         title="Patterns"
         aside={
-          <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-fg-muted">
+          <span className="px-2 text-xs uppercase tracking-[0.18em] text-fg-muted">
             {items.length} rows
           </span>
         }
 
       >
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-surface-subtle text-[10px] uppercase tracking-wide text-fg-muted">
-              <tr>
-                <th className="px-3 py-2">Name</th>
-                <th className="px-3 py-2">Kind</th>
-                <th className="px-3 py-2">Pattern</th>
-                <th className="px-3 py-2">Severity</th>
-                <th className="px-3 py-2">Hits</th>
-                <th className="px-3 py-2">Last Matched</th>
-                <th className="px-3 py-2">Enabled</th>
-                <th className="px-3 py-2 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table className="w-full text-left">
+            <TableHeader className="uppercase">
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Kind</TableHead>
+                <TableHead>Pattern</TableHead>
+                <TableHead>Severity</TableHead>
+                <TableHead>Hits</TableHead>
+                <TableHead>Last Matched</TableHead>
+                <TableHead>Enabled</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {isLoading ? (
-                <tr>
-                  <td className="px-3 py-0" colSpan={COLSPAN}>
+                <TableRow>
+                  <TableCell colSpan={COLSPAN}>
                     <SkeletonRows rows={6} />
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ) : items.length === 0 ? (
-                <tr>
-                  <td className="px-3 py-0" colSpan={COLSPAN}>
+                <TableRow>
+                  <TableCell colSpan={COLSPAN}>
                     <EmptyState
                       icon="search"
                       title="No detection patterns defined yet"
                       description="Custom regex and keyword patterns detect sensitive data, prompt injections, and PII in LLM traffic."
                       suggestion="Create a pattern from the right panel — it takes effect immediately after scanner reload."
                     />
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ) : (
                 items.map((p) => (
-                  <tr key={p.id} className="border-t border-border hover:bg-surface-subtle/60">
-                    <td className="px-3 py-2 text-fg">{p.name}</td>
-                    <td className="px-3 py-2">
-                      <Badge className="rounded-sm border border-border-strong bg-surface-subtle text-[10px] text-fg-muted">
+                  <TableRow key={p.id}>
+                    <TableCell>{p.name}</TableCell>
+                    <TableCell>
+                      <Badge className="rounded-sm border border-border-strong bg-surface-subtle text-xs text-fg-muted">
                         {p.kind}
                       </Badge>
-                    </td>
-                    <td className="max-w-[260px] truncate px-3 py-2 text-[11px] text-fg-muted">
+                    </TableCell>
+                    <TableCell className="max-w-[260px] truncate">
                       {p.pattern}
-                    </td>
-                    <td className="px-3 py-2">
-                      <Badge className={`rounded-sm border text-[10px] ${sevClass(p.severity)}`}>
+                    </TableCell>
+                    <TableCell>
+                      <Badge className={`rounded-sm border text-xs ${sevClass(p.severity)}`}>
                         {toUpperEn(p.severity)}
                       </Badge>
-                    </td>
-                    <td className="px-3 py-2 tabular-nums text-[11px] text-fg-muted">
+                    </TableCell>
+                    <TableCell className="tabular-nums">
                       —
-                    </td>
-                    <td className="px-3 py-2 text-[11px] text-fg-subtle">
+                    </TableCell>
+                    <TableCell>
                       —
-                    </td>
-                    <td className="px-3 py-2">
+                    </TableCell>
+                    <TableCell>
                       <Switch
                         checked={p.enabled}
                         onCheckedChange={() => onToggleEnabled(p)}
                         aria-label={`Toggle ${p.name}`}
                       />
-                    </td>
-                    <td className="px-3 py-2 text-right">
+                    </TableCell>
+                    <TableCell className="text-right">
                       <div className="inline-flex gap-1">
                         <Button variant="outline"
-                          className="cursor-pointer rounded-sm border border-border-strong bg-surface-subtle px-2 py-1 text-fg-muted hover:bg-surface-card"
+                          className="rounded-sm border border-border-strong bg-surface-subtle px-2 py-1 text-fg-muted hover:bg-surface-card"
                           onClick={() => onEdit(p)}
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
                         <Button variant="outline"
-                          className="cursor-pointer rounded-sm border border-status-critical bg-status-critical/30 px-2 py-1 text-status-critical hover:bg-status-critical/40"
+                          className="rounded-sm border border-status-critical bg-status-critical/30 px-2 py-1 text-status-critical hover:bg-status-critical/40"
                           onClick={() => {
                             onDelete(p.id);
                           }}
@@ -112,12 +113,12 @@ export function PatternsTable({ items, isLoading, onEdit, onDelete, onToggleEnab
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))
               )}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       </Panel>
     </div>

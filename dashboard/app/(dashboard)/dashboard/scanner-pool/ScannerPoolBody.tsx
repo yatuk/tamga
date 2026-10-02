@@ -8,6 +8,7 @@ import { HealthScoreBadge } from "@/components/common/HealthScoreBadge";
 import { Panel } from "@/components/app/panel";
 import { Badge } from "@/components/ui/badge";
 import type { ScannerPoolPageData } from "./useScannerPoolPage";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 
 function scannerDotColor(ms: number): string {
   if (ms < 500) return "bg-status-pass";
@@ -172,7 +173,7 @@ export function ScannerPoolBody({
           <div className="grid gap-4 sm:grid-cols-2 mb-6">
             {/* Throughput sparkline */}
             <div className="rounded-sm border border-border bg-surface-card p-3">
-              <div className="text-[10px] uppercase tracking-[0.12em] text-fg-subtle mb-2">
+              <div className="text-xs uppercase tracking-[0.12em] text-fg-subtle mb-2">
                 Throughput Trend
               </div>
               <div className="flex items-end gap-1 h-10">
@@ -185,7 +186,7 @@ export function ScannerPoolBody({
                   />
                 ))}
               </div>
-              <div className="mt-1 text-[10px] text-fg-subtle text-right">
+              <div className="mt-1 text-xs text-fg-subtle text-right">
                 {pool.jobsCompleted > 0 ? `${pool.jobsCompleted.toLocaleString("en-US")} completed` : "no data yet"}
               </div>
             </div>
@@ -193,7 +194,7 @@ export function ScannerPoolBody({
             {/* Shed rate gauge */}
             <div className="rounded-sm border border-border bg-surface-card p-3">
               <div className="flex items-center justify-between mb-2">
-                <div className="text-[10px] uppercase tracking-[0.12em] text-fg-subtle">
+                <div className="text-xs uppercase tracking-[0.12em] text-fg-subtle">
                   Shed Rate
                 </div>
                 <span className={`font-mono text-lg font-semibold ${shedColor}`}>
@@ -210,7 +211,7 @@ export function ScannerPoolBody({
                   }}
                 />
               </div>
-              <div className="mt-1 text-[10px] text-fg-subtle">
+              <div className="mt-1 text-xs text-fg-subtle">
                 {shedRate < 5 ? "healthy" : shedRate < 15 ? "elevated" : "critical"}
               </div>
             </div>
@@ -219,7 +220,7 @@ export function ScannerPoolBody({
           {/* Queue depth bar */}
           <div className="rounded-sm border border-border bg-surface-card p-3 mb-6">
             <div className="flex items-center justify-between mb-2">
-              <div className="text-[10px] uppercase tracking-[0.12em] text-fg-subtle">
+              <div className="text-xs uppercase tracking-[0.12em] text-fg-subtle">
                 Queue Depth
               </div>
               <span className="font-mono text-xs text-fg-muted">
@@ -232,7 +233,7 @@ export function ScannerPoolBody({
                 style={{ width: `${queueFillPct}%` }}
               />
             </div>
-            <div className="mt-1 flex justify-between text-[10px] text-fg-subtle">
+            <div className="mt-1 flex justify-between text-xs text-fg-subtle">
               <span>0</span>
               <span>{pool.queueSize}</span>
             </div>
@@ -241,7 +242,7 @@ export function ScannerPoolBody({
           {/* Scanner instance status dots */}
           {scannerNames.length > 0 && (
             <div className="rounded-sm border border-border bg-surface-card p-3 mb-6">
-              <div className="text-[10px] uppercase tracking-[0.12em] text-fg-subtle mb-3">
+              <div className="text-xs uppercase tracking-[0.12em] text-fg-subtle mb-3">
                 Scanner Instances
               </div>
               <div className="flex flex-wrap items-center gap-3">
@@ -253,10 +254,10 @@ export function ScannerPoolBody({
                         className={`inline-block h-2.5 w-2.5 rounded-full ${scannerDotColor(ms)}`}
                         title={`${name}: ${ms.toFixed(2)} ms`}
                       />
-                      <span className="font-mono text-[11px] text-fg-muted">
+                      <span className="font-mono text-xs text-fg-muted">
                         {name}
                       </span>
-                      <Badge className="rounded-sm border border-border-strong/30 bg-surface-subtle0/10 text-[10px] text-fg-subtle">
+                      <Badge className="rounded-sm border border-border-strong/30 bg-surface-subtle0/10 text-xs text-fg-subtle">
                         {ms.toFixed(0)}ms
                       </Badge>
                     </div>
@@ -272,29 +273,28 @@ export function ScannerPoolBody({
               title="Per-Scanner Mean Latency"
             >
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border text-fg-subtle">
-                      <th className="px-4 py-2 text-left">Scanner</th>
-                      <th className="px-4 py-2 text-right">Mean Latency</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                <Table className="w-full">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-left">Scanner</TableHead>
+                      <TableHead className="text-right">Mean Latency</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {Object.entries(pool.perScannerDurationMs)
                       .sort(([, a], [, b]) => b - a)
                       .map(([name, ms]) => (
-                        <tr
+                        <TableRow
                           key={name}
-                          className="border-b border-border/50 text-fg-subtle"
                         >
-                          <td className="px-4 py-2 font-mono text-xs">{name}</td>
-                          <td className="px-4 py-2 text-right font-mono text-xs">
+                          <TableCell className="font-mono">{name}</TableCell>
+                          <TableCell className="text-right font-mono">
                             {ms.toFixed(2)} ms
-                          </td>
-                        </tr>
+                          </TableCell>
+                        </TableRow>
                       ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
             </Panel>
           )}

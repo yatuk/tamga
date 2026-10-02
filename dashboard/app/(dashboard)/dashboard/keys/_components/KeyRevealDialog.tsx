@@ -22,7 +22,7 @@ export function KeyRevealDialog({ revealed, onDismiss, onCopy }: Props) {
             <h2 className="text-sm font-semibold text-status-medium">
               Copy this key now — it will not be shown again
             </h2>
-            <p className="mt-1 text-[11px] text-fg-subtle">
+            <p className="mt-1 text-xs text-fg-subtle">
               Key name: <span className="font-mono text-fg-muted">{revealed.label}</span>
             </p>
           </div>
@@ -38,14 +38,14 @@ export function KeyRevealDialog({ revealed, onDismiss, onCopy }: Props) {
           <Button
             size="sm"
             variant="outline"
-            className="cursor-pointer rounded-sm"
+            className="rounded-sm"
             onClick={() => onCopy(revealed.rawKey)}
           >
             <Copy className="mr-1 h-3.5 w-3.5" /> Copy
           </Button>
           <Button variant="outline"
             size="sm"
-            className="cursor-pointer rounded-sm bg-status-pass text-white hover:bg-status-pass"
+            className="rounded-sm bg-status-pass text-white hover:bg-status-pass"
             onClick={onDismiss}
           >
             <Check className="mr-1 h-3.5 w-3.5" /> I have saved this key

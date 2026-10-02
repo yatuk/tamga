@@ -18,7 +18,7 @@ export function BarRow({
   const pct = total > 0 ? Math.round((value / total) * 100) : 0;
   return (
     <div className="space-y-1">
-      <div className="flex items-center justify-between text-[11px]">
+      <div className="flex items-center justify-between text-xs">
         <span className="truncate font-mono text-fg-muted">{label}</span>
         <span className="ml-2 shrink-0 tabular-nums text-fg-muted">
           {formatInt(value)} <span className="text-fg-subtle">({pct}%)</span>
@@ -57,7 +57,7 @@ export function DonutCard({
 
   return (
     <div className="rounded-sm border border-border bg-surface-card p-4">
-      <h3 className="mb-3 text-[10px] uppercase tracking-[0.14em] text-fg-muted">
+      <h3 className="mb-3 text-xs uppercase tracking-[0.14em] text-fg-muted">
         {title}
       </h3>
       <div className="flex items-center gap-4">
@@ -67,7 +67,7 @@ export function DonutCard({
         />
         <div className="min-w-0 flex-1 space-y-1.5">
           {segments.slice(0, 5).map((s) => (
-            <div key={s.name} className="flex items-center gap-1.5 text-[11px]">
+            <div key={s.name} className="flex items-center gap-1.5 text-xs">
               <span
                 className="h-2 w-2 shrink-0 rounded-sm"
                 style={{ backgroundColor: s.color }}

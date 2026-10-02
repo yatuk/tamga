@@ -16,7 +16,7 @@ export function SettingsStatusChip({
       : "border-status-critical/40 bg-status-critical/10 text-status-critical";
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-sm border px-2 py-1 text-[10px] uppercase tracking-wide ${cls}`}
+      className={`inline-flex items-center gap-1 rounded-sm border px-2 py-1 text-xs uppercase tracking-wide ${cls}`}
     >
       {label}
       <span className="text-fg-muted">·</span>

@@ -14,7 +14,7 @@ export function IncidentsSavedViewsColumn({ m }: { m: IncidentsConsoleModel }) {
       <CardContent className="space-y-2">
         <Button variant="outline"
           type="button"
-          className="h-8 w-full cursor-pointer rounded-sm border border-border-strong bg-surface-subtle px-2 text-xs text-fg-muted hover:bg-surface-card"
+          className="h-8 w-full rounded-sm border border-border-strong bg-surface-subtle px-2 text-xs text-fg-muted hover:bg-surface-card"
           onClick={() => m.saveCurrentView()}
         >
           Save current view
@@ -28,26 +28,26 @@ export function IncidentsSavedViewsColumn({ m }: { m: IncidentsConsoleModel }) {
                 <button
                   type="button"
                   onClick={() => m.applySavedView(v)}
-                  className="flex-1 cursor-pointer text-left text-xs text-fg hover:text-fg"
+                  className="flex-1 text-left text-xs text-fg hover:text-fg"
                 >
                   {v.name}
                 </button>
                 <button
                   type="button"
                   onClick={() => m.renameSavedView(v.id)}
-                  className="text-[10px] text-fg-muted hover:text-fg"
+                  className="text-xs text-fg-muted hover:text-fg"
                 >
                   edit
                 </button>
                 <button
                   type="button"
                   onClick={() => m.deleteSavedView(v.id)}
-                  className="text-[10px] text-fg-muted hover:text-status-critical"
+                  className="text-xs text-fg-muted hover:text-status-critical"
                 >
                   del
                 </button>
               </div>
-              <div className="mt-1 text-[10px] text-fg-muted">
+              <div className="mt-1 text-xs text-fg-muted">
                 {v.action}/{v.type}/{v.severity}/{v.range}/{v.triage}/{v.assignee}
               </div>
             </div>

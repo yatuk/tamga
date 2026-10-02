@@ -108,7 +108,7 @@ export function GlossaryPanel({ open, onClose }: GlossaryPanelProps) {
           <button
             type="button"
             onClick={onClose}
-            className="cursor-pointer rounded-sm p-1 text-fg-subtle hover:text-fg-muted dark:hover:text-fg-subtle hover:bg-surface-subtle"
+            className="rounded-sm p-1 text-fg-subtle hover:text-fg-muted hover:bg-surface-subtle"
             aria-label="Close glossary"
           >
             <X className="h-4 w-4" />
@@ -124,7 +124,7 @@ export function GlossaryPanel({ open, onClose }: GlossaryPanelProps) {
               <div className="text-xs font-semibold text-fg font-mono">
                 {term}
               </div>
-              <p className="mt-0.5 text-[11px] leading-relaxed text-fg-muted">
+              <p className="mt-0.5 text-xs leading-relaxed text-fg-muted">
                 {definition}
               </p>
             </div>
@@ -146,7 +146,7 @@ export function GlossaryToggle({
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex cursor-pointer items-center justify-center h-7 w-7 rounded-sm border border-border-strong bg-surface-subtle text-fg-subtle hover:text-fg-muted dark:hover:text-fg-subtle hover:bg-surface-card"
+      className="inline-flex items-center justify-center h-7 w-7 rounded-sm border border-border-strong bg-surface-subtle text-fg-subtle hover:text-fg-muted hover:bg-surface-card"
       title="Open glossary"
       aria-label="Open glossary"
     >
