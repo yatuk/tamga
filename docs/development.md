@@ -47,7 +47,7 @@ make dashboard-build                            # Production dashboard build
 
 Tamga ships an automated stress-test suite that validates scanner
 resilience against adversarial bypass attempts and load thresholds. Every
-PR triggers a regression gate comparing current results to a known
+PR triggers a regression gate comparing the adversarial results to a known
 baseline.
 
 - **Adversarial tests** — 5 categories (PII, injection, secret, policy,
@@ -56,9 +56,10 @@ baseline.
   zero-width characters, and indirect references. Numbers tracked in
   [tests/stress/baseline.json](../tests/stress/baseline.json).
 - **Load tests** — k6 benchmarks at 100/500/1000 RPS with P95 latency and
-  error-rate thresholds, run against a mocked upstream.
-- **Regression gate** — CI blocks PRs that degrade detection or performance
-  beyond tolerance.
+  error-rate thresholds, run against a mocked upstream. Run locally or on a
+  manual workflow run; latency on a shared CI runner measures the runner.
+- **Regression gate** — CI blocks PRs in which any category has more
+  bypasses than the baseline.
 
 ```bash
 # Run locally (requires Docker):
