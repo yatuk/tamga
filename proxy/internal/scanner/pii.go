@@ -22,6 +22,32 @@ type piiPattern struct {
 	Severity   string
 	confidence float64
 	validate   func(string) bool
+	// refine narrows a match to the identifier inside it and returns its
+	// length, or false when there is none. It replaces validate.
+	refine func(string) (int, bool)
+	// needsContext, when set, requires one of these words near the match.
+	needsContext []string
+	// forwardOnly keeps the pattern off the reversed-digits variant.
+	forwardOnly bool
+}
+
+// accept decides whether the match at loc is a finding for p, and returns the
+// span to report. text is the string the pattern ran on.
+func (p piiPattern) accept(text string, loc []int) ([]int, bool) {
+	matched := text[loc[0]:loc[1]]
+	if p.refine != nil {
+		n, ok := p.refine(matched)
+		if !ok {
+			return nil, false
+		}
+		loc = []int{loc[0], loc[0] + n}
+	} else if p.validate != nil && !p.validate(matched) {
+		return nil, false
+	}
+	if len(p.needsContext) > 0 && !hasContextNearby(text, loc[0], p.needsContext) {
+		return nil, false
+	}
+	return loc, true
 }
 
 var (
@@ -37,11 +63,16 @@ func compilePIIPatterns() {
 	piiPatterns = []piiPattern{
 		{
 			Name:     "credit_card",
-			Regex:    regexp.MustCompile(`\b(?:\d{4}[-\s]?){3}\d{4}\b|\b\d{13,19}\b`),
+			Regex:    regexp.MustCompile(`\b(?:\d{4}[-\s.]?){3}\d{4}\b|\b\d{13,19}\b`),
 			Severity: "critical",
 			validate: func(m string) bool {
 				d := digitsOnly(m)
 				if len(d) < 13 || len(d) > 19 {
+					return false
+				}
+				// A single repeated digit passes Luhn for some lengths
+				// (sixteen zeros) and is a placeholder, not a card.
+				if allSameDigit(d) {
 					return false
 				}
 				return validLuhn(d)
@@ -74,9 +105,9 @@ func compilePIIPatterns() {
 				`(?i)\b[A-Z]{2}\d{2}(?:\s?[A-Z0-9]){11,30}\b`,
 			),
 			Severity: "critical",
-			validate: func(m string) bool {
-				return validIBAN(m)
-			},
+			// The pattern runs on into the words after the number
+			// ("TR33… hesabıma"); the country's length says where it ends.
+			refine:     ibanSpan,
 			confidence: 0.95,
 		},
 		{
@@ -94,13 +125,43 @@ func compilePIIPatterns() {
 			Name: "phone_tr",
 			Regex: regexp.MustCompile(
 				// No leading \b: '+' is non-word; "Ara +90 ..." would otherwise miss.
-				`(?i)(?:\+90|0)(?:\s|-)?5\d{2}(?:\s|-)?\d{3}(?:\s|-)?\d{2}(?:\s|-)?\d{2}\b`,
+				// Mobile (5xx) and landline (2xx–4xx) area codes, with or
+				// without brackets: "0 (532) 123 45 67", "+90 212 555 11 22".
+				`(?i)(?:\+90|\b0)[\s-]?\(?[2-5]\d{2}\)?[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}\b`,
 			),
 			Severity: "high",
 			validate: func(m string) bool {
-				return validTRMobile(m)
+				return validTRPhone(m)
 			},
 			confidence: 0.88,
+		},
+		{
+			Name: "phone",
+			Regex: regexp.MustCompile(
+				// International numbers are only taken with their "+" prefix;
+				// a bare digit run is an order number as often as a phone.
+				`\+[1-9]\d{0,2}[\s-]?(?:\(\d{1,4}\)|\d{1,4})(?:[\s-]?\d{2,5}){1,4}\b`,
+			),
+			Severity: "high",
+			validate: func(m string) bool {
+				d := digitsOnly(m)
+				// E.164: at most 15 digits. Turkish numbers are phone_tr's.
+				return len(d) >= 10 && len(d) <= 15 && !strings.HasPrefix(d, "90")
+			},
+			forwardOnly: true,
+			confidence:  0.85,
+		},
+		{
+			Name: "vkn",
+			// A ten digit run is a tax number only next to a word that says so.
+			Regex:    regexp.MustCompile(`\b\d{10}\b`),
+			Severity: "high",
+			validate: func(m string) bool {
+				return validVKN(m)
+			},
+			needsContext: []string{"vergi", "vkn", "tax id", "tax number"},
+			forwardOnly:  true,
+			confidence:   0.85,
 		},
 		{
 			Name:       "passport_number",
@@ -160,17 +221,23 @@ func (s *PIIScanner) Scan(ctx context.Context, content []byte) ([]Finding, error
 	contentStr := string(content)
 
 	// Normalize to detect Unicode-evaded PII (mathematical bold, fullwidth, homoglyphs).
-	normResult := normalize.Apply(contentStr, normalize.Default())
+	// De-leeting maps digits to letters ("1000" → "iooo") to unmask leet
+	// words. That is right for injection phrases and wrong for identifiers:
+	// it would erase the digits that number-word expansion just produced.
+	normOpts := normalize.Default()
+	normOpts.Deleet = false
+	normResult := normalize.Apply(contentStr, normOpts)
 	normText := normResult.Text()
 	normBytes := []byte(normText)
 
 	for _, p := range piiPatterns {
 		matches := p.Regex.FindAllIndex(content, -1)
 		for _, loc := range matches {
-			matched := string(content[loc[0]:loc[1]])
-			if p.validate != nil && !p.validate(matched) {
+			loc, ok := p.accept(contentStr, loc)
+			if !ok {
 				continue
 			}
+			matched := contentStr[loc[0]:loc[1]]
 			var masked string
 			if p.Name == "credit_card" {
 				masked = maskPAN(matched)
@@ -221,10 +288,11 @@ func (s *PIIScanner) Scan(ctx context.Context, content []byte) ([]Finding, error
 	// (mathematical bold digits, fullwidth/homoglyph characters, zero-width splits).
 	for _, p := range piiPatterns {
 		for _, loc := range p.Regex.FindAllIndex(normBytes, -1) {
-			matched := string(normBytes[loc[0]:loc[1]])
-			if p.validate != nil && !p.validate(matched) {
+			loc, ok := p.accept(normText, loc)
+			if !ok {
 				continue
 			}
+			matched := normText[loc[0]:loc[1]]
 			var masked string
 			if p.Name == "credit_card" {
 				masked = maskPAN(matched)
@@ -283,11 +351,17 @@ func (s *PIIScanner) Scan(ctx context.Context, content []byte) ([]Finding, error
 		}
 		variantBytes := []byte(variant)
 		for _, p := range piiPatterns {
+			// Reversing is an evasion for checksummed identifiers. Any
+			// number read backwards looks like some phone number.
+			if vi == 2 && p.forwardOnly {
+				continue
+			}
 			for _, loc := range p.Regex.FindAllIndex(variantBytes, -1) {
-				matched := string(variantBytes[loc[0]:loc[1]])
-				if p.validate != nil && !p.validate(matched) {
+				loc, ok := p.accept(variant, loc)
+				if !ok {
 					continue
 				}
+				matched := variant[loc[0]:loc[1]]
 				masked := maskContent(matched)
 				if p.Name == "credit_card" {
 					masked = maskPAN(matched)
@@ -414,7 +488,7 @@ func calculatePIIConfidence(category, content string, pos int, matched string) C
 			factor.Context = WContext
 		}
 	case "phone_tr":
-		if validTRMobile(matched) {
+		if validTRPhone(matched) {
 			factor.Algorithm = 20
 		}
 		if hasContextNearby(content, pos, []string{"telefon", "phone", "gsm", "cep"}) {
@@ -636,22 +710,99 @@ func isEmailDomainChar(r rune) bool {
 	}
 }
 
-func validTRMobile(s string) bool {
-	var b strings.Builder
-	for _, r := range s {
-		if r >= '0' && r <= '9' {
-			b.WriteRune(r)
-		}
-	}
-	n := b.String()
+// validTRPhone accepts a Turkish number with its trunk prefix: 0 or +90,
+// then an area code starting 2–5 (landline 2xx–4xx, mobile 5xx) and seven
+// digits.
+func validTRPhone(s string) bool {
+	n := digitsOnly(s)
 	switch len(n) {
 	case 12:
-		return strings.HasPrefix(n, "905")
+		return strings.HasPrefix(n, "90") && n[2] >= '2' && n[2] <= '5'
 	case 11:
-		return strings.HasPrefix(n, "05")
+		return n[0] == '0' && n[1] >= '2' && n[1] <= '5'
 	default:
 		return false
 	}
+}
+
+func allSameDigit(d string) bool {
+	for i := 1; i < len(d); i++ {
+		if d[i] != d[0] {
+			return false
+		}
+	}
+	return len(d) > 0
+}
+
+// validVKN checks the check digit of a Turkish tax number (vergi kimlik
+// numarası): ten digits, the tenth computed from the first nine.
+func validVKN(s string) bool {
+	if len(s) != 10 || allSameDigit(s) {
+		return false
+	}
+	sum := 0
+	for i := 0; i < 9; i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+		a := (int(s[i]-'0') + 9 - i) % 10
+		b := (a * (1 << (9 - i))) % 9
+		if a != 0 && b == 0 {
+			b = 9
+		}
+		sum += b
+	}
+	return (10-sum%10)%10 == int(s[9]-'0')
+}
+
+// ibanLengths is the registered IBAN length per country (ISO 13616 registry).
+var ibanLengths = map[string]int{
+	"AD": 24, "AE": 23, "AL": 28, "AT": 20, "AZ": 28, "BA": 20, "BE": 16,
+	"BG": 22, "BH": 22, "BR": 29, "BY": 28, "CH": 21, "CR": 22, "CY": 28,
+	"CZ": 24, "DE": 22, "DK": 18, "DO": 28, "EE": 20, "EG": 29, "ES": 24,
+	"FI": 18, "FO": 18, "FR": 27, "GB": 22, "GE": 22, "GI": 23, "GL": 18,
+	"GR": 27, "GT": 28, "HR": 21, "HU": 28, "IE": 22, "IL": 23, "IQ": 23,
+	"IS": 26, "IT": 27, "JO": 30, "KW": 30, "KZ": 20, "LB": 28, "LI": 21,
+	"LT": 20, "LU": 20, "LV": 21, "MC": 27, "MD": 24, "ME": 22, "MK": 19,
+	"MT": 31, "MU": 30, "NL": 18, "NO": 15, "PK": 24, "PL": 28, "PS": 29,
+	"PT": 25, "QA": 29, "RO": 24, "RS": 22, "SA": 24, "SE": 24, "SI": 19,
+	"SK": 24, "SM": 27, "TN": 24, "TR": 26, "UA": 29, "VG": 24, "XK": 20,
+}
+
+// ibanSpan finds the IBAN at the start of m and returns its length in m.
+// m may run on past the number; the country code fixes how many characters
+// belong to it, and the mod-97 check confirms them.
+func ibanSpan(m string) (int, bool) {
+	if len(m) < 4 {
+		return 0, false
+	}
+	want, known := ibanLengths[strings.ToUpper(m[:2])]
+	if !known {
+		return 0, false
+	}
+	seen := 0
+	for i := 0; i < len(m); i++ {
+		c := m[i]
+		if c == ' ' || c == '\t' || c == '\n' || c == '\r' {
+			continue
+		}
+		seen++
+		if seen == want {
+			// The number must end here, not sit inside a longer token.
+			if i+1 < len(m) && isASCIIAlnum(m[i+1]) {
+				return 0, false
+			}
+			if !validIBAN(m[:i+1]) {
+				return 0, false
+			}
+			return i + 1, true
+		}
+	}
+	return 0, false
+}
+
+func isASCIIAlnum(c byte) bool {
+	return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 }
 
 func isPrivateOrSpecialIPv4(ip net.IP) bool {

@@ -78,6 +78,33 @@
   - Model families are derived from the name for models the proxy does not
     know (`gpt-5-mini` → `gpt-5`, `qwen3:32b` → `qwen3`).
 
+### Detection
+- **Recall on the red-team corpus went from 0.495 to 0.896 with no false
+  positives** (was 3). Read `docs/benchmarks/README.md` before quoting it:
+  eleven corpus entries were mislabelled, and the rules were then written
+  against the corpus. A 163-prompt held-out set is published next to it.
+- Fixed: an IBAN followed by a word was never matched; spelled-out digits
+  ("bir sıfır sıfır…") were turned back into letters before the PII scan;
+  Cyrillic "і" was not folded to "i"; sixteen identical digits counted as a
+  card number.
+- New PII categories: `phone` (international, "+" prefix required), `vkn`
+  (Turkish tax number, needs a tax word nearby); `phone_tr` now covers
+  landlines and bracketed area codes.
+- New secret categories: `slack_token`, `google_api_key`, `twilio_sid`,
+  `basic_auth`, `password`; `github_token` covers fine-grained tokens,
+  `private_key` matches a PEM header on its own.
+- Injection: rules that match a verb acting on a target ("disregard every
+  earlier instruction") instead of fixed sentences, in English and Turkish,
+  for instruction override, switched-off safety, system prompt extraction,
+  forged system turns and encoded instructions.
+- The bare phrase "developer mode" no longer blocks; it fired on questions
+  about Android. "developer mode enabled" still does.
+- **Policy files need updating to act on the new categories.** The shipped
+  default lists them; a custom policy with explicit `types:` lists will see
+  the findings but apply no rule to them.
+- `go test ./cmd/redteam` now fails when either set catches fewer attacks or
+  flags a benign prompt, so the published numbers are enforced by CI.
+
 ### Tests
 - Stress suite: runs against a mocked upstream, sets up the operator_state
   fixtures it needs, uses one API key per load-test request (it was measuring

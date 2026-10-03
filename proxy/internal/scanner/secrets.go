@@ -53,7 +53,7 @@ func compileSecretPatterns() {
 			// (above) handles aws_secret_access_key; this one covers the
 			// remaining config/env/code patterns so they don't overlap.
 			Name:       "aws_secret_key_broad",
-			Regex:      regexp.MustCompile(`(?i)(?:aws|amazon)[\W_]*(?:secret|private)[\W_]*(?:key|token|credential)[\W_:=]+([A-Za-z0-9/+=]{40})`),
+			Regex:      regexp.MustCompile(`(?i)(?:aws|amazon)[\W_]*(?:secret|private)(?:[\W_]*(?:key|token|credential))?[\W_:=]+([A-Za-z0-9/+=]{40})`),
 			Severity:   "critical",
 			confidence: 0.90,
 			validate:   verifyAWSSecretValue,
@@ -124,6 +124,60 @@ func compileSecretPatterns() {
 			Severity:   "high",
 			confidence: 0.93,
 			validate:   verifySlackWebhookURL,
+		},
+		{
+			// A PEM header on its own: the body is often cut off or pasted
+			// separately, and the header already says what follows. PGP
+			// blocks and encrypted keys use the same framing.
+			Name:       "private_key",
+			Regex:      regexp.MustCompile(`-----BEGIN (?:[A-Z0-9]+ ){0,2}PRIVATE KEY(?: BLOCK)?-----`),
+			Severity:   "high",
+			confidence: 0.85,
+		},
+		{
+			// Fine-grained personal access tokens (github_pat_…); the
+			// classic gh?_ prefixes are matched above.
+			Name:       "github_token",
+			Regex:      regexp.MustCompile(`\bgithub_pat_[A-Za-z0-9_]{22,255}\b`),
+			Severity:   "critical",
+			confidence: 0.95,
+		},
+		{
+			// Slack bot, user, app and refresh tokens.
+			Name:       "slack_token",
+			Regex:      regexp.MustCompile(`\bxox[abeoprs]-[A-Za-z0-9]{6,}(?:-[A-Za-z0-9]{6,}){1,4}\b`),
+			Severity:   "critical",
+			confidence: 0.93,
+		},
+		{
+			Name:       "google_api_key",
+			Regex:      regexp.MustCompile(`\bAIza[0-9A-Za-z_-]{35}`),
+			Severity:   "critical",
+			confidence: 0.93,
+		},
+		{
+			// Twilio account (AC) and API key (SK) identifiers: 32 hex digits.
+			Name:       "twilio_sid",
+			Regex:      regexp.MustCompile(`\b(?:AC|SK)[0-9a-f]{32}\b`),
+			Severity:   "high",
+			confidence: 0.88,
+		},
+		{
+			// HTTP Basic credentials are a base64 "user:password" pair.
+			Name:       "basic_auth",
+			Regex:      regexp.MustCompile(`(?i)\bAuthorization:\s*Basic\s+[A-Za-z0-9+/]{8,}={0,2}`),
+			Severity:   "critical",
+			confidence: 0.93,
+			validate:   verifyBasicAuth,
+		},
+		{
+			// A password stated next to its label, in English or Turkish:
+			// "password: hunter2", "parolam Yazilim123!", "şifresi: …".
+			Name:       "password",
+			Regex:      regexp.MustCompile(`(?i)\b(?:passwords?|passwd|pwd|parola|[şs]ifre)(?:m|n|s[ıi]|m[ıi]z|n[ıi]z)?(?:\s+is\b|\s*[:=])?\s+\S{5,64}`),
+			Severity:   "high",
+			confidence: 0.75,
+			validate:   verifyPasswordValue,
 		},
 	}
 
@@ -438,6 +492,70 @@ func padJWTBase64(s string) string {
 	default:
 		return s
 	}
+}
+
+// verifyBasicAuth decodes the credential and requires the "user:password"
+// shape, so the header name quoted in documentation is not a finding.
+func verifyBasicAuth(s string) bool {
+	i := strings.LastIndexAny(s, " \t")
+	if i < 0 {
+		return false
+	}
+	raw, err := base64.StdEncoding.DecodeString(s[i+1:])
+	if err != nil {
+		raw, err = base64.RawStdEncoding.DecodeString(strings.TrimRight(s[i+1:], "="))
+		if err != nil {
+			return false
+		}
+	}
+	colon := strings.IndexByte(string(raw), ':')
+	if colon <= 0 || colon == len(raw)-1 {
+		return false
+	}
+	for _, c := range raw {
+		if c < 0x20 || c > 0x7e {
+			return false
+		}
+	}
+	return true
+}
+
+// verifyPasswordValue decides whether the word after a password label is a
+// password or just the next word of a sentence. A password has a digit or a
+// symbol in it; when no "is", ":" or "=" ties it to the label it must also be
+// long and mix letters with digits. "password policy" and "password is at
+// least 12" are prose; "password: hunter2" is not.
+func verifyPasswordValue(s string) bool {
+	i := strings.LastIndexAny(s, " \t\n")
+	if i < 0 {
+		return false
+	}
+	label := strings.TrimSpace(s[:i])
+	value := strings.TrimRight(s[i+1:], `.,;"')`)
+	tied := strings.HasSuffix(label, ":") || strings.HasSuffix(label, "=") || strings.HasSuffix(strings.ToLower(label), " is")
+
+	var letters, digits, symbols int
+	for _, r := range value {
+		switch {
+		case unicode.IsLetter(r):
+			letters++
+		case unicode.IsDigit(r):
+			digits++
+		default:
+			symbols++
+		}
+	}
+	if digits+symbols == 0 {
+		return false
+	}
+	// "password: <placeholder>", "password=${VAR}" and friends name a slot.
+	if strings.ContainsAny(value, "<>{}$*") || strings.Contains(value, "...") {
+		return false
+	}
+	if tied {
+		return len(value) >= 5
+	}
+	return len(value) >= 8 && letters > 0 && digits > 0
 }
 
 func verifyPrivateKeyPEM(s string) bool {

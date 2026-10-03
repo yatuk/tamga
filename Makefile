@@ -42,6 +42,10 @@ redteam-report:
 		-in ./testdata/redteam/prompts.csv \
 		-json ../docs/benchmarks/redteam_latest.json \
 		-min-precision 0 -min-recall 0
+	cd $(PROXY_DIR) && go run ./cmd/redteam \
+		-in ./testdata/redteam/holdout.csv \
+		-json ../docs/benchmarks/redteam_holdout.json \
+		-min-precision 0 -min-recall 0
 
 # Run the Shadow ML sidecar test suite in stub mode (no transformers,
 # no torch). Mirrors what .github/workflows/sidecar-ci.yml runs.

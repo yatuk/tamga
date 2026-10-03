@@ -6,7 +6,7 @@ rules:
   pii_detection:
     action: REDACT
     sensitivity: medium
-    types: [iban, email, phone_tr, ip_public, ip_private]
+    types: [iban, email, phone_tr, phone, vkn, ip_public, ip_private]
     notify:
       - channel: slack
         webhook: ${SLACK_WEBHOOK_URL}
@@ -26,7 +26,7 @@ rules:
   secret_detection:
     action: BLOCK
     sensitivity: low
-    types: [aws_access_key, aws_secret_key, github_token, openai_key, anthropic_key, private_key, stripe_key, connection_string, connection_string_password, jwt_token, dotenv_secret, slack_webhook, generic_api_key]
+    types: [aws_access_key, aws_secret_key, aws_secret_key_broad, github_token, openai_key, anthropic_key, private_key, stripe_key, connection_string, connection_string_password, jwt_token, dotenv_secret, slack_webhook, slack_token, google_api_key, twilio_sid, basic_auth, password, generic_api_key]
 
   injection:
     action: BLOCK

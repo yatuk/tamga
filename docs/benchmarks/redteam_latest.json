@@ -1,19 +1,19 @@
 {
-  "generated_at": "2026-10-01T19:18:24Z",
+  "generated_at": "2026-10-03T09:08:24Z",
   "corpus": "prompts.csv",
   "samples": 309,
-  "tp": 95,
-  "fp": 3,
-  "fn": 97,
-  "tn": 114,
-  "precision": 0.9693877551020408,
-  "recall": 0.4947916666666667,
-  "f1": 0.6551724137931035,
+  "tp": 172,
+  "fp": 0,
+  "fn": 20,
+  "tn": 117,
+  "precision": 1,
+  "recall": 0.8958333333333334,
+  "f1": 0.945054945054945,
   "scan_latency": {
-    "p50_ms": 0.211,
-    "p95_ms": 0.827,
-    "p99_ms": 1.217,
-    "max_ms": 1.411
+    "p50_ms": 0.23,
+    "p95_ms": 0.837,
+    "p99_ms": 1.695,
+    "max_ms": 2.828
   },
   "categories": [
     {
@@ -107,79 +107,79 @@
     {
       "category": "injection.context",
       "n": 2,
-      "tp": 1,
+      "tp": 2,
       "fp": 0,
-      "fn": 1,
+      "fn": 0,
       "tn": 0,
       "precision": 1,
-      "recall": 0.5,
-      "f1": 0.6666666666666666
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "injection.contextswitch",
       "n": 1,
-      "tp": 0,
+      "tp": 1,
       "fp": 0,
-      "fn": 1,
+      "fn": 0,
       "tn": 0,
-      "precision": 0,
-      "recall": 0,
-      "f1": 0
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "injection.delim",
       "n": 3,
-      "tp": 1,
+      "tp": 3,
       "fp": 0,
-      "fn": 2,
+      "fn": 0,
       "tn": 0,
       "precision": 1,
-      "recall": 0.3333333333333333,
-      "f1": 0.5
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "injection.delim.tr",
       "n": 1,
-      "tp": 0,
+      "tp": 1,
       "fp": 0,
-      "fn": 1,
+      "fn": 0,
       "tn": 0,
-      "precision": 0,
-      "recall": 0,
-      "f1": 0
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "injection.hidden",
       "n": 1,
-      "tp": 0,
+      "tp": 1,
       "fp": 0,
-      "fn": 1,
+      "fn": 0,
       "tn": 0,
-      "precision": 0,
-      "recall": 0,
-      "f1": 0
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "injection.instructions",
       "n": 1,
-      "tp": 0,
+      "tp": 1,
       "fp": 0,
-      "fn": 1,
+      "fn": 0,
       "tn": 0,
-      "precision": 0,
-      "recall": 0,
-      "f1": 0
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "injection.markdown",
       "n": 1,
-      "tp": 0,
+      "tp": 1,
       "fp": 0,
-      "fn": 1,
+      "fn": 0,
       "tn": 0,
-      "precision": 0,
-      "recall": 0,
-      "f1": 0
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "injection.tool",
@@ -195,46 +195,46 @@
     {
       "category": "injection.tool.tr",
       "n": 1,
-      "tp": 0,
+      "tp": 1,
       "fp": 0,
-      "fn": 1,
+      "fn": 0,
       "tn": 0,
-      "precision": 0,
-      "recall": 0,
-      "f1": 0
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "injection.url",
       "n": 1,
-      "tp": 0,
+      "tp": 1,
       "fp": 0,
-      "fn": 1,
+      "fn": 0,
       "tn": 0,
-      "precision": 0,
-      "recall": 0,
-      "f1": 0
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "injection.url.tr",
       "n": 1,
-      "tp": 0,
+      "tp": 1,
       "fp": 0,
-      "fn": 1,
+      "fn": 0,
       "tn": 0,
-      "precision": 0,
-      "recall": 0,
-      "f1": 0
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "injection.xss",
       "n": 1,
-      "tp": 0,
+      "tp": 1,
       "fp": 0,
-      "fn": 1,
+      "fn": 0,
       "tn": 0,
-      "precision": 0,
-      "recall": 0,
-      "f1": 0
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "jailbreak.base64",
@@ -250,13 +250,13 @@
     {
       "category": "jailbreak.base64.tr",
       "n": 1,
-      "tp": 0,
+      "tp": 1,
       "fp": 0,
-      "fn": 1,
+      "fn": 0,
       "tn": 0,
-      "precision": 0,
-      "recall": 0,
-      "f1": 0
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "jailbreak.chain",
@@ -294,24 +294,24 @@
     {
       "category": "jailbreak.encoded",
       "n": 1,
-      "tp": 0,
+      "tp": 1,
       "fp": 0,
-      "fn": 1,
+      "fn": 0,
       "tn": 0,
-      "precision": 0,
-      "recall": 0,
-      "f1": 0
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "jailbreak.fiction",
       "n": 1,
-      "tp": 0,
+      "tp": 1,
       "fp": 0,
-      "fn": 1,
+      "fn": 0,
       "tn": 0,
-      "precision": 0,
-      "recall": 0,
-      "f1": 0
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "jailbreak.grandma",
@@ -327,24 +327,24 @@
     {
       "category": "jailbreak.hex",
       "n": 1,
-      "tp": 0,
+      "tp": 1,
       "fp": 0,
-      "fn": 1,
+      "fn": 0,
       "tn": 0,
-      "precision": 0,
-      "recall": 0,
-      "f1": 0
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "jailbreak.homoglyph",
       "n": 2,
-      "tp": 0,
+      "tp": 2,
       "fp": 0,
-      "fn": 2,
+      "fn": 0,
       "tn": 0,
-      "precision": 0,
-      "recall": 0,
-      "f1": 0
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "jailbreak.hypothetical",
@@ -360,46 +360,46 @@
     {
       "category": "jailbreak.jailbreak_kw",
       "n": 3,
-      "tp": 0,
+      "tp": 3,
       "fp": 0,
-      "fn": 3,
+      "fn": 0,
       "tn": 0,
-      "precision": 0,
-      "recall": 0,
-      "f1": 0
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "jailbreak.leak",
       "n": 2,
-      "tp": 0,
+      "tp": 2,
       "fp": 0,
-      "fn": 2,
+      "fn": 0,
       "tn": 0,
-      "precision": 0,
-      "recall": 0,
-      "f1": 0
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "jailbreak.leak.tr",
       "n": 2,
-      "tp": 0,
+      "tp": 2,
       "fp": 0,
-      "fn": 2,
+      "fn": 0,
       "tn": 0,
-      "precision": 0,
-      "recall": 0,
-      "f1": 0
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "jailbreak.manyshot",
       "n": 2,
-      "tp": 1,
+      "tp": 2,
       "fp": 0,
-      "fn": 1,
+      "fn": 0,
       "tn": 0,
       "precision": 1,
-      "recall": 0.5,
-      "f1": 0.6666666666666666
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "jailbreak.markdown",
@@ -415,46 +415,46 @@
     {
       "category": "jailbreak.negation",
       "n": 1,
-      "tp": 0,
+      "tp": 1,
       "fp": 0,
-      "fn": 1,
+      "fn": 0,
       "tn": 0,
-      "precision": 0,
-      "recall": 0,
-      "f1": 0
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "jailbreak.override",
       "n": 6,
-      "tp": 2,
-      "fp": 0,
-      "fn": 4,
-      "tn": 0,
-      "precision": 1,
-      "recall": 0.3333333333333333,
-      "f1": 0.5
-    },
-    {
-      "category": "jailbreak.override.tr",
-      "n": 7,
-      "tp": 1,
-      "fp": 0,
-      "fn": 6,
-      "tn": 0,
-      "precision": 1,
-      "recall": 0.14285714285714285,
-      "f1": 0.25
-    },
-    {
-      "category": "jailbreak.prompt_leak",
-      "n": 2,
-      "tp": 1,
+      "tp": 5,
       "fp": 0,
       "fn": 1,
       "tn": 0,
       "precision": 1,
-      "recall": 0.5,
-      "f1": 0.6666666666666666
+      "recall": 0.8333333333333334,
+      "f1": 0.9090909090909091
+    },
+    {
+      "category": "jailbreak.override.tr",
+      "n": 7,
+      "tp": 6,
+      "fp": 0,
+      "fn": 1,
+      "tn": 0,
+      "precision": 1,
+      "recall": 0.8571428571428571,
+      "f1": 0.923076923076923
+    },
+    {
+      "category": "jailbreak.prompt_leak",
+      "n": 2,
+      "tp": 2,
+      "fp": 0,
+      "fn": 0,
+      "tn": 0,
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "jailbreak.role",
@@ -481,13 +481,13 @@
     {
       "category": "jailbreak.role.tr",
       "n": 2,
-      "tp": 1,
+      "tp": 2,
       "fp": 0,
-      "fn": 1,
+      "fn": 0,
       "tn": 0,
       "precision": 1,
-      "recall": 0.5,
-      "f1": 0.6666666666666666
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "jailbreak.rot13",
@@ -569,13 +569,13 @@
     {
       "category": "pii.credit_card",
       "n": 18,
-      "tp": 17,
+      "tp": 18,
       "fp": 0,
-      "fn": 1,
+      "fn": 0,
       "tn": 0,
       "precision": 1,
-      "recall": 0.9444444444444444,
-      "f1": 0.9714285714285714
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "pii.credit_card.context",
@@ -603,9 +603,9 @@
       "category": "pii.credit_card.invalid",
       "n": 3,
       "tp": 0,
-      "fp": 2,
+      "fp": 0,
       "fn": 0,
-      "tn": 1,
+      "tn": 3,
       "precision": 0,
       "recall": 0,
       "f1": 0
@@ -613,35 +613,35 @@
     {
       "category": "pii.credit_card.phonetic",
       "n": 1,
-      "tp": 0,
+      "tp": 1,
       "fp": 0,
-      "fn": 1,
+      "fn": 0,
       "tn": 0,
-      "precision": 0,
-      "recall": 0,
-      "f1": 0
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "pii.credit_card.phonetic.tr",
       "n": 1,
-      "tp": 0,
+      "tp": 1,
       "fp": 0,
-      "fn": 1,
+      "fn": 0,
       "tn": 0,
-      "precision": 0,
-      "recall": 0,
-      "f1": 0
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "pii.credit_card.spaced",
       "n": 6,
-      "tp": 4,
+      "tp": 6,
       "fp": 0,
-      "fn": 2,
+      "fn": 0,
       "tn": 0,
       "precision": 1,
-      "recall": 0.6666666666666666,
-      "f1": 0.8
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "pii.email",
@@ -657,21 +657,21 @@
     {
       "category": "pii.iban",
       "n": 11,
-      "tp": 4,
+      "tp": 11,
       "fp": 0,
-      "fn": 7,
+      "fn": 0,
       "tn": 0,
       "precision": 1,
-      "recall": 0.36363636363636365,
-      "f1": 0.5333333333333333
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "pii.iban.invalid",
       "n": 1,
       "tp": 0,
-      "fp": 1,
+      "fp": 0,
       "fn": 0,
-      "tn": 0,
+      "tn": 1,
       "precision": 0,
       "recall": 0,
       "f1": 0
@@ -679,35 +679,35 @@
     {
       "category": "pii.phone",
       "n": 2,
-      "tp": 0,
+      "tp": 2,
       "fp": 0,
-      "fn": 2,
+      "fn": 0,
       "tn": 0,
-      "precision": 0,
-      "recall": 0,
-      "f1": 0
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "pii.phone_tr",
       "n": 5,
-      "tp": 3,
+      "tp": 5,
       "fp": 0,
-      "fn": 2,
+      "fn": 0,
       "tn": 0,
       "precision": 1,
-      "recall": 0.6,
-      "f1": 0.7499999999999999
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "pii.tckn",
       "n": 17,
-      "tp": 12,
+      "tp": 17,
       "fp": 0,
-      "fn": 5,
+      "fn": 0,
       "tn": 0,
       "precision": 1,
-      "recall": 0.7058823529411765,
-      "f1": 0.8275862068965517
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "pii.tckn.homoglyph",
@@ -734,24 +734,24 @@
     {
       "category": "pii.tckn.phonetic",
       "n": 1,
-      "tp": 0,
+      "tp": 1,
       "fp": 0,
-      "fn": 1,
+      "fn": 0,
       "tn": 0,
-      "precision": 0,
-      "recall": 0,
-      "f1": 0
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "pii.tckn.phonetic.tr",
       "n": 1,
-      "tp": 0,
+      "tp": 1,
       "fp": 0,
-      "fn": 1,
+      "fn": 0,
       "tn": 0,
-      "precision": 0,
-      "recall": 0,
-      "f1": 0
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "pii.tckn.spaced",
@@ -767,13 +767,13 @@
     {
       "category": "pii.vkn",
       "n": 3,
-      "tp": 0,
+      "tp": 3,
       "fp": 0,
-      "fn": 3,
+      "fn": 0,
       "tn": 0,
-      "precision": 0,
-      "recall": 0,
-      "f1": 0
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "secret.aws",
@@ -789,13 +789,13 @@
     {
       "category": "secret.aws_secret",
       "n": 1,
-      "tp": 0,
+      "tp": 1,
       "fp": 0,
-      "fn": 1,
+      "fn": 0,
       "tn": 0,
-      "precision": 0,
-      "recall": 0,
-      "f1": 0
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "secret.aws_session",
@@ -822,13 +822,13 @@
     {
       "category": "secret.basic",
       "n": 1,
-      "tp": 0,
+      "tp": 1,
       "fp": 0,
-      "fn": 1,
+      "fn": 0,
       "tn": 0,
-      "precision": 0,
-      "recall": 0,
-      "f1": 0
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "secret.db",
@@ -866,13 +866,13 @@
     {
       "category": "secret.gcp",
       "n": 1,
-      "tp": 0,
+      "tp": 1,
       "fp": 0,
-      "fn": 1,
+      "fn": 0,
       "tn": 0,
-      "precision": 0,
-      "recall": 0,
-      "f1": 0
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "secret.github",
@@ -888,13 +888,13 @@
     {
       "category": "secret.github_pat",
       "n": 1,
-      "tp": 0,
+      "tp": 1,
       "fp": 0,
-      "fn": 1,
+      "fn": 0,
       "tn": 0,
-      "precision": 0,
-      "recall": 0,
-      "f1": 0
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "secret.jwt",
@@ -932,79 +932,79 @@
     {
       "category": "secret.password",
       "n": 3,
-      "tp": 0,
+      "tp": 2,
       "fp": 0,
-      "fn": 3,
+      "fn": 1,
       "tn": 0,
-      "precision": 0,
-      "recall": 0,
-      "f1": 0
+      "precision": 1,
+      "recall": 0.6666666666666666,
+      "f1": 0.8
     },
     {
       "category": "secret.password.tr",
       "n": 2,
-      "tp": 0,
+      "tp": 2,
       "fp": 0,
-      "fn": 2,
+      "fn": 0,
       "tn": 0,
-      "precision": 0,
-      "recall": 0,
-      "f1": 0
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "secret.pgp",
       "n": 1,
-      "tp": 0,
+      "tp": 1,
       "fp": 0,
-      "fn": 1,
+      "fn": 0,
       "tn": 0,
-      "precision": 0,
-      "recall": 0,
-      "f1": 0
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "secret.private_key",
       "n": 1,
-      "tp": 0,
+      "tp": 1,
       "fp": 0,
-      "fn": 1,
+      "fn": 0,
       "tn": 0,
-      "precision": 0,
-      "recall": 0,
-      "f1": 0
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "secret.slack",
       "n": 1,
-      "tp": 0,
+      "tp": 1,
       "fp": 0,
-      "fn": 1,
+      "fn": 0,
       "tn": 0,
-      "precision": 0,
-      "recall": 0,
-      "f1": 0
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "secret.ssh",
       "n": 1,
-      "tp": 0,
+      "tp": 1,
       "fp": 0,
-      "fn": 1,
+      "fn": 0,
       "tn": 0,
-      "precision": 0,
-      "recall": 0,
-      "f1": 0
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "secret.ssh_pass",
       "n": 1,
-      "tp": 0,
+      "tp": 1,
       "fp": 0,
-      "fn": 1,
+      "fn": 0,
       "tn": 0,
-      "precision": 0,
-      "recall": 0,
-      "f1": 0
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "secret.stripe",
@@ -1031,13 +1031,13 @@
     {
       "category": "secret.twilio",
       "n": 1,
-      "tp": 0,
+      "tp": 1,
       "fp": 0,
-      "fn": 1,
+      "fn": 0,
       "tn": 0,
-      "precision": 0,
-      "recall": 0,
-      "f1": 0
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
     },
     {
       "category": "tool.fetch",

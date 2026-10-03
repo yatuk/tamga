@@ -83,7 +83,6 @@ func init() {
 
 		// jailbreak
 		{"dan mode", "jailbreak", 0.90},
-		{"developer mode", "jailbreak", 0.88},
 		{"developer mode enabled", "jailbreak", 0.91},
 		{"no restrictions", "jailbreak", 0.85},
 		{"bypass your safety", "jailbreak", 0.88},

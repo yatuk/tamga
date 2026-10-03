@@ -53,6 +53,9 @@ func Default() Options {
 // along the way. Scanners can run against every variant.
 type Result struct {
 	Canonical string   // NFKC-folded, homoglyph- and diacritic-normalized variant
+	// Plain is Canonical before de-leeting: folded and lower-cased, with the
+	// digits still digits. Rules that read numbers use this view.
+	Plain string
 	Decoded   []string // any Base64/hex/rot13 decoded payloads that look "textual"
 }
 
@@ -127,6 +130,7 @@ func Apply(s string, opts Options) Result {
 			decoded[i] = expandWordsToNumbers(d)
 		}
 	}
+	plain := cur
 	if opts.Deleet {
 		variants := applyDeleet(cur)
 		cur = variants[0]                          // canonical: 1→i mapping
@@ -140,7 +144,7 @@ func Apply(s string, opts Options) Result {
 			}
 		}
 	}
-	return Result{Canonical: cur, Decoded: decoded}
+	return Result{Canonical: cur, Plain: plain, Decoded: decoded}
 }
 
 // stripZeroWidth removes common invisible characters that adversaries use to
@@ -245,6 +249,9 @@ var homoglyphMap = map[rune]rune{
 	'о': 'o', 'р': 'p', 'с': 'c', 'т': 'T', 'у': 'y', 'х': 'x',
 	'А': 'A', 'В': 'B', 'Е': 'E', 'К': 'K', 'М': 'M', 'Н': 'H',
 	'О': 'O', 'Р': 'P', 'С': 'C', 'Т': 'T', 'У': 'Y', 'Х': 'X',
+	// Ukrainian/Belarusian i, Serbian je and Macedonian dze: pixel-identical
+	// to Latin i, j and s, and the usual way to write "іgnore".
+	'і': 'i', 'І': 'I', 'ј': 'j', 'Ј': 'J', 'ѕ': 's', 'Ѕ': 'S',
 	// Greek.
 	'Α': 'A', 'Β': 'B', 'Ε': 'E', 'Ζ': 'Z', 'Η': 'H', 'Ι': 'I',
 	'Κ': 'K', 'Μ': 'M', 'Ν': 'N', 'Ο': 'O', 'Ρ': 'P', 'Τ': 'T',

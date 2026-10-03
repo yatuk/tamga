@@ -90,6 +90,11 @@ func (s *JailbreakScanner) Scan(ctx context.Context, content []byte) ([]Finding,
 		})
 	}
 
+	// Verb-on-target rules, on the normalised and decoded views. They read
+	// the view from before de-leeting, which rewrites digits as letters:
+	// several rules read numbers ("DAN 11.0", "first 50 tokens").
+	out = append(out, scanIntentRules(intentViews(norm.Plain, norm.Decoded))...)
+
 	// Encoding-layer escalation: if normalize surfaced decoded Base64/hex
 	// payloads that contain override phrases, flag as critical jailbreak.
 	for _, dec := range norm.Decoded {

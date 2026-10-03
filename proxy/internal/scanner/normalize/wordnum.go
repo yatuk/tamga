@@ -88,7 +88,13 @@ func expandWordsToNumbers(s string) string {
 	out.Grow(len(s))
 	i := 0
 	for i < len(tokens) {
-		run := collectNumberRun(tokens, i)
+		// A run starts at a number word. Starting it at the whitespace before
+		// one would swallow that space and glue the digits to the word in
+		// front ("numaram bir sıfır" → "numaram10").
+		run := 0
+		if isNumberWord(tokens[i]) {
+			run = collectNumberRun(tokens, i)
+		}
 		if run > 1 {
 			if val, ok := parseNumberRun(tokens[i : i+run]); ok {
 				// Write the numeric representation.

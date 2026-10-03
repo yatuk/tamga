@@ -1,15 +1,15 @@
 {
-  "version": "1.2.0",
-  "updated_at": "2026-10-01",
-  "source_commit": "fe9bbac",
+  "version": "1.3.0",
+  "updated_at": "2026-10-03",
+  "source_commit": "884c900 + detection changes of 2026-10-03",
   "conditions": "run_stress_suite.sh: docker compose stack + docker-compose.stress.yml, mock upstream, in-process scanning, shipped default policy with the operator_state authorization allowlist added",
   "adversarial": {
     "pii": { "total": 17, "detected": 16, "bypassed": 1 },
-    "injection": { "total": 22, "detected": 17, "bypassed": 5 },
+    "injection": { "total": 22, "detected": 19, "bypassed": 3 },
     "secret": { "total": 12, "detected": 12, "bypassed": 0 },
     "policy": { "total": 11, "detected": 6, "bypassed": 1 },
     "operator_state": { "total": 7, "detected": 6, "bypassed": 1 },
-    "total_bypassed": 8
+    "total_bypassed": 6
   },
   "load_note": "Load P95 is hardware-specific. These are the gate's thresholds, not a current measurement: they date from 2026-06-13 on a 4-core machine and are kept deliberately loose so the gate does not depend on the runner's CPU. The 2026-10-01 run on a 16-core machine measured p95 4.7 / 4.1 / 4.8 ms at 100 / 500 / 1000 RPS with 0 errors. CI runs the adversarial tests only; load tests run locally or on a manual workflow run.",
   "load": {

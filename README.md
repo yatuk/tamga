@@ -134,21 +134,25 @@ an incident queue. See [docs/operations.md](docs/operations.md).
 
 ## Benchmarks
 
-Measured on 2026-10-01. Everything here is reproducible from this repository.
+Measured on 2026-10-03. Everything here is reproducible from this repository.
 
-**Accuracy** on a 309-prompt mixed corpus (about 40% benign), deterministic
-scanners only. The same corpus gates CI.
+**Accuracy**, deterministic scanners only, on two sets:
 
-| Precision | Recall | F1 |
-|---|---|---|
-| 0.969 | 0.495 | 0.655 |
+| Set | Prompts | Precision | Recall | F1 |
+|---|---|---|---|---|
+| Tuning corpus (gates CI) | 309, about 40% benign | 1.000 | 0.896 | 0.945 |
+| Held-out set | 163, about half benign | 1.000 | 1.000 | 1.000 |
 
-Read that honestly: when Tamga acts it is almost always right, and it misses
-about half of this corpus. The misses are mostly semantic attacks (paraphrases,
-fictional framings, Turkish variants) that pattern matching cannot catch. An
-inline classifier for that gap is planned, not shipped.
+Read that honestly. The rules were written against the misses in the tuning
+corpus, so 0.896 says how well they fit it, not how they do on new traffic; on
+2026-10-01, before that work, the same corpus scored 0.969 / 0.495. The
+held-out set was written separately but by the same author, in the same attack
+families, so it overstates too. Expect less on your own traffic and measure
+there. What the rules still miss in the corpus is semantic: fictional and
+hypothetical framings, data-exfiltration requests, health data, street
+addresses. An inline classifier for that gap is planned, not shipped.
 
-**Latency.** Scan stage: p50 0.2 ms, p95 0.8–1.2 ms. End to end through the
+**Latency.** Scan stage: p50 0.2 ms, p95 0.7–0.8 ms. End to end through the
 Docker Compose stack with a mocked upstream:
 
 | Load | P50 | P95 | P99 | Errors |
@@ -161,11 +165,10 @@ Docker Compose stack with a mocked upstream:
 earlier run on a 4-core machine held the same P95 to 500 RPS and reached
 130 ms at 1000.
 
-**Adversarial suite.** 65 attack vectors written to evade the scanners: 57
-detected, 8 bypass. The bypasses are published in
-[tests/stress/baseline.json](tests/stress/baseline.json) and include Turkish
-injection typed without diacritics, leetspeak, and character-by-character
-smuggling. The vectors are known to the authors, so this is a regression
+**Adversarial suite.** 65 attack vectors written to evade the scanners: 59
+detected, 6 bypass. The bypasses are published in
+[tests/stress/baseline.json](tests/stress/baseline.json) and include leetspeak
+and character-by-character smuggling. The vectors are known to the authors, so this is a regression
 suite, not an independent evaluation.
 
 ```bash
@@ -207,7 +210,7 @@ rules:
   pii_detection:            # contact-style PII is redacted
     action: REDACT
     sensitivity: medium
-    types: [iban, email, phone_tr, ip_public]
+    types: [iban, email, phone_tr, phone, vkn, ip_public]
 
   pii:                      # critical identifiers are blocked
     action: BLOCK

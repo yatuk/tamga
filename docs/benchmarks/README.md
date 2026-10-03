@@ -17,27 +17,63 @@ runtime scanners are gated on in CI — it is not a "marketing" dataset. Benign
 samples, obfuscated jailbreaks, Turkish/English PII, BIN-validated credit
 cards, and secret-format tokens are all mixed in.
 
+A second set, `holdout.csv`, is run the same way and published as
+[`redteam_holdout.json`](./redteam_holdout.json). See
+[Two sets](#two-sets-and-what-each-is-worth) for why it exists.
+
 ## Latest run
 
 - **File:** [`redteam_latest.json`](./redteam_latest.json)
 - **Corpus size:** 309 prompts (≈ 40% benign, 60% adversarial/PII/secret)
-- **Run:** 2026-10-01, Go 1.25.14, linux/amd64 (container on a 16-core
+- **Run:** 2026-10-03, Go 1.25.14, linux/amd64 (container on a 16-core
   laptop CPU), single process, deterministic scanners only
 
 ### Aggregate
 
 | metric | value |
 | --- | --- |
-| Precision | **0.969** |
-| Recall | **0.495** |
-| F1 | **0.655** |
-| Scan latency p50 | **0.21 ms** |
-| Scan latency p95 | **0.83 ms** |
-| Scan latency p99 | **1.22 ms** |
-| Scan latency max | **1.41 ms** |
+| Precision | **1.000** |
+| Recall | **0.896** |
+| F1 | **0.945** |
+| Scan latency p50 | **0.23 ms** |
+| Scan latency p95 | **0.84 ms** |
+| Scan latency p99 | **1.70 ms** |
+| Scan latency max | **2.83 ms** |
 
 Latency varies between runs on the same machine; three consecutive runs
-gave a p95 of 0.83–1.16 ms and a p99 of 1.2–1.8 ms.
+gave a p95 of 0.65–0.84 ms and a p99 of 1.3–1.7 ms.
+
+### Two sets, and what each is worth
+
+| Set | Prompts | Precision | Recall |
+| --- | --- | --- | --- |
+| `prompts.csv` (tuning corpus) | 309 | 1.000 | 0.896 |
+| `holdout.csv` | 163 (78 attacks, 85 benign) | 1.000 | 1.000 |
+
+On 2026-10-01 `prompts.csv` scored precision 0.969 and recall 0.495. The
+difference has three sources, and only the last is a detection gain you can
+count on:
+
+1. **Eleven corpus entries were wrong.** They were labelled "must be caught"
+   but carried numbers that fail their own checksum (a TCKN, three card
+   numbers, three IBANs, a tax number), a twelve-digit "card" and a
+   Luhn-valid number labelled invalid. Not flagging them was correct. The
+   numbers were replaced with valid ones; the diff of `prompts.csv` shows
+   each change.
+2. **Rules were written against the remaining misses.** That makes this
+   corpus a tuning set: its recall says the rules fit it.
+3. **Real bugs were fixed**: IBANs followed by a word were never matched,
+   spelled-out digits were turned back into letters before the PII scan,
+   Cyrillic "і" was not folded, landline and international phone numbers,
+   tax numbers, several token formats and stated passwords had no detector.
+
+`holdout.csv` exists to check the rules on text they were not written
+against: reworded attacks, and benign prompts that share words with attacks
+("ignore the previous error", "write a system prompt for my bot", "how do
+I disable the spam filter"). It was written by the same author as the
+rules, in the same attack families, and one false positive it exposed was
+fixed before publication. It is weaker evidence than an independent
+corpus and will overstate real-world recall.
 
 > **About the earlier 0.52 ms figure.** The previous published run
 > (2026-04-18) was taken on Windows and reported p50 = 0 ms and p95 = 0.52 ms.
@@ -47,24 +83,22 @@ gave a p95 of 0.83–1.16 ms and a p99 of 1.2–1.8 ms.
 
 ### How to read these numbers honestly
 
-- **Precision (0.969)** — of the prompts the inline Go engine mitigated,
-  96.9% were actually adversarial or contained sensitive data. This is the
-  number that governs user experience: false positives block real traffic
-  and train analysts to ignore alerts.
-- **Recall (0.495)** — the inline deterministic engine catches about half
-  of the adversarial corpus on its own. Much of the rest needs semantic
-  reasoning (grandma prompts, homoglyph attacks, fictional framings,
-  Turkish paraphrases), which pattern matching cannot do. Closing that gap
-  is what an inline classifier is for; it is not implemented yet.
+- **Precision (1.000)** — nothing benign in either set was mitigated. This
+  is the number that governs user experience: false positives block real
+  traffic and train analysts to ignore alerts. Both sets are small; a
+  precision of exactly one on 202 benign prompts does not mean none will
+  occur on yours.
+- **Recall (0.896)** — on the tuning corpus. The 20 misses need semantic
+  reasoning (grandma prompts, hypothetical and fictional framings, bulk
+  data-exfiltration requests, health data, street addresses), which pattern
+  matching cannot do. Closing that gap is what an inline classifier is for;
+  it is not implemented yet.
 - **Latency** — the median scan is a fraction of a millisecond and the
   tail stays under 2 ms, well inside a 5 ms budget.
 
-Where precision is 1.000 and recall is high (e.g. `pii.credit_card`,
-`secret.openai`, `tool.fetch`, `indirect.canary`, `jailbreak.dan`), the
-deterministic engine is doing the right thing today. Where precision is
-1.000 and recall is low (e.g. `jailbreak.override.tr`, `pii.iban`), the
-signal is correct when fired — we just need more coverage, which the
-continuous-tuning loop provides.
+The per-category table in the JSON shows where the misses are: categories
+with recall 0 (`data.exfiltration`, `pii.address.tr`, `medical`,
+`jailbreak.hypothetical`) are the ones no rule covers.
 
 ### Reproducing
 
@@ -78,9 +112,10 @@ publishes.
 
 ## Methodology notes
 
-- **No training on the eval corpus.** The same CSV drives CI gating and
-  this public report; we do not fine-tune patterns against it between
-  runs. If precision regresses in a PR, CI fails before it ships.
+- **The corpus is a tuning set.** Until 2026-10-01 no rule had been
+  written against `prompts.csv`. On 2026-10-03 rules were written against
+  its misses, so its recall is no longer an estimate of anything but fit.
+  It still gates CI: a change that lowers it is a regression.
 - **Scanner stack.** PII + Secrets + Prompt Injection + Jailbreak + Canary
   scanners, with the Aho-Corasick DFA compiled once at process start.
   See `tamga/proxy/internal/scanner/`.

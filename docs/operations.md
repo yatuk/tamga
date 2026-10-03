@@ -46,7 +46,7 @@ rules:
   pii_detection:
     action: REDACT
     sensitivity: medium
-    types: [iban, email, phone_tr, ip_public, ip_private]
+    types: [iban, email, phone_tr, phone, vkn, ip_public, ip_private]
 
   pii_critical:
     action: BLOCK

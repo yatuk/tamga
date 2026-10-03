@@ -88,12 +88,12 @@ func TestValidTRMobile(t *testing.T) {
 		"1234567890",
 	}
 	for _, s := range pos {
-		if !validTRMobile(s) {
+		if !validTRPhone(s) {
 			t.Errorf("expected TR mobile valid: %q", s)
 		}
 	}
 	for _, s := range neg {
-		if validTRMobile(s) {
+		if validTRPhone(s) {
 			t.Errorf("expected TR mobile invalid: %q", s)
 		}
 	}
