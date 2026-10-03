@@ -158,7 +158,7 @@ rules:
 		got = append(got, g.Message)
 	}
 	joined := strings.Join(got, "\n")
-	if len(gaps) != 2 || !strings.Contains(joined, `"secret"`) || !strings.Contains(joined, `"injection"`) {
-		t.Errorf("want gaps for secret (LOG only) and injection (missing), got:\n%s", joined)
+	if len(gaps) != 3 || !strings.Contains(joined, "scan.on_error is not set") || !strings.Contains(joined, `"secret"`) || !strings.Contains(joined, `"injection"`) {
+		t.Errorf("want gaps for secret (LOG only), injection (missing) and the unset scan.on_error, got:\n%s", joined)
 	}
 }

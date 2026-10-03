@@ -28,6 +28,21 @@ rules:
     sensitivity: low
     types: [aws_access_key, aws_secret_key, aws_secret_key_broad, github_token, openai_key, anthropic_key, private_key, stripe_key, connection_string, connection_string_password, jwt_token, dotenv_secret, slack_webhook, slack_token, google_api_key, twilio_sid, basic_auth, password, generic_api_key]
 
+  # applies_to limits a rule to text of some roles: system, user, assistant,
+  # tool (tool results, documents, search results), tool_definition, request.
+  # Without it a rule covers every role, as this one does. To let your own
+  # system prompt say "ignore previous instructions" without being blocked:
+  #
+  #   injection:
+  #     action: BLOCK
+  #     applies_to: [user, assistant, tool, tool_definition, request]
+  #   injection_detection:
+  #     action: WARN
+  #     applies_to: [system]
+  #
+  # The role is whatever the request says. Only narrow a rule this way when
+  # your own server builds the request; a caller who reaches the proxy
+  # directly can label any text "system".
   injection:
     action: BLOCK
     sensitivity: medium
@@ -165,8 +180,20 @@ providers:
 #   block     answer 400 (code tamga_invalid_json). The default.
 #   raw_scan  scan the body as plain bytes and forward it, with
 #             X-Tamga-Scan-Mode: raw on the response.
+#
+# on_error: what to do when the scan itself fails — a scanner errors or
+# panics, the scan times out, or a scanner is shed under load.
+#   block  answer 503 (code tamga_scan_unavailable). Shipped here.
+#   pass   forward on the findings of the scanners that did run, with
+#          X-Tamga-Scan-Degraded: true. Also what a policy without this key does.
+#
+# default_action: the action for a finding whose type has no rule at all
+# (BLOCK, WARN, LOG or PASS). It does not affect findings a rule leaves
+# alone on purpose (below its sensitivity, outside its types or roles).
 scan:
   on_malformed: block
+  on_error: block
+  default_action: WARN
 
 # ---------------------------------------------------------------------------
 # RBAC exception framework (opt-in)

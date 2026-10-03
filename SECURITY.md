@@ -33,9 +33,17 @@ deploy it where only trusted applications can reach it, and note:
   `X-Tamga-Last-Verifiable-By`) are taken from the request as sent. They drive
   budget attribution and operator-state checks, so the same gateway rule
   applies if callers are not fully trusted.
-- The proxy fails open when a scanner errors, panics or is shed under load.
-  Watch `tamga_scan_degraded_total` and the `X-Tamga-Scan-Degraded` response
-  header.
+- When a scanner errors, panics or is shed under load, `scan.on_error` decides:
+  `block` (the shipped policy) answers 503, `pass` or no setting forwards the
+  request. Watch `tamga_scan_degraded_total` and the `X-Tamga-Scan-Degraded`
+  response header either way.
+- The role of a piece of text (system, user, tool, …) is read from the request
+  body, which the caller writes. A rule narrowed with `applies_to` trusts the
+  caller not to mislabel text; only do so when your own server builds the
+  request.
+- Images, audio and PDFs attached to a request are not readable by the proxy.
+  Instructions or personal data inside them reach the model unseen. Text
+  attachments are decoded and scanned.
 - A JSON body that parsers can read differently (a repeated key, invalid
   UTF-8, non-standard JSON) is refused with 400 by default. Setting
   `scan.on_malformed: raw_scan` forwards it instead; `tamga_malformed_json_total`

@@ -528,6 +528,13 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 		logger.Error().Err(err).Msg("scanner error")
 		w.Header().Set("X-Tamga-Scan-Degraded", "true")
 		span.SetAttributes(attribute.Bool("tamga.scan_degraded", true))
+		if pol.BlockOnScanError() {
+			// scan.on_error: block — a verdict reached with scanners missing
+			// is not one this policy accepts.
+			logger.Warn().Msg("scan incomplete and scan.on_error is block: request refused")
+			writeScanUnavailable(w, requestID)
+			return
+		}
 	}
 
 	scanDuration := time.Since(start)
@@ -1540,6 +1547,23 @@ func writeInvalidJSON(w http.ResponseWriter, requestID string, e *extract.Strict
 			"message":    "Request body is ambiguous JSON: " + e.Error(),
 			"type":       "invalid_request_error",
 			"reason":     e.Reason,
+			"request_id": requestID,
+		},
+	})
+}
+
+// writeScanUnavailable refuses a request whose scan did not complete. It is
+// a 503: nothing is wrong with the request, and sending it again may work.
+func writeScanUnavailable(w http.ResponseWriter, requestID string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Tamga-Request-Id", requestID)
+	w.Header().Set("Retry-After", "1")
+	w.WriteHeader(http.StatusServiceUnavailable)
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"error": map[string]interface{}{
+			"code":       "tamga_scan_unavailable",
+			"message":    "The security scan could not be completed and the policy does not allow forwarding without it.",
+			"type":       "service_unavailable",
 			"request_id": requestID,
 		},
 	})

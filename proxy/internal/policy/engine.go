@@ -39,6 +39,41 @@ type Rule struct {
 	Mode              string   `yaml:"mode" json:"mode"` // legacy(default) or confidence_based
 	MinimumConfidence int      `yaml:"minimum_confidence" json:"minimum_confidence"`
 	OverrideAction    *Action  `yaml:"override_action" json:"override_action"`
+	// AppliesTo limits the rule to findings in text of these message roles
+	// (system, user, assistant, tool, tool_definition, request). Empty means
+	// every role. See MessageRoles for what each is.
+	//
+	// The role is what the request says it is. Whoever writes the body can
+	// label any text "system", so leaving a role out of a rule trusts the
+	// caller not to do that: safe when your own server builds the request,
+	// not when end users reach the proxy directly.
+	AppliesTo []string `yaml:"applies_to" json:"applies_to,omitempty"`
+}
+
+// MessageRoles are the roles a rule's applies_to may name.
+var MessageRoles = map[string]string{
+	"system":          "the system prompt",
+	"user":            "user messages",
+	"assistant":       "assistant messages, including the arguments of tool calls",
+	"tool":            "tool results, attached documents and search results",
+	"tool_definition": "the descriptions of the tools offered to the model",
+	"request":         "request parameters outside the conversation, such as metadata",
+}
+
+// appliesToRole reports whether the rule covers text of the given role. A
+// finding without a role comes from a raw scan, where the role is unknown;
+// every rule covers it, so an unrecognised request shape cannot be used to
+// step around a role-limited rule.
+func (r Rule) appliesToRole(role string) bool {
+	if len(r.AppliesTo) == 0 || role == "" {
+		return true
+	}
+	for _, a := range r.AppliesTo {
+		if strings.EqualFold(strings.TrimSpace(a), role) {
+			return true
+		}
+	}
+	return false
 }
 
 type RateLimit struct {
@@ -329,6 +364,9 @@ func (p *Policy) EvaluateWithRole(findings []scanner.Finding, role string, stric
 				maxAction = a
 			}
 		}
+		if a, ok := p.unruledAction(f); ok && actionSeverity(a) > actionSeverity(maxAction) {
+			maxAction = a
+		}
 	}
 
 	// Deduplicate applied exceptions (same rule can be matched by multiple findings).
@@ -381,6 +419,68 @@ type ScanConfig struct {
 	// OnMalformed decides what happens to a JSON body that is ambiguous:
 	// duplicate keys, invalid UTF-8, or not JSON at all. Empty means block.
 	OnMalformed string `yaml:"on_malformed" json:"on_malformed"`
+	// OnError decides what happens when the scan itself fails: a scanner
+	// errors or panics, the scan times out, or a scanner is shed under load.
+	// "block" answers 503; "pass" forwards the request on the findings of the
+	// scanners that did run. Empty means pass, the behaviour before this
+	// setting existed.
+	OnError string `yaml:"on_error" json:"on_error"`
+	// DefaultAction is the action for a finding whose type no rule is
+	// written for (BLOCK, WARN, LOG or PASS). Empty means PASS. It does not
+	// touch findings a rule deliberately leaves alone — below its
+	// sensitivity, outside its types or its roles.
+	DefaultAction string `yaml:"default_action" json:"default_action"`
+}
+
+// Values of scan.on_error.
+const (
+	ScanErrorBlock = "block"
+	ScanErrorPass  = "pass"
+)
+
+// BlockOnScanError reports whether a failed scan must stop the request.
+func (p *Policy) BlockOnScanError() bool {
+	return p != nil && p.Scan != nil && strings.EqualFold(strings.TrimSpace(p.Scan.OnError), ScanErrorBlock)
+}
+
+// unruledAction returns scan.default_action for a finding whose type has no
+// rule at all, and false otherwise. A scanner can be registered — content
+// moderation, competitor mentions — without the policy saying what to do with
+// what it finds; this is the answer for those.
+func (p *Policy) unruledAction(f scanner.Finding) (Action, bool) {
+	if p == nil || p.Scan == nil || strings.TrimSpace(p.Scan.DefaultAction) == "" || f.Type == "custom" {
+		return ActionPass, false
+	}
+	for _, key := range []string{f.Type + "_detection", f.Type} {
+		if _, ok := p.Rules[key]; ok {
+			return ActionPass, false
+		}
+	}
+	return ParseAction(p.Scan.DefaultAction), true
+}
+
+// validate checks the values of the scan section. A misspelled value would
+// otherwise fall back to a default nobody chose.
+func (c *ScanConfig) validate() error {
+	if c == nil {
+		return nil
+	}
+	switch c.OnMalformed {
+	case "", MalformedBlock, MalformedRawScan:
+	default:
+		return fmt.Errorf("scan.on_malformed: unknown value %q (block or raw_scan)", c.OnMalformed)
+	}
+	switch strings.ToLower(strings.TrimSpace(c.OnError)) {
+	case "", ScanErrorBlock, ScanErrorPass:
+	default:
+		return fmt.Errorf("scan.on_error: unknown value %q (block or pass)", c.OnError)
+	}
+	switch Action(strings.ToUpper(strings.TrimSpace(c.DefaultAction))) {
+	case "", ActionBlock, ActionWarn, ActionLog, ActionPass:
+	default:
+		return fmt.Errorf("scan.default_action: unknown value %q (BLOCK, WARN, LOG or PASS)", c.DefaultAction)
+	}
+	return nil
 }
 
 // OnMalformedJSON returns the action for an ambiguous JSON body. It blocks
@@ -564,6 +664,19 @@ func LoadFromBytes(data []byte) (*Policy, error) {
 		p.Version = "1.0"
 	}
 
+	if err := p.Scan.validate(); err != nil {
+		return nil, fmt.Errorf("parsing policy YAML: %w", err)
+	}
+
+	// A misspelled role would make the rule cover nothing, silently.
+	for name, rule := range p.Rules {
+		for _, role := range rule.AppliesTo {
+			if _, ok := MessageRoles[strings.ToLower(strings.TrimSpace(role))]; !ok {
+				return nil, fmt.Errorf("parsing policy YAML: rules.%s.applies_to: unknown role %q (known: system, user, assistant, tool, tool_definition, request)", name, role)
+			}
+		}
+	}
+
 	return &p, nil
 }
 
@@ -638,6 +751,9 @@ func (p *Policy) Evaluate(findings []scanner.Finding) Action {
 				maxAction = a
 			}
 		}
+		if a, ok := p.unruledAction(f); ok && actionSeverity(a) > actionSeverity(maxAction) {
+			maxAction = a
+		}
 	}
 
 	return maxAction
@@ -648,6 +764,9 @@ func (p *Policy) Evaluate(findings []scanner.Finding) Action {
 func evalRuleAction(rule Rule, f scanner.Finding) (Action, bool) {
 	// Category filter: an empty Types list matches every category.
 	if len(rule.Types) > 0 && !containsType(rule.Types, f.Category) {
+		return ActionPass, false
+	}
+	if !rule.appliesToRole(f.Role) {
 		return ActionPass, false
 	}
 
@@ -764,10 +883,16 @@ func (p *Policy) MatchedRule(f scanner.Finding) (Rule, bool) {
 		if len(rule.Types) > 0 && !containsType(rule.Types, f.Category) {
 			continue
 		}
+		if !rule.appliesToRole(f.Role) {
+			continue
+		}
 		if !meetsThreshold(f.Severity, rule.Sensitivity) {
 			continue
 		}
 		return rule, true
+	}
+	if a, ok := p.unruledAction(f); ok {
+		return Rule{Action: a, Sensitivity: "low"}, true
 	}
 	return Rule{}, false
 }

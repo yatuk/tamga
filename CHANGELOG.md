@@ -130,6 +130,27 @@
   counts by reason. Requests that do not claim JSON (uploads) are untouched,
   and an unpaired surrogate inside a string value is still accepted.
 
+### Policy
+- **`applies_to` on a rule** limits it to text of some roles: `system`,
+  `user`, `assistant`, `tool` (tool results, documents, search results),
+  `tool_definition`, `request`. Without it a rule covers every role, so
+  existing policies behave as before. An unknown role name is a load error.
+  The shipped policy still blocks injection in every role; it carries a
+  commented example for exempting your own system prompt. The role is
+  whatever the request says, so narrow a rule only when your own server
+  builds the request.
+- **`scan.on_error: block | pass`.** When a scanner errors or panics, the scan
+  times out, or a scanner is shed under load, `block` answers `503`
+  (`tamga_scan_unavailable`) instead of forwarding with reduced inspection.
+  A policy without the key keeps the old behaviour (`pass`) and logs a warning
+  at load. **The shipped policy sets `block`**: a copy of it now fails closed.
+- **`scan.default_action`** is the action for a finding whose type has no rule
+  at all (`BLOCK`, `WARN`, `LOG`, `PASS`). The shipped policy sets `WARN`, so
+  content-moderation and competitor findings, which it has no rule for, are no
+  longer dropped silently. Findings a rule leaves alone on purpose are not
+  affected.
+- A misspelled value under `scan:` is a load error.
+
 ### Detection
 - **Recall on the red-team corpus went from 0.495 to 0.896 with no false
   positives** (was 3). Read `docs/benchmarks/README.md` before quoting it:

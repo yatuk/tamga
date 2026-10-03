@@ -31,6 +31,14 @@ func CoverageGaps(p *Policy) []ValidationIssue {
 			Severity: "warning",
 		})
 	}
+	if p.Scan == nil || strings.TrimSpace(p.Scan.OnError) == "" {
+		issues = append(issues, ValidationIssue{
+			Field:    "scan.on_error",
+			Rule:     "fail_open",
+			Message:  "scan.on_error is not set: when a scanner fails, times out or is shed under load the request is forwarded with less inspection than configured; set it to block or pass to choose",
+			Severity: "warning",
+		})
+	}
 	return issues
 }
 
