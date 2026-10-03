@@ -1,9 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import type { TimeRange } from "@/lib/types";
 import { useAdminKey } from "@/hooks/useAdminKey";
 import { useCsvExport } from "@/hooks/useCsvExport";
 import { useRangeParam } from "@/hooks/useRangeParam";

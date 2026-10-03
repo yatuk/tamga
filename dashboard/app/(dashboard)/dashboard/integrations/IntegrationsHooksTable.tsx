@@ -1,141 +1,97 @@
 "use client";
 
-import { CheckCircle2, Trash2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { EmptyState } from "@/components/app/states";
-import { Panel } from "@/components/app/panel";
-import { formatSince } from "@/lib/utils/format";
-import type { Webhook } from "@/lib/api";
-import { integrationKindBadge } from "./integrationWebhookHelpers";
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { Send, Trash2 } from "lucide-react";
 import { ConfirmButton } from "@/components/app/confirm-button";
+import { Panel } from "@/components/app/panel";
+import { EmptyState } from "@/components/app/states";
+import { StatusBadge } from "@/components/app/status-badge";
+import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import type { Webhook } from "@/lib/api";
+import { formatSince } from "@/lib/utils/format";
 
 type Props = {
   hooks: Webhook[];
+  /** The webhook a test is being sent to right now. */
+  testingId?: string;
   onTest: (id: string) => void;
   onDelete: (id: string) => void;
-  onConnect?: () => void;
 };
 
-function lastFiredColor(ts: string | undefined): string {
-  if (!ts) return "text-fg-subtle";
-  const ago = Date.now() - new Date(ts).getTime();
-  const mins = Math.floor(ago / 60000);
-  if (mins < 5) return "text-status-pass";
-  if (mins < 60) return "text-status-medium";
-  return "text-fg-subtle";
-}
-
-function lastFiredDotClass(ts: string | undefined): string {
-  if (!ts) return "bg-zinc-400";
-  const ago = Date.now() - new Date(ts).getTime();
-  const mins = Math.floor(ago / 60000);
-  if (mins < 5) return "bg-status-pass";
-  if (mins < 60) return "bg-status-medium";
-  return "bg-zinc-400";
-}
-
-const COLSPAN = 8;
-
-export function IntegrationsHooksTable({ hooks, onTest, onDelete, onConnect }: Props) {
+export function IntegrationsHooksTable({ hooks, testingId, onTest, onDelete }: Props) {
   return (
-    <div>
-      <Panel
-        title="Connected Webhooks"
-        aside={
-          <span className="px-2 text-xs uppercase tracking-[0.18em] text-fg-muted">{hooks.length} rows</span>
-        }
-
-      >
-        <div className="overflow-x-auto">
-          <Table className="w-full text-left">
-            <TableHeader className="uppercase">
-              <TableRow>
-                <TableHead>Kind</TableHead>
-                <TableHead>Label</TableHead>
-                <TableHead>URL</TableHead>
-                <TableHead>Enabled</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Last Fired</TableHead>
-                <TableHead>Delivered</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+    <Panel title="Connected" aside={hooks.length > 0 ? `${hooks.length} destinations` : undefined}>
+      {hooks.length === 0 ? (
+        <EmptyState
+          icon="database"
+          title="Nothing connected yet"
+          description="Alerts stay in this console until you connect a destination."
+          suggestion="Pick one below. Each has a setup guide."
+        />
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Label</TableHead>
+              <TableHead>Kind</TableHead>
+              <TableHead>State</TableHead>
+              <TableHead>URL</TableHead>
+              <TableHead>Last delivery</TableHead>
+              <TableHead>
+                <span className="sr-only">Actions</span>
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {hooks.map((h) => (
+              <TableRow key={h.id}>
+                <TableCell className="font-medium">
+                  {h.label}
+                  {h.kind === "jira" && h.project_key ? (
+                    <span className="ml-2 font-mono text-xs font-normal text-muted-foreground">
+                      {h.project_key} / {h.issue_type || "Task"}
+                    </span>
+                  ) : null}
+                </TableCell>
+                <TableCell>
+                  <StatusBadge>{h.kind}</StatusBadge>
+                </TableCell>
+                <TableCell>
+                  <StatusBadge tone={h.enabled ? "pass" : "neutral"}>{h.enabled ? "enabled" : "disabled"}</StatusBadge>
+                </TableCell>
+                <TableCell className="max-w-72 truncate font-mono text-xs text-muted-foreground" title={h.url}>
+                  {h.url}
+                </TableCell>
+                <TableCell
+                  className="font-mono text-xs text-muted-foreground"
+                  title={h.last_fired ? new Date(h.last_fired).toLocaleString("en-GB") : undefined}
+                >
+                  {h.last_fired ? formatSince(h.last_fired) : "Never"}
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center justify-end gap-1">
+                    <Button variant="outline" size="sm" onClick={() => onTest(h.id)} disabled={testingId === h.id}>
+                      <Send />
+                      {testingId === h.id ? "Sending…" : "Send Test"}
+                    </Button>
+                    <ConfirmButton
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={`Disconnect ${h.label}`}
+                      title={`Disconnect ${h.label}?`}
+                      description="Alerts will no longer be sent to this destination."
+                      confirmLabel="Disconnect"
+                      onConfirm={() => onDelete(h.id)}
+                    >
+                      <Trash2 />
+                    </ConfirmButton>
+                  </div>
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {hooks.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={COLSPAN}>
-                    <EmptyState
-                      icon="database"
-                      title="No webhooks configured"
-                      description="Connect external services like Slack, Jira, PagerDuty, or custom webhooks for real-time incident notifications."
-                      suggestion="Choose a preset from the grid above to get started with a guided setup."
-                      action={onConnect ? { label: "Create Webhook", onClick: onConnect } : undefined}
-                    />
-                  </TableCell>
-                </TableRow>
-              ) : (
-                hooks.map((h) => (
-                  <TableRow key={h.id}>
-                    <TableCell>
-                      <Badge className={`rounded-sm border text-xs ${integrationKindBadge(h.kind)}`}>{h.kind}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      {h.label}
-                      {h.kind === "jira" && h.project_key ? (
-                        <span className="ml-2 rounded-sm border border-status-low/60 bg-status-low/30 px-1 py-0.5 text-xs text-status-low">
-                          {h.project_key}/{h.issue_type || "Task"}
-                        </span>
-                      ) : null}
-                    </TableCell>
-                    <TableCell className="max-w-[280px] truncate">{h.url}</TableCell>
-                    <TableCell>
-                      {h.enabled ? <span className="text-status-pass">ON</span> : <span className="text-fg-muted">OFF</span>}
-                    </TableCell>
-                    <TableCell>
-                      <span
-                        className="inline-flex items-center gap-1.5"
-                        title={h.last_fired ? `Last delivery: ${new Date(h.last_fired).toLocaleString("en-GB")}` : "No deliveries yet"}
-                      >
-                        <span className={`inline-block h-2 w-2 rounded-full ${lastFiredDotClass(h.last_fired)}`} />
-                        <span className="text-xs text-fg-subtle">
-                          {h.last_fired ? "Active" : "—"}
-                        </span>
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <span className={`inline-flex items-center gap-1 text-xs ${lastFiredColor(h.last_fired)}`}>
-                        {h.last_fired ? formatSince(h.last_fired) : "Never"}
-                      </span>
-                    </TableCell>
-                    <TableCell className="tabular-nums">
-                      —
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="inline-flex gap-1">
-                        <Button variant="outline" size="icon-sm" aria-label={`Send a test event to ${h.label}`} onClick={() => onTest(h.id)}>
-                          <CheckCircle2 className="h-3.5 w-3.5" />
-                        </Button>
-                        <ConfirmButton
-                          variant="outline"
-                          size="icon-sm"
-                          aria-label={`Delete integration ${h.label}`}
-                          title={`Delete ${h.label}?`}
-                          description="Incidents will no longer be sent to this destination."
-                          onConfirm={() => onDelete(h.id)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </ConfirmButton>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </Panel>
-    </div>
+            ))}
+          </TableBody>
+        </Table>
+      )}
+    </Panel>
   );
 }

@@ -1,107 +1,83 @@
 "use client";
 
 import { PageHeader } from "@/components/app/page-header";
-import { API_BASE, SETTINGS_TABS } from "./_constants";
+import { StatusBadge } from "@/components/app/status-badge";
+import { PageTabsList, PageTabsTrigger } from "@/components/app/page-tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { API_BASE, SETTINGS_TABS, type SettingsTabKey } from "./_constants";
 import { SettingsAccessSection } from "./SettingsAccessSection";
-import { SettingsRetentionSection } from "./SettingsRetentionSection";
 import { SettingsProvidersSection } from "./SettingsProvidersSection";
+import { SettingsRetentionSection } from "./SettingsRetentionSection";
 import { SettingsRuntimeSection } from "./SettingsRuntimeSection";
 import { SettingsSSOSection } from "./SettingsSSOSection";
-import { SettingsStatusChip } from "./SettingsStatusChip";
-import { SettingsWebhooksSection } from "./SettingsWebhooksSection";
 import { useSettingsPage } from "./useSettingsPage";
 
 export default function SettingsPage() {
-  const {
-    tab,
-    setTab,
-    draft,
-    setDraft,
-    saved,
-    retention,
-    setRetention,
-    health,
-    runtime,
-    keyList,
-    hookList,
-    ssoConfig,
-    ssoLoading,
-    ssoError,
-    saveSSO,
-    saveAdminKey,
-    saveRetention,
-    createKey,
-    removeKey,
-    createHook,
-    removeHook,
-    testHook,
-  } = useSettingsPage();
-
+  const m = useSettingsPage();
+  const { health } = m;
   const dbStatus = health?.database || "unknown";
+  const scanners = health?.scanner_count ?? 0;
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-6">
       <PageHeader
         title="Settings"
-        description={`${API_BASE} · proxy ${health?.proxy || "unknown"} · db ${dbStatus}`}
+        description={
+          <>
+            Access, alert delivery and runtime of the proxy at <span className="font-mono text-xs">{API_BASE}</span>.
+          </>
+        }
         actions={
-          <div className="flex flex-wrap items-center gap-1">
-            <SettingsStatusChip label="PROXY" value={health?.proxy || "?"} good={health?.proxy === "up"} />
-            <SettingsStatusChip
-              label="DB"
-              value={dbStatus}
-              good={dbStatus === "connected"}
-              neutral={dbStatus === "not_configured"}
-            />
-            <SettingsStatusChip label="SCAN" value={String(health?.scanner_count ?? 0)} good={(health?.scanner_count ?? 0) > 0} />
-          </div>
+          <>
+            <StatusBadge tone={health?.proxy === "up" ? "pass" : health ? "critical" : "neutral"}>
+              Proxy {health?.proxy || "unknown"}
+            </StatusBadge>
+            <StatusBadge
+              tone={dbStatus === "connected" ? "pass" : dbStatus === "not_configured" || !health ? "neutral" : "critical"}
+            >
+              Database {dbStatus.replace(/_/g, " ")}
+            </StatusBadge>
+            <StatusBadge tone={scanners > 0 ? "pass" : health ? "critical" : "neutral"}>{scanners} scanners</StatusBadge>
+          </>
         }
       />
 
-      <div className="inline-flex overflow-hidden rounded-sm border border-border bg-surface-card">
-        {SETTINGS_TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => setTab(t.id)}
-            className={` px-3 py-1.5 text-xs uppercase tracking-wide ${
-              tab === t.id ? "bg-status-pass text-white" : "text-fg-muted hover:bg-surface-subtle hover:text-fg"
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <Tabs value={m.tab} onValueChange={(v) => m.setTab(v as SettingsTabKey)} className="gap-6">
+        <PageTabsList>
+          {SETTINGS_TABS.map((t) => (
+            <PageTabsTrigger key={t.id} value={t.id}>
+              {t.label}
+            </PageTabsTrigger>
+          ))}
+        </PageTabsList>
 
-      <div className="space-y-3">
-        {tab === "access" ? (
+        <TabsContent value="access" className="space-y-6">
           <SettingsAccessSection
-            draft={draft}
-            setDraft={setDraft}
-            saved={saved}
-            saveAdminKey={saveAdminKey}
-            keyList={keyList}
-            createKey={createKey}
-            removeKey={removeKey}
+            draft={m.draft}
+            setDraft={m.setDraft}
+            saved={m.saved}
+            saveAdminKey={m.saveAdminKey}
           />
-        ) : null}
-        {tab === "raw-webhooks" ? (
-          <SettingsWebhooksSection hookList={hookList} createHook={createHook} removeHook={removeHook} testHook={testHook} />
-        ) : null}
-        {tab === "retention" ? (
-          <SettingsRetentionSection retention={retention} setRetention={setRetention} saveRetention={saveRetention} />
-        ) : null}
-        {tab === "providers" ? <SettingsProvidersSection health={health} adminKey={saved} /> : null}
-        {tab === "runtime" ? <SettingsRuntimeSection health={health} runtime={runtime} /> : null}
-        {tab === "sso" ? (
+        </TabsContent>
+        <TabsContent value="retention">
+          <SettingsRetentionSection retention={m.retention} setRetention={m.setRetention} saveRetention={m.saveRetention} />
+        </TabsContent>
+        <TabsContent value="providers">
+          <SettingsProvidersSection health={health} adminKey={m.saved} />
+        </TabsContent>
+        <TabsContent value="runtime">
+          <SettingsRuntimeSection health={health} runtime={m.runtime} />
+        </TabsContent>
+        <TabsContent value="sso">
           <SettingsSSOSection
-            config={ssoConfig}
-            loading={ssoLoading}
-            error={ssoError instanceof Error ? ssoError.message : null}
-            onSave={saveSSO}
+            adminKey={m.saved}
+            config={m.ssoConfig}
+            loading={m.ssoLoading}
+            error={m.ssoError}
+            onSave={m.saveSSO}
           />
-        ) : null}
-      </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

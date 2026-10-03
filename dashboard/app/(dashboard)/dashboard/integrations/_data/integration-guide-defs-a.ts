@@ -4,7 +4,6 @@ import { LAST_VERIFIED } from "@/app/(dashboard)/dashboard/integrations/_data/in
 export const SLACK: IntegrationGuide = {
   kind: "slack",
   name: "Slack",
-  badge: "border-[#4A154B]/60 bg-[#4A154B]/20 text-[#ECB22E]",
   overview:
     "Post Tamga alerts into a Slack channel via an Incoming Webhook. Best for real-time analyst visibility; not a durable log store.",
   lastVerified: LAST_VERIFIED,
@@ -59,7 +58,6 @@ export const SLACK: IntegrationGuide = {
 export const TEAMS: IntegrationGuide = {
   kind: "teams",
   name: "Microsoft Teams",
-  badge: "border-[#6264A7]/60 bg-[#6264A7]/20 text-[#a5a8ff]",
   overview:
     "Post Tamga alerts into a Microsoft Teams channel via a Power Automate Workflow. Microsoft retired the classic Office 365 Connector / Incoming Webhook channel in Q4 2024 — the old outlook.office.com URLs stop working at end of 2025. This is the supported replacement.",
   lastVerified: LAST_VERIFIED,
@@ -125,7 +123,6 @@ export const TEAMS: IntegrationGuide = {
 export const SPLUNK: IntegrationGuide = {
   kind: "splunk",
   name: "Splunk HEC (JSON)",
-  badge: "border-status-pass/60 bg-status-pass/20 text-status-pass",
   overview:
     "Ship Tamga events as JSON to Splunk’s HTTP Event Collector. Easiest path for Splunk Enterprise / Cloud when you want the Splunk field extractor to auto-parse.",
   lastVerified: LAST_VERIFIED,
@@ -188,7 +185,6 @@ export const SPLUNK: IntegrationGuide = {
 export const SPLUNK_HEC: IntegrationGuide = {
   kind: "splunk_hec",
   name: "Splunk HEC (CEF)",
-  badge: "border-status-pass/60 bg-status-pass/20 text-status-pass",
   overview:
     "Ship Tamga events as ArcSight CEF 0.1 lines to Splunk’s HEC /raw endpoint. Use this when your SOC has standardized on CEF across multiple vendors.",
   lastVerified: LAST_VERIFIED,

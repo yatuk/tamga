@@ -5,6 +5,8 @@ import { ArrowRight, Download, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
 import { Panel } from "@/components/app/panel";
 import { Stat, StatGrid } from "@/components/app/stat";
+import { BarList } from "@/components/app/bar-list";
+import { TimeSeriesChart, type ChartSeries } from "@/components/app/charts";
 import { AdminKeyRequired, EmptyState, ErrorState } from "@/components/app/states";
 import { ActionBadge, SeverityBadge, StatusBadge, type Tone } from "@/components/app/status-badge";
 import { TimeRangeToggle } from "@/components/app/time-range";
@@ -17,13 +19,17 @@ import { humanizeFindingType, humanizeProvider } from "@/lib/humanize";
 import { primaryOwasp } from "@/lib/owasp-llm";
 import type { SecurityEvent } from "@/lib/api/types-core";
 import { toLowerEn } from "@/lib/utils/case";
-import { overviewTrafficBarConfig } from "./overviewConstants";
-import { OverviewTrafficChart } from "./overviewDynamicCharts";
 import { buildIncidentsHref, formatInt, relTime } from "./overviewHelpers";
 import { useOverviewPage } from "./useOverviewPage";
 
 const SEVERITIES = ["critical", "high", "medium", "low"] as const;
 type Severity = (typeof SEVERITIES)[number];
+
+const TRAFFIC_SERIES: ChartSeries[] = [
+  { key: "total", label: "Requests", color: "var(--chart-1)" },
+  { key: "blocked", label: "Blocked", color: "var(--status-critical)" },
+  { key: "redacted", label: "Redacted", color: "var(--status-medium)" },
+];
 
 type Posture = { label: string; tone: Tone };
 
@@ -216,7 +222,14 @@ export function OverviewView() {
       <div className="grid gap-6 xl:grid-cols-3">
         <Panel title={`Traffic · ${range}`} description="Requests, blocked and redacted" className="xl:col-span-2">
           <div className="p-4">
-            <OverviewTrafficChart data={derived.sevenDayData} config={overviewTrafficBarConfig} />
+            <TimeSeriesChart
+              kind="bar"
+              data={derived.sevenDayData}
+              xKey="day"
+              series={TRAFFIC_SERIES}
+              height={300}
+              label={`Requests, blocked and redacted per bucket over the last ${range}`}
+            />
           </div>
         </Panel>
 
@@ -357,24 +370,7 @@ export function OverviewView() {
           {derived.topProviders.length === 0 ? (
             <EmptyState icon="chart" title="No traffic" />
           ) : (
-            <ul className="space-y-3 p-4">
-              {derived.topProviders.map((p) => {
-                const share = totals.total > 0 ? (p.value / totals.total) * 100 : 0;
-                return (
-                  <li key={p.name}>
-                    <div className="flex items-baseline justify-between text-sm">
-                      <span>{humanizeProvider(p.name)}</span>
-                      <span className="font-mono text-xs text-muted-foreground tabular-nums">
-                        {formatInt(p.value)} · {Math.round(share)}%
-                      </span>
-                    </div>
-                    <div className="mt-1.5 h-1 bg-muted">
-                      <div className="h-full bg-chart-1" style={{ width: `${Math.min(100, share)}%` }} />
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
+            <BarList items={derived.topProviders.map((p) => ({ label: humanizeProvider(p.name), value: p.value }))} />
           )}
         </Panel>
       </div>

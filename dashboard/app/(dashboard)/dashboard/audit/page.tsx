@@ -2,62 +2,39 @@
 
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { RefreshCw, ShieldCheck, ShieldAlert } from "lucide-react";
-import { api, type AuditEntry } from "@/lib/api";
-import { toLowerEn } from "@/lib/utils/case";
-import { humanizeAuditKind } from "@/lib/humanize";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { RefreshCw, Search } from "lucide-react";
+import { BarList } from "@/components/app/bar-list";
+import { DetailList } from "@/components/app/detail-list";
+import { FormField } from "@/components/app/form-field";
 import { PageHeader } from "@/components/app/page-header";
-import { Stat, StatGrid } from "@/components/app/stat";
-import { SkeletonRows } from "@/components/app/states";
 import { Panel } from "@/components/app/panel";
-import { useAdminKey } from "@/hooks/useAdminKey";
+import { Stat, StatGrid } from "@/components/app/stat";
+import { AdminKeyRequired, EmptyState, ErrorState, SkeletonRows } from "@/components/app/states";
+import { StatusBadge } from "@/components/app/status-badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useAdminKey } from "@/hooks/useAdminKey";
+import { useStringParam } from "@/hooks/useUrlState";
+import { api, type AuditEntry } from "@/lib/api";
+import { humanizeAuditKind } from "@/lib/humanize";
+import { toLowerEn } from "@/lib/utils/case";
+import { formatInt } from "@/lib/utils/format";
 
-function kindClass(k: string) {
-  if (k.startsWith("policy.")) return "border-status-medium/40 bg-status-medium/10 text-status-medium";
-  if (k.startsWith("incident.")) return "border-status-low/40 bg-status-low/10 text-status-low";
-  if (k.startsWith("apikey.")) return "border-border/40 bg-surface-subtle text-fg-subtle";
-  if (k.startsWith("webhook.")) return "border-border-strong/40 bg-surface-subtle0/10 text-fg-subtle";
-  if (k.startsWith("pattern.")) return "border-status-pass/40 bg-status-pass/10 text-status-pass";
-  if (k.startsWith("team.")) return "border-status-critical/40 bg-status-critical/10 text-status-critical";
-  return "border-border-strong bg-surface-subtle text-fg-muted";
-}
-
-function kindBorderColor(k: string) {
-  if (k.startsWith("policy.")) return "border-l-status-medium";
-  if (k.startsWith("incident.")) return "border-l-status-low";
-  if (k.startsWith("apikey.")) return "border-l-border";
-  if (k.startsWith("webhook.")) return "border-l-border-strong";
-  if (k.startsWith("pattern.")) return "border-l-status-pass";
-  if (k.startsWith("team.")) return "border-l-status-critical";
-  return "border-l-border";
-}
-
-function kindBarColor(k: string) {
-  if (k.startsWith("policy.")) return "bg-status-medium";
-  if (k.startsWith("incident.")) return "bg-status-critical";
-  if (k.startsWith("pattern.")) return "bg-status-pass";
-  if (k.startsWith("apikey.")) return "bg-status-low";
-  if (k.startsWith("webhook.")) return "bg-surface-subtle0";
-  if (k.startsWith("team.")) return "bg-status-critical";
-  if (k.startsWith("auth.")) return "bg-status-low";
-  return "bg-zinc-400";
-}
+/** The area of the product an entry belongs to: "policy.reload" is "policy". */
+const areaOf = (kind: string) => kind.split(".")[0] || kind;
 
 export default function AuditPage() {
   const [adminKey] = useAdminKey();
-  const [q, setQ] = useState("");
-  const [kind, setKind] = useState<string>("");
-  const [actor, setActor] = useState<string>("");
+  const [q, setQ] = useStringParam("q");
+  const [kind, setKind] = useStringParam("kind");
+  const [actor, setActor] = useStringParam("actor");
   const [selected, setSelected] = useState<AuditEntry | null>(null);
-
   const queryClient = useQueryClient();
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["tamga-audit", adminKey],
     queryFn: () => api.getAuditLog(adminKey, 500),
     enabled: !!adminKey,
@@ -65,9 +42,8 @@ export default function AuditPage() {
     retry: 1,
   });
 
-  // Hash-chain verification: GET /api/v1/audit/verify walks the `prev_hash`/
-  // `hash` links. If any entry is tampered the endpoint returns chain_ok=false
-  // + broken_at index. We refresh every 30s and on manual button press.
+  // The log is a hash chain: every entry carries the hash of the one before
+  // it. The verify endpoint walks the chain and reports the first broken link.
   const {
     data: chain,
     isFetching: chainLoading,
@@ -80,258 +56,231 @@ export default function AuditPage() {
     retry: 1,
   });
 
-  const chainOk = chain?.chain_ok !== false;
-  const chainBadge = chainOk
-    ? "border-status-pass/40 bg-status-pass/10 text-status-pass"
-    : "border-status-critical/40 bg-status-critical/10 text-status-critical";
+  const items = useMemo(() => data?.items ?? [], [data]);
+  const kinds = useMemo(() => [...new Set(items.map((it) => it.kind))].sort(), [items]);
+  const actors = useMemo(() => [...new Set(items.map((it) => it.actor).filter(Boolean) as string[])].sort(), [items]);
 
-  const kinds = useMemo(() => {
-    const set = new Set<string>();
-    (data?.items || []).forEach((it: AuditEntry) => set.add(it.kind));
-    return Array.from(set).sort();
-  }, [data]);
-
-  const actors = useMemo(() => {
-    const set = new Set<string>();
-    (data?.items || []).forEach((it: AuditEntry) => {
-      if (it.actor) set.add(it.actor);
-    });
-    return Array.from(set).sort();
-  }, [data]);
-
-  const kindCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    (data?.items || []).forEach((it) => {
-      counts[it.kind] = (counts[it.kind] || 0) + 1;
-    });
-    return counts;
-  }, [data]);
-
-  const maxKindCount = useMemo(() => {
-    const vals = Object.values(kindCounts);
-    return vals.length > 0 ? Math.max(...vals) : 1;
-  }, [kindCounts]);
-
-  const uniqueActorCount = useMemo(
-    () => new Set((data?.items || []).map((e) => e.actor).filter(Boolean)).size,
-    [data],
-  );
+  const byKind = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const it of items) counts.set(it.kind, (counts.get(it.kind) ?? 0) + 1);
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
+  }, [items]);
 
   const filtered = useMemo(() => {
-    const items = data?.items || [];
     const query = toLowerEn(q.trim());
     return items.filter((it) => {
       if (kind && it.kind !== kind) return false;
       if (actor && (it.actor || "") !== actor) return false;
       if (!query) return true;
-      return (
-        toLowerEn(it.kind).includes(query) ||
-        toLowerEn(it.actor || "").includes(query) ||
-        toLowerEn(it.target || "").includes(query)
-      );
+      return [it.kind, it.actor || "", it.target || ""].some((field) => toLowerEn(field).includes(query));
     });
-  }, [data, q, kind, actor]);
+  }, [items, q, kind, actor]);
 
-  return (
-    <div className="space-y-2">
-      <PageHeader
-        title="Audit Log"
-        description={`${filtered.length} / ${data?.total ?? 0} records · in-system actions`}
-        actions={
-          <div className="flex items-center gap-2">
-            <Badge className={`rounded-sm border text-xs ${chainBadge}`}>
-              {chainOk ? (
-                <ShieldCheck className="mr-1 h-3 w-3" />
-              ) : (
-                <ShieldAlert className="mr-1 h-3 w-3" />
-              )}
-              {chainOk
-                ? `CHAIN OK · ${chain?.entries ?? 0} entries`
-                : `CHAIN BROKEN @ #${chain?.broken_at ?? "?"}`}
-            </Badge>
+  const filtering = Boolean(q || kind || actor);
+  const clearFilters = () => {
+    setQ("");
+    setKind("");
+    setActor("");
+  };
+
+  const header = (
+    <PageHeader
+      title="Audit log"
+      description="Who changed what in this console. Entries are hash-chained, so tampering is detectable."
+      actions={
+        adminKey ? (
+          <>
+            {chain ? (
+              <StatusBadge tone={chain.chain_ok ? "pass" : "critical"}>
+                {chain.chain_ok ? `Chain intact · ${formatInt(chain.entries)} entries` : `Chain broken at entry ${chain.broken_at ?? "?"}`}
+              </StatusBadge>
+            ) : (
+              <StatusBadge>Chain not verified</StatusBadge>
+            )}
             <Button
               size="sm"
-              variant="secondary"
-              onClick={() => {
- refetchChain();
- queryClient.invalidateQueries({ queryKey: ["tamga-audit", adminKey] });
- }}
+              variant="outline"
               disabled={chainLoading}
+              onClick={() => {
+                void refetchChain();
+                void queryClient.invalidateQueries({ queryKey: ["tamga-audit", adminKey] });
+              }}
             >
-              <RefreshCw
-                className={`mr-1 h-3 w-3 ${chainLoading ? "animate-spin" : ""}`}
-              />
-              Verify
+              <RefreshCw className={chainLoading ? "motion-safe:animate-spin" : undefined} />
+              {chainLoading ? "Verifying…" : "Verify Chain"}
             </Button>
-          </div>
-        }
-      />
+          </>
+        ) : null
+      }
+    />
+  );
 
-      <div>
-        <div className="flex flex-wrap items-center gap-2 rounded-sm border border-border bg-surface-card p-2">
-          <Input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="actor, target, kind…"
-            className="w-64"
-            aria-label="actor, target, kind"
-          />
-          <NativeSelect value={kind} onChange={(e) => setKind(e.target.value)}>
-            <NativeSelectOption value="">all kinds</NativeSelectOption>
-            {kinds.map((k) => (
-              <NativeSelectOption key={k} value={k}>
-                {k}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
-          <NativeSelect value={actor} onChange={(e) => setActor(e.target.value)}>
-            <NativeSelectOption value="">all actors</NativeSelectOption>
-            {actors.map((a) => (
-              <NativeSelectOption key={a} value={a}>
-                {a}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
-          <Badge className="rounded-sm border-border-strong bg-surface-subtle text-xs text-fg-muted">
-            {filtered.length} / {data?.total ?? 0}
-          </Badge>
-        </div>
+  if (!adminKey) {
+    return (
+      <div className="space-y-6">
+        {header}
+        <Panel>
+          <AdminKeyRequired />
+        </Panel>
       </div>
+    );
+  }
 
-      {/* 3-card metric row */}
-      <StatGrid className="lg:grid-cols-3">
-        <Stat label="TOTAL ENTRIES" value={data?.total ?? 0} />
-        <Stat label="UNIQUE ACTORS" value={uniqueActorCount} />
-        <Stat label="UNIQUE KINDS" value={kinds.length} />
+  return (
+    <div className="space-y-6">
+      {header}
+
+      <StatGrid>
+        <Stat label="Entries" value={formatInt(data?.total ?? 0)} hint={items.length < (data?.total ?? 0) ? `Showing the latest ${items.length}` : undefined} />
+        <Stat label="Actors" value={actors.length} />
+        <Stat label="Kinds of action" value={kinds.length} />
+        <Stat
+          label="Chain"
+          value={!chain ? "—" : chain.chain_ok ? "Intact" : "Broken"}
+          tone={!chain ? "default" : chain.chain_ok ? "pass" : "critical"}
+          tooltip="Whether every entry still links to the one before it."
+        />
       </StatGrid>
 
-      {/* Kind distribution bar chart */}
-      {Object.keys(kindCounts).length > 0 && (
-        <div className="rounded-sm border border-border bg-surface-card p-3">
-          <div className="mb-2 text-xs uppercase tracking-[0.14em] text-fg-muted">
-            Kind Distribution
-          </div>
-          <div className="space-y-1.5">
-            {Object.entries(kindCounts)
-              .sort((a, b) => b[1] - a[1])
-              .slice(0, 12)
-              .map(([k, count]) => (
-                <div key={k} className="flex items-center gap-2">
-                  <span className="w-36 truncate text-xs text-fg-muted">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
+        <Panel
+          title="Entries"
+          aside={
+            <span className="font-mono tabular-nums">
+              {filtering ? `${formatInt(filtered.length)} of ${formatInt(items.length)}` : formatInt(items.length)}
+            </span>
+          }
+        >
+          <div className="grid gap-3 border-b p-4 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+            <FormField label="Search" htmlFor="audit-q">
+              <div className="relative">
+                <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+                <Input
+                  id="audit-q"
+                  name="q"
+                  type="search"
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="pl-9"
+                  placeholder="Actor, target or kind…"
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                />
+              </div>
+            </FormField>
+            <FormField label="Kind" htmlFor="audit-kind">
+              <NativeSelect id="audit-kind" name="kind" value={kind} onChange={(e) => setKind(e.target.value)}>
+                <NativeSelectOption value="">All kinds</NativeSelectOption>
+                {kinds.map((k) => (
+                  <NativeSelectOption key={k} value={k}>
                     {humanizeAuditKind(k)}
-                  </span>
-                  <div className="h-3 flex-1 rounded-sm bg-surface-subtle">
-                    <div
-                      className={`h-full rounded-sm ${kindBarColor(k)}`}
-                      style={{ width: `${Math.max((count / maxKindCount) * 100, 2)}%` }}
-                    />
-                  </div>
-                  <span className="w-8 text-right text-xs tabular-nums text-fg-muted">
-                    {count}
-                  </span>
-                </div>
-              ))}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            </FormField>
+            <FormField label="Actor" htmlFor="audit-actor">
+              <NativeSelect id="audit-actor" name="actor" value={actor} onChange={(e) => setActor(e.target.value)}>
+                <NativeSelectOption value="">All actors</NativeSelectOption>
+                {actors.map((a) => (
+                  <NativeSelectOption key={a} value={a}>
+                    {a}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            </FormField>
           </div>
-        </div>
-      )}
 
-      <div className="grid gap-3 lg:grid-cols-[1fr_360px]">
-        <div>
-          <Panel
-            title="Audit log"
-            aside={
-              <span className="px-2 text-xs uppercase tracking-[0.18em] text-fg-muted">
-                {filtered.length} rows
-              </span>
-            }
-
-          >
-            {isLoading ? (
-              <SkeletonRows rows={8} />
-            ) : error ? (
-              <div className="p-6 text-xs text-status-critical" role="alert">
-                audit log failed: {(error as Error).message}
-              </div>
-            ) : filtered.length === 0 ? (
-              <div className="flex h-[300px] items-center justify-center rounded-sm border border-border bg-surface-subtle/50 text-xs text-fg-muted">
-                No audit records
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table className="w-full text-left">
-                  <TableHeader className="uppercase">
-                    <TableRow>
-                      <TableHead>Time</TableHead>
-                      <TableHead>Kind</TableHead>
-                      <TableHead>Actor</TableHead>
-                      <TableHead>Target</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filtered.map((it, idx) => (
-                      <TableRow
-                        key={`${it.timestamp}-${idx}`}
+          {isLoading ? (
+            <SkeletonRows rows={8} />
+          ) : error ? (
+            <ErrorState title="Could not load the audit log" error={error} onRetry={() => void refetch()} />
+          ) : filtered.length === 0 ? (
+            <EmptyState
+              icon="search"
+              title={filtering ? "No entries match" : "No audit entries yet"}
+              description={
+                filtering ? "Nothing fits the current search and filters." : "Changes to policies, keys and integrations are recorded here."
+              }
+              action={filtering ? { label: "Clear Filters", onClick: clearFilters } : undefined}
+            />
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Time</TableHead>
+                  <TableHead>Action</TableHead>
+                  <TableHead>Actor</TableHead>
+                  <TableHead>Target</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filtered.map((it, idx) => (
+                  <TableRow key={`${it.timestamp}-${idx}`} data-state={selected === it ? "selected" : undefined}>
+                    <TableCell>
+                      <Button
+                        variant="link"
+                        className="h-auto p-0 font-mono text-xs text-foreground underline decoration-border-strong underline-offset-4 hover:decoration-foreground"
                         onClick={() => setSelected(it)}
-                        className={` border-t border-l-2 border-border text-fg hover:bg-surface-subtle/60 ${kindBorderColor(it.kind)} ${
-                          selected === it ? "bg-surface-subtle" : ""
-                        }`}
+                        aria-label={`Open audit entry from ${new Date(it.timestamp).toLocaleString("en-GB")}`}
                       >
-                        <TableCell className="whitespace-nowrap">
-                          {new Date(it.timestamp).toLocaleString("en-GB")}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap">
-                          <Badge className={`rounded-sm border text-xs ${kindClass(it.kind)}`}>
-                            {humanizeAuditKind(it.kind)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{it.actor || "—"}</TableCell>
-                        <TableCell className="max-w-[260px] truncate">
-                          {it.target || "—"}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </Panel>
-        </div>
+                        {new Date(it.timestamp).toLocaleString("en-GB")}
+                      </Button>
+                    </TableCell>
+                    <TableCell>
+                      <span className="inline-flex items-center gap-2">
+                        <StatusBadge>{areaOf(it.kind)}</StatusBadge>
+                        {humanizeAuditKind(it.kind)}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{it.actor || "—"}</TableCell>
+                    <TableCell className="max-w-64 truncate font-mono text-xs text-muted-foreground" title={it.target}>
+                      {it.target || "—"}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </Panel>
 
-        <div>
-          <Panel title={selected ? humanizeAuditKind(selected.kind) : "Audit detail"}>
-            {!selected ? (
-              <div className="p-6 text-center text-xs text-fg-muted">
-                Select a row to see its detail…
-              </div>
-            ) : (
-              <div className="space-y-2 p-3 text-xs text-fg-muted">
-                <div className="flex items-center justify-between gap-2">
-                  <Badge className={`rounded-sm border text-xs ${kindClass(selected.kind)}`}>
-                    {selected.kind}
-                  </Badge>
-                  <span className="text-xs text-fg-muted">
-                    {new Date(selected.timestamp).toLocaleString("en-GB")}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-fg-muted">actor: </span>
-                  <span className="text-fg">{selected.actor || "—"}</span>
-                </div>
-                <div>
-                  <span className="text-fg-muted">target: </span>
-                  <span className="text-fg">{selected.target || "—"}</span>
-                </div>
-                <div>
-                  <div className="mb-1 text-xs uppercase tracking-wide text-fg-muted">DETAIL</div>
-                  <pre className="max-h-[360px] overflow-auto rounded-sm border border-border bg-surface-subtle p-2 text-xs leading-4 text-fg-muted">
-                    {selected.detail ? JSON.stringify(selected.detail, null, 2) : "—"}
-                  </pre>
-                </div>
-              </div>
-            )}
-          </Panel>
-        </div>
+        <Panel title="Most frequent actions" description="In the loaded entries">
+          {byKind.length === 0 ? (
+            <EmptyState icon="chart" title="No entries" />
+          ) : (
+            <BarList items={byKind.map(([k, value]) => ({ id: k, label: humanizeAuditKind(k), value }))} />
+          )}
+        </Panel>
       </div>
+
+      <Sheet open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
+        <SheetContent className="w-full gap-0 overflow-y-auto overscroll-contain sm:max-w-lg">
+          <SheetHeader className="border-b">
+            <SheetTitle>{selected ? humanizeAuditKind(selected.kind) : "Audit entry"}</SheetTitle>
+            <SheetDescription className="font-mono text-xs">{selected?.kind}</SheetDescription>
+          </SheetHeader>
+          {selected ? (
+            <>
+              <DetailList
+                items={[
+                  { label: "Time", value: new Date(selected.timestamp).toLocaleString("en-GB"), mono: true },
+                  { label: "Actor", value: selected.actor || "—" },
+                  { label: "Target", value: selected.target || "—", mono: true },
+                ]}
+              />
+              <div className="border-t p-4">
+                <p className="mb-2 text-xs text-muted-foreground">Recorded detail</p>
+                {selected.detail ? (
+                  <pre className="max-h-96 overflow-auto border bg-background p-3 font-mono text-xs leading-5" tabIndex={0} translate="no">
+                    {JSON.stringify(selected.detail, null, 2)}
+                  </pre>
+                ) : (
+                  <p className="text-sm text-muted-foreground">This entry has no further detail.</p>
+                )}
+              </div>
+            </>
+          ) : null}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

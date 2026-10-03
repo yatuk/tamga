@@ -1,181 +1,148 @@
 "use client";
 
 import { useState } from "react";
-import { Globe, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { FormField } from "@/components/app/form-field";
 import { Panel } from "@/components/app/panel";
-import { toast } from "@/lib/toast";
-import { type SSOSettings } from "@/lib/api/client";
+import { AdminKeyRequired, ErrorState, SkeletonRows } from "@/components/app/states";
+import { StatusBadge } from "@/components/app/status-badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { Spinner } from "@/components/ui/spinner";
+import { Switch } from "@/components/ui/switch";
+import type { SSOSettings } from "@/lib/api/client";
+import { toast } from "@/lib/toast";
 
 type Props = {
+  adminKey: string;
   config: SSOSettings | undefined;
   loading: boolean;
-  error: string | null;
+  error: unknown;
   onSave: (cfg: Partial<SSOSettings>) => Promise<void>;
 };
 
-export function SettingsSSOSection({ config, loading, error, onSave }: Props) {
+export function SettingsSSOSection({ adminKey, config, loading, error, onSave }: Props) {
+  if (!adminKey) {
+    return (
+      <Panel title="Enterprise SSO">
+        <AdminKeyRequired />
+      </Panel>
+    );
+  }
+  if (loading) {
+    return (
+      <Panel title="Enterprise SSO">
+        <SkeletonRows rows={4} />
+      </Panel>
+    );
+  }
+  if (error) {
+    return (
+      <Panel title="Enterprise SSO">
+        <ErrorState title="Could not load the SSO configuration" error={error} />
+      </Panel>
+    );
+  }
+  // The form starts from the loaded configuration, so it mounts only once
+  // that has arrived.
+  return <SSOForm config={config} onSave={onSave} />;
+}
+
+function SSOForm({ config, onSave }: Pick<Props, "config" | "onSave">) {
   const [providerType, setProviderType] = useState(config?.provider_type ?? "");
   const [metadataUrl, setMetadataUrl] = useState(config?.metadata_url ?? "");
   const [domain, setDomain] = useState(config?.domain ?? "");
   const [enabled, setEnabled] = useState(config?.enabled ?? false);
   const [saving, setSaving] = useState(false);
 
-  if (loading) {
-    return (
-      <div>
-        <Panel title="Enterprise SSO">
-          <div className="space-y-3 p-3 animate-pulse">
-            <div className="h-4 w-2/3 rounded-sm bg-surface-subtle" />
-            <div className="h-10 w-full rounded-sm bg-surface-subtle" />
-            <div className="h-10 w-full rounded-sm bg-surface-subtle" />
-            <div className="h-10 w-full rounded-sm bg-surface-subtle" />
-          </div>
-        </Panel>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div>
-        <Panel title="Enterprise SSO">
-          <div className="space-y-3 p-3">
-            <Badge className="rounded-sm border-status-critical/30 bg-status-critical/10 text-xs text-status-critical">
-              LOAD ERROR
-            </Badge>
-            <div className="text-xs text-fg-muted">{error}</div>
-          </div>
-        </Panel>
-      </div>
-    );
-  }
-
   const handleSave = async () => {
     try {
       setSaving(true);
-      await onSave({
-        provider_type: providerType,
-        metadata_url: metadataUrl,
-        domain,
-        enabled,
-      });
-      toast.success("SSO settings saved", "Enterprise SSO configuration updated.");
+      await onSave({ provider_type: providerType, metadata_url: metadataUrl, domain, enabled });
+      toast.success("SSO configuration saved");
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Unknown error";
-      toast.error("SSO save failed", msg);
+      toast.error("Could not save the SSO configuration", e instanceof Error ? e.message : "Unknown error");
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <div>
-      <Panel
-        title="Enterprise SSO"
-        aside={
-          <span className="px-2 text-xs uppercase tracking-[0.18em] text-fg-muted">
-            <Globe className="mr-1 inline h-3 w-3" />
-            {enabled ? providerType.toUpperCase() : "DISABLED"}
-          </span>
-        }
+    <Panel
+      title="Enterprise SSO"
+      description="SAML 2.0 or OpenID Connect sign-in for one email domain"
+      aside={
+        <StatusBadge tone={enabled && providerType ? "pass" : "neutral"}>
+          {enabled && providerType ? `${providerType} enabled` : "Disabled"}
+        </StatusBadge>
+      }
+    >
+      <form
+        className="max-w-xl space-y-4 p-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void handleSave();
+        }}
       >
-        <div className="space-y-3 p-3">
-          <div className="text-xs text-fg-muted">
-            SAML 2.0 or OpenID Connect (OIDC) enterprise SSO. Requires Clerk Enterprise plan.
-          </div>
+        <FormField label="Protocol" htmlFor="sso-provider-type">
+          <NativeSelect
+            id="sso-provider-type"
+            name="provider_type"
+            value={providerType}
+            onChange={(e) => setProviderType(e.target.value)}
+          >
+            <NativeSelectOption value="">None</NativeSelectOption>
+            <NativeSelectOption value="saml">SAML 2.0</NativeSelectOption>
+            <NativeSelectOption value="oidc">OpenID Connect (OIDC)</NativeSelectOption>
+          </NativeSelect>
+        </FormField>
 
-          {/* Provider Type */}
-          <div>
-            <label className="mb-1 block text-xs uppercase tracking-wide text-fg-muted">
-              Provider Type
-            </label>
-            <NativeSelect
-              value={providerType}
-              onChange={(e) => setProviderType(e.target.value)}
-              className="w-full"
-            >
-              <NativeSelectOption value="">None (Disabled)</NativeSelectOption>
-              <NativeSelectOption value="saml">SAML 2.0</NativeSelectOption>
-              <NativeSelectOption value="oidc">OpenID Connect (OIDC)</NativeSelectOption>
-            </NativeSelect>
-          </div>
+        <FormField
+          label="Identity provider metadata URL"
+          htmlFor="sso-metadata-url"
+          hint="The SAML metadata document or the OIDC discovery URL of your identity provider."
+        >
+          <Input
+            id="sso-metadata-url"
+            name="metadata_url"
+            type="url"
+            inputMode="url"
+            autoComplete="off"
+            spellCheck={false}
+            value={metadataUrl}
+            onChange={(e) => setMetadataUrl(e.target.value)}
+            placeholder="https://idp.example.com/metadata…"
+            className="font-mono"
+          />
+        </FormField>
 
-          {/* Metadata URL */}
-          <div>
-            <label className="mb-1 block text-xs uppercase tracking-wide text-fg-muted">
-              Metadata URL
-            </label>
-            <Input
-              type="url"
-              value={metadataUrl}
-              onChange={(e) => setMetadataUrl(e.target.value)}
-              placeholder="https://idp.example.com/metadata"
-              className="w-full"
-              aria-label="https://idp.example.com/metadata"
-            />
-          </div>
+        <FormField label="Email domain" htmlFor="sso-domain" hint="Users with an address on this domain sign in through SSO.">
+          <Input
+            id="sso-domain"
+            name="domain"
+            autoComplete="off"
+            spellCheck={false}
+            value={domain}
+            onChange={(e) => setDomain(e.target.value)}
+            placeholder="example.com…"
+            className="font-mono"
+          />
+        </FormField>
 
-          {/* Domain */}
-          <div>
-            <label className="mb-1 block text-xs uppercase tracking-wide text-fg-muted">
-              Domain
-            </label>
-            <Input
-              type="text"
-              value={domain}
-              onChange={(e) => setDomain(e.target.value)}
-              placeholder="example.com"
-              className="w-full"
-              aria-label="example.com"
-            />
-          </div>
-
-          {/* Enabled Toggle */}
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="sso-enabled"
-              checked={enabled}
-              onChange={(e) => setEnabled(e.target.checked)}
-              className="h-4 w-4 rounded-sm border-border-strong"
-            />
-            <label htmlFor="sso-enabled" className="text-xs text-fg-muted">
-              Enable SSO for this domain
-            </label>
-          </div>
-
-          {/* Status Chips */}
-          <div className="flex flex-wrap gap-2">
-            <Badge
-              className={`rounded-sm border text-xs ${
-                enabled
-                  ? "border-status-pass/30 bg-status-pass/10 text-status-pass"
-                  : "border-border-strong bg-surface-subtle text-fg-muted"
-              }`}
-            >
-              {enabled ? "ENABLED" : "DISABLED"}
-            </Badge>
-            <Badge className="rounded-sm border-border-strong bg-surface-subtle text-xs text-fg-muted">
-              {providerType ? providerType.toUpperCase() : "NONE"}
-            </Badge>
-          </div>
-
-          {/* Save Button */}
-          <Button onClick={handleSave} disabled={saving}>
-            {saving ? (
-              <>
-                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> Saving...
-              </>
-            ) : (
-              "Save SSO Configuration"
-            )}
-          </Button>
+        <div className="flex items-center gap-3">
+          <Switch id="sso-enabled" checked={enabled} onCheckedChange={setEnabled} />
+          <Label htmlFor="sso-enabled">Require SSO for this domain</Label>
         </div>
-      </Panel>
-    </div>
+
+        <div className="flex flex-wrap items-center gap-3 border-t pt-4">
+          <Button type="submit" disabled={saving}>
+            {saving ? <Spinner /> : null}
+            {saving ? "Saving…" : "Save Configuration"}
+          </Button>
+          <p className="text-xs text-muted-foreground">Enterprise SSO needs an identity plan that supports it.</p>
+        </div>
+      </form>
+    </Panel>
   );
 }

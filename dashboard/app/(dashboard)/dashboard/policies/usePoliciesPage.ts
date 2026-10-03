@@ -4,8 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "@/lib/toast";
 import { api, type PolicySimulateResult, type TamgaPolicy } from "@/lib/api";
-import { POLICY_DRAFT_STORAGE, POLICY_SAMPLE_STORAGE } from "./_constants";
+import { POLICY_DRAFT_STORAGE, POLICY_SAMPLE_STORAGE, POLICY_TAB_IDS } from "./_constants";
 import { useAdminKey } from "@/hooks/useAdminKey";
+import { useEnumParam } from "@/hooks/useUrlState";
 import { stringifyPolicy } from "./policyUtils";
 
 export function usePoliciesPage() {
@@ -16,7 +17,7 @@ export function usePoliciesPage() {
   const [saving, setSaving] = useState(false);
   const [simulating, setSimulating] = useState(false);
   const [simResult, setSimResult] = useState<PolicySimulateResult | null>(null);
-  const [tab, setTab] = useState<"editor" | "diff" | "simulate" | "history" | "entities" | "competitors">("editor");
+  const [tab, setTab] = useEnumParam("tab", POLICY_TAB_IDS, "editor");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -58,22 +59,22 @@ export function usePoliciesPage() {
   async function onReload() {
     try {
       const res = await api.reloadPolicies(adminKey);
-      toast.success(`Policy reload`, res.name || "default");
+      toast.success("Policy reloaded from disk", res.name || "default");
       await refetch();
     } catch (e) {
-      toast.error("Reload failed", (e as Error).message);
+      toast.error("Could not reload the policy", (e as Error).message);
     }
   }
 
   async function onSave() {
     if (!draft.trim()) {
-      toast.error("Draft is empty");
+      toast.error("The draft is empty");
       return;
     }
     try {
       JSON.parse(draft);
     } catch {
-      toast.error("Invalid JSON", "The policy must be valid JSON.");
+      toast.error("The draft is not valid JSON", "Fix the syntax error and save again.");
       return;
     }
     setSaving(true);
@@ -81,11 +82,11 @@ export function usePoliciesPage() {
       const validation = await api.validatePolicy(adminKey, draft);
       await api.putPolicy(adminKey, draft);
       const subtitle =
-        validation.warnings?.length ? `${validation.warnings.length} warnings · active after reload` : "active after reload";
-      toast.success("Policy kaydedildi", subtitle);
+        validation.warnings?.length ? `Saved with ${validation.warnings.length} warnings.` : "The proxy is now enforcing it.";
+      toast.success("Policy saved", subtitle);
       await refetch();
     } catch (e) {
-      toast.error("Save failed", (e as Error).message);
+      toast.error("Could not save the policy", (e as Error).message);
     } finally {
       setSaving(false);
     }
@@ -97,7 +98,7 @@ export function usePoliciesPage() {
       const res = await api.simulatePolicy(adminKey, draft, sample);
       setSimResult(res);
     } catch (e) {
-      toast.error("Simulation failed", (e as Error).message);
+      toast.error("Could not run the simulation", (e as Error).message);
     } finally {
       setSimulating(false);
     }

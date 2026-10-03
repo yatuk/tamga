@@ -1,12 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type { DailyCostRow, CostBreakdownRow } from "@/lib/api/client";
 import { useAdminKey } from "@/hooks/useAdminKey";
 import { useCsvExport } from "@/hooks/useCsvExport";
-import type { TimeRange } from "@/lib/types";
 import { useRangeParam } from "@/hooks/useRangeParam";
 
 export function useCostsPage() {

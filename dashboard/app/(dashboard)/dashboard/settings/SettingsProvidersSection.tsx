@@ -1,22 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, RotateCcw } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { RotateCcw } from "lucide-react";
 import { Panel } from "@/components/app/panel";
+import { EmptyState } from "@/components/app/states";
+import { CircuitBadge, StatusBadge } from "@/components/app/status-badge";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import type { DashboardHealthDetailed } from "@/lib/api/types-core";
 import { toast } from "@/lib/toast";
-import { toLowerEn, toUpperEn } from "@/lib/utils/case";
-import { useQueryClient } from "@tanstack/react-query";
-
-function stateClass(state: string): string {
-  const s = toLowerEn(state);
-  if (s === "closed") return "text-status-pass";
-  if (s === "open") return "text-status-critical";
-  if (s === "half-open") return "text-status-medium";
-  return "text-fg-muted";
-}
+import { toLowerEn } from "@/lib/utils/case";
 
 type Props = {
   health: DashboardHealthDetailed | undefined;
@@ -29,98 +23,87 @@ export function SettingsProvidersSection({ health, adminKey }: Props) {
   const qc = useQueryClient();
 
   async function resetCircuit(pool: string, endpoint: string) {
-    const key = `${pool}:${endpoint}`;
-    setPending(key);
+    setPending(`${pool}:${endpoint}`);
     try {
       await api.resetUpstreamCircuit(adminKey, pool, endpoint);
       toast.success("Circuit reset", `${pool} / ${endpoint}`);
       await qc.invalidateQueries({ queryKey: ["tamga-settings-health"] });
     } catch (e) {
-      toast.error("Reset failed", (e as Error).message);
+      toast.error("Could not reset the circuit", (e as Error).message);
     } finally {
       setPending(null);
     }
   }
 
+  if (pools.length === 0) {
+    return (
+      <Panel title="Provider pools">
+        <EmptyState
+          icon="database"
+          title="No provider pools"
+          description={
+            <>
+              Define <span className="font-mono">providers.pools</span> in the policy and reload the proxy to see circuit
+              breaker state here.
+            </>
+          }
+        />
+      </Panel>
+    );
+  }
+
   return (
-    <div>
-      <div className="space-y-2">
-        <p className="text-sm text-muted-foreground">
-          Circuit breaker state for the policy&apos;s <code className="text-xs text-fg-muted">providers.pools</code>.
-          An open circuit receives no traffic; reset it manually after maintenance.
-        </p>
-
-        {pools.length === 0 ? (
-          <div className="rounded-sm border border-border bg-surface-card px-4 py-6 text-sm text-fg-muted">
-            No provider pools yet: the <code className="text-xs">providers</code> field in health/detailed is
-            empty. Define <code className="text-xs">providers.pools</code> in the policy and reload the
-            proxy.
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {pools.map((pl) => (
-              <Panel
-                key={pl.pool}
-                title={`${toUpperEn(pl.pool.charAt(0)) + pl.pool.slice(1)} pool`}
-
-                aside={
-                  <span className="px-2 text-xs uppercase tracking-[0.18em] text-fg-muted">
-                    {pl.healthy_count}/{pl.total_count} healthy
-                  </span>
-                }
-              >
-                <div className="divide-y divide-border">
-                  {pl.providers.map((p) => {
-                    const isOpen = toLowerEn(p.state) === "open";
-                    const busy = pending === `${pl.pool}:${p.name}`;
-                    return (
-                      <div
-                        key={p.name}
-                        className="flex flex-wrap items-center justify-between gap-3 px-3 py-2.5 text-xs"
-                      >
-                        <div className="min-w-0 flex-1 space-y-0.5">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-fg">{p.name}</span>
-                            <span className={`rounded-sm border border-border-strong px-1.5 py-0.5 ${stateClass(p.state)}`}>
-                              {p.state}
-                            </span>
-                            {isOpen ? (
-                              <span className="inline-flex items-center gap-1 text-status-critical/90">
-                                <AlertTriangle className="h-3 w-3" />
-                                out of rotation
-                              </span>
-                            ) : null}
-                          </div>
-                          <div className="text-xs text-fg-muted">
-                            req window: {p.requests_in_window ?? "—"} · success rate:{" "}
-                            {typeof p.success_rate_observed === "number"
-                              ? `${(p.success_rate_observed * 100).toFixed(1)}%`
-                              : "—"}
-                            {p.last_failure ? ` · last fail: ${p.last_failure}` : ""}
-                            {p.failure_reason ? ` (${p.failure_reason})` : ""}
-                          </div>
-                        </div>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          type="button"
-                          disabled={busy || !adminKey}
-                          className="shrink-0"
-                          onClick={() => void resetCircuit(pl.pool, p.name)}
-                          title="Reset the breaker counters (new circuit instance)"
-                        >
-                          <RotateCcw className="mr-1 h-3 w-3" />
-                          {busy ? "…" : "Reset circuit"}
-                        </Button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </Panel>
-            ))}
-          </div>
-        )}
-      </div>
+    <div className="space-y-6">
+      <p className="max-w-2xl text-sm text-muted-foreground">
+        Circuit breaker state for each upstream in the policy. An open circuit receives no traffic; reset it after the
+        upstream is healthy again.
+      </p>
+      {pools.map((pl) => (
+        <Panel
+          key={pl.pool}
+          title={`${pl.pool} pool`}
+          aside={
+            <StatusBadge tone={pl.healthy_count === pl.total_count ? "pass" : pl.healthy_count === 0 ? "critical" : "medium"}>
+              {pl.healthy_count}/{pl.total_count} healthy
+            </StatusBadge>
+          }
+        >
+          <ul className="divide-y">
+            {pl.providers.map((p) => {
+              const busy = pending === `${pl.pool}:${p.name}`;
+              return (
+                <li key={p.name} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-sm">{p.name}</span>
+                      <CircuitBadge state={p.state} />
+                      {toLowerEn(p.state) === "open" ? (
+                        <span className="text-xs text-status-critical">Out of rotation</span>
+                      ) : null}
+                    </div>
+                    <p className="mt-1 font-mono text-xs text-muted-foreground">
+                      {p.requests_in_window ?? "—"} requests in window ·{" "}
+                      {typeof p.success_rate_observed === "number" ? `${(p.success_rate_observed * 100).toFixed(1)}%` : "—"}{" "}
+                      success
+                      {p.last_failure ? ` · last failure ${p.last_failure}` : ""}
+                      {p.failure_reason ? ` (${p.failure_reason})` : ""}
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={busy || !adminKey}
+                    onClick={() => void resetCircuit(pl.pool, p.name)}
+                  >
+                    <RotateCcw />
+                    {busy ? "Resetting…" : "Reset Circuit"}
+                  </Button>
+                </li>
+              );
+            })}
+          </ul>
+        </Panel>
+      ))}
     </div>
   );
 }

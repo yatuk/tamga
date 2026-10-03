@@ -74,12 +74,14 @@ export const metadata: Metadata = {
 };
 
 // Tints the browser chrome to match the page background in each theme.
+/* eslint-disable tamga/no-hardcoded-color -- a meta tag cannot read CSS variables */
 export const viewport: Viewport = {
   themeColor: [
     { media: "(prefers-color-scheme: dark)", color: "#10120f" },
     { media: "(prefers-color-scheme: light)", color: "#e7e8e2" },
   ],
 };
+/* eslint-enable tamga/no-hardcoded-color */
 
 export default async function RootLayout({
   children,

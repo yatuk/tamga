@@ -1,7 +1,8 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
+import { FormField } from "@/components/app/form-field";
 import { Panel } from "@/components/app/panel";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 type Props = {
@@ -12,29 +13,33 @@ type Props = {
 
 export function SettingsRetentionSection({ retention, setRetention, saveRetention }: Props) {
   return (
-    <div>
-      <Panel title="Retention">
-        <div className="space-y-3 p-3">
-          <div className="text-xs text-fg-muted">
-            {"//"} Day limit applied in the dashboard only. Database retention is set in the proxy configuration; this
-            preference affects UI filters only.
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="text-xs uppercase tracking-wide text-fg-muted">DAYS</label>
-            <Input
-              type="number"
-              min={1}
-              max={365}
-              value={retention}
-              onChange={(e) => setRetention(e.target.value)}
-              className="w-28"
-            />
-            <Button onClick={saveRetention}>
-              Save
-            </Button>
-          </div>
-        </div>
-      </Panel>
-    </div>
+    <Panel title="Dashboard window" description="How far back this browser looks">
+      <form
+        className="flex flex-wrap items-end gap-3 p-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          saveRetention();
+        }}
+      >
+        <FormField label="Days" htmlFor="retention-days-input">
+          <Input
+            id="retention-days-input"
+            name="retention-days"
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={365}
+            value={retention}
+            onChange={(e) => setRetention(e.target.value)}
+            className="w-28 font-mono"
+          />
+        </FormField>
+        <Button type="submit">Save</Button>
+      </form>
+      <p className="border-t px-4 py-3 text-xs text-muted-foreground">
+        This only limits what the dashboard filters show in this browser. How long the proxy keeps events is set in the
+        proxy configuration, not here.
+      </p>
+    </Panel>
   );
 }

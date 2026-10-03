@@ -1,9 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import type { TimeRange } from "@/lib/types";
 import { useAdminKey } from "@/hooks/useAdminKey";
 import { useRangeParam } from "@/hooks/useRangeParam";
 
@@ -16,7 +15,7 @@ export function useTrendsPage() {
 
   const bucket = range === "24h" || range === "1h" ? "hour" : "day";
 
-  const { data: ts, isLoading: tsLoading } = useQuery({
+  const { data: ts, isLoading: tsLoading, error: tsError, refetch } = useQuery({
     queryKey: ["tamga-trends-ts", adminKey, range, bucket],
     queryFn: () => api.getTimeseries(adminKey, range, bucket),
     enabled: !!adminKey,
@@ -32,7 +31,7 @@ export function useTrendsPage() {
     staleTime: 60 * 1000,
   });
 
-  const points = ts?.points ?? [];
+  const points = useMemo(() => ts?.points ?? [], [ts]);
 
   const totals = useMemo(() => {
     let attempted = 0;
@@ -47,14 +46,14 @@ export function useTrendsPage() {
   const chartData = useMemo(
     () =>
       points.map((p) => ({
-        time: new Date(p.t).toLocaleDateString("en-GB", {
-          month: "short",
-          day: "2-digit",
-        }),
+        time:
+          bucket === "hour"
+            ? new Date(p.t).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })
+            : new Date(p.t).toLocaleDateString("en-GB", { month: "short", day: "2-digit" }),
         attempted: p.total,
         caught: p.blocked + (p.redacted || 0) + (p.warned || 0),
       })),
-    [points],
+    [points, bucket],
   );
 
   const byType = useMemo(() => {
@@ -66,6 +65,9 @@ export function useTrendsPage() {
   }, [breakdown]);
 
   return {
+    adminKey,
+    error: tsError,
+    refetch,
     range,
     setRange,
     isLoading: tsLoading || bLoading,

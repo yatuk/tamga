@@ -46,7 +46,7 @@ export const PRIMARY_PRESETS: IntegrationPreset[] = [
     name: "Generic Webhook",
     blurb: "Raw JSON POST · any endpoint",
     urlHint: "https://hooks.your-soc.example/ingest",
-    docs: "https://www.tamga.ai/docs",
+    docs: "https://tamgaproxy.com/docs",
   },
 ];
 

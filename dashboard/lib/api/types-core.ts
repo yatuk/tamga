@@ -18,6 +18,10 @@ export interface DashboardHealthDetailed {
   proxy: "up" | string;
   proxy_status?: { up?: boolean };
   database: "connected" | "disconnected" | "not_configured" | string;
+  redis?: "connected" | "disconnected" | "not_configured" | string;
+  analyzer?: "reachable" | "unreachable" | "not_configured" | string;
+  /** Events the bus could not deliver since the proxy started. */
+  events_dropped?: number;
   scanner_count: number;
   uptime_seconds: number;
   policy_path: string;

@@ -1,10 +1,16 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Play } from "lucide-react";
+import { FormField } from "@/components/app/form-field";
 import { Panel } from "@/components/app/panel";
-import type { PolicySimulateResult } from "@/lib/api";
+import { EmptyState } from "@/components/app/states";
+import { ActionBadge, SeverityBadge } from "@/components/app/status-badge";
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import type { PolicySimulateResult } from "@/lib/api";
+import { humanizeFindingType } from "@/lib/humanize";
 
 type Props = {
   sample: string;
@@ -14,64 +20,76 @@ type Props = {
   simResult: PolicySimulateResult | null;
 };
 
+/** Runs a prompt against the draft without saving it or calling a provider. */
 export function PoliciesSimulatePanel({ sample, onSampleChange, simulating, onSimulate, simResult }: Props) {
   return (
-    <div className="space-y-3">
-      <Panel title="Simulation input">
-        <Textarea
-          className="min-h-[120px] w-full resize-y"
-          value={sample}
-          onChange={(e) => onSampleChange(e.target.value)}
-          placeholder="Sample prompt…"
-          aria-label="Sample prompt"
-        />
-      </Panel>
-      <Button onClick={onSimulate} disabled={simulating}>
-        {simulating ? "Running…" : "Run simulate"}
-      </Button>
-      {simResult ? (
-        <div>
-          <Panel
-            title="Simulation result"
-            aside={
-              <Badge
-                className={`rounded-sm border text-xs uppercase tracking-[0.18em] ${
-                  simResult.action === "BLOCK"
-                    ? "border-status-critical/40 bg-status-critical/10 text-status-critical"
-                    : simResult.action === "REDACT"
-                      ? "border-status-medium/40 bg-status-medium/10 text-status-medium"
-                      : "border-status-pass/40 bg-status-pass/10 text-status-pass"
-                }`}
-              >
-                {simResult.action || "PASS"}
-              </Badge>
-            }
-
+    <>
+      <Panel title="Test a prompt against the draft">
+        <form
+          className="space-y-3 p-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            onSimulate();
+          }}
+        >
+          <FormField
+            label="Prompt"
+            htmlFor="policy-sample"
+            hint="Nothing is sent to a provider and nothing is saved. The draft is evaluated as it is in the editor."
           >
-            <div className="space-y-2 p-3 text-xs text-fg">
-              <div className="text-xs uppercase tracking-[0.14em] text-fg-muted">
-                policy: {simResult.policy_name} @ {simResult.policy_version}
-              </div>
-              {simResult.findings.length === 0 ? (
-                <div className="text-fg-muted">No findings.</div>
-              ) : (
-                <div className="space-y-1">
-                  {simResult.findings.map((f, i) => (
-                    <div key={i}>
-                      <div className="flex items-center gap-2 border-b border-border py-1">
-                        <span className="text-fg">{f.type}</span>
-                        <span className="text-fg-muted">{f.category}</span>
-                        <span className="text-fg-muted">{f.severity}</span>
-                        <span className="ml-auto text-fg-muted">{f.action}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </Panel>
-        </div>
+            <Textarea
+              id="policy-sample"
+              name="sample"
+              className="min-h-28 resize-y font-mono text-xs"
+              spellCheck={false}
+              value={sample}
+              onChange={(e) => onSampleChange(e.target.value)}
+              placeholder="Paste a prompt to test…"
+            />
+          </FormField>
+          <Button type="submit" disabled={simulating || !sample.trim()}>
+            {simulating ? <Spinner /> : <Play />}
+            {simulating ? "Running…" : "Run Simulation"}
+          </Button>
+        </form>
+      </Panel>
+
+      {simResult ? (
+        <Panel
+          title="Decision"
+          description={`${simResult.policy_name} v${simResult.policy_version}`}
+          aside={<ActionBadge action={simResult.action || "PASS"} />}
+        >
+          {simResult.findings.length === 0 ? (
+            <EmptyState icon="shield" title="No findings" description="The draft would pass this prompt unchanged." />
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Severity</TableHead>
+                  <TableHead>Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {simResult.findings.map((f, i) => (
+                  <TableRow key={i}>
+                    <TableCell>{humanizeFindingType(f.type)}</TableCell>
+                    <TableCell className="font-mono text-xs">{f.category}</TableCell>
+                    <TableCell>
+                      <SeverityBadge severity={f.severity} />
+                    </TableCell>
+                    <TableCell>
+                      <ActionBadge action={f.action} />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </Panel>
       ) : null}
-    </div>
+    </>
   );
 }

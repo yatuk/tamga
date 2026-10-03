@@ -2,61 +2,56 @@
 
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api, type PolicyRevision } from "@/lib/api";
-import { Badge } from "@/components/ui/badge";
-import { GitCompareArrows, Clock3, User2 } from "lucide-react";
+import { DetailList } from "@/components/app/detail-list";
+import { DiffView, diffStats, type DiffLine } from "@/components/app/diff-view";
+import { FormField } from "@/components/app/form-field";
+import { Panel } from "@/components/app/panel";
+import { EmptyState, ErrorState, SkeletonRows } from "@/components/app/states";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { api, type PolicyRevision } from "@/lib/api";
 
-// Myers-style LCS diff is overkill for YAML policy files that are
-// typically under 200 lines. A simple two-pointer line-walk that
-// emits +/− on inequality and = on match is both faster to render
-// and easier for an analyst to scan during an approval review.
-type DiffOp = { kind: "=" | "+" | "-"; left?: string; right?: string };
-
-function diffLines(a: string, b: string): DiffOp[] {
+/**
+ * Line diff by longest common subsequence. O(n·m), which is fine for policy
+ * documents of a few hundred lines, and it gives a stable, readable result.
+ */
+function diffLines(a: string, b: string): DiffLine[] {
   const la = a.split(/\r?\n/);
   const lb = b.split(/\r?\n/);
   const n = la.length;
   const m = lb.length;
-  // Classical LCS DP — O(n·m). Plenty for policy YAML sizes and
-  // produces a stable, readable diff. Falls back to raw diff if the
-  // shapes are wildly different (e.g. a full rewrite).
   const dp: number[][] = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
   for (let i = n - 1; i >= 0; i--) {
     for (let j = m - 1; j >= 0; j--) {
       dp[i][j] = la[i] === lb[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
     }
   }
-  const out: DiffOp[] = [];
+  const out: DiffLine[] = [];
   let i = 0;
   let j = 0;
   while (i < n && j < m) {
     if (la[i] === lb[j]) {
-      out.push({ kind: "=", left: la[i], right: lb[j] });
+      out.push({ type: " ", text: la[i] });
       i++;
       j++;
     } else if (dp[i + 1][j] >= dp[i][j + 1]) {
-      out.push({ kind: "-", left: la[i] });
-      i++;
+      out.push({ type: "-", text: la[i++] });
     } else {
-      out.push({ kind: "+", right: lb[j] });
-      j++;
+      out.push({ type: "+", text: lb[j++] });
     }
   }
-  while (i < n) out.push({ kind: "-", left: la[i++] });
-  while (j < m) out.push({ kind: "+", right: lb[j++] });
+  while (i < n) out.push({ type: "-", text: la[i++] });
+  while (j < m) out.push({ type: "+", text: lb[j++] });
   return out;
 }
 
-function revisionLabel(rev: PolicyRevision | undefined): string {
-  if (!rev) return "—";
-  const short = rev.id.slice(0, 8);
+function revisionLabel(rev: PolicyRevision): string {
   const when = rev.created_at ? new Date(rev.created_at).toLocaleString("en-GB") : "";
-  return `${short} · ${when}`;
+  return `${rev.id.slice(0, 8)} · ${when}${rev.message ? ` · ${rev.message}` : ""}`;
 }
 
+/** Compares two saved revisions of the policy. */
 export function PolicyDiff({ adminKey }: { adminKey: string }) {
-  const { data: revs, isLoading, error } = useQuery({
+  const { data: revs, isLoading, error, refetch } = useQuery({
     queryKey: ["tamga-policy-history", adminKey],
     queryFn: () => api.listPolicyRevisions(adminKey),
     enabled: !!adminKey,
@@ -71,16 +66,12 @@ export function PolicyDiff({ adminKey }: { adminKey: string }) {
     });
   }, [revs]);
 
-  const [leftId, setLeftId] = useState<string>("");
-  const [rightId, setRightId] = useState<string>("");
+  const [leftId, setLeftId] = useState("");
+  const [rightId, setRightId] = useState("");
 
-  // Default selection: compare the newest revision against the one before it.
-  // This makes the diff useful the instant the component mounts without
-  // forcing the operator to hunt through a dropdown.
-  const defaultLeft = sorted[1]?.id || "";
-  const defaultRight = sorted[0]?.id || "";
-  const effectiveLeft = leftId || defaultLeft;
-  const effectiveRight = rightId || defaultRight;
+  // Start with the newest revision against the one before it.
+  const effectiveLeft = leftId || sorted[1]?.id || "";
+  const effectiveRight = rightId || sorted[0]?.id || "";
 
   const { data: left } = useQuery({
     queryKey: ["tamga-policy-rev", adminKey, effectiveLeft],
@@ -95,152 +86,103 @@ export function PolicyDiff({ adminKey }: { adminKey: string }) {
     staleTime: 60_000,
   });
 
-  const diff = useMemo(() => {
-    if (!left || !right) return [];
-    return diffLines(left.yaml || "", right.yaml || "");
-  }, [left, right]);
-
-  const stats = useMemo(() => {
-    let plus = 0;
-    let minus = 0;
-    for (const op of diff) {
-      if (op.kind === "+") plus++;
-      else if (op.kind === "-") minus++;
-    }
-    return { plus, minus };
-  }, [diff]);
+  const lines = useMemo(() => (left && right ? diffLines(left.yaml || "", right.yaml || "") : []), [left, right]);
+  const { added, removed } = diffStats(lines);
 
   if (isLoading) {
     return (
-      <div className="rounded-sm border border-border bg-surface-card p-4 text-xs text-fg-muted">
-        Loading revisions…
-      </div>
+      <Panel title="Revisions">
+        <SkeletonRows rows={4} />
+      </Panel>
     );
   }
   if (error) {
     return (
-      <div className="rounded-sm border border-status-critical/30 bg-status-critical/5 p-4 text-xs text-status-critical">
-        {(error as Error).message}
-      </div>
+      <Panel title="Revisions">
+        <ErrorState title="Could not load the revisions" error={error} onRetry={() => void refetch()} />
+      </Panel>
     );
   }
   if (sorted.length < 2) {
     return (
-      <div className="rounded-sm border border-border bg-surface-card p-4 text-xs text-fg-muted">
-        At least two revisions are needed to diff. Push a policy change first.
-      </div>
+      <Panel title="Revisions">
+        <EmptyState
+          title={sorted.length === 0 ? "No revisions yet" : "Only one revision"}
+          description="Save the policy to record a revision. Two are needed to compare."
+        />
+      </Panel>
     );
   }
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="inline-flex items-center gap-2 text-xs uppercase tracking-wide text-fg-muted">
-          <GitCompareArrows className="h-3.5 w-3.5" aria-hidden /> Compare
+    <>
+      <Panel title="Compare revisions" aside={`${sorted.length} revisions`}>
+        <div className="grid gap-4 p-4 md:grid-cols-2">
+          <RevisionPicker id="policy-rev-base" label="From" value={effectiveLeft} onChange={setLeftId} revisions={sorted} />
+          <RevisionPicker id="policy-rev-target" label="To" value={effectiveRight} onChange={setRightId} revisions={sorted} />
         </div>
-        <RevisionPicker
-          label="Base"
-          value={effectiveLeft}
-          onChange={setLeftId}
-          revisions={sorted}
-        />
-        <span className="text-xs text-fg-muted">→</span>
-        <RevisionPicker
-          label="Target"
-          value={effectiveRight}
-          onChange={setRightId}
-          revisions={sorted}
-        />
-        <Badge className="ml-auto rounded-sm border-status-pass/50 bg-status-pass/20 font-mono text-xs text-status-pass">
-          +{stats.plus}
-        </Badge>
-        <Badge className="rounded-sm border-status-critical/50 bg-status-critical/20 font-mono text-xs text-status-critical">
-          −{stats.minus}
-        </Badge>
-      </div>
-
-      <div className="grid gap-3 md:grid-cols-2">
-        <RevisionCard rev={left} title="Base" />
-        <RevisionCard rev={right} title="Target" />
-      </div>
-
-      <div className="overflow-hidden rounded-sm border border-border bg-surface-card">
-        <div className="grid grid-cols-[3rem_1fr] font-mono text-xs">
-          {diff.map((op, idx) => {
-            const bg =
-              op.kind === "+"
-                ? "bg-status-pass/10 text-status-pass"
-                : op.kind === "-"
-                  ? "bg-status-critical/10 text-status-critical"
-                  : "text-fg-muted";
-            const marker = op.kind === "=" ? " " : op.kind;
-            return (
-              <div key={idx} className={`contents ${bg}`}>
-                <div className={`px-2 py-0.5 text-right text-fg-muted ${bg}`}>{marker}</div>
-                <pre className={`whitespace-pre-wrap px-2 py-0.5 ${bg}`}>
-                  {op.kind === "+" ? op.right : op.left}
-                </pre>
-              </div>
-            );
-          })}
-          {diff.length === 0 && (
-            <div className="col-span-2 px-3 py-2 text-fg-muted">Identical.</div>
-          )}
+        <div className="grid border-t md:grid-cols-2 md:divide-x">
+          <RevisionSummary rev={left} />
+          <RevisionSummary rev={right} />
         </div>
-      </div>
-    </div>
+      </Panel>
+
+      <Panel
+        title="Changes"
+        aside={
+          <span className="font-mono tabular-nums">
+            <span className="text-status-pass">+{added}</span> <span className="text-status-critical">-{removed}</span>
+          </span>
+        }
+      >
+        {!left || !right ? (
+          <SkeletonRows rows={6} />
+        ) : added + removed === 0 ? (
+          <EmptyState title="Identical" description="These two revisions have the same content." />
+        ) : (
+          <DiffView lines={lines} />
+        )}
+      </Panel>
+    </>
   );
 }
 
 function RevisionPicker({
+  id,
   label,
   value,
   onChange,
   revisions,
 }: {
+  id: string;
   label: string;
   value: string;
   onChange: (id: string) => void;
   revisions: PolicyRevision[];
 }) {
   return (
-    <label className="inline-flex items-center gap-2 text-xs text-fg-muted">
-      <span className="text-fg-muted">{label}</span>
-      <NativeSelect value={value} onChange={(e) => onChange(e.target.value)}>
+    <FormField label={label} htmlFor={id}>
+      <NativeSelect id={id} name={id} value={value} onChange={(e) => onChange(e.target.value)} className="font-mono text-xs">
         {revisions.map((rev) => (
           <NativeSelectOption key={rev.id} value={rev.id}>
-            {revisionLabel(rev)} {rev.message ? `: ${rev.message}` : ""}
+            {revisionLabel(rev)}
           </NativeSelectOption>
         ))}
       </NativeSelect>
-    </label>
+    </FormField>
   );
 }
 
-function RevisionCard({ rev, title }: { rev: PolicyRevision | undefined; title: string }) {
-  if (!rev) {
-    return (
-      <div className="rounded-sm border border-border bg-surface-card p-3 text-xs text-fg-muted">
-        {title}: loading…
-      </div>
-    );
-  }
+function RevisionSummary({ rev }: { rev: PolicyRevision | undefined }) {
+  if (!rev) return <SkeletonRows rows={2} />;
   return (
-    <div className="rounded-sm border border-border bg-surface-card p-3 text-xs text-fg-muted">
-      <div className="text-xs uppercase tracking-wide text-fg-muted">{title}</div>
-      <div className="mt-1 flex flex-wrap items-center gap-3 text-fg">
-        <span className="font-mono">{rev.id.slice(0, 10)}</span>
-        {rev.message ? <span>· {rev.message}</span> : null}
-      </div>
-      <div className="mt-2 flex flex-wrap items-center gap-3 text-fg-muted">
-        <span className="inline-flex items-center gap-1">
-          <User2 className="h-3 w-3" aria-hidden /> {rev.author || "unknown"}
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <Clock3 className="h-3 w-3" aria-hidden />{" "}
-          {rev.created_at ? new Date(rev.created_at).toLocaleString("en-GB") : "—"}
-        </span>
-      </div>
-    </div>
+    <DetailList
+      items={[
+        { label: "Revision", value: rev.id.slice(0, 10), mono: true },
+        { label: "Author", value: rev.author || "unknown" },
+        { label: "Saved", value: rev.created_at ? new Date(rev.created_at).toLocaleString("en-GB") : "—", mono: true },
+        ...(rev.message ? [{ label: "Message", value: rev.message }] : []),
+      ]}
+    />
   );
 }

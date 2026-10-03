@@ -1,9 +1,14 @@
 "use client";
 
+import { Play } from "lucide-react";
 import { Panel } from "@/components/app/panel";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Spinner } from "@/components/ui/spinner";
+import { Textarea } from "@/components/ui/textarea";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { PolicySource } from "./_constants";
 import { PLAYGROUND_SNIPPETS } from "./playgroundData";
-import { Textarea } from "@/components/ui/textarea";
 
 type Props = {
   prompt: string;
@@ -13,7 +18,15 @@ type Props = {
   uploadYaml: string;
   setUploadYaml: (v: string) => void;
   effectiveYaml: string;
+  running: boolean;
+  onRun: () => void;
 };
+
+const SOURCES: { id: PolicySource; label: string; hint: string }[] = [
+  { id: "active", label: "Running", hint: "The policy the proxy is enforcing now." },
+  { id: "draft", label: "Draft", hint: "Your unsaved draft from the Policies editor." },
+  { id: "upload", label: "Pasted", hint: "A policy you paste below, used only for this test." },
+];
 
 export function PlaygroundPromptAndPolicy({
   prompt,
@@ -23,75 +36,104 @@ export function PlaygroundPromptAndPolicy({
   uploadYaml,
   setUploadYaml,
   effectiveYaml,
+  running,
+  onRun,
 }: Props) {
-  return (
-    <div className="grid gap-3 lg:grid-cols-2">
-      <div>
-        <Panel
-          title="Prompt"
-          aside={
-            <span className="px-2 text-xs uppercase tracking-[0.18em] text-fg-muted">{prompt.length} chars</span>
-          }
+  const source = SOURCES.find((s) => s.id === policySource) ?? SOURCES[0];
 
+  return (
+    <div className="grid gap-6 lg:grid-cols-2">
+      <Panel title="Prompt" aside={<span className="font-mono tabular-nums">{prompt.length} chars</span>}>
+        <form
+          className="flex h-full flex-col"
+          onSubmit={(e) => {
+            e.preventDefault();
+            onRun();
+          }}
         >
+          <Label htmlFor="playground-prompt" className="sr-only">
+            Prompt
+          </Label>
           <Textarea
-            className="min-h-[260px] w-full resize-y"
+            id="playground-prompt"
+            name="prompt"
+            className="min-h-64 flex-1 resize-y border-0 font-mono text-xs shadow-none focus-visible:ring-inset"
+            spellCheck={false}
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            placeholder="Sample prompt…"
-            aria-label="Sample prompt"
+            placeholder="Type or paste a prompt to test…"
           />
-          <div className="flex flex-wrap gap-1 border-t border-border bg-surface-subtle px-2 py-2">
-            {PLAYGROUND_SNIPPETS.map((s) => (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => setPrompt(s.text)}
-                className="rounded-sm border border-border-strong bg-surface-subtle px-2 py-1 text-xs text-fg-muted hover:border-status-critical/40 hover:bg-surface-card"
-              >
-                {s.label}
-              </button>
-            ))}
-          </div>
-        </Panel>
-      </div>
-
-      <div>
-        <Panel title="Policy source">
-          <div className="space-y-2 p-3">
-            <div className="text-xs uppercase tracking-[0.18em] text-fg-muted">POLICY SOURCE</div>
-            <div className="flex flex-wrap gap-1">
-              {(["active", "draft", "upload"] as PolicySource[]).map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => setPolicySource(s)}
-                  className={` rounded-sm border px-2 py-1 text-xs uppercase tracking-[0.12em] ${
-                    policySource === s
-                      ? "border-status-critical/60 bg-status-critical/10 text-status-critical"
-                      : "border-border-strong bg-surface-subtle text-fg-muted hover:bg-surface-card"
-                  }`}
-                >
-                  {s}
-                </button>
+          <div className="border-t p-3">
+            <p className="mb-2 text-xs text-muted-foreground">Examples</p>
+            <div className="flex flex-wrap gap-1.5">
+              {PLAYGROUND_SNIPPETS.map((s) => (
+                <Button key={s.id} type="button" variant="outline" size="xs" onClick={() => setPrompt(s.text)}>
+                  {s.label}
+                </Button>
               ))}
             </div>
-            {policySource === "upload" ? (
+          </div>
+          <div className="border-t p-3">
+            <Button type="submit" disabled={running || !prompt.trim()}>
+              {running ? <Spinner /> : <Play />}
+              {running ? "Running…" : "Run Simulation"}
+            </Button>
+          </div>
+        </form>
+      </Panel>
+
+      <Panel title="Policy">
+        <div className="space-y-3 p-4">
+          <ToggleGroup
+            type="single"
+            variant="outline"
+            size="sm"
+            value={policySource}
+            onValueChange={(v) => {
+              if (v) setPolicySource(v as PolicySource);
+            }}
+            aria-label="Policy to test against"
+          >
+            {SOURCES.map((s) => (
+              <ToggleGroupItem key={s.id} value={s.id} className="px-3 text-xs">
+                {s.label}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+          <p className="text-xs text-muted-foreground">{source.hint}</p>
+
+          {policySource === "upload" ? (
+            <>
+              <Label htmlFor="playground-policy" className="sr-only">
+                Policy document
+              </Label>
               <Textarea
-                className="min-h-[180px] w-full resize-y"
+                id="playground-policy"
+                name="policy"
+                className="min-h-56 resize-y font-mono text-xs"
+                spellCheck={false}
                 value={uploadYaml}
                 onChange={(e) => setUploadYaml(e.target.value)}
-                placeholder="Paste policy YAML…"
-                aria-label="Paste policy YAML"
+                placeholder="Paste a policy document…"
               />
-            ) : (
-              <pre className="max-h-[220px] overflow-auto rounded-sm border border-border bg-surface-card p-2 text-xs leading-4 text-fg-muted">
-                {effectiveYaml || "// (empty) — switch source or load a policy"}
-              </pre>
-            )}
-          </div>
-        </Panel>
-      </div>
+            </>
+          ) : effectiveYaml ? (
+            <pre
+              className="max-h-72 overflow-auto border bg-background p-3 font-mono text-xs leading-5 text-fg-muted"
+              tabIndex={0}
+              aria-label="Policy document"
+            >
+              {effectiveYaml}
+            </pre>
+          ) : (
+            <p className="border border-dashed px-3 py-6 text-center text-xs text-muted-foreground">
+              {policySource === "draft"
+                ? "There is no draft. Edit the policy on the Policies page first."
+                : "The running policy could not be loaded. Check the admin key in Settings."}
+            </p>
+          )}
+        </div>
+      </Panel>
     </div>
   );
 }

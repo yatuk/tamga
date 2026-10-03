@@ -1,9 +1,11 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Eye, EyeOff, ExternalLink } from "lucide-react";
 import { Panel } from "@/components/app/panel";
-import { getSeverityBadge, getActionBadge } from "@/lib/badges";
+import { EmptyState, ErrorState, SkeletonRows } from "@/components/app/states";
+import { ActionBadge, SeverityBadge, StatusBadge } from "@/components/app/status-badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { API_BASE, authHeaders } from "@/lib/api/fetch-core";
 
 interface Competitor {
   name: string;
@@ -56,182 +58,84 @@ function parseCompetitors(yaml: string): Competitor[] {
 
 type Props = { adminKey: string };
 
+/** Competitor names the active policy watches for. Read-only; edit them in the policy. */
 export function CompetitorsForm({ adminKey }: Props) {
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["policy-competitors", adminKey],
     queryFn: async () => {
-      const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8443";
-      const r = await fetch(`${base}/api/v1/policies`, {
-        headers: { "X-Tamga-Admin-Key": adminKey },
-      });
-      if (!r.ok) throw new Error(`policy fetch failed: ${r.status}`);
+      const r = await fetch(`${API_BASE}/api/v1/policies`, { headers: authHeaders(adminKey) });
+      if (!r.ok) throw new Error(`The policy request failed with status ${r.status}.`);
       const json = (await r.json()) as PolicyResponse;
-      const raw = json.yaml ?? "";
-      const yamlCompetitors = parseCompetitors(raw);
-      return {
-        name: json.name ?? "unknown",
-        version: json.version ?? "0",
-        competitors:
-          json.competitors && json.competitors.length > 0
-            ? json.competitors
-            : yamlCompetitors,
-      };
+      return json.competitors && json.competitors.length > 0 ? json.competitors : parseCompetitors(json.yaml ?? "");
     },
+    enabled: !!adminKey,
     staleTime: 30_000,
   });
 
-  const competitors = data?.competitors ?? [];
+  const competitors = data ?? [];
+  const active = competitors.filter((c) => c.enabled).length;
 
   return (
-    <Panel title="Rakip Modeller">
-      <div className="space-y-2 p-3">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-[0.14em] text-status-critical">
-              Competitor Intelligence
-            </p>
-            <p className="mt-1 text-xs text-fg-subtle">
-              Detects competitor brand and product mentions in LLM prompts.
-              Configure via{" "}
-              <code className="rounded-sm bg-surface-subtle px-1 font-mono text-xs text-fg-muted">
-                competitors
-              </code>{" "}
-              block in policy YAML.
-            </p>
-          </div>
-          {data && (
-            <span className="text-xs text-fg-subtle">
-              {data.name} v{data.version}
-            </span>
-          )}
-        </div>
-
-        {/* Loading */}
-        {isLoading && (
-          <div className="flex items-center gap-2 py-8 text-center text-xs text-fg-subtle">
-            <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-surface-subtle0" />
-            Loading competitor configuration…
-          </div>
-        )}
-
-        {/* Error */}
-        {error && (
-          <div className="rounded-sm border border-status-critical/30 bg-status-critical/5 p-3 text-xs text-status-critical">
-            Failed to load policy: {(error as Error).message}
-          </div>
-        )}
-
-        {/* Empty */}
-        {!isLoading && !error && competitors.length === 0 && (
-          <div className="py-8 text-center">
-            <p className="text-xs text-fg-subtle">
-              No competitors configured.
-            </p>
-            <p className="mt-1 text-xs text-fg-muted">
-              Add a{" "}
-              <code className="rounded-sm bg-surface-subtle px-1 font-mono text-xs">
-                competitors:
-              </code>{" "}
-              block to your policy YAML to enable competitor detection.
-            </p>
-            <a
-              href="https://github.com/tamga-dev/tamga/blob/dev/tamga/docs/benchmarks/README.md"
-              target="_blank"
-              rel="noreferrer"
-              className="mt-3 inline-flex items-center gap-1.5 rounded-sm border border-border bg-surface-subtle px-3 py-1.5 text-xs text-fg-muted hover:text-fg transition-colors"
-            >
-              See example policy
-              <ExternalLink className="h-3 w-3" />
-            </a>
-          </div>
-        )}
-
-        {/* Competitor list */}
-        {!isLoading && !error && competitors.length > 0 && (
-          <div className="space-y-2">
-            {competitors.map((c) => {
-              const sev = getSeverityBadge(c.severity);
-              const SevIcon = sev.icon;
-              const act = getActionBadge(c.action);
-              const ActIcon = act.icon;
-              return (
-                <div
-                  key={c.name}
-                  className="rounded-sm border border-border bg-surface-card/60 overflow-hidden"
-                >
-                  {/* Top row */}
-                  <div className="flex items-center justify-between px-3 py-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      {c.enabled ? (
-                        <Eye className="h-3.5 w-3.5 shrink-0 text-status-pass" />
-                      ) : (
-                        <EyeOff className="h-3.5 w-3.5 shrink-0 text-fg-subtle" />
-                      )}
-                      <span className="font-mono text-sm text-fg truncate">
-                        {c.name}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <span
-                        className={`inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 text-xs uppercase ${sev.cls}`}
-                      >
-                        <SevIcon className="h-2.5 w-2.5" />
-                        {c.severity}
-                      </span>
-                      <span
-                        className={`inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 text-xs uppercase ${act.cls}`}
-                      >
-                        <ActIcon className="h-2.5 w-2.5" />
-                        {c.action}
-                      </span>
-                    </div>
+    <Panel
+      title="Competitor mentions"
+      description="Brand and product names the policy looks for in prompts"
+      aside={competitors.length > 0 ? `${active} of ${competitors.length} enabled` : undefined}
+    >
+      {isLoading ? (
+        <SkeletonRows rows={3} />
+      ) : error ? (
+        <ErrorState title="Could not load the policy" error={error} onRetry={() => void refetch()} />
+      ) : competitors.length === 0 ? (
+        <EmptyState
+          title="No competitors configured"
+          description={
+            <>
+              Add a <span className="font-mono">competitors</span> list to the policy in the Editor tab to detect competitor
+              mentions.
+            </>
+          }
+        />
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Name</TableHead>
+              <TableHead>State</TableHead>
+              <TableHead>Severity</TableHead>
+              <TableHead>Action</TableHead>
+              <TableHead>Patterns</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {competitors.map((c) => (
+              <TableRow key={c.name}>
+                <TableCell className="font-medium">
+                  {c.name}
+                  {c.description ? <p className="text-xs font-normal text-muted-foreground">{c.description}</p> : null}
+                </TableCell>
+                <TableCell>
+                  <StatusBadge tone={c.enabled ? "pass" : "neutral"}>{c.enabled ? "enabled" : "disabled"}</StatusBadge>
+                </TableCell>
+                <TableCell>
+                  <SeverityBadge severity={c.severity} />
+                </TableCell>
+                <TableCell>
+                  <ActionBadge action={c.action} />
+                </TableCell>
+                <TableCell className="whitespace-normal">
+                  <div className="flex flex-wrap gap-1">
+                    {c.patterns.map((pattern) => (
+                      <code key={pattern} className="bg-muted px-1.5 py-0.5 font-mono text-xs text-fg-muted">
+                        {pattern}
+                      </code>
+                    ))}
                   </div>
-
-                  {/* Patterns */}
-                  {c.patterns.length > 0 && (
-                    <div className="border-t border-border px-3 py-1.5 bg-surface-subtle">
-                      <div className="flex flex-wrap gap-1">
-                        {c.patterns.map((p, i) => (
-                          <code
-                            key={i}
-                            className="rounded-sm bg-surface-subtle px-1.5 py-0.5 font-mono text-xs text-fg-muted"
-                          >
-                            /{p}/
-                          </code>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Description */}
-                  {c.description && (
-                    <div className="border-t border-border px-3 py-1.5">
-                      <p className="text-xs text-fg-subtle truncate">
-                        {c.description}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Footer stats */}
-        {!isLoading && !error && competitors.length > 0 && (
-          <div className="flex items-center gap-3 border-t border-border pt-3 text-xs text-fg-subtle">
-            <span>
-              {competitors.filter((c) => c.enabled).length} active
-            </span>
-            <span>·</span>
-            <span>
-              {competitors.filter((c) => c.enabled).length} of{" "}
-              {competitors.length} competitors configured
-            </span>
-          </div>
-        )}
-      </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
     </Panel>
   );
 }

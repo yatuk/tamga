@@ -1,48 +1,46 @@
 "use client";
 
-import { Copy, Check } from "lucide-react";
+import { CopyButton } from "@/components/app/copy-button";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { RevealedKey } from "../useKeysPage";
 
 type Props = {
   revealed: RevealedKey;
   onDismiss: () => void;
-  onCopy: (text: string) => void;
 };
 
-export function KeyRevealDialog({ revealed, onDismiss, onCopy }: Props) {
-  if (!revealed) return null;
-
+/** Shows a new key once. It closes only through its own button, not by clicking away. */
+export function KeyRevealDialog({ revealed, onDismiss }: Props) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-md rounded-sm border border-status-medium/20 bg-surface-card p-5 shadow-lg">
-        <div className="mb-4 flex items-start gap-3">
-          <span className="mt-0.5 text-lg">⚠</span>
-          <div>
-            <h2 className="text-sm font-semibold text-status-medium">
-              Copy this key now. It will not be shown again.
-            </h2>
-            <p className="mt-1 text-xs text-fg-subtle">
-              Key name: <span className="font-mono text-fg-muted">{revealed.label}</span>
-            </p>
-          </div>
-        </div>
+    <Dialog open={!!revealed} onOpenChange={(open) => (open ? undefined : onDismiss())}>
+      <DialogContent
+        className="sm:max-w-lg"
+        showCloseButton={false}
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+      >
+        <DialogHeader>
+          <DialogTitle>Copy the key now</DialogTitle>
+          <DialogDescription>
+            This is the only time the full key for <span className="font-mono text-foreground">{revealed?.label}</span> is
+            shown. Store it in your secret manager.
+          </DialogDescription>
+        </DialogHeader>
 
-        <div className="rounded-sm border border-border bg-surface-subtle p-3">
-          <code className="break-all text-xs font-mono text-fg select-all">
-            {revealed.rawKey}
+        <div className="flex items-start gap-2 border bg-background p-3">
+          <code className="min-w-0 flex-1 font-mono text-xs break-all select-all" translate="no">
+            {revealed?.rawKey}
           </code>
+          <CopyButton value={revealed?.rawKey ?? ""} label="API key" variant="outline" size="sm">
+            Copy
+          </CopyButton>
         </div>
 
-        <div className="mt-4 flex justify-between gap-2">
-          <Button size="sm" variant="outline" onClick={() => onCopy(revealed.rawKey)}>
-            <Copy className="mr-1 h-3.5 w-3.5" /> Copy
-          </Button>
-          <Button size="sm" onClick={onDismiss}>
-            <Check className="mr-1 h-3.5 w-3.5" /> I have saved this key
-          </Button>
-        </div>
-      </div>
-    </div>
+        <DialogFooter>
+          <Button onClick={onDismiss}>I Have Saved the Key</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

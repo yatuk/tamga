@@ -1,24 +1,25 @@
-// Dashboard route skeleton. Served during segment transitions so the
-// user sees instant feedback while the next route's JS chunk streams.
-// Mirrors the mission-control aesthetic (mono eyebrow + dense grid).
+import { Skeleton } from "@/components/ui/skeleton";
+
+/**
+ * Shown while a dashboard route loads. It has the shape of a page (header,
+ * stats, a panel) so the layout does not jump when the content arrives.
+ */
 export default function DashboardLoading() {
   return (
-    <div className="space-y-2" aria-busy aria-live="polite">
-      <div className="flex flex-col gap-2">
-        <div className="h-3 w-48 animate-pulse rounded-sm bg-surface-subtle/60" />
-        <div className="h-7 w-72 animate-pulse rounded-sm bg-surface-subtle/80" />
-        <div className="h-3 w-64 animate-pulse rounded-sm bg-surface-subtle/80" />
+    <div className="space-y-6" role="status" aria-label="Loading page">
+      <div className="space-y-2 border-b pb-4">
+        <Skeleton className="h-8 w-64" />
+        <Skeleton className="h-4 w-96 max-w-full" />
       </div>
-      <div className="grid gap-3 md:grid-cols-3">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <div
-            key={i}
-            className="h-24 animate-pulse rounded-sm border border-border/80 bg-surface-subtle"
-          />
+      <div className="grid grid-cols-2 gap-px border bg-border lg:grid-cols-4">
+        {Array.from({ length: 4 }, (_, i) => (
+          <div key={i} className="space-y-3 bg-card p-4">
+            <Skeleton className="h-3 w-20" />
+            <Skeleton className="h-6 w-16" />
+          </div>
         ))}
       </div>
-      <div className="h-72 animate-pulse rounded-sm border border-border/80 bg-surface-subtle" />
-      <span className="sr-only">Loading…</span>
+      <Skeleton className="h-72 w-full" />
     </div>
   );
 }

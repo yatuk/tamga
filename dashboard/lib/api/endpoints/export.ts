@@ -19,6 +19,27 @@ export const exportEndpoints = {
     return `${base}/api/v1/events/export?${params.toString()}`;
   },
 
+  /**
+   * Download an events export. The admin key travels in a header, never in
+   * the URL, so it stays out of browser history and proxy logs.
+   */
+  getEventsExport: async (
+    adminKey: string,
+    filters: { range?: string; action?: string; format?: "csv" | "json" } = {},
+  ): Promise<Blob> => {
+    const params = new URLSearchParams();
+    if (filters.range) params.set("range", filters.range);
+    if (filters.action) params.set("action", filters.action);
+    params.set("format", filters.format || "csv");
+    const resp = await fetch(`${API_BASE}/api/v1/events/export?${params.toString()}`, {
+      headers: authHeaders(adminKey),
+    });
+    if (!resp.ok) {
+      throw new Error(`Export failed: ${resp.status}`);
+    }
+    return resp.blob();
+  },
+
   getMetricsText: async (adminKey: string): Promise<string> => {
     const resp = await fetch(`${API_BASE}/api/v1/metrics`, {
       headers: authHeaders(adminKey),

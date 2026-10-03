@@ -1,8 +1,8 @@
 "use client";
 
-import { Copy, Play } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Copy } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
+import { Button } from "@/components/ui/button";
 import { PlaygroundPromptAndPolicy } from "./PlaygroundPromptAndPolicy";
 import { PlaygroundRedTeamPanel } from "./PlaygroundRedTeamPanel";
 import { PlaygroundSimulateResult } from "./PlaygroundSimulateResult";
@@ -12,21 +12,19 @@ export default function PlaygroundPage() {
   const p = usePlaygroundPage();
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-6">
       <PageHeader
         title="Playground"
-        description="Simulate a prompt against a policy. Nothing here touches live traffic."
+        description="Try a prompt against a policy. Nothing here touches live traffic or calls a provider."
         actions={
           <>
-            <Button variant="outline" onClick={p.copyCurl}>
-              <Copy className="mr-1 h-4 w-4" /> COPY CURL
+            <Button variant="outline" size="sm" onClick={p.copyCurl}>
+              <Copy />
+              Copy as cURL
             </Button>
-            <Button variant="outline" onClick={p.copyJson}>
-              <Copy className="mr-1 h-4 w-4" /> COPY JSON
-            </Button>
-            <Button onClick={p.runSimulate} disabled={p.running}>
-              <Play className="mr-1 h-4 w-4" />
-              {p.running ? "Running…" : "Run"}
+            <Button variant="outline" size="sm" onClick={p.copyJson} disabled={!p.result}>
+              <Copy />
+              Copy Result
             </Button>
           </>
         }
@@ -40,6 +38,8 @@ export default function PlaygroundPage() {
         uploadYaml={p.uploadYaml}
         setUploadYaml={p.setUploadYaml}
         effectiveYaml={p.effectiveYaml}
+        running={p.running}
+        onRun={p.runSimulate}
       />
 
       <PlaygroundSimulateResult result={p.result} originalPrompt={p.prompt} loading={p.running} />

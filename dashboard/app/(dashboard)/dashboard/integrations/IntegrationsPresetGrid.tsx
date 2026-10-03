@@ -2,13 +2,12 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { BookOpen, ChevronDown, ChevronRight, ExternalLink, Plug } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus } from "lucide-react";
+import { StatusBadge } from "@/components/app/status-badge";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { PRIMARY_PRESETS, SECONDARY_PRESETS } from "./integrationPresets";
-import { integrationKindBadge } from "./integrationWebhookHelpers";
-import { openIntegrationDraft } from "./integrationDraft";
 import type { Webhook } from "@/lib/api";
+import type { openIntegrationDraft } from "./integrationDraft";
+import { PRIMARY_PRESETS, SECONDARY_PRESETS, type IntegrationPreset } from "./integrationPresets";
 
 type Props = {
   hooks: Webhook[];
@@ -20,96 +19,64 @@ function PresetCard({
   connected,
   onConnect,
 }: {
-  preset: (typeof PRIMARY_PRESETS)[number];
+  preset: IntegrationPreset;
   connected: number;
   onConnect: Props["onConnect"];
 }) {
   return (
-    <div className="flex h-full flex-col justify-between gap-3 rounded-sm border border-border bg-surface-card p-3 hover:border-border-strong">
+    <li className="flex flex-col justify-between gap-4 bg-card p-4">
       <div>
-        <div className="flex items-center gap-2">
-          <Badge className={`rounded-sm border text-xs uppercase ${integrationKindBadge(preset.kind)}`}>
-            {preset.kind}
-          </Badge>
-          <span className="text-xs uppercase tracking-wide text-fg-muted">
-            {connected > 0 ? `${connected} connected` : "not connected"}
-          </span>
+        <div className="flex items-start justify-between gap-2">
+          <h3 className="text-sm font-medium">{preset.name}</h3>
+          {connected > 0 ? <StatusBadge tone="pass">{connected} connected</StatusBadge> : null}
         </div>
-        <div className="mt-2 text-sm font-medium text-fg">{preset.name}</div>
-        <div className="text-xs text-fg-muted">{"//"} {preset.blurb}</div>
+        <p className="mt-1 text-xs text-muted-foreground">{preset.blurb}</p>
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-3">
-          <Link
-            href={`/dashboard/integrations/${preset.kind}`}
-            className="inline-flex items-center gap-1 text-xs text-fg-muted hover:text-fg"
-          >
-            <BookOpen className="h-3 w-3" /> Setup guide
-          </Link>
-          <a
-            href={preset.docs}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1 text-xs text-fg-muted hover:text-fg-subtle"
-          >
-            Docs <ExternalLink className="h-3 w-3" />
-          </a>
-        </div>
-        <Button onClick={() => onConnect(preset.kind, preset.name)}>
-          <Plug className="mr-1 h-3.5 w-3.5" /> Connect
+      <div className="flex items-center justify-between gap-2">
+        <Link
+          href={`/dashboard/integrations/${preset.kind}`}
+          className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
+        >
+          Setup guide
+        </Link>
+        <Button variant="outline" size="sm" onClick={() => onConnect(preset.kind, preset.name)}>
+          <Plus />
+          Connect
+          <span className="sr-only"> {preset.name}</span>
         </Button>
       </div>
-    </div>
+    </li>
   );
 }
 
+/** The destinations Tamga can send to, most used first. */
 export function IntegrationsPresetGrid({ hooks, onConnect }: Props) {
   const [showAll, setShowAll] = useState(false);
+  const presets = showAll ? [...PRIMARY_PRESETS, ...SECONDARY_PRESETS] : PRIMARY_PRESETS;
+  const connectedOf = (kind: string) => hooks.filter((h) => h.kind === kind).length;
 
   return (
-    <div>
-      {/* Primary 5 */}
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-        {PRIMARY_PRESETS.map((p, _i) => {
-          const connected = hooks.filter((h) => h.kind === p.kind).length;
-          return (
-            <div key={p.kind}>
-              <PresetCard preset={p} connected={connected} onConnect={onConnect} />
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Expandable secondary */}
-      {SECONDARY_PRESETS.length > 0 && (
-        <div className="mt-2">
-          <button
-            type="button"
-            onClick={() => setShowAll((v) => !v)}
-            className="inline-flex items-center gap-1 text-xs text-fg-muted hover:text-fg-muted"
-          >
-            {showAll ? (
-              <ChevronDown className="h-3 w-3" />
-            ) : (
-              <ChevronRight className="h-3 w-3" />
-            )}
-            {showAll
-              ? `Hide additional integrations (${SECONDARY_PRESETS.length})`
-              : `Show all integrations (${SECONDARY_PRESETS.length} more)`}
-          </button>
-
-          {showAll && (
-            <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 opacity-60">
-              {SECONDARY_PRESETS.map((p) => {
-                const connected = hooks.filter((h) => h.kind === p.kind).length;
-                return (
-                  <PresetCard key={p.kind} preset={p} connected={connected} onConnect={onConnect} />
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
+    <section aria-labelledby="destinations-heading" className="space-y-3">
+      <h2 id="destinations-heading" className="font-mono text-[11px] font-medium tracking-[0.14em] text-fg-muted uppercase">
+        Add a destination
+      </h2>
+      <ul id="destination-list" className="grid gap-px border bg-border sm:grid-cols-2 xl:grid-cols-3">
+        {presets.map((p) => (
+          <PresetCard key={p.kind} preset={p} connected={connectedOf(p.kind)} onConnect={onConnect} />
+        ))}
+      </ul>
+      {SECONDARY_PRESETS.length > 0 ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setShowAll((v) => !v)}
+          aria-expanded={showAll}
+          aria-controls="destination-list"
+        >
+          {showAll ? <ChevronDown /> : <ChevronRight />}
+          {showAll ? "Show Fewer" : `Show ${SECONDARY_PRESETS.length} More`}
+        </Button>
+      ) : null}
+    </section>
   );
 }

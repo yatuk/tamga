@@ -2,6 +2,8 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Copy, Search } from "lucide-react";
+import { CopyButton } from "@/components/app/copy-button";
+import { Button } from "@/components/ui/button";
 import { toLowerEn } from "@/lib/utils/case";
 import { Input } from "@/components/ui/input";
 
@@ -97,10 +99,6 @@ function JsonNodeView({
 
   const toggleCollapse = useCallback(() => setCollapsed((v) => !v), []);
 
-  const copyPath = useCallback(() => {
-    navigator.clipboard.writeText(path).catch(() => {});
-  }, [path]);
-
   if (node.type === "primitive") {
     const display =
       node.kind === "string" && node.value.length > maxStringLen && truncated
@@ -110,33 +108,18 @@ function JsonNodeView({
           : node.value;
 
     return (
-      <div
-        className="group flex items-center hover:bg-surface-subtle/50"
-        onDoubleClick={copyPath}
-        title={`${path}\nDouble-click to copy path`}
-      >
+      <div className="group flex items-center hover:bg-accent/50">
         <JsonLine text={display} depth={depth} kind={node.kind} searchTerm={searchTerm} />
         {node.kind === "string" && node.value.length > maxStringLen && (
-          <button
-            className="shrink-0 text-xs text-fg-subtle hover:text-fg-subtle ml-1"
-            onClick={() => setTruncated((v) => !v)}
-          >
-            {truncated ? "more…" : "less"}
-          </button>
+          <Button variant="ghost" size="xs" className="ml-1 shrink-0" onClick={() => setTruncated((v) => !v)}>
+            {truncated ? "Show more" : "Show less"}
+          </Button>
         )}
-        <button
-          aria-label="Copy value"
-            className="ml-1 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-          onClick={(e) => {
-            e.stopPropagation();
-            navigator.clipboard
-              .writeText(node.kind === "string" ? node.value : node.value)
-              .catch(() => {});
-          }}
-          title="Copy value"
-        >
-          <Copy className="h-3 w-3 text-fg-subtle hover:text-fg-subtle" />
-        </button>
+        <CopyButton
+          value={node.value}
+          label="value"
+          className="ml-1 shrink-0 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+        />
       </div>
     );
   }
@@ -151,11 +134,12 @@ function JsonNodeView({
   if (collapsed) {
     const count = isArray ? node.items.length : node.entries.length;
     return (
-      <div
-        className="group flex items-center hover:bg-surface-subtle/50"
+      <Button
+        variant="ghost"
+        className="h-auto w-full justify-start gap-0 p-0 font-normal"
         onClick={toggleCollapse}
-        onDoubleClick={copyPath}
-        title={`${path}\nClick to expand · Double-click to copy path`}
+        aria-expanded={false}
+        aria-label={`Expand ${path}`}
       >
         <span className="shrink-0 inline-block w-[2.5rem] text-right pr-1">
           <ChevronRight className="inline h-3 w-3 text-fg-subtle" />
@@ -165,23 +149,25 @@ function JsonNodeView({
           <span className="text-fg-subtle ml-1">{count} item{count !== 1 ? "s" : ""}</span>
           <span className={COLOR.bracket}>{closeBracket}</span>
         </span>
-      </div>
+      </Button>
     );
   }
 
   return (
     <div>
       {/* Open bracket */}
-      <div
-        className="group flex items-center hover:bg-surface-subtle/50"
+      <Button
+        variant="ghost"
+        className="h-auto w-full justify-start gap-0 p-0 font-normal"
         onClick={toggleCollapse}
-        onDoubleClick={copyPath}
+        aria-expanded
+        aria-label={`Collapse ${path}`}
       >
         <span className="shrink-0 inline-block w-[2.5rem] text-right pr-1">
           <ChevronDown className="inline h-3 w-3 text-fg-subtle" />
         </span>
         <span className={`font-mono text-xs ${COLOR.bracket}`}>{openBracket}</span>
-      </div>
+      </Button>
 
       {/* Entries */}
       {entries.map((entry, i) => (
@@ -258,19 +244,13 @@ export function JsonInspector({
             aria-label="Search payload"
           />
         </div>
-        <button
-          className="text-xs text-fg-subtle hover:text-fg-subtle transition-colors"
-          onClick={() => setExpandAll((v) => !v)}
-        >
-          {expandAll ? "Collapse all" : "Expand all"}
-        </button>
-        <button
-          className="text-xs text-fg-subtle hover:text-fg-subtle transition-colors flex items-center gap-1"
-          onClick={copyAll}
-        >
-          <Copy className="h-3 w-3" />
+        <Button variant="ghost" size="xs" onClick={() => setExpandAll((v) => !v)} aria-pressed={expandAll}>
+          {expandAll ? "Collapse All" : "Expand All"}
+        </Button>
+        <Button variant="ghost" size="xs" onClick={copyAll}>
+          <Copy />
           Copy
-        </button>
+        </Button>
       </div>
 
       {/* Tree */}

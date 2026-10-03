@@ -1,10 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
-import type { TimeRange } from "@/lib/types";
 import { useAdminKey } from "@/hooks/useAdminKey";
 import { useRangeParam } from "@/hooks/useRangeParam";
 
@@ -36,7 +35,6 @@ export function useLatencyPage() {
   const p95 = health?.scan_latency_ms_p95 ?? 0;
   const p99 = health?.scan_latency_ms_p99 ?? 0;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const healthAny = health as Record<string, unknown> | undefined;
   const p75 = (healthAny?.scan_latency_ms_p75 as number) ?? (p50 + (p95 - p50) * 0.5);
   const p90 = (healthAny?.scan_latency_ms_p90 as number) ?? (p50 + (p95 - p50) * 0.8);

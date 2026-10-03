@@ -105,7 +105,7 @@ export function useSecurityIncidentsTableBulk(L: SecurityIncidentsDataLayer) {
       if (adminKey) {
         api
           .patchIncident(adminKey, selectedRequestId, { tags: nextTags })
-          .catch((err) => toast.error(`Tag kaydedilemedi: ${String(err?.message || err)}`));
+          .catch((err) => toast.error("Could not save the tag", { description: String(err?.message || err) }));
       }
       return { ...prev, [selectedRequestId]: nextTags };
     });

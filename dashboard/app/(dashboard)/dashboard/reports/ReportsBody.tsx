@@ -1,63 +1,32 @@
 "use client";
 
-import type { RefObject } from "react";
-import dynamic from "next/dynamic";
-import { ArrowDownRight, ArrowUpRight, Download, FileDown, Loader2, Minus } from "lucide-react";
-import { api } from "@/lib/api";
-import { toUpperEn } from "@/lib/utils/case";
-import { humanizeFindingType } from "@/lib/humanize";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { ActionBadge } from "@/components/app/status-badge";
+import Link from "next/link";
+import { Download, FileDown } from "lucide-react";
+import { BarList } from "@/components/app/bar-list";
+import { TimeSeriesChart, type ChartSeries } from "@/components/app/charts";
 import { PageHeader } from "@/components/app/page-header";
 import { Panel } from "@/components/app/panel";
 import { Stat, StatGrid } from "@/components/app/stat";
-import { BudgetBurnCard } from "@/components/dashboard/BudgetBurnCard";
-import { CHART_CONFIG, type ReportRange } from "./_constants";
-import { ReportsBarRow } from "./ReportsBarRow";
-import { ReportsOwaspAndCompliance } from "./ReportsOwaspAndCompliance";
+import { AdminKeyRequired, EmptyState } from "@/components/app/states";
 import { TimeRangeToggle } from "@/components/app/time-range";
+import { BudgetBurnCard } from "@/components/dashboard/BudgetBurnCard";
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { humanizeFindingType, humanizeProvider } from "@/lib/humanize";
+import { formatInt } from "@/lib/utils/format";
+import { ReportsOwaspAndCompliance } from "./ReportsOwaspAndCompliance";
+import type { useReportsPage } from "./useReportsPage";
 
-const ReportsAreaChart = dynamic(
-  () => import("@/components/dashboard/charts/ReportsAreaChart").then((m) => m.ReportsAreaChart),
-  {
-    ssr: false,
-    loading: () => <div className="h-[260px] w-full animate-pulse rounded-sm bg-surface-subtle" />,
-  },
-);
+const SERIES: ChartSeries[] = [
+  { key: "total", label: "Requests", color: "var(--chart-1)" },
+  { key: "blocked", label: "Blocked", color: "var(--status-critical)" },
+  { key: "redacted", label: "Redacted", color: "var(--status-medium)" },
+];
 
-type Props = {
-  reportRef: RefObject<HTMLDivElement | null>;
-  adminKey: string;
-  range: ReportRange;
-  setRange: (r: ReportRange) => void;
-  stats: Awaited<ReturnType<typeof api.getStats>> | undefined;
-  chartData: { time: string; total: number; blocked: number; redacted: number }[];
-  recentBlocked: NonNullable<Awaited<ReturnType<typeof api.getEvents>>["events"]>;
-  topFindingEntries: [string, number][];
-  topFindingsTotal: number;
-  owaspCoverageRows: { type: string; count: number; pct: number; code: string; note: string }[];
-  exportBlockedCsv: () => void;
-  exportOwaspPdf: () => void;
-  exportIncidentPdf: () => void;
-  isExporting: boolean;
-  mttrData: Awaited<ReturnType<typeof api.getMttr>> | undefined;
-  comparisonDelta: { reqDelta: number; blockedDelta: number } | null;
-  executiveSummary: {
-    totalRequests: number;
-    totalBlocked: number;
-    totalRedacted: number;
-    totalFindings: number;
-    criticalCount: number;
-    topFinding: string | null;
-    topFindingCount: number;
-    mttrMinutes: number;
-    mttrTrend: string;
-  };
-};
+type Props = ReturnType<typeof useReportsPage>;
 
 export function ReportsBody({
-  reportRef,
   adminKey,
   range,
   setRange,
@@ -65,265 +34,200 @@ export function ReportsBody({
   chartData,
   recentBlocked,
   topFindingEntries,
-  topFindingsTotal,
   owaspCoverageRows,
   exportBlockedCsv,
+  exportEventsCsv,
   exportOwaspPdf,
   exportIncidentPdf,
   isExporting,
   mttrData,
   comparisonDelta,
-  executiveSummary,
+  executiveSummary: summary,
 }: Props) {
-  return (
-    <div ref={reportRef} className="space-y-2">
-      <PageHeader
-        title="Reports"
-        description="Key figures for the period, with CSV and PDF export."
-        actions={
-          <>
-            <TimeRangeToggle value={range} onChange={setRange} />
-            <Button variant="outline" onClick={exportBlockedCsv}>
-              <Download className="mr-1 h-4 w-4" /> CSV
-            </Button>
-            <Button variant="outline" disabled={isExporting} onClick={exportOwaspPdf}>
-              {isExporting ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <FileDown className="mr-1 h-4 w-4" />}
-              OWASP PDF
-            </Button>
-            <Button variant="outline" disabled={isExporting} onClick={exportIncidentPdf}>
-              {isExporting ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <FileDown className="mr-1 h-4 w-4" />}
-              Incident PDF
-            </Button>
-          </>
-        }
-      />
+  const header = (
+    <PageHeader
+      title="Reports"
+      description="Key figures for the period, with CSV and PDF exports for audits."
+      actions={
+        <>
+          <TimeRangeToggle value={range} onChange={setRange} />
+          <Button variant="outline" size="sm" disabled={isExporting || !adminKey} onClick={exportOwaspPdf}>
+            {isExporting ? <Spinner /> : <FileDown />}
+            OWASP Report
+          </Button>
+          <Button variant="outline" size="sm" disabled={isExporting || !adminKey} onClick={exportIncidentPdf}>
+            {isExporting ? <Spinner /> : <FileDown />}
+            Incident Report
+          </Button>
+        </>
+      }
+    />
+  );
 
-      <div>
-        <StatGrid>
-          <Stat label="TOTAL REQUESTS" value={stats?.total_requests ?? 0} />
-          <Stat label="BLOCKED" value={stats?.blocked_requests ?? 0} tone="critical" />
-          <Stat label="REDACTED" value={stats?.redacted_requests ?? 0} tone="warn" />
-          <Stat label="AVG INPUT RISK" value={`${stats?.avg_input_risk_pct ?? 0}%`} />
-        </StatGrid>
+  if (!adminKey) {
+    return (
+      <div className="space-y-6">
+        {header}
+        <Panel>
+          <AdminKeyRequired />
+        </Panel>
       </div>
+    );
+  }
 
-      <div>
+  // MTTR and SLA only mean something once an incident has been resolved.
+  const hasResolved = !!mttrData && (mttrData.overall_mttr_minutes > 0 || mttrData.sla_compliance > 0);
+  const sla = mttrData?.sla_compliance ?? 0;
+  const signed = (n: number | null | undefined) => (n == null ? "—" : `${n > 0 ? "+" : ""}${n.toFixed(1)}%`);
+
+  return (
+    <div className="space-y-6">
+      {header}
+
+      <StatGrid>
+        <Stat label="Requests" value={formatInt(stats?.total_requests ?? 0)} />
+        <Stat label="Blocked" value={formatInt(stats?.blocked_requests ?? 0)} tone={stats?.blocked_requests ? "critical" : "default"} />
+        <Stat label="Redacted" value={formatInt(stats?.redacted_requests ?? 0)} tone={stats?.redacted_requests ? "warn" : "default"} />
+        <Stat label="Avg input risk" value={`${stats?.avg_input_risk_pct ?? 0}%`} tooltip="Mean risk score of scanned prompts, 0 to 100." />
+        <Stat
+          label="MTTR"
+          value={hasResolved ? `${mttrData!.overall_mttr_minutes.toFixed(1)} min` : "—"}
+          hint={hasResolved ? mttrData!.trend : "No resolved incidents"}
+          tooltip="Mean time to resolve an incident, from creation to close."
+        />
+        <Stat
+          label="Resolved within SLA"
+          value={hasResolved ? `${sla.toFixed(1)}%` : "—"}
+          tone={!hasResolved ? "default" : sla >= 95 ? "pass" : sla >= 80 ? "warn" : "critical"}
+          tooltip="Share of incidents resolved within 60 minutes."
+        />
+        <Stat
+          label="Requests, late vs early"
+          value={signed(comparisonDelta?.reqDelta)}
+          tooltip="Second half of this window compared with the first half."
+        />
+        <Stat
+          label="Blocked, late vs early"
+          value={signed(comparisonDelta?.blockedDelta)}
+          tone={(comparisonDelta?.blockedDelta ?? 0) > 0 ? "warn" : "default"}
+          tooltip="Second half of this window compared with the first half."
+        />
+      </StatGrid>
+
+      <Panel title="Summary" description={`The last ${range} in plain words`}>
+        <ul className="list-disc space-y-1.5 py-4 pr-4 pl-8 text-sm text-fg-muted marker:text-fg-faint">
+          <li>
+            <span className="font-mono text-foreground tabular-nums">{formatInt(summary.totalRequests)}</span> requests went
+            through the proxy.
+          </li>
+          <li>
+            <span className="font-mono text-foreground tabular-nums">{formatInt(summary.totalFindings)}</span> findings were
+            detected
+            {summary.criticalCount > 0 ? (
+              <>
+                , <span className="text-status-critical">{formatInt(summary.criticalCount)} of them critical</span>
+              </>
+            ) : null}
+            . <span className="font-mono text-foreground tabular-nums">{formatInt(summary.totalBlocked)}</span> requests were
+            blocked and <span className="font-mono text-foreground tabular-nums">{formatInt(summary.totalRedacted)}</span>{" "}
+            redacted.
+          </li>
+          {summary.topFinding ? (
+            <li>
+              The most common finding type was{" "}
+              <span className="text-foreground">{humanizeFindingType(summary.topFinding)}</span> (
+              {formatInt(summary.topFindingCount)}).
+            </li>
+          ) : null}
+          <li>
+            {hasResolved
+              ? `Incidents took ${summary.mttrMinutes.toFixed(1)} minutes to resolve on average; the trend is ${summary.mttrTrend}.`
+              : "No incident was resolved in this window, so there is no resolution time to report."}
+          </li>
+        </ul>
+      </Panel>
+
+      <div className="grid gap-6 xl:grid-cols-3">
+        <Panel title={`Traffic · ${range}`} className="xl:col-span-2">
+          {chartData.length === 0 || (stats?.total_requests ?? 0) === 0 ? (
+            <EmptyState icon="chart" title="No traffic in this window" />
+          ) : (
+            <div className="p-4">
+              <TimeSeriesChart
+                data={chartData}
+                xKey="time"
+                series={SERIES}
+                height={260}
+                label={`Requests, blocked and redacted over the last ${range}`}
+              />
+            </div>
+          )}
+        </Panel>
         <BudgetBurnCard adminKey={adminKey} />
       </div>
 
-      {/* Comparative period display + SLA gauge row */}
-      <div className="grid gap-2 sm:grid-cols-2">
-        {comparisonDelta ? (
-          <div className="flex flex-col gap-1.5 rounded-sm border border-border bg-surface-card p-3">
-            <div className="text-xs uppercase tracking-[0.14em] text-fg-muted">
-              Period Comparison
-            </div>
-            <div className="flex items-center gap-3">
-              <span
-                className={`inline-flex items-center gap-1 text-xs ${
-                  comparisonDelta.reqDelta > 0 ? "text-status-critical" : comparisonDelta.reqDelta < 0 ? "text-status-pass" : "text-fg-subtle"
-                }`}
-              >
-                {comparisonDelta.reqDelta > 0 ? (
-                  <ArrowUpRight className="h-3 w-3" />
-                ) : comparisonDelta.reqDelta < 0 ? (
-                  <ArrowDownRight className="h-3 w-3" />
-                ) : (
-                  <Minus className="h-3 w-3" />
-                )}
-                {comparisonDelta.reqDelta > 0 ? "+" : ""}
-                {comparisonDelta.reqDelta.toFixed(1)}% requests
-              </span>
-              <span
-                className={`inline-flex items-center gap-1 text-xs ${
-                  comparisonDelta.blockedDelta > 0 ? "text-status-critical" : comparisonDelta.blockedDelta < 0 ? "text-status-pass" : "text-fg-subtle"
-                }`}
-              >
-                {comparisonDelta.blockedDelta > 0 ? (
-                  <ArrowUpRight className="h-3 w-3" />
-                ) : comparisonDelta.blockedDelta < 0 ? (
-                  <ArrowDownRight className="h-3 w-3" />
-                ) : (
-                  <Minus className="h-3 w-3" />
-                )}
-                {comparisonDelta.blockedDelta > 0 ? "+" : ""}
-                {comparisonDelta.blockedDelta.toFixed(1)}% blocked
-              </span>
-            </div>
-          </div>
-        ) : (
-          <div className="rounded-sm border border-border bg-surface-card p-3">
-            <div className="text-xs uppercase tracking-[0.14em] text-fg-muted">
-              Period Comparison
-            </div>
-            <div className="mt-1 text-xs text-fg-subtle">
-              Insufficient data for comparison
-            </div>
-          </div>
-        )}
-
-        {/* SLA compliance gauge */}
-        <div className="flex flex-col gap-1.5 rounded-sm border border-border bg-surface-card p-3">
-          <div className="text-xs uppercase tracking-[0.14em] text-fg-muted">
-            SLA Compliance
-          </div>
-          {mttrData ? (
-            <>
-              <div className="flex items-baseline gap-2">
-                <span
-                  className={`font-mono text-2xl font-semibold tabular-nums ${
-                    mttrData.sla_compliance >= 95
-                      ? "text-status-pass"
-                      : mttrData.sla_compliance >= 80
-                        ? "text-status-medium"
-                        : "text-status-critical"
-                  }`}
-                >
-                  {mttrData.sla_compliance.toFixed(1)}%
-                </span>
-              </div>
-              <div className="h-2 w-full rounded-sm bg-surface-subtle">
-                <div
-                  className={`h-full rounded-sm ${
-                    mttrData.sla_compliance >= 95
-                      ? "bg-status-pass"
-                      : mttrData.sla_compliance >= 80
-                        ? "bg-status-medium"
-                        : "bg-status-critical"
-                  }`}
-                  style={{ width: `${Math.min(mttrData.sla_compliance, 100)}%` }}
-                />
-              </div>
-              <div className="text-xs text-fg-subtle">
-                MTTR: {mttrData.overall_mttr_minutes.toFixed(1)} min
-              </div>
-            </>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Panel title="Finding types" description="Share of detections">
+          {topFindingEntries.length === 0 ? (
+            <EmptyState icon="shield" title="No findings" />
           ) : (
-            <div className="mt-1 text-xs text-fg-subtle">No SLA data</div>
+            <BarList items={topFindingEntries.map(([name, value]) => ({ label: humanizeFindingType(name), value }))} />
           )}
-        </div>
-      </div>
+        </Panel>
 
-      {/* Executive summary */}
-      <div className="rounded-sm border border-border bg-surface-card p-3">
-        <div className="mb-2 text-xs uppercase tracking-[0.14em] text-fg-muted">
-          Executive Summary
-        </div>
-        <ul className="space-y-1 text-xs text-fg-muted">
-          <li className="flex items-center gap-1.5">
-            <span className="text-fg-subtle">&bull;</span>
-            {executiveSummary.totalRequests.toLocaleString("en-US")} requests processed this period
-          </li>
-          <li className="flex items-center gap-1.5">
-            <span className="text-fg-subtle">&bull;</span>
-            {executiveSummary.totalFindings} findings detected
-            {executiveSummary.criticalCount > 0 && (
-              <span className="text-status-critical">({executiveSummary.criticalCount} critical)</span>
-            )}
-            {executiveSummary.totalBlocked > 0 && (
-              <span>, {executiveSummary.totalBlocked} blocked</span>
-            )}
-          </li>
-          <li className="flex items-center gap-1.5">
-            <span className="text-fg-subtle">&bull;</span>
-            MTTR {executiveSummary.mttrTrend === "improving" ? "improved" : executiveSummary.mttrTrend === "worsening" ? "degraded" : "stable"}{" "}
-            at {executiveSummary.mttrMinutes.toFixed(1)} min
-          </li>
-          {executiveSummary.topFinding && (
-            <li className="flex items-center gap-1.5">
-              <span className="text-fg-subtle">&bull;</span>
-              Top finding: <span className="text-status-critical">{humanizeFindingType(executiveSummary.topFinding)}</span>{" "}
-              ({executiveSummary.topFindingCount} occurrences)
-            </li>
-          )}
-          {executiveSummary.totalRedacted > 0 && (
-            <li className="flex items-center gap-1.5">
-              <span className="text-fg-subtle">&bull;</span>
-              {executiveSummary.totalRedacted} requests redacted
-            </li>
-          )}
-        </ul>
-      </div>
-
-      <div>
         <Panel
-          title={`Traffic · ${range === "24h" ? "24 hours" : range === "7d" ? "7 days" : "30 days"}`}
+          title="Latest blocked requests"
           aside={
-            <span className="px-2 text-xs uppercase tracking-[0.18em] text-fg-muted">
-              {chartData.length} pts
-            </span>
+            <Button variant="ghost" size="xs" onClick={exportBlockedCsv} disabled={recentBlocked.length === 0}>
+              <Download />
+              CSV
+            </Button>
           }
-
         >
-          <div className="p-3">
-            {chartData.length === 0 ? (
-              <div className="py-16 text-center text-xs text-fg-muted">no data</div>
-            ) : (
-              <ReportsAreaChart data={chartData} config={CHART_CONFIG} />
-            )}
-          </div>
+          {recentBlocked.length === 0 ? (
+            <EmptyState icon="shield" title="Nothing was blocked" description="No request was blocked in this window." />
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Time</TableHead>
+                  <TableHead>Provider / model</TableHead>
+                  <TableHead>Request</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {recentBlocked.map((e) => (
+                  <TableRow key={e.request_id}>
+                    <TableCell className="font-mono text-xs whitespace-nowrap text-muted-foreground">
+                      {new Date(e.timestamp).toLocaleString("en-GB")}
+                    </TableCell>
+                    <TableCell>
+                      {humanizeProvider(e.provider || "")}
+                      <span className="text-muted-foreground"> / {e.model || "—"}</span>
+                    </TableCell>
+                    <TableCell>
+                      <Link
+                        href={`/dashboard/security?request_id=${encodeURIComponent(e.request_id)}`}
+                        className="font-mono text-xs underline decoration-border-strong underline-offset-4 hover:decoration-foreground"
+                        translate="no"
+                      >
+                        {e.request_id.slice(0, 13)}
+                      </Link>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </Panel>
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-2">
-        <div>
-          <Panel title="Top findings">
-            <div className="space-y-2 p-3">
-              {topFindingEntries.length === 0 ? (
-                <div className="py-6 text-center text-xs text-fg-muted">no findings</div>
-              ) : (
-                topFindingEntries.map(([name, count], i) => (
-                  <ReportsBarRow
-                    key={name}
-                    label={humanizeFindingType(name)}
-                    value={count}
-                    total={topFindingsTotal}
-                    color={
-                      i === 0 ? "bg-status-critical" : i === 1 ? "bg-status-high" : i === 2 ? "bg-status-medium" : "bg-surface-subtle0"
-                    }
-                  />
-                ))
-              )}
-            </div>
-          </Panel>
-        </div>
-
-        <div>
-          <Panel
-            title="Blocked events"
-            aside={
-              <Badge className="rounded-sm border border-status-critical/40 bg-status-critical/10 text-xs uppercase text-status-critical">
-                {recentBlocked.length} BLOCK
-              </Badge>
-            }
-
-          >
-            <div className="space-y-2 p-3">
-              {recentBlocked.length === 0 ? (
-                <div className="py-6 text-center text-xs text-fg-muted">no blocked events in range</div>
-              ) : (
-                recentBlocked.map((e) => (
-                  <div
-                    key={e.request_id}
-                    className="rounded-sm border border-border bg-surface-subtle p-2 hover:border-border-strong"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="text-xs text-fg">{e.request_id.slice(0, 12)}</div>
-                      <ActionBadge action={e.action} />
-                    </div>
-                    <div className="mt-1 text-xs text-fg-muted">
-                      {e.provider || "unknown"} {e.model ? `· ${e.model}` : ""} ·{" "}
-                      {new Date(e.timestamp).toLocaleString("en-GB")}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </Panel>
-        </div>
-      </div>
-
-      <ReportsOwaspAndCompliance owaspCoverageRows={owaspCoverageRows} range={range} adminKey={adminKey} />
+      <ReportsOwaspAndCompliance
+        owaspCoverageRows={owaspCoverageRows}
+        range={range}
+        exportEventsCsv={exportEventsCsv}
+        isExporting={isExporting}
+      />
     </div>
   );
 }

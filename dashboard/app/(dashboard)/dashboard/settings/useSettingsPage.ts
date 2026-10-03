@@ -2,14 +2,15 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, type ApiKey, type Webhook } from "@/lib/api";
+import { api } from "@/lib/api";
 import { type SSOSettings } from "@/lib/api/client";
 import { toast } from "@/lib/toast";
-import { RETENTION_STORAGE, type SettingsTabKey } from "./_constants";
+import { RETENTION_STORAGE, SETTINGS_TAB_IDS } from "./_constants";
 import { useAdminKey } from "@/hooks/useAdminKey";
+import { useEnumParam } from "@/hooks/useUrlState";
 
 export function useSettingsPage() {
-  const [tab, setTab] = useState<SettingsTabKey>("access");
+  const [tab, setTab] = useEnumParam("tab", SETTINGS_TAB_IDS, "access");
   const [adminKey, setAdminKey] = useAdminKey();
   const [draft, setDraft] = useState(adminKey);
   const [saved, setSaved] = useState(adminKey);
@@ -41,18 +42,6 @@ export function useSettingsPage() {
     enabled: tab === "runtime",
   });
 
-  const { data: keyList } = useQuery({
-    queryKey: ["tamga-apikeys", saved],
-    queryFn: () => api.listApiKeys(saved),
-    enabled: !!saved,
-  });
-
-  const { data: hookList } = useQuery({
-    queryKey: ["tamga-webhooks", saved],
-    queryFn: () => api.listWebhooks(saved),
-    enabled: !!saved,
-  });
-
   const {
     data: ssoConfig,
     isLoading: ssoLoading,
@@ -74,69 +63,13 @@ export function useSettingsPage() {
   function saveAdminKey() {
     setAdminKey(draft);
     setSaved(draft);
-    toast.success("Admin key kaydedildi");
+    toast.success("Admin key saved");
   }
 
   function saveRetention() {
     if (typeof window === "undefined") return;
     window.localStorage.setItem(RETENTION_STORAGE, retention);
-    toast.success("Retention updated", `${retention} days (client-side)`);
-  }
-
-  async function createKey(label: string, scope: ApiKey["scope"]) {
-    if (!label.trim()) {
-      toast.error("Label cannot be empty.");
-      return;
-    }
-    try {
-      const created = await api.createApiKey(saved, label.trim(), scope);
-      toast.success("API key created", "shown once");
-      navigator.clipboard?.writeText(created.raw_key).catch(() => {});
-      qc.invalidateQueries({ queryKey: ["tamga-apikeys"] });
-      toast.success("Key copied to clipboard", created.raw_key.slice(0, 12) + "...");
-    } catch (e) {
-      toast.error("Could not create the key", (e as Error).message);
-    }
-  }
-
-  async function removeKey(id: string) {
-    try {
-      await api.deleteApiKey(saved, id);
-      toast.success("API key revoked");
-      qc.invalidateQueries({ queryKey: ["tamga-apikeys"] });
-    } catch (e) {
-      toast.error("Delete failed", (e as Error).message);
-    }
-  }
-
-  async function createHook(payload: Omit<Webhook, "id" | "created_at">) {
-    try {
-      await api.createWebhook(saved, payload);
-      toast.success("Webhook eklendi");
-      qc.invalidateQueries({ queryKey: ["tamga-webhooks"] });
-    } catch (e) {
-      toast.error("Webhook eklenemedi", (e as Error).message);
-    }
-  }
-
-  async function removeHook(id: string) {
-    try {
-      await api.deleteWebhook(saved, id);
-      toast.success("Webhook deleted");
-      qc.invalidateQueries({ queryKey: ["tamga-webhooks"] });
-    } catch (e) {
-      toast.error("Delete failed", (e as Error).message);
-    }
-  }
-
-  async function testHook(id: string) {
-    try {
-      const r = await api.testWebhook(saved, id);
-      if (r.ok) toast.success("Webhook OK", `HTTP ${r.status_code}`);
-      else toast.error("Webhook FAIL", `HTTP ${r.status_code}`);
-    } catch (e) {
-      toast.error("Test failed", (e as Error).message);
-    }
+    toast.success("Dashboard window saved", `${retention} days`);
   }
 
   return {
@@ -149,18 +82,11 @@ export function useSettingsPage() {
     setRetention,
     health,
     runtime,
-    keyList,
-    hookList,
     ssoConfig,
     ssoLoading,
     ssoError,
     saveSSO,
     saveAdminKey,
     saveRetention,
-    createKey,
-    removeKey,
-    createHook,
-    removeHook,
-    testHook,
   };
 }

@@ -1,273 +1,179 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import {
-  ArrowLeft,
-  BadgeCheck,
-  Check,
-  ChevronRight,
-  Copy,
-  ExternalLink,
-  Plug,
-  TriangleAlert,
-} from "lucide-react";
+import { ArrowLeft, ExternalLink, Plus, TriangleAlert } from "lucide-react";
+import { CopyButton } from "@/components/app/copy-button";
+import { DetailList } from "@/components/app/detail-list";
 import { PageHeader } from "@/components/app/page-header";
 import { Panel } from "@/components/app/panel";
+import { StatusBadge } from "@/components/app/status-badge";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { toast } from "@/lib/toast";
-import { toUpperEn } from "@/lib/utils/case";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { IntegrationGuide } from "../_data/guides";
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
-
-function CopyButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <button
-      type="button"
-      onClick={async () => {
-        try {
-          await navigator.clipboard.writeText(text);
-          setCopied(true);
-          toast.success("Copied");
-          setTimeout(() => setCopied(false), 1400);
-        } catch {
-          toast.error("Copy failed");
-        }
-      }}
-      className="inline-flex h-6 items-center gap-1 rounded-sm border border-border bg-surface-subtle px-2 text-xs uppercase tracking-wide text-fg-muted hover:bg-surface-card"
-    >
-      {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-      {copied ? "Copied" : "Copy"}
-    </button>
-  );
-}
 
 function CodeBlock({ lang, content }: { lang: string; content: string }) {
   return (
-    <div className="mt-3 rounded-sm border border-border bg-surface-card">
-      <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
-        <span className="text-xs uppercase tracking-[0.18em] text-fg-muted">{lang}</span>
-        <CopyButton text={content} />
+    <div className="mt-3 border bg-background">
+      <div className="flex items-center justify-between border-b py-1 pr-1 pl-3">
+        <span className="font-mono text-[11px] tracking-[0.1em] text-muted-foreground uppercase">{lang}</span>
+        <CopyButton value={content} label={`${lang} snippet`} size="xs">
+          Copy
+        </CopyButton>
       </div>
-      <pre className="overflow-x-auto px-3 py-2 text-xs leading-5 text-fg whitespace-pre-wrap wrap-break-word">
+      <pre className="overflow-x-auto p-3 font-mono text-xs leading-5" tabIndex={0} translate="no">
         {content}
       </pre>
     </div>
   );
 }
 
-export function GuideView({ guide }: { guide: IntegrationGuide }) {
+function Note({ children }: { children: React.ReactNode }) {
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-fg-muted">
-        <Link href="/dashboard/integrations" className="inline-flex items-center gap-1 hover:text-fg-subtle">
-          <ArrowLeft className="h-3 w-3" /> Back to integrations
-        </Link>
-        <ChevronRight className="h-3 w-3 text-fg-muted" />
-        <span className="text-fg-muted">{guide.name}</span>
-      </div>
+    <p className="mt-3 flex items-start gap-2 border border-status-medium/40 bg-status-medium-bg p-3 text-sm text-status-medium">
+      <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
+      <span>{children}</span>
+    </p>
+  );
+}
+
+export function GuideView({ guide }: { guide: IntegrationGuide }) {
+  const connectHref = `/dashboard/integrations?connect=${guide.kind}`;
+
+  return (
+    <div className="space-y-6">
+      <Link
+        href="/dashboard/integrations"
+        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+      >
+        <ArrowLeft className="size-4" aria-hidden />
+        All integrations
+      </Link>
 
       <PageHeader
-        title={`${guide.name} setup guide`}
+        title={`${guide.name} setup`}
         description={guide.overview}
         actions={
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1 rounded-sm border border-status-pass/60 bg-status-pass/30 px-2 py-1 text-xs uppercase tracking-wide text-status-pass">
-              <BadgeCheck className="h-3 w-3" /> verified {guide.lastVerified}
-            </span>
-            <Link href={`/dashboard/integrations?connect=${guide.kind}`} className="inline-flex">
-              <Button >
-                <Plug className="mr-1 h-3.5 w-3.5" /> Connect now
-              </Button>
+          <Button asChild size="sm">
+            <Link href={connectHref}>
+              <Plus />
+              Connect {guide.name}
             </Link>
-          </div>
+          </Button>
         }
       />
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="space-y-4">
-          <div>
-            <section className="rounded-sm border border-border bg-surface-card p-4">
-              <div className="mb-2 text-xs uppercase tracking-[0.18em] text-fg-muted">
-                Overview
-              </div>
-              <p className="text-sm leading-6 text-fg-muted">{guide.overview}</p>
-              {guide.docsLinks.length > 0 ? (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {guide.docsLinks.map((d) => (
-                    <a
-                      key={d.href}
-                      href={d.href}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1 rounded-sm border border-border bg-surface-subtle px-2 py-1 text-xs text-fg-muted hover:bg-surface-card"
-                    >
-                      {d.label} <ExternalLink className="h-3 w-3" />
-                    </a>
-                  ))}
-                </div>
-              ) : null}
-            </section>
-          </div>
-
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="min-w-0 space-y-6">
           {guide.prerequisites.length > 0 ? (
-            <div>
-              <section className="rounded-sm border border-border bg-surface-card p-4">
-                <div className="mb-2 text-xs uppercase tracking-[0.18em] text-fg-muted">
-                  Prerequisites
-                </div>
-                <ul className="space-y-1.5 text-sm text-fg-muted">
-                  {guide.prerequisites.map((p) => (
-                    <li key={p} className="flex items-start gap-2">
-                      <Check className="mt-0.5 h-3.5 w-3.5 flex-none text-status-pass" />
-                      <span>{p}</span>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            </div>
+            <Panel title="Before you start">
+              <ul className="list-disc space-y-1.5 py-4 pr-4 pl-8 text-sm text-fg-muted marker:text-fg-faint">
+                {guide.prerequisites.map((p) => (
+                  <li key={p}>{p}</li>
+                ))}
+              </ul>
+            </Panel>
           ) : null}
 
-          <div>
-            <section className="space-y-3">
-              <div className="text-xs uppercase tracking-[0.18em] text-fg-muted">
-                Setup steps
-              </div>
-              <ol className="space-y-3">
-                {guide.steps.map((s, i) => (
-                  <li
-                    key={`${i}-${s.title}`}
-                    className="rounded-sm border border-border bg-surface-card p-4"
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="mt-0.5 inline-flex h-6 w-6 flex-none items-center justify-center rounded-sm border border-border-strong bg-surface-subtle text-xs text-fg-muted">
-                        {String(i + 1).padStart(2, "0")}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm font-medium text-fg">{s.title}</div>
-                        <p className="mt-1 text-sm leading-6 text-fg-muted">{s.body}</p>
-                        {s.code ? <CodeBlock lang={s.code.lang} content={s.code.content} /> : null}
-                        {s.note ? (
-                          <div className="mt-3 flex items-start gap-2 rounded-sm border border-status-medium/50 bg-status-medium/20 p-2 text-[12px] text-status-medium">
-                            <TriangleAlert className="mt-0.5 h-3.5 w-3.5 flex-none" />
-                            <span>{s.note}</span>
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            </section>
-          </div>
+          <Panel title="Steps" aside={`${guide.steps.length} steps`}>
+            <ol className="divide-y">
+              {guide.steps.map((s, i) => (
+                <li key={`${i}-${s.title}`} className="flex gap-4 p-4">
+                  <span className="font-mono text-sm text-fg-faint tabular-nums" aria-hidden>
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-sm font-medium">{s.title}</h3>
+                    <p className="mt-1 text-sm leading-relaxed text-fg-muted">{s.body}</p>
+                    {s.code ? <CodeBlock lang={s.code.lang} content={s.code.content} /> : null}
+                    {s.note ? <Note>{s.note}</Note> : null}
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </Panel>
 
           {guide.headers && guide.headers.length > 0 ? (
-            <div>
-              <section className="rounded-sm border border-border bg-surface-card p-4">
-                <div className="mb-2 text-xs uppercase tracking-[0.18em] text-fg-muted">
-                  Required headers
-                </div>
-                <div className="overflow-x-auto">
-                  <Table className="w-full text-left">
-                    <TableHeader className="uppercase">
-                      <TableRow>
-                        <TableHead>Key</TableHead>
-                        <TableHead>Value hint</TableHead>
-                        <TableHead>Note</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {guide.headers.map((h) => (
-                        <TableRow key={h.key}>
-                          <TableCell>{h.key}</TableCell>
-                          <TableCell>{h.valueHint}</TableCell>
-                          <TableCell>{h.note ?? "—"}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </section>
-            </div>
+            <Panel title="Required headers">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Header</TableHead>
+                    <TableHead>Value</TableHead>
+                    <TableHead>Note</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {guide.headers.map((h) => (
+                    <TableRow key={h.key}>
+                      <TableCell className="font-mono text-xs">{h.key}</TableCell>
+                      <TableCell className="font-mono text-xs text-muted-foreground">{h.valueHint}</TableCell>
+                      <TableCell className="whitespace-normal text-muted-foreground">{h.note ?? "—"}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Panel>
           ) : null}
 
-          <div>
-            <Panel
-              title={`payload.${guide.payloadPreview.lang}`}
-              aside={
-                <span className="px-2 text-xs uppercase tracking-[0.18em] text-fg-muted">
-                  preview
-                </span>
-              }
+          <Panel
+            title="What Tamga sends"
+            aside={<CopyButton value={guide.payloadPreview.content} label="example payload" size="xs">Copy</CopyButton>}
+          >
+            <pre className="overflow-x-auto p-4 font-mono text-xs leading-5" tabIndex={0} translate="no">
+              {guide.payloadPreview.content}
+            </pre>
+          </Panel>
 
-            >
-              <pre className="overflow-x-auto px-3 py-3 text-xs leading-5 text-fg whitespace-pre-wrap wrap-break-word">
-                {guide.payloadPreview.content}
-              </pre>
-            </Panel>
-          </div>
-
-          <div>
-            <section className="rounded-sm border border-border bg-surface-card p-4">
-              <div className="mb-2 text-xs uppercase tracking-[0.18em] text-fg-muted">
-                Caveats &amp; gotchas
-              </div>
-              <ul className="space-y-3">
+          {guide.gotchas.length > 0 ? (
+            <Panel title="Things that go wrong">
+              <ul className="divide-y">
                 {guide.gotchas.map((g) => (
-                  <li key={g.title} className="rounded-sm border border-border bg-black/40 p-3">
-                    <div className="flex items-start gap-2">
-                      <TriangleAlert className="mt-0.5 h-3.5 w-3.5 flex-none text-status-medium" />
-                      <div>
-                        <div className="text-sm font-medium text-fg">{g.title}</div>
-                        <p className="mt-1 text-sm leading-6 text-fg-muted">{g.body}</p>
-                      </div>
-                    </div>
+                  <li key={g.title} className="p-4">
+                    <h3 className="text-sm font-medium">{g.title}</h3>
+                    <p className="mt-1 text-sm leading-relaxed text-fg-muted">{g.body}</p>
                   </li>
                 ))}
               </ul>
-            </section>
-          </div>
+            </Panel>
+          ) : null}
         </div>
 
-        <aside className="space-y-4">
-          <div>
-            <section className="rounded-sm border border-border bg-surface-card p-4">
-              <div className="mb-2 text-xs uppercase tracking-[0.18em] text-fg-muted">
-                Summary
-              </div>
-              <div className="space-y-2 text-xs">
-                <div>
-                  <span className="text-xs uppercase tracking-wide text-fg-muted">kind</span>
-                  <div>
-                    <Badge className={`rounded-sm border text-xs uppercase ${guide.badge}`}>
-                      {guide.kind}
-                    </Badge>
-                  </div>
-                </div>
-                <div>
-                  <span className="text-xs uppercase tracking-wide text-fg-muted">url pattern</span>
-                  <div className="mt-1 break-all rounded-sm border border-border bg-black/40 px-2 py-1 text-xs text-fg-muted">
-                    {guide.urlHint}
-                  </div>
-                </div>
-                <div>
-                  <span className="text-xs uppercase tracking-wide text-fg-muted">last verified</span>
-                  <div className="text-xs text-fg-muted">{guide.lastVerified}</div>
-                </div>
-              </div>
-            </section>
-          </div>
+        <aside className="space-y-6">
+          <Panel title="At a glance">
+            <DetailList
+              items={[
+                { label: "Kind", value: <StatusBadge>{guide.kind}</StatusBadge> },
+                { label: "Instructions checked", value: guide.lastVerified, mono: true },
+              ]}
+            />
+            <div className="border-t px-4 py-3">
+              <p className="text-xs text-muted-foreground">URL pattern</p>
+              <p className="mt-1 font-mono text-xs break-all text-fg-muted" translate="no">
+                {guide.urlHint}
+              </p>
+            </div>
+          </Panel>
 
-          <div>
-            <Link
-              href={`/dashboard/integrations?connect=${guide.kind}`}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-sm bg-status-critical px-3 py-2 text-xs uppercase tracking-wide text-white hover:bg-status-critical"
-            >
-              <Plug className="h-3.5 w-3.5" /> Connect now
-            </Link>
-          </div>
+          {guide.docsLinks.length > 0 ? (
+            <Panel title="Vendor documentation">
+              <ul className="divide-y text-sm">
+                {guide.docsLinks.map((d) => (
+                  <li key={d.href}>
+                    <a
+                      href={d.href}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-accent"
+                    >
+                      <span>{d.label}</span>
+                      <ExternalLink className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                      <span className="sr-only">(opens in a new tab)</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </Panel>
+          ) : null}
         </aside>
       </div>
     </div>

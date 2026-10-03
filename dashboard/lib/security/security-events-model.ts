@@ -1,11 +1,9 @@
 import type { SecurityEvent } from "@/lib/api";
 import { toLowerEn } from "@/lib/utils/case";
-import { severityRank as _severityRank } from "@/lib/badges";
 
 import type { TimeRange } from "@/lib/types";
 
 export { ADMIN_KEY_STORAGE } from "@/hooks/useAdminKey";
-export const DENSITY_STORAGE = "tamga_security_density";
 export const SAVED_VIEWS_STORAGE = "tamga_security_saved_views_v2";
 export const INCIDENT_OPS_STORAGE = "tamga_security_incident_ops_v2";
 export const INCIDENT_COMMENTS_STORAGE = "tamga_security_comments_v2";
@@ -37,7 +35,6 @@ export type SeverityFilter = (typeof VALID_SEVERITIES)[number];
 export type TriageFilter = (typeof VALID_TRIAGE)[number];
 export type AssigneeFilter = (typeof VALID_ASSIGNEE)[number];
 export type ProviderFilter = (typeof VALID_PROVIDERS)[number];
-export type DensityMode = "comfortable" | "compact";
 export type TriageStatus = "Open" | "In Progress" | "Closed" | "False Positive";
 
 export type SavedView = {
@@ -67,13 +64,25 @@ export function validateParam<T extends string>(value: string | null, valid: rea
  * Numeric rank for severity sorting, delegates to shared badge library.
  * Accepts undefined for backward compatibility (returns 0).
  */
+/** Numeric rank for sorting by severity: critical 4, high 3, medium 2, low 1, anything else 0. */
 export function severityRank(severity?: string): number {
-  return _severityRank(severity || "");
+  switch (toLowerEn(severity || "")) {
+    case "critical":
+      return 4;
+    case "high":
+      return 3;
+    case "medium":
+      return 2;
+    case "low":
+      return 1;
+    default:
+      return 0;
+  }
 }
 
 export function primarySeverity(findings: SecurityEvent["findings"] | undefined) {
   if (!findings || findings.length === 0) return "none";
-  const top = findings.reduce((a, b) => (_severityRank(a?.severity || "") >= _severityRank(b?.severity || "") ? a : b));
+  const top = findings.reduce((a, b) => (severityRank(a?.severity || "") >= severityRank(b?.severity || "") ? a : b));
   return toLowerEn(top?.severity || "none");
 }
 

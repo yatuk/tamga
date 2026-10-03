@@ -54,10 +54,10 @@ export function usePlaygroundPage() {
           : `# Incident ${prefillRequestId.slice(0, 12)}\n# No flagged fragments available.`;
         setPrompt(reconstructed);
         setPrefilled(true);
-        toast.success(`Loaded incident ${prefillRequestId.slice(0, 12)}`);
+        toast.success("Incident loaded", prefillRequestId.slice(0, 13));
       } catch (err) {
         if (cancelled) return;
-        toast.error(`Failed to load incident: ${(err as Error).message}`);
+        toast.error("Could not load the incident", (err as Error).message);
         setPrefilled(true);
       }
     })();
@@ -78,7 +78,7 @@ export function usePlaygroundPage() {
 
   async function runSimulate() {
     if (!prompt.trim()) {
-      toast.error("Prompt is empty");
+      toast.error("Enter a prompt to test");
       return;
     }
     setRunning(true);
@@ -86,7 +86,7 @@ export function usePlaygroundPage() {
       const res = await api.simulatePolicy(adminKey, effectiveYaml, prompt);
       setResult(res);
     } catch (e) {
-      toast.error("Simulation failed", (e as Error).message);
+      toast.error("Could not run the simulation", (e as Error).message);
     } finally {
       setRunning(false);
     }
@@ -101,19 +101,19 @@ export function usePlaygroundPage() {
   -H "Content-Type: application/json" \\
   -d '${payload.replaceAll("'", "\\'")}'`;
     navigator.clipboard.writeText(cmd);
-    toast.success("COPY CURL", "clipboard");
+    toast.success("cURL command copied");
   }
 
   function copyJson() {
     const payload = JSON.stringify({ policy_yaml: effectiveYaml, sample_text: prompt }, null, 2);
     navigator.clipboard.writeText(payload);
-    toast.success("COPY JSON", "clipboard");
+    toast.success("Result copied");
   }
 
   function loadBundledSamples() {
     setBatchSamples(BUNDLED_REDTEAM);
     setBatchRows([]);
-    toast.success("RED TEAM", `${BUNDLED_REDTEAM.length} sample loaded`);
+    toast.success("Samples loaded", `${BUNDLED_REDTEAM.length} bundled prompts`);
   }
 
   function onUploadCsv(ev: React.ChangeEvent<HTMLInputElement>) {
@@ -123,12 +123,12 @@ export function usePlaygroundPage() {
     reader.onload = () => {
       const samples = parseRedTeamCsv(String(reader.result || ""));
       if (samples.length === 0) {
-        toast.error("CSV empty", "no valid rows (expected id,category,expected,prompt)");
+        toast.error("No usable rows in the CSV", "Expected the columns id, category, expected_action, prompt.");
         return;
       }
       setBatchSamples(samples);
       setBatchRows([]);
-      toast.success("RED TEAM", `${samples.length} sample loaded from ${file.name}`);
+      toast.success("Samples loaded", `${samples.length} prompts from ${file.name}`);
     };
     reader.readAsText(file);
     ev.target.value = "";
@@ -136,7 +136,7 @@ export function usePlaygroundPage() {
 
   async function runBatch() {
     if (batchSamples.length === 0) {
-      toast.error("Red team set is empty", "Load the samples or pick a CSV first");
+      toast.error("No samples loaded", "Load the bundled samples or upload a CSV first.");
       return;
     }
     setBatchRunning(true);
@@ -168,7 +168,7 @@ export function usePlaygroundPage() {
     setBatchRunning(false);
     const miss = results.filter((r) => r.outcome === "miss").length;
     const fp = results.filter((r) => r.outcome === "fp").length;
-    toast.success("RED TEAM DONE", `miss ${miss} · fp ${fp} · n ${results.length}`);
+    toast.success("Batch finished", `${results.length} prompts, ${miss} missed, ${fp} false positives`);
   }
 
   const batchSummary = useMemo(() => {

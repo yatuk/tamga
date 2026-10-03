@@ -59,30 +59,34 @@ export function useIntegrationsPage() {
       }
       return api.createWebhook(adminKey, body);
     },
-    onSuccess: () => {
-      toast.success("Integration connected");
+    onSuccess: (_res, d) => {
+      toast.success("Destination connected", d.label || d.kind);
       setDraft(null);
       qc.invalidateQueries({ queryKey: ["tamga-webhooks-integrations", adminKey] });
     },
-    onError: (e: Error) => toast.error("Create failed", e.message),
+    onError: (e: Error) => toast.error("Could not connect the destination", e.message),
   });
 
   const testMut = useMutation({
     mutationFn: (id: string) => api.testWebhook(adminKey, id),
-    onSuccess: (res) => toast.success("TEST", `status ${res.status_code}`),
-    onError: (e: Error) => toast.error("Test failed", e.message),
+    onSuccess: (res) =>
+      res.ok
+        ? toast.success("Test delivered", `HTTP ${res.status_code}`)
+        : toast.error("The destination rejected the test", `HTTP ${res.status_code}`),
+    onError: (e: Error) => toast.error("Could not send the test", e.message),
   });
 
   const deleteMut = useMutation({
     mutationFn: (id: string) => api.deleteWebhook(adminKey, id),
     onSuccess: () => {
-      toast.success("Disconnected");
+      toast.success("Destination disconnected");
       qc.invalidateQueries({ queryKey: ["tamga-webhooks-integrations", adminKey] });
     },
-    onError: (e: Error) => toast.error("Delete failed", e.message),
+    onError: (e: Error) => toast.error("Could not disconnect the destination", e.message),
   });
 
   return {
+    adminKey,
     draft,
     setDraft,
     hooks,

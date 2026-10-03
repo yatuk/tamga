@@ -1,315 +1,122 @@
 "use client";
 
-import { useMemo } from "react";
-import { Stat, StatGrid } from "@/components/app/stat";
+import { BarList } from "@/components/app/bar-list";
 import { PageHeader } from "@/components/app/page-header";
-import { EmptyState } from "@/components/app/states";
-import { HealthScoreBadge } from "@/components/common/HealthScoreBadge";
 import { Panel } from "@/components/app/panel";
-import { Badge } from "@/components/ui/badge";
+import { Stat, StatGrid } from "@/components/app/stat";
+import { AdminKeyRequired, EmptyState, ErrorState, SkeletonRows } from "@/components/app/states";
+import { StatusBadge, type Tone } from "@/components/app/status-badge";
+import { useAdminKey } from "@/hooks/useAdminKey";
+import { formatInt } from "@/lib/utils/format";
 import type { ScannerPoolPageData } from "./useScannerPoolPage";
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 
-function scannerDotColor(ms: number): string {
-  if (ms < 500) return "bg-status-pass";
-  if (ms < 2000) return "bg-status-medium";
-  return "bg-status-critical";
-}
+/** A share of jobs dropped under load above this is worth acting on. */
+const SHED_WARN_PCT = 5;
+const SHED_CRITICAL_PCT = 15;
 
-function throughputColor(utilization: number): string {
-  if (utilization > 0.5) return "bg-status-pass";
-  if (utilization > 0.2) return "bg-status-medium";
-  return "bg-surface-subtle0";
-}
+export function ScannerPoolBody({ poolEnabled, pool, scannerCount, pipelineMode, loading, error }: ScannerPoolPageData) {
+  const [adminKey] = useAdminKey();
 
-const BAR_HEIGHTS = [0.4, 0.65, 0.5, 0.8, 0.7, 0.55];
+  const shedPct = pool && pool.jobsSubmitted > 0 ? (pool.jobsShed / pool.jobsSubmitted) * 100 : 0;
+  const queuePct = pool && pool.queueSize > 0 ? Math.min(100, (pool.queueDepth / pool.queueSize) * 100) : 0;
+  const utilPct = pool ? pool.utilization * 100 : 0;
+  const workers = pool ? pool.workersActive + pool.workersIdle : 0;
+  const scanners = pool ? Object.entries(pool.perScannerDurationMs).sort(([, a], [, b]) => b - a) : [];
 
-export function ScannerPoolBody({
-  poolEnabled,
-  pool,
-  scannerCount,
-  pipelineMode,
-  loading,
-  error,
-}: ScannerPoolPageData) {
-  const poolHealthScore = useMemo(() => {
-    if (!pool) return 50;
-    // Higher utilization + higher failure rate = lower score
-    const utilDeduction = Math.min(60, pool.utilization * 60);
-    const failRate = pool.jobsSubmitted > 0 ? pool.jobsFailed / pool.jobsSubmitted : 0;
-    const failDeduction = Math.min(40, failRate * 100);
-    return Math.max(0, Math.round(100 - utilDeduction - failDeduction));
-  }, [pool]);
+  const state: { label: string; tone: Tone } | null = !pool || !poolEnabled
+    ? null
+    : shedPct >= SHED_CRITICAL_PCT || queuePct >= 80
+      ? { label: "Overloaded", tone: "critical" }
+      : shedPct >= SHED_WARN_PCT || queuePct >= 50 || utilPct > 80
+        ? { label: "Under pressure", tone: "medium" }
+        : { label: "Keeping up", tone: "pass" };
 
-  const shedRate = useMemo(() => {
-    if (!pool || pool.jobsSubmitted === 0) return 0;
-    return (pool.jobsShed / pool.jobsSubmitted) * 100;
-  }, [pool]);
+  const header = (
+    <PageHeader
+      title="Scanner pool"
+      description={
+        <>
+          The worker pool that runs the scanners. Pipeline mode <span className="font-mono text-xs">{pipelineMode}</span>,
+          refreshed every 5 seconds.
+        </>
+      }
+      actions={state ? <StatusBadge tone={state.tone}>{state.label}</StatusBadge> : undefined}
+    />
+  );
 
-  const queueFillPct = useMemo(() => {
-    if (!pool || pool.queueSize === 0) return 0;
-    return Math.min(100, (pool.queueDepth / pool.queueSize) * 100);
-  }, [pool]);
-
-  const queueColor = useMemo(() => {
-    if (queueFillPct >= 80) return "bg-status-critical";
-    if (queueFillPct >= 50) return "bg-status-medium";
-    return "bg-status-pass";
-  }, [queueFillPct]);
-
-  const shedColor = useMemo(() => {
-    if (shedRate >= 15) return "text-status-critical";
-    if (shedRate >= 5) return "text-status-medium";
-    return "text-status-pass";
-  }, [shedRate]);
-
-  const scannerNames = useMemo(() => {
-    if (!pool) return [];
-    return Object.keys(pool.perScannerDurationMs);
-  }, [pool]);
+  if (!adminKey || error || (loading && !pool) || !poolEnabled || !pool) {
+    return (
+      <div className="space-y-6">
+        {header}
+        <Panel>
+          {!adminKey ? (
+            <AdminKeyRequired />
+          ) : error ? (
+            <ErrorState title="Could not load the pool metrics" error={error} />
+          ) : loading && !pool ? (
+            <SkeletonRows rows={5} />
+          ) : (
+            <EmptyState
+              icon="database"
+              title="The worker pool is not enabled"
+              description={
+                <>
+                  The proxy is scanning in its default mode. Set{" "}
+                  <span className="font-mono">TAMGA_SCANNER_WORKER_POOL_SIZE</span> to a positive number and{" "}
+                  <span className="font-mono">TAMGA_SCANNER_PIPELINE_MODE</span> to{" "}
+                  <span className="font-mono">workerpool</span> to bound scan concurrency and see its metrics here.
+                </>
+              }
+            />
+          )}
+        </Panel>
+      </div>
+    );
+  }
 
   return (
-    <div>
-      <PageHeader
-        title="Scanner Pool"
-        description={`Pipeline mode: ${pipelineMode}`}
-        actions={
-          pool ? (
-            <HealthScoreBadge score={poolHealthScore} label="pool" size="sm" showScore />
-          ) : undefined
-        }
-      />
+    <div className="space-y-6">
+      {header}
 
-      {error && (
-        <div className="rounded-lg border border-status-critical/50 bg-status-critical/30 px-4 py-3 text-sm text-status-critical mb-6">
-          {error}
-        </div>
-      )}
-
-      {loading && !pool && (
-        <StatGrid>
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-24 animate-pulse rounded-xl bg-surface-elevated/50"
-            />
-          ))}
-        </StatGrid>
-      )}
-
-      {!poolEnabled && !loading && (
-        <EmptyState
-          title="Worker Pool Not Active"
-          description="Set TAMGA_SCANNER_WORKER_POOL_SIZE to a positive integer (e.g. 4) and TAMGA_SCANNER_PIPELINE_MODE to 'workerpool' to activate bounded-concurrency scanning."
+      <StatGrid>
+        <Stat
+          label="Workers busy"
+          value={`${pool.workersActive} / ${workers}`}
+          hint={`${utilPct.toFixed(0)}% utilisation`}
+          tone={utilPct > 80 ? "warn" : "default"}
         />
-      )}
+        <Stat
+          label="Queue"
+          value={`${formatInt(pool.queueDepth)} / ${formatInt(pool.queueSize)}`}
+          hint={`${queuePct.toFixed(0)}% full`}
+          tone={queuePct >= 80 ? "critical" : queuePct >= 50 ? "warn" : "default"}
+          tooltip="Scan jobs waiting for a free worker, against the queue capacity."
+        />
+        <Stat
+          label="Jobs shed"
+          value={formatInt(pool.jobsShed)}
+          hint={`${shedPct.toFixed(1)}% of submitted`}
+          tone={shedPct >= SHED_CRITICAL_PCT ? "critical" : shedPct >= SHED_WARN_PCT ? "warn" : "default"}
+          tooltip="Jobs dropped because the queue was full. Add workers or queue capacity if this grows."
+        />
+        <Stat label="Jobs failed" value={formatInt(pool.jobsFailed)} tone={pool.jobsFailed > 0 ? "critical" : "default"} />
+        <Stat label="Jobs submitted" value={formatInt(pool.jobsSubmitted)} />
+        <Stat label="Jobs completed" value={formatInt(pool.jobsCompleted)} />
+        <Stat label="Scanners" value={formatInt(scannerCount)} tooltip="Detectors registered with the proxy." />
+      </StatGrid>
 
-      {pool && poolEnabled && (
-        <>
-          {/* Metric cards */}
-          <StatGrid>
-            <Stat
-              label="Active Workers"
-              value={`${pool.workersActive} / ${pool.workersActive + pool.workersIdle}`}
-              tone="pass"
-            />
-            <Stat
-              label="Jobs Completed"
-              value={pool.jobsCompleted.toLocaleString("en-US")}
-              tone="pass"
-            />
-            <Stat
-              label="Jobs Failed"
-              value={pool.jobsFailed.toLocaleString("en-US")}
-              tone={pool.jobsFailed > 0 ? "critical" : "default"}
-            />
-            <Stat
-              label="Scanners Registered"
-              value={scannerCount.toString()}
-            />
-          </StatGrid>
-
-          {/* Second row: utilization + throughput + shed + queue bar */}
-          <StatGrid>
-            <Stat
-              label="Utilization"
-              value={`${(pool.utilization * 100).toFixed(1)}%`}
-              tone={
-                pool.utilization > 0.8
-                  ? "critical"
-                  : pool.utilization > 0.5
-                    ? "warn"
-                    : "pass"
-              }
-            />
-            <Stat
-              label="Jobs Submitted"
-              value={pool.jobsSubmitted.toLocaleString("en-US")}
-            />
-            <Stat
-              label="Jobs Shed"
-              value={pool.jobsShed.toLocaleString("en-US")}
-              tone={pool.jobsShed > 0 ? "critical" : "default"}
-              tooltip={
-                shedRate > 0
-                  ? `Shed rate: ${shedRate.toFixed(1)}% of submitted jobs`
-                  : "No jobs have been shed"
-              }
-            />
-            <Stat
-              label="Queue Depth"
-              value={`${pool.queueDepth} / ${pool.queueSize}`}
-              tone={
-                queueFillPct >= 80
-                  ? "critical"
-                  : queueFillPct >= 50
-                    ? "warn"
-                    : "pass"
-              }
-            />
-          </StatGrid>
-
-          {/* Throughput sparkline + shed gauge + queue bar + scanner dots */}
-          <div className="grid gap-4 sm:grid-cols-2 mb-6">
-            {/* Throughput sparkline */}
-            <div className="rounded-sm border border-border bg-surface-card p-3">
-              <div className="text-xs uppercase tracking-[0.12em] text-fg-subtle mb-2">
-                Throughput Trend
-              </div>
-              <div className="flex items-end gap-1 h-10">
-                {BAR_HEIGHTS.map((h, i) => (
-                  <div
-                    key={i}
-                    className={`flex-1 rounded-t-sm ${throughputColor(pool.utilization)}`}
-                    style={{ height: `${h * 100}%` }}
-                    title={`Slot ${i + 1}`}
-                  />
-                ))}
-              </div>
-              <div className="mt-1 text-xs text-fg-subtle text-right">
-                {pool.jobsCompleted > 0 ? `${pool.jobsCompleted.toLocaleString("en-US")} completed` : "no data yet"}
-              </div>
-            </div>
-
-            {/* Shed rate gauge */}
-            <div className="rounded-sm border border-border bg-surface-card p-3">
-              <div className="flex items-center justify-between mb-2">
-                <div className="text-xs uppercase tracking-[0.12em] text-fg-subtle">
-                  Shed Rate
-                </div>
-                <span className={`font-mono text-lg font-semibold ${shedColor}`}>
-                  {shedRate.toFixed(1)}%
-                </span>
-              </div>
-              <div className="h-1.5 rounded-sm bg-surface-subtle overflow-hidden">
-                <div
-                  className="h-full transition-[width]"
-                  style={{
-                    width: `${Math.min(100, shedRate)}%`,
-                    backgroundColor:
-                      shedRate >= 15 ? "var(--status-critical)" : shedRate >= 5 ? "var(--status-medium)" : "var(--status-pass)",
-                  }}
-                />
-              </div>
-              <div className="mt-1 text-xs text-fg-subtle">
-                {shedRate < 5 ? "healthy" : shedRate < 15 ? "elevated" : "critical"}
-              </div>
-            </div>
-          </div>
-
-          {/* Queue depth bar */}
-          <div className="rounded-sm border border-border bg-surface-card p-3 mb-6">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-xs uppercase tracking-[0.12em] text-fg-subtle">
-                Queue Depth
-              </div>
-              <span className="font-mono text-xs text-fg-muted">
-                {pool.queueDepth} / {pool.queueSize}
-              </span>
-            </div>
-            <div className="h-2 rounded-sm bg-surface-subtle overflow-hidden">
-              <div
-                className={`h-full transition-[width] ${queueColor}`}
-                style={{ width: `${queueFillPct}%` }}
-              />
-            </div>
-            <div className="mt-1 flex justify-between text-xs text-fg-subtle">
-              <span>0</span>
-              <span>{pool.queueSize}</span>
-            </div>
-          </div>
-
-          {/* Scanner instance status dots */}
-          {scannerNames.length > 0 && (
-            <div className="rounded-sm border border-border bg-surface-card p-3 mb-6">
-              <div className="text-xs uppercase tracking-[0.12em] text-fg-subtle mb-3">
-                Scanner Instances
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                {scannerNames.map((name) => {
-                  const ms = pool.perScannerDurationMs[name];
-                  return (
-                    <div key={name} className="flex items-center gap-1.5">
-                      <span
-                        className={`inline-block h-2.5 w-2.5 rounded-full ${scannerDotColor(ms)}`}
-                        title={`${name}: ${ms.toFixed(2)} ms`}
-                      />
-                      <span className="font-mono text-xs text-fg-muted">
-                        {name}
-                      </span>
-                      <Badge className="rounded-sm border border-border-strong/30 bg-surface-subtle0/10 text-xs text-fg-subtle">
-                        {ms.toFixed(0)}ms
-                      </Badge>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Per-scanner latency table */}
-          {Object.keys(pool.perScannerDurationMs).length > 0 && (
-            <Panel
-              title="Per-Scanner Mean Latency"
-            >
-              <div className="overflow-x-auto">
-                <Table className="w-full">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-left">Scanner</TableHead>
-                      <TableHead className="text-right">Mean Latency</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {Object.entries(pool.perScannerDurationMs)
-                      .sort(([, a], [, b]) => b - a)
-                      .map(([name, ms]) => (
-                        <TableRow
-                          key={name}
-                        >
-                          <TableCell className="font-mono">{name}</TableCell>
-                          <TableCell className="text-right font-mono">
-                            {ms.toFixed(2)} ms
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </Panel>
-          )}
-
-          {/* All-clear when no per-scanner data yet */}
-          {Object.keys(pool.perScannerDurationMs).length === 0 && (
-            <Panel title="Per-Scanner Mean Latency">
-              <div className="px-4 py-8 text-center text-sm text-fg-subtle">
-                No scan jobs completed yet. Per-scanner latency will appear here
-                once the pool processes requests.
-              </div>
-            </Panel>
-          )}
-        </>
-      )}
+      <Panel title="Mean scan time by scanner" description="Slowest first">
+        {scanners.length === 0 ? (
+          <EmptyState icon="chart" title="No scans yet" description="Timings appear once the pool has processed a request." />
+        ) : (
+          <BarList
+            scale="max"
+            mono
+            items={scanners.map(([label, value]) => ({ label, value }))}
+            formatValue={(ms) => `${ms.toFixed(2)} ms`}
+          />
+        )}
+      </Panel>
     </div>
   );
 }

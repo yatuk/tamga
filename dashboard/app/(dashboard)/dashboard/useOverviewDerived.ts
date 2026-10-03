@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { type DashboardStatsV2, type MTTRStats, type SecurityEvent } from "@/lib/api";
 import { pctDelta } from "@/components/common/Sparkline";
-import type { RangeMode } from "./overviewConstants";
+import type { TimeRange as RangeMode } from "@/lib/types";
 import { buildIncidentsHref, mapToTopArray } from "./overviewHelpers";
 import { toUpperEn, toLowerEn } from "@/lib/utils/case";
 

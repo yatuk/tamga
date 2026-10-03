@@ -1,57 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { integrationKindBadge, defaultHeadersForIntegration } from "./integrationWebhookHelpers";
-
-describe("integrationKindBadge", () => {
-  it("returns slack style for slack", () => {
-    expect(integrationKindBadge("slack")).toContain("border");
-  });
-
-  it("returns teams style for teams", () => {
-    expect(integrationKindBadge("teams")).toContain("bg");
-  });
-
-  it("returns splunk style for splunk", () => {
-    expect(integrationKindBadge("splunk")).toContain("status-pass");
-  });
-
-  it("returns splunk style for splunk_hec", () => {
-    expect(integrationKindBadge("splunk_hec")).toContain("status-pass");
-  });
-
-  it("returns sentinel style for sentinel", () => {
-    expect(integrationKindBadge("sentinel")).toContain("status-low");
-  });
-
-  it("returns qradar style for qradar", () => {
-    expect(integrationKindBadge("qradar")).toContain("status-medium");
-  });
-
-  it("returns datadog style for datadog", () => {
-    expect(integrationKindBadge("datadog")).toContain("fg-muted");
-  });
-
-  it("returns jira style for jira", () => {
-    expect(integrationKindBadge("jira")).toContain("status-low");
-  });
-
-  it("returns pagerduty style for pagerduty", () => {
-    expect(integrationKindBadge("pagerduty")).toContain("06A94D");
-  });
-
-  it("returns opsgenie style for opsgenie", () => {
-    expect(integrationKindBadge("opsgenie")).toContain("4C9AFF");
-  });
-
-  it("returns servicenow style for servicenow", () => {
-    expect(integrationKindBadge("servicenow")).toContain("81B5A1");
-  });
-
-  it("returns default style for unknown", () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- intentional cast for testing edge case with unrecognized kind
-    const cls = integrationKindBadge("unknown" as any);
-    expect(cls).toContain("border-border");
-  });
-});
+import { defaultHeadersForIntegration } from "./integrationWebhookHelpers";
 
 describe("defaultHeadersForIntegration", () => {
   it("returns Splunk header for splunk", () => {

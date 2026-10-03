@@ -198,16 +198,16 @@ function SavedViews({ m }: { m: IncidentsConsoleModel }) {
           <ul className="max-h-72 divide-y overflow-y-auto overscroll-contain">
             {m.savedViews.map((v) => (
               <li key={v.id} className="flex items-center gap-1 px-1.5 py-1">
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
                   onClick={() => m.applySavedView(v)}
-                  className="min-w-0 flex-1 px-1.5 py-1 text-left hover:bg-accent"
+                  className="h-auto min-w-0 flex-1 flex-col items-start gap-0 px-1.5 py-1 text-left font-normal whitespace-normal"
                 >
-                  <span className="block truncate text-sm">{v.name}</span>
-                  <span className="block truncate font-mono text-xs text-muted-foreground">
+                  <span className="block w-full truncate text-sm">{v.name}</span>
+                  <span className="block w-full truncate font-mono text-xs text-muted-foreground">
                     {[v.range, v.action, v.type, v.severity, v.triage].filter((x) => x !== "all").join(" / ")}
                   </span>
-                </button>
+                </Button>
                 <Button variant="ghost" size="icon-xs" aria-label={`Rename ${v.name}`} onClick={() => m.renameSavedView(v.id)}>
                   <Pencil />
                 </Button>

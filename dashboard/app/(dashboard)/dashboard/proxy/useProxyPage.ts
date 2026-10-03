@@ -67,28 +67,31 @@ export function useProxyPage() {
       dependsOn: "network, disk",
     });
 
-    // Redis
-    const redisOk = detail?.redis_enabled;
+    // Redis: the health check knows whether it answers; the runtime detail
+    // only knows whether it is configured.
+    const redis = health?.redis ?? (detail?.redis_enabled ? "connected" : "not_configured");
     rows.push({
       component: "Redis Cache",
-      status: redisOk ? "ok" : "disabled",
-      detail: redisOk ? "enabled" : "not configured",
+      status: redis === "connected" ? "ok" : redis === "not_configured" ? "disabled" : "error",
+      detail: redis === "connected" ? "connected" : redis === "not_configured" ? "not configured" : redis,
       dependsOn: "network",
     });
 
     // Analyzer
+    const analyzer = health?.analyzer ?? "not_configured";
     rows.push({
       component: "Analyzer",
-      status: "ok", // health doesn't expose analyzer status separately — infer from scanner_count > 0
-      detail: "gRPC :50051 · HTTP :8444",
-      dependsOn: "Python runtime, Presidio, gRPC",
+      status: analyzer === "reachable" ? "ok" : analyzer === "not_configured" ? "disabled" : "error",
+      detail: analyzer === "reachable" ? "gRPC, reachable" : analyzer === "not_configured" ? "not configured" : analyzer,
+      dependsOn: "Python runtime, gRPC",
     });
 
     // Event bus
+    const dropped = health?.events_dropped ?? 0;
     rows.push({
       component: "Event Bus",
-      status: "ok",
-      detail: "buffered channel · 1000 cap",
+      status: dropped > 0 ? "warning" : "ok",
+      detail: dropped > 0 ? `${dropped} events dropped` : "no events dropped",
       dependsOn: "in-process channel",
     });
 

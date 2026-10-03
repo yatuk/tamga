@@ -7,7 +7,6 @@ import type { WebhookKind } from "@/lib/api";
 export type IntegrationGuide = {
   kind: WebhookKind;
   name: string;
-  badge: string;
   overview: string;
   lastVerified: string;
   docsLinks: { label: string; href: string }[];

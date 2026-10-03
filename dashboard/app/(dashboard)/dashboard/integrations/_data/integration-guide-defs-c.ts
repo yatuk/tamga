@@ -4,7 +4,6 @@ import { LAST_VERIFIED } from "@/app/(dashboard)/dashboard/integrations/_data/in
 export const DATADOG: IntegrationGuide = {
   kind: "datadog",
   name: "Datadog",
-  badge: "border-border-strong/60 bg-surface-subtle0/10 text-fg-subtle",
   overview:
     "Post Tamga alerts as Datadog events. Best for blended observability views where you already run Datadog for infra + APM.",
   lastVerified: LAST_VERIFIED,
@@ -54,7 +53,6 @@ export const DATADOG: IntegrationGuide = {
 export const JIRA: IntegrationGuide = {
   kind: "jira",
   name: "Jira Cloud",
-  badge: "border-status-low/60 bg-status-low/20 text-status-low",
   overview:
     "Open Jira Cloud issues from Tamga events. Uses REST API v3 which requires an Atlassian Document Format (ADF) description — Tamga wraps this for you.",
   lastVerified: LAST_VERIFIED,

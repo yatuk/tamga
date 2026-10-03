@@ -2,12 +2,15 @@
 
 import type { RefObject } from "react";
 import { Play, Upload } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Panel } from "@/components/app/panel";
+import { Stat, StatGrid } from "@/components/app/stat";
+import { EmptyState } from "@/components/app/states";
+import { ActionBadge, StatusBadge, type Tone } from "@/components/app/status-badge";
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { PolicySource } from "./_constants";
 import type { RedTeamRow, RedTeamSample } from "./playgroundData";
-import { playgroundActionClass } from "./playgroundUi";
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 
 type Summary = {
   tp: number;
@@ -33,6 +36,16 @@ type Props = {
   runBatch: () => void;
 };
 
+const OUTCOME: Record<string, { label: string; tone: Tone }> = {
+  match: { label: "Caught", tone: "pass" },
+  tn: { label: "Correct pass", tone: "neutral" },
+  fp: { label: "False positive", tone: "high" },
+  miss: { label: "Missed", tone: "critical" },
+};
+
+const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
+
+/** Runs a labelled set of prompts and compares expected with actual actions. */
 export function PlaygroundRedTeamPanel({
   policySource,
   fileInputRef,
@@ -46,146 +59,108 @@ export function PlaygroundRedTeamPanel({
   runBatch,
 }: Props) {
   return (
-    <div>
-      <Panel
-        title="Red Team Batch"
-        aside={
-          <div className="flex items-center gap-1 px-2">
-            <input ref={fileInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={onUploadCsv} />
-            <button
-              type="button"
-              onClick={loadBundledSamples}
-              className="rounded-sm border border-border-strong bg-surface-subtle px-2 py-1 text-xs uppercase tracking-[0.14em] text-fg-muted hover:bg-surface-card"
-            >
-              Load sample
-            </button>
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="rounded-sm border border-border-strong bg-surface-subtle px-2 py-1 text-xs uppercase tracking-[0.14em] text-fg-muted hover:bg-surface-card"
-            >
-              <Upload className="mr-1 inline h-3 w-3" /> CSV
-            </button>
-            <button
-              type="button"
-              onClick={runBatch}
-              disabled={batchRunning || batchSamples.length === 0}
-              className="rounded-sm bg-status-critical px-2 py-1 text-xs uppercase tracking-[0.14em] text-white hover:bg-status-critical disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Play className="mr-1 inline h-3 w-3" />
-              {batchRunning ? `Running ${batchProgress.done}/${batchProgress.total}` : `Run ${batchSamples.length || ""}`}
-            </button>
-          </div>
-        }
+    <Panel
+      title="Batch test"
+      description={`Expected against actual action, on the ${policySource === "active" ? "running" : policySource === "draft" ? "draft" : "pasted"} policy`}
+      aside={
+        <>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="sr-only"
+            tabIndex={-1}
+            aria-hidden
+            onChange={onUploadCsv}
+          />
+          <Button variant="ghost" size="xs" onClick={loadBundledSamples}>
+            Load Samples
+          </Button>
+          <Button variant="ghost" size="xs" onClick={() => fileInputRef.current?.click()}>
+            <Upload />
+            Upload CSV
+          </Button>
+          <Button size="xs" onClick={runBatch} disabled={batchRunning || batchSamples.length === 0}>
+            {batchRunning ? <Spinner /> : <Play />}
+            {batchRunning
+              ? `Running ${batchProgress.done}/${batchProgress.total}`
+              : batchSamples.length > 0
+                ? `Run ${batchSamples.length}`
+                : "Run"}
+          </Button>
+        </>
+      }
+    >
+      {batchSummary ? (
+        <StatGrid className="border-x-0 border-t-0">
+          <Stat label="Precision" value={pct(batchSummary.precision)} tooltip="Of the prompts acted on, the share that should have been." />
+          <Stat label="Recall" value={pct(batchSummary.recall)} tooltip="Of the prompts that should be acted on, the share that was." />
+          <Stat label="F1" value={pct(batchSummary.f1)} tooltip="Harmonic mean of precision and recall." />
+          <Stat label="Missed" value={batchSummary.fn} tone={batchSummary.fn > 0 ? "critical" : "default"} />
+          <Stat label="False positives" value={batchSummary.fp} tone={batchSummary.fp > 0 ? "warn" : "default"} />
+          <Stat
+            label="Correct"
+            value={batchSummary.tp + batchSummary.tn}
+            hint={batchSummary.err > 0 ? `${batchSummary.err} errored` : undefined}
+          />
+        </StatGrid>
+      ) : null}
 
-      >
-        <div className="space-y-3 p-3">
-          <div className="text-xs uppercase tracking-[0.14em] text-fg-muted">
-            RED TEAM // EXPECTED vs ACTUAL · policy source: {policySource}
-          </div>
-          {batchSummary && (
-            <div className="grid grid-cols-2 gap-2 rounded-sm border border-border bg-surface-card p-2 md:grid-cols-5">
-              <div className="text-xs text-fg-muted">
-                <span className="text-fg-muted">precision</span>{" "}
-                <span className="tabular-nums text-status-pass">{(batchSummary.precision * 100).toFixed(1)}%</span>
-              </div>
-              <div className="text-xs text-fg-muted">
-                <span className="text-fg-muted">recall</span>{" "}
-                <span className="tabular-nums text-status-medium">{(batchSummary.recall * 100).toFixed(1)}%</span>
-              </div>
-              <div className="text-xs text-fg-muted">
-                <span className="text-fg-muted">f1</span>{" "}
-                <span className="tabular-nums text-fg">{(batchSummary.f1 * 100).toFixed(1)}%</span>
-              </div>
-              <div className="text-xs text-fg-muted">
-                <span className="text-fg-muted">miss</span>{" "}
-                <span className="tabular-nums text-status-critical">{batchSummary.fn}</span>
-                <span className="mx-1 text-fg-muted">·</span>
-                <span className="text-fg-muted">fp</span>{" "}
-                <span className="tabular-nums text-status-high">{batchSummary.fp}</span>
-              </div>
-              <div className="text-xs text-fg-muted">
-                <span className="text-fg-muted">match</span>{" "}
-                <span className="tabular-nums text-status-pass">{batchSummary.tp}</span>
-                <span className="mx-1 text-fg-muted">·</span>
-                <span className="text-fg-muted">tn</span>{" "}
-                <span className="tabular-nums text-fg-muted">{batchSummary.tn}</span>
-                {batchSummary.err > 0 && (
-                  <>
-                    <span className="mx-1 text-fg-muted">·</span>
-                    <span className="text-fg-muted">err</span>{" "}
-                    <span className="tabular-nums text-status-critical">{batchSummary.err}</span>
-                  </>
-                )}
-              </div>
-            </div>
-          )}
-
-          {batchSamples.length === 0 ? (
-            <div className="rounded-sm border border-dashed border-border p-6 text-center text-xs text-fg-muted">
-              Load the bundled sample or upload a status-criticalteam CSV (id,category,expected_action,prompt) to start.
-            </div>
-          ) : batchRows.length === 0 ? (
-            <div className="rounded-sm border border-border bg-surface-card p-3 text-xs text-fg-muted">
-              {batchSamples.length} sample ready. Hit <span className="text-fg">Run</span> to evaluate against the selected
-              policy source.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table className="w-full text-left">
-                <TableHeader className="uppercase">
-                  <TableRow>
-                    <TableHead>#</TableHead>
-                    <TableHead>id</TableHead>
-                    <TableHead>category</TableHead>
-                    <TableHead>expected</TableHead>
-                    <TableHead>actual</TableHead>
-                    <TableHead>conf</TableHead>
-                    <TableHead>outcome</TableHead>
-                    <TableHead>prompt</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {batchRows.map((r, i) => (
-                    <TableRow key={`${r.id}-${i}`}>
-                      <TableCell className="tabular-nums">{i + 1}</TableCell>
-                      <TableCell>{r.id}</TableCell>
-                      <TableCell>{r.category}</TableCell>
-                      <TableCell>
-                        <Badge className={`rounded-sm border text-xs ${playgroundActionClass(r.expected)}`}>{r.expected}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={`rounded-sm border text-xs ${playgroundActionClass(r.actual)}`}>{r.actual}</Badge>
-                      </TableCell>
-                      <TableCell className="tabular-nums">{Math.round(r.confidence * 100)}%</TableCell>
-                      <TableCell>
-                        <Badge
-                          className={`rounded-sm border text-xs uppercase ${
-                            r.outcome === "match"
-                              ? "border-status-pass/40 bg-status-pass/10 text-status-pass"
-                              : r.outcome === "tn"
-                                ? "border-border-strong bg-surface-subtle text-fg-muted"
-                                : r.outcome === "fp"
-                                  ? "border-status-high/40 bg-status-high/10 text-status-high"
-                                  : r.outcome === "miss"
-                                    ? "border-status-critical/40 bg-status-critical/10 text-status-critical"
-                                    : "border-status-critical/40 bg-status-critical/10 text-status-critical"
-                          }`}
-                        >
-                          {r.outcome}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="max-w-[360px] truncate" title={r.prompt}>
-                        {r.prompt.length > 80 ? `${r.prompt.slice(0, 80)}…` : r.prompt}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </div>
-      </Panel>
-    </div>
+      {batchSamples.length === 0 ? (
+        <EmptyState
+          title="No samples loaded"
+          description={
+            <>
+              Load the bundled samples, or upload a CSV with the columns{" "}
+              <span className="font-mono">id, category, expected_action, prompt</span>.
+            </>
+          }
+          action={{ label: "Load Samples", onClick: loadBundledSamples }}
+        />
+      ) : batchRows.length === 0 ? (
+        <EmptyState
+          title={`${batchSamples.length} samples ready`}
+          description="Run them to compare what the policy does with what each sample expects."
+        />
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Sample</TableHead>
+              <TableHead>Category</TableHead>
+              <TableHead>Expected</TableHead>
+              <TableHead>Actual</TableHead>
+              <TableHead className="text-right">Confidence</TableHead>
+              <TableHead>Outcome</TableHead>
+              <TableHead>Prompt</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {batchRows.map((r, i) => {
+              const outcome = OUTCOME[r.outcome] ?? { label: "Error", tone: "critical" as Tone };
+              return (
+                <TableRow key={`${r.id}-${i}`}>
+                  <TableCell className="font-mono text-xs">{r.id}</TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">{r.category}</TableCell>
+                  <TableCell>
+                    <ActionBadge action={r.expected} />
+                  </TableCell>
+                  <TableCell>
+                    <ActionBadge action={r.actual} />
+                  </TableCell>
+                  <TableCell className="text-right font-mono text-xs tabular-nums">{Math.round(r.confidence * 100)}%</TableCell>
+                  <TableCell>
+                    <StatusBadge tone={outcome.tone}>{outcome.label}</StatusBadge>
+                  </TableCell>
+                  <TableCell className="max-w-80 truncate font-mono text-xs text-muted-foreground" title={r.prompt}>
+                    {r.prompt}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      )}
+    </Panel>
   );
 }

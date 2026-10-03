@@ -1,15 +1,11 @@
 "use client";
 
-import * as React from "react";
-import { DollarSign, Zap } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { api, type BudgetStats } from "@/lib/api";
+import { Panel } from "@/components/app/panel";
+import { ErrorState, SkeletonRows } from "@/components/app/states";
+import { StatusBadge, type Tone } from "@/components/app/status-badge";
+import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
-
-interface BudgetBurnCardProps {
-  adminKey: string;
-  className?: string;
-}
 
 function formatUSD(v: number): string {
   if (v >= 1_000) return `$${(v / 1_000).toFixed(1)}k`;
@@ -22,8 +18,38 @@ function formatTokens(v: number): string {
   return String(v);
 }
 
-export function BudgetBurnCard({ adminKey, className }: BudgetBurnCardProps) {
-  const { data, isLoading, error } = useQuery({
+function usedPct(used: number, limit: number): number | null {
+  return limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : null;
+}
+
+/** One budget dimension: what was used today against its daily limit. */
+function Meter({ label, used, limit, pct }: { label: string; used: string; limit: string | null; pct: number | null }) {
+  const bar = pct === null ? "bg-chart-1" : pct >= 90 ? "bg-status-critical" : pct >= 70 ? "bg-status-medium" : "bg-chart-1";
+  return (
+    <div>
+      <div className="flex items-baseline justify-between gap-3 text-sm">
+        <span>{label}</span>
+        <span className="font-mono text-xs text-muted-foreground tabular-nums">
+          <span className="text-foreground">{used}</span> / {limit ?? "no limit"}
+        </span>
+      </div>
+      <div
+        className="mt-1.5 h-1 bg-muted"
+        role={pct === null ? undefined : "progressbar"}
+        aria-label={pct === null ? undefined : `${label} budget used`}
+        aria-valuenow={pct ?? undefined}
+        aria-valuemin={pct === null ? undefined : 0}
+        aria-valuemax={pct === null ? undefined : 100}
+      >
+        {pct !== null ? <div className={cn("h-full", bar)} style={{ width: `${Math.max(pct, 1)}%` }} /> : null}
+      </div>
+    </div>
+  );
+}
+
+/** Today's token and cost use against the daily budget. */
+export function BudgetBurnCard({ adminKey, className }: { adminKey: string; className?: string }) {
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["tamga-budget-stats", adminKey],
     queryFn: () => api.getBudgetStats(adminKey),
     enabled: !!adminKey,
@@ -31,147 +57,42 @@ export function BudgetBurnCard({ adminKey, className }: BudgetBurnCardProps) {
     retry: 1,
   });
 
-  const stats: BudgetStats = data || {
-    tokens_today: 0,
-    cost_today_usd: 0,
-    limit_tokens: 0,
-    limit_cost_usd: 0,
-  };
-
-  const tokenPct =
-    stats.limit_tokens > 0
-      ? Math.min(100, Math.round((stats.tokens_today / stats.limit_tokens) * 100))
-      : null;
-  const costPct =
-    stats.limit_cost_usd > 0
-      ? Math.min(100, Math.round((stats.cost_today_usd / stats.limit_cost_usd) * 100))
-      : null;
-
-  // Highest burn rate drives the accent colour.
-  const burnPct = Math.max(tokenPct ?? 0, costPct ?? 0);
-  const accent =
-    burnPct >= 90
-      ? "text-status-critical"
-      : burnPct >= 70
-      ? "text-status-medium"
-      : "text-status-pass";
-  const ringColor =
-    burnPct >= 90
-      ? "var(--status-critical)"
-      : burnPct >= 70
-        ? "var(--status-medium)"
-        : "var(--status-pass)";
-
-  // 44-radius ring for a 100x100 viewBox so the stroke stays crisp.
-  const circumference = 2 * Math.PI * 44;
-  const dashOffset = circumference * (1 - burnPct / 100);
+  const tokens = data?.tokens_today ?? 0;
+  const cost = data?.cost_today_usd ?? 0;
+  const tokenPct = usedPct(tokens, data?.limit_tokens ?? 0);
+  const costPct = usedPct(cost, data?.limit_cost_usd ?? 0);
+  const hasLimit = tokenPct !== null || costPct !== null;
+  const burn = Math.max(tokenPct ?? 0, costPct ?? 0);
+  const tone: Tone = burn >= 90 ? "critical" : burn >= 70 ? "medium" : "neutral";
 
   return (
-    <div
-      className={cn(
-        "relative rounded-sm border border-border bg-surface-card p-4",
-        className,
-      )}
+    <Panel
+      title="Budget today"
+      description="Resets at midnight UTC"
+      aside={data ? <StatusBadge tone={hasLimit ? tone : "neutral"}>{hasLimit ? `${burn}% used` : "No limit set"}</StatusBadge> : null}
+      className={className}
     >
-      <div className="flex items-center justify-between">
-        <div className="text-xs uppercase tracking-[0.14em] text-fg-muted">
-          Budget Burn
-        </div>
-        <span className="text-xs text-fg-muted">
-          {stats.day || new Date().toISOString().slice(0, 10)}
-        </span>
-      </div>
-
-      <div className="mt-3 flex items-center gap-4">
-        <svg
-          viewBox="0 0 100 100"
-          className="h-24 w-24 shrink-0"
-          role="img"
-          aria-label={`Budget burn ${burnPct}%`}
-        >
-          <circle
-            cx="50"
-            cy="50"
-            r="44"
-            stroke="var(--border-subtle)"
-            strokeWidth="8"
-            fill="none"
-          />
-          {(tokenPct !== null || costPct !== null) && (
-            <circle
-              cx="50"
-              cy="50"
-              r="44"
-              stroke={ringColor}
-              strokeWidth="8"
-              fill="none"
-              strokeDasharray={circumference}
-              strokeDashoffset={dashOffset}
-              strokeLinecap="round"
-              transform="rotate(-90 50 50)"
-              style={{ transition: "stroke-dashoffset 500ms ease" }}
-            />
-          )}
-          <text
-            x="50"
-            y="54"
-            textAnchor="middle"
-            fontFamily="ui-monospace, monospace"
-            fontSize="18"
-            className={accent}
-            fill="currentColor"
-          >
-            {burnPct}%
-          </text>
-        </svg>
-
-        <div className="min-w-0 flex-1 space-y-2">
-          <div>
-            <div className="flex items-center gap-1.5 text-xs uppercase tracking-[0.14em] text-fg-muted">
-              <Zap className="h-3 w-3" />
-              tokens
-            </div>
-            <div className="mt-0.5 text-sm tabular-nums text-fg">
-              {formatTokens(stats.tokens_today)}
-              <span className="ml-1 text-fg-muted">
-                /{" "}
-                {stats.limit_tokens > 0
-                  ? formatTokens(stats.limit_tokens)
-                  : "unlimited"}
-              </span>
-            </div>
-          </div>
-          <div>
-            <div className="flex items-center gap-1.5 text-xs uppercase tracking-[0.14em] text-fg-muted">
-              <DollarSign className="h-3 w-3" />
-              cost
-            </div>
-            <div className="mt-0.5 text-sm tabular-nums text-fg">
-              {formatUSD(stats.cost_today_usd)}
-              <span className="ml-1 text-fg-muted">
-                /{" "}
-                {stats.limit_cost_usd > 0
-                  ? formatUSD(stats.limit_cost_usd)
-                  : "unlimited"}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {error ? (
-        <div className="mt-3 text-xs text-status-critical">
-          budget endpoint unreachable
-        </div>
+        <ErrorState title="Could not load the budget" error={error} onRetry={() => void refetch()} />
       ) : isLoading ? (
-        <div className="mt-3 text-xs text-fg-muted">
-          syncing...
+        <SkeletonRows rows={2} />
+      ) : (
+        <div className="space-y-4 p-4">
+          <Meter
+            label="Tokens"
+            used={formatTokens(tokens)}
+            limit={data && data.limit_tokens > 0 ? formatTokens(data.limit_tokens) : null}
+            pct={tokenPct}
+          />
+          <Meter
+            label="Cost"
+            used={formatUSD(cost)}
+            limit={data && data.limit_cost_usd > 0 ? formatUSD(data.limit_cost_usd) : null}
+            pct={costPct}
+          />
+          {data?.note ? <p className="text-xs text-muted-foreground">{data.note}</p> : null}
         </div>
-      ) : stats.note ? (
-        <div className="mt-3 text-xs text-status-medium/80">
-          {stats.note}
-        </div>
-      ) : null}
-    </div>
+      )}
+    </Panel>
   );
 }

@@ -1,8 +1,10 @@
 "use client";
 
-import { Crosshair, Trash2 } from "lucide-react";
-import type { SavedHunt } from "./_types";
+import { Trash2 } from "lucide-react";
 import { ConfirmButton } from "@/components/app/confirm-button";
+import { Panel } from "@/components/app/panel";
+import { Button } from "@/components/ui/button";
+import type { SavedHunt } from "./_types";
 
 type Props = {
   savedHunts: SavedHunt[];
@@ -12,42 +14,39 @@ type Props = {
 
 export function SavedHuntsPanel({ savedHunts, onApply, onDelete }: Props) {
   return (
-    <div className="rounded-sm border border-border bg-surface-card/60 p-3">
-      <div className="mb-2 flex items-center gap-2 text-xs uppercase tracking-wide text-fg-muted">
-        <Crosshair className="h-3 w-3" />
-        Saved hunts
-      </div>
+    <Panel title="Saved hunts" aside={savedHunts.length > 0 ? savedHunts.length : undefined}>
       {savedHunts.length === 0 ? (
-        <p className="text-xs text-fg-muted">No saved hunts yet.</p>
+        <p className="px-4 py-6 text-sm text-muted-foreground">
+          No saved hunts. Build a query and choose Save Hunt to keep it here.
+        </p>
       ) : (
-        <ul className="space-y-2">
+        <ul className="divide-y">
           {savedHunts.map((h) => (
-            <li key={h.id} className="flex items-start justify-between gap-2 rounded-sm border border-border bg-surface-subtle p-2">
-              <div className="min-w-0 flex-1">
-                <button
-                  type="button"
-                  onClick={() => onApply(h)}
-                  className="block w-full text-left text-xs text-fg hover:text-white"
-                >
-                  {h.name}
-                </button>
-                <div className="mt-0.5 text-xs text-fg-subtle">
+            <li key={h.id} className="flex items-center gap-1 py-1 pr-2 pl-1">
+              <Button
+                variant="ghost"
+                className="h-auto min-w-0 flex-1 flex-col items-start gap-0.5 px-3 py-2 text-left whitespace-normal"
+                onClick={() => onApply(h)}
+              >
+                <span className="w-full truncate text-sm">{h.name}</span>
+                <span className="font-mono text-xs font-normal text-muted-foreground">
                   {new Date(h.updated_at).toLocaleString("en-GB")}
-                </div>
-              </div>
+                </span>
+              </Button>
               <ConfirmButton
                 variant="ghost"
-                size="icon-xs"
+                size="icon-sm"
                 aria-label={`Delete saved hunt ${h.name}`}
                 title={`Delete saved hunt ${h.name}?`}
+                description="The saved query is removed. Events are not affected."
                 onConfirm={() => onDelete(h.id)}
               >
-                <Trash2 className="h-3.5 w-3.5" />
+                <Trash2 />
               </ConfirmButton>
             </li>
           ))}
         </ul>
       )}
-    </div>
+    </Panel>
   );
 }

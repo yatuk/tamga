@@ -65,3 +65,26 @@ export function SeverityBadge({ severity, ...props }: Omit<BadgeProps, "tone"> &
     </StatusBadge>
   );
 }
+
+const CIRCUIT_TONE: Record<string, Tone> = {
+  closed: "pass",
+  healthy: "pass",
+  connected: "pass",
+  "half-open": "medium",
+  half: "medium",
+  degraded: "medium",
+  open: "critical",
+};
+
+/**
+ * Circuit breaker state of an upstream. Closed means serving; open means the
+ * breaker tripped and the upstream is out of rotation.
+ */
+export function CircuitBadge({ state, ...props }: Omit<BadgeProps, "tone"> & { state?: string }) {
+  const key = toLowerEn(state || "");
+  return (
+    <StatusBadge tone={CIRCUIT_TONE[key] ?? "neutral"} {...props}>
+      {key || "unknown"}
+    </StatusBadge>
+  );
+}

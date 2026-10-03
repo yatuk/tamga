@@ -243,7 +243,7 @@ export function IncidentsTable({
 
   return (
     <Panel title="Incident queue" aside={count} className="min-h-0">
-      <div onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>
+      <div role="presentation" onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>
         {m.selectedIds.length > 0 ? (
           <div className="flex flex-wrap items-center gap-2 border-b bg-muted px-3 py-2 text-sm">
             <span className="font-mono tabular-nums">{m.selectedIds.length} selected</span>

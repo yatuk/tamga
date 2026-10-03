@@ -20,7 +20,6 @@ interface StatProps {
   /** Explains the metric on hover. */
   tooltip?: string;
   href?: string;
-  onClick?: () => void;
   className?: string;
 }
 
@@ -42,10 +41,9 @@ export function Stat({
   sparkline,
   tooltip,
   href,
-  onClick,
   className,
 }: StatProps) {
-  const interactive = Boolean(href || onClick);
+  const interactive = Boolean(href);
   const body = (
     <div
       className={cn(
@@ -92,13 +90,6 @@ export function Stat({
       </Link>
     );
   }
-  if (onClick) {
-    return (
-      <button type="button" onClick={onClick} className="block h-full w-full text-left">
-        {body}
-      </button>
-    );
-  }
   return body;
 }
 
@@ -121,11 +112,12 @@ function Delta({ value, label }: { value: number; label?: string }) {
 
 /**
  * Lays stats out as one ruled block instead of separate cards: the 1px gaps
- * show the border color through, so cells share dividers.
+ * show the border color through, so cells share dividers. Cells wrap and
+ * grow, so a last row with fewer stats still fills the width.
  */
 export function StatGrid({ className, children }: { className?: string; children: React.ReactNode }) {
   return (
-    <div className={cn("grid grid-cols-2 gap-px border bg-border sm:grid-cols-3 lg:grid-cols-4", className)}>
+    <div className={cn("flex flex-wrap gap-px border bg-border *:h-auto! *:min-w-40 *:flex-1 *:basis-[calc(25%-1px)]", className)}>
       {children}
     </div>
   );

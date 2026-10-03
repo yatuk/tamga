@@ -17,7 +17,6 @@ export function useKeysPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; label: string } | null>(null);
   const [revealedKey, setRevealedKey] = useState<RevealedKey>(null);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   const { data, isLoading, error: listError } = useQuery({
@@ -49,7 +48,7 @@ export function useKeysPage() {
       });
     },
     onError: () => {
-      toast.error("Failed to create API key");
+      toast.error("Could not create the API key");
     },
   });
 
@@ -61,22 +60,9 @@ export function useKeysPage() {
       toast.success("API key revoked");
     },
     onError: () => {
-      toast.error("Failed to revoke API key");
+      toast.error("Could not revoke the API key");
     },
   });
-
-  const copyToClipboard = async (text: string, id?: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      toast.success("Copied to clipboard");
-      if (id) {
-        setCopiedId(id);
-        setTimeout(() => setCopiedId(null), 2000);
-      }
-    } catch {
-      toast.error("Failed to copy");
-    }
-  };
 
   const dismissReveal = () => setRevealedKey(null);
 
@@ -94,7 +80,5 @@ export function useKeysPage() {
     deleteMutation,
     revealedKey,
     dismissReveal,
-    copyToClipboard,
-    copiedId,
   };
 }

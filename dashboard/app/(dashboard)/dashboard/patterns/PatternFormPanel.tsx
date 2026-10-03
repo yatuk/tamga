@@ -1,14 +1,17 @@
 "use client";
 
 import type { Dispatch, SetStateAction } from "react";
-import { ArrowRight, Plus } from "lucide-react";
-import type { PatternSeverity } from "@/lib/api";
-import { Button } from "@/components/ui/button";
+import { FormField } from "@/components/app/form-field";
 import { Panel } from "@/components/app/panel";
-import { EMPTY_DRAFT, type Draft } from "./_constants";
+import { StatusBadge } from "@/components/app/status-badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import type { PatternSeverity } from "@/lib/api";
+import { EMPTY_DRAFT, type Draft } from "./_constants";
 
 type Props = {
   draft: Draft;
@@ -18,8 +21,7 @@ type Props = {
   setTestInput: (v: string) => void;
   testMatch: string | null;
   compiledRegex: RegExp | "invalid" | null;
-  createPending: boolean;
-  updatePending: boolean;
+  pending: boolean;
   onSubmit: () => void;
   onTest: () => void;
 };
@@ -32,108 +34,119 @@ export function PatternFormPanel({
   setTestInput,
   testMatch,
   compiledRegex,
-  createPending,
-  updatePending,
+  pending,
   onSubmit,
   onTest,
 }: Props) {
-  return (
-    <div>
-      <Panel title={draft.id ? `Edit pattern: ${draft.id}` : "New pattern"}>
-        <div className="space-y-3 p-3">
-          <div>
-            <label className="text-xs uppercase tracking-[0.16em] text-fg-muted">Name</label>
-            <Input
-              className="mt-1 w-full"
-              value={draft.name}
-              onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-              placeholder="project-codename"
-              aria-label="project-codename"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-xs uppercase tracking-[0.16em] text-fg-muted">Kind</label>
-              <NativeSelect
-                className="mt-1 w-full"
-                value={draft.kind}
-                onChange={(e) => setDraftKind(e.target.value as Draft["kind"])}
-              >
-                <NativeSelectOption value="regex">regex</NativeSelectOption>
-                <NativeSelectOption value="literal">literal</NativeSelectOption>
-              </NativeSelect>
-            </div>
-            <div>
-              <label className="text-xs uppercase tracking-[0.16em] text-fg-muted">Severity</label>
-              <NativeSelect
-                className="mt-1 w-full"
-                value={draft.severity}
-                onChange={(e) => setDraft({ ...draft, severity: e.target.value as PatternSeverity })}
-              >
-                <NativeSelectOption value="low">low</NativeSelectOption>
-                <NativeSelectOption value="medium">medium</NativeSelectOption>
-                <NativeSelectOption value="high">high</NativeSelectOption>
-                <NativeSelectOption value="critical">critical</NativeSelectOption>
-              </NativeSelect>
-            </div>
-          </div>
-          <div>
-            <label className="text-xs uppercase tracking-[0.16em] text-fg-muted">Pattern</label>
-            <Textarea
-              className="mt-1 min-h-[70px] w-full resize-y"
-              value={draft.pattern}
-              onChange={(e) => setDraft({ ...draft, pattern: e.target.value })}
-              placeholder={draft.kind === "regex" ? "(?i)project-\\w+" : "ACME-SECRET"}
-            />
-            {compiledRegex === "invalid" ? (
-              <div className="mt-1 text-xs text-status-critical">invalid regex</div>
-            ) : null}
-          </div>
-          <label className="flex items-center gap-2 text-xs text-fg-muted">
-            <input
-              type="checkbox"
-              checked={draft.enabled}
-              onChange={(e) => setDraft({ ...draft, enabled: e.target.checked })}
-              className="h-3.5 w-3.5 accent-status-critical"
-            />
-            enabled
-          </label>
+  const editing = Boolean(draft.id);
+  const invalid = compiledRegex === "invalid";
+  const ready = draft.name.trim() !== "" && draft.pattern.trim() !== "" && !invalid;
 
-          <div className="rounded-sm border border-border bg-surface-subtle p-2">
-            <div className="text-xs uppercase tracking-[0.16em] text-fg-muted">INLINE TESTER</div>
+  return (
+    <Panel title={editing ? "Edit pattern" : "New pattern"} aside={editing ? <StatusBadge tone="medium">Editing</StatusBadge> : undefined}>
+      <form
+        className="space-y-4 p-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          onSubmit();
+        }}
+      >
+        <FormField label="Name" htmlFor="pattern-name">
+          <Input
+            id="pattern-name"
+            name="name"
+            autoComplete="off"
+            spellCheck={false}
+            value={draft.name}
+            onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+            placeholder="project-codename…"
+          />
+        </FormField>
+
+        <div className="grid grid-cols-2 gap-3">
+          <FormField label="Kind" htmlFor="pattern-kind">
+            <NativeSelect
+              id="pattern-kind"
+              name="kind"
+              value={draft.kind}
+              onChange={(e) => setDraftKind(e.target.value as Draft["kind"])}
+            >
+              <NativeSelectOption value="regex">regex</NativeSelectOption>
+              <NativeSelectOption value="literal">literal</NativeSelectOption>
+            </NativeSelect>
+          </FormField>
+          <FormField label="Severity" htmlFor="pattern-severity">
+            <NativeSelect
+              id="pattern-severity"
+              name="severity"
+              value={draft.severity}
+              onChange={(e) => setDraft({ ...draft, severity: e.target.value as PatternSeverity })}
+            >
+              <NativeSelectOption value="low">low</NativeSelectOption>
+              <NativeSelectOption value="medium">medium</NativeSelectOption>
+              <NativeSelectOption value="high">high</NativeSelectOption>
+              <NativeSelectOption value="critical">critical</NativeSelectOption>
+            </NativeSelect>
+          </FormField>
+        </div>
+
+        <FormField label={draft.kind === "regex" ? "Regular expression" : "Literal text"} htmlFor="pattern-value">
+          <Textarea
+            id="pattern-value"
+            name="pattern"
+            className="min-h-20 resize-y font-mono text-xs"
+            spellCheck={false}
+            value={draft.pattern}
+            onChange={(e) => setDraft({ ...draft, pattern: e.target.value })}
+            placeholder={draft.kind === "regex" ? "(?i)project-\\w+…" : "ACME-SECRET…"}
+            aria-invalid={invalid}
+            aria-describedby={invalid ? "pattern-value-error" : undefined}
+          />
+          {invalid ? (
+            <p id="pattern-value-error" role="alert" className="text-xs text-status-critical">
+              This is not a valid regular expression.
+            </p>
+          ) : null}
+        </FormField>
+
+        <div className="flex items-center gap-3">
+          <Switch id="pattern-enabled" checked={draft.enabled} onCheckedChange={(on) => setDraft({ ...draft, enabled: on })} />
+          <Label htmlFor="pattern-enabled">Enabled</Label>
+        </div>
+
+        <div className="space-y-2 border-t pt-4">
+          <FormField label="Try it on sample text" htmlFor="pattern-test">
             <Textarea
-              className="mt-1 min-h-[60px] w-full resize-y"
+              id="pattern-test"
+              name="sample"
+              className="min-h-16 resize-y font-mono text-xs"
+              spellCheck={false}
               value={testInput}
               onChange={(e) => setTestInput(e.target.value)}
-              placeholder="paste sample text…"
-              aria-label="paste sample text"
+              placeholder="Paste text the pattern should match…"
             />
-            <div className="mt-1 flex items-center justify-between">
-              <Button variant="outline" onClick={onTest}>
-                Test
-              </Button>
-              {testMatch ? (
-                <span className="inline-flex items-center gap-1 text-xs text-fg-muted">
-                  <ArrowRight className="h-3 w-3" aria-hidden />
-                  {testMatch}
-                </span>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="flex items-center justify-end gap-2 pt-1">
-            {draft.id ? (
-              <Button variant="outline" onClick={() => setDraft(EMPTY_DRAFT)}>
-                Cancel
-              </Button>
-            ) : null}
-            <Button onClick={onSubmit} disabled={createPending || updatePending}>
-              <Plus className="mr-1 h-4 w-4" />
-              {draft.id ? "Update" : "Create"}
+          </FormField>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button type="button" variant="outline" size="sm" onClick={onTest} disabled={!draft.pattern || invalid}>
+              Test Pattern
             </Button>
+            <p aria-live="polite" className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">
+              {testMatch === null ? "" : testMatch === "no match" ? "No match" : `Matched: ${testMatch}`}
+            </p>
           </div>
         </div>
-      </Panel>
-    </div>
+
+        <div className="flex items-center justify-end gap-2 border-t pt-4">
+          {editing ? (
+            <Button type="button" variant="ghost" onClick={() => setDraft(EMPTY_DRAFT)}>
+              Cancel
+            </Button>
+          ) : null}
+          <Button type="submit" disabled={pending || !ready}>
+            {pending ? "Saving…" : editing ? "Save Changes" : "Create Pattern"}
+          </Button>
+        </div>
+      </form>
+    </Panel>
   );
 }

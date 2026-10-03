@@ -1,6 +1,8 @@
 "use client";
 
+import { DiffView, diffStats } from "@/components/app/diff-view";
 import { Panel } from "@/components/app/panel";
+import { EmptyState } from "@/components/app/states";
 import { computeUnifiedDiff } from "./policyUtils";
 
 type Props = {
@@ -8,32 +10,28 @@ type Props = {
   draft: string;
 };
 
+/** What the draft changes against the policy the proxy is running. */
 export function PoliciesDiffPanel({ originalYaml, draft }: Props) {
-  const diff = computeUnifiedDiff(originalYaml, draft);
+  const lines = originalYaml === draft ? [] : computeUnifiedDiff(originalYaml, draft);
+  const { added, removed } = diffStats(lines);
+  const changed = added + removed > 0;
 
   return (
-    <Panel title="Policy diff">
-      <pre className="max-h-[460px] overflow-auto bg-surface-card p-3 text-[12px] leading-5">
-        {diff.length === 0 ? (
-          <span className="text-fg-muted">No changes.</span>
-        ) : (
-          diff.map((line, i) => (
-            <div
-              key={i}
-              className={
-                line.type === "+"
-                  ? "bg-status-pass/10 text-status-pass"
-                  : line.type === "-"
-                    ? "bg-status-critical/10 text-status-critical"
-                    : "text-fg-muted"
-              }
-            >
-              {line.type === " " ? "  " : line.type + " "}
-              {line.text}
-            </div>
-          ))
-        )}
-      </pre>
+    <Panel
+      title="Draft against the running policy"
+      aside={
+        changed ? (
+          <span className="font-mono tabular-nums">
+            <span className="text-status-pass">+{added}</span> <span className="text-status-critical">-{removed}</span>
+          </span>
+        ) : undefined
+      }
+    >
+      {changed ? (
+        <DiffView lines={lines} />
+      ) : (
+        <EmptyState title="No changes" description="The draft is identical to the policy the proxy is running." />
+      )}
     </Panel>
   );
 }

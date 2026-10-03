@@ -191,11 +191,12 @@ describe("useProxyPage — derived logic", () => {
     const busRow = result.current.componentRows.find(
       (r) => r.component === "Event Bus",
     );
+    // The mock health reports no dropped events.
     expect(busRow?.status).toBe("ok");
-    expect(busRow?.detail).toContain("buffered");
+    expect(busRow?.detail).toBe("no events dropped");
   });
 
-  it("Analyzer always reports ok", async () => {
+  it("Analyzer is not configured unless health reports it", async () => {
     const { result } = renderHook(() => useProxyPage(), { wrapper: Wrapper });
     await waitFor(
       () => expect(result.current.isLoading).toBe(false),
@@ -204,8 +205,9 @@ describe("useProxyPage — derived logic", () => {
     const anaRow = result.current.componentRows.find(
       (r) => r.component === "Analyzer",
     );
-    expect(anaRow?.status).toBe("ok");
-    expect(anaRow?.detail).toContain("gRPC");
+    // The status comes from the health response, never from an assumption.
+    expect(anaRow?.status).toBe("disabled");
+    expect(anaRow?.detail).toBe("not configured");
   });
 
   it("all rows have valid status values", async () => {

@@ -1,198 +1,188 @@
 "use client";
 
-import type { ChangeEvent } from "react";
-import { BookmarkPlus } from "lucide-react";
+import { useState } from "react";
+import { BookmarkPlus, Search } from "lucide-react";
+import { FormField } from "@/components/app/form-field";
+import { Panel } from "@/components/app/panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Panel } from "@/components/app/panel";
-
-import type { TimeRange } from "@/lib/types";
+import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Switch } from "@/components/ui/switch";
+import type { HuntFilterKey, HuntFilters } from "./useHuntingPage";
 
 type Props = {
-  action: string;
-  setAction: (v: string) => void;
-  provider: string;
-  setProvider: (v: string) => void;
+  filters: HuntFilters;
+  setFilter: (key: HuntFilterKey, value: string) => void;
   shadow: boolean;
-  setShadow: (v: boolean) => void;
-  findingType: string;
-  setFindingType: (v: string) => void;
-  severity: string;
-  setSeverity: (v: string) => void;
-  category: string;
-  setCategory: (v: string) => void;
-  technique: string;
-  setTechnique: (v: string) => void;
-  q: string;
-  setQ: (v: string) => void;
-  range: TimeRange;
-  setRange: (v: TimeRange) => void;
-  resetPage: () => void;
-  saveHunt: () => void;
-  total: number;
-  page: number;
-  isLoading: boolean;
-  isFetching: boolean;
+  setShadow: (on: boolean) => void;
+  activeFilterCount: number;
+  clearFilters: () => void;
+  saveHunt: (name: string) => Promise<void>;
 };
 
-export function HuntingFilters({
-  action,
-  setAction,
-  provider,
-  setProvider,
-  shadow,
-  setShadow,
-  findingType,
-  setFindingType,
-  severity,
-  setSeverity,
-  category,
-  setCategory,
-  technique,
-  setTechnique,
-  q,
-  setQ,
-  range,
-  setRange,
-  resetPage,
-  saveHunt,
-  total,
-  page,
-  isLoading,
-  isFetching,
-}: Props) {
+const ACTIONS = ["BLOCK", "REDACT", "WARN", "PASS"];
+const SEVERITIES = ["critical", "high", "medium", "low"];
+
+export function HuntingFilters({ filters, setFilter, shadow, setShadow, activeFilterCount, clearFilters, saveHunt }: Props) {
   return (
-    <Panel title="Search query">
-      <div className="space-y-3 p-3">
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          <label className="space-y-1">
-            <span className="text-xs uppercase tracking-wide text-fg-muted">Action</span>
+    <Panel
+      title="Query"
+      aside={
+        <>
+          {activeFilterCount > 0 ? (
+            <Button variant="ghost" size="xs" onClick={clearFilters}>
+              Clear {activeFilterCount} {activeFilterCount === 1 ? "filter" : "filters"}
+            </Button>
+          ) : null}
+          <SaveHuntPopover onSave={saveHunt} />
+        </>
+      }
+    >
+      <div className="space-y-4 p-4">
+        <FormField label="Search" htmlFor="hunt-q" hint="Matches the request ID and the text of findings.">
+          <div className="relative">
+            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
             <Input
-              className="h-8 focus:border-status-critical"
-              placeholder="BLOCK, REDACT…"
-              value={action}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                setAction(e.target.value);
-                resetPage();
-              }}
+              id="hunt-q"
+              name="q"
+              type="search"
+              autoComplete="off"
+              spellCheck={false}
+              className="pl-9 font-mono"
+              placeholder="Request ID or text…"
+              value={filters.q}
+              onChange={(e) => setFilter("q", e.target.value)}
             />
-          </label>
-          <label className="space-y-1">
-            <span className="text-xs uppercase tracking-wide text-fg-muted">Provider</span>
-            <Input
-              className="w-full"
-              placeholder="openai, shadow…"
-              value={provider}
-              disabled={shadow}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                setProvider(e.target.value);
-                resetPage();
-              }}
-              aria-label="openai, shadow"
-            />
-          </label>
-          <label className="flex items-end gap-2 pb-1">
-            <input
-              type="checkbox"
-              checked={shadow}
-              onChange={(e) => {
-                setShadow(e.target.checked);
-                if (e.target.checked) setProvider("");
-                resetPage();
-              }}
-              className="accent-status-critical"
-            />
-            <span className="text-xs text-fg-muted">Shadow providers only</span>
-          </label>
-          <label className="space-y-1">
-            <span className="text-xs uppercase tracking-wide text-fg-muted">Range</span>
+          </div>
+        </FormField>
+
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <FormField label="Action" htmlFor="hunt-action">
             <NativeSelect
-              className="w-full"
-              value={range}
-              onChange={(e) => {
-                setRange(e.target.value as TimeRange);
-                resetPage();
-              }}
+              id="hunt-action"
+              name="action"
+              value={filters.action}
+              onChange={(e) => setFilter("action", e.target.value)}
             >
-              <NativeSelectOption value="24h">24h</NativeSelectOption>
-              <NativeSelectOption value="7d">7d</NativeSelectOption>
-              <NativeSelectOption value="30d">30d</NativeSelectOption>
+              <NativeSelectOption value="">Any action</NativeSelectOption>
+              {ACTIONS.map((a) => (
+                <NativeSelectOption key={a} value={a}>
+                  {a}
+                </NativeSelectOption>
+              ))}
             </NativeSelect>
-          </label>
+          </FormField>
+          <FormField label="Severity" htmlFor="hunt-severity">
+            <NativeSelect
+              id="hunt-severity"
+              name="severity"
+              value={filters.severity}
+              onChange={(e) => setFilter("severity", e.target.value)}
+            >
+              <NativeSelectOption value="">Any severity</NativeSelectOption>
+              {SEVERITIES.map((s) => (
+                <NativeSelectOption key={s} value={s}>
+                  {s}
+                </NativeSelectOption>
+              ))}
+            </NativeSelect>
+          </FormField>
+          <FormField label="Finding type" htmlFor="hunt-finding-type">
+            <Input
+              id="hunt-finding-type"
+              name="finding_type"
+              autoComplete="off"
+              spellCheck={false}
+              placeholder="pii, secret, injection…"
+              value={filters.finding_type}
+              onChange={(e) => setFilter("finding_type", e.target.value)}
+            />
+          </FormField>
+          <FormField label="Category contains" htmlFor="hunt-category">
+            <Input
+              id="hunt-category"
+              name="category"
+              autoComplete="off"
+              spellCheck={false}
+              placeholder="credit_card, jailbreak…"
+              value={filters.category}
+              onChange={(e) => setFilter("category", e.target.value)}
+            />
+          </FormField>
+          <FormField label="Technique or OWASP code" htmlFor="hunt-technique">
+            <Input
+              id="hunt-technique"
+              name="technique"
+              autoComplete="off"
+              spellCheck={false}
+              placeholder="LLM01…"
+              value={filters.technique}
+              onChange={(e) => setFilter("technique", e.target.value)}
+            />
+          </FormField>
+          <FormField label="Provider" htmlFor="hunt-provider">
+            <Input
+              id="hunt-provider"
+              name="provider"
+              autoComplete="off"
+              spellCheck={false}
+              placeholder="openai, anthropic…"
+              value={filters.provider}
+              disabled={shadow}
+              onChange={(e) => setFilter("provider", e.target.value)}
+            />
+          </FormField>
         </div>
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          <label className="space-y-1">
-            <span className="text-xs uppercase tracking-wide text-fg-muted">Finding type</span>
-            <Input
-              className="h-8 focus:border-status-critical"
-              placeholder="pii, injection…"
-              value={findingType}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                setFindingType(e.target.value);
-                resetPage();
-              }}
-            />
-          </label>
-          <label className="space-y-1">
-            <span className="text-xs uppercase tracking-wide text-fg-muted">Severity</span>
-            <Input
-              className="h-8 focus:border-status-critical"
-              placeholder="high, critical…"
-              value={severity}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                setSeverity(e.target.value);
-                resetPage();
-              }}
-            />
-          </label>
-          <label className="space-y-1">
-            <span className="text-xs uppercase tracking-wide text-fg-muted">Category</span>
-            <Input
-              className="h-8 focus:border-status-critical"
-              placeholder="substring"
-              value={category}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                setCategory(e.target.value);
-                resetPage();
-              }}
-            />
-          </label>
-          <label className="space-y-1">
-            <span className="text-xs uppercase tracking-wide text-fg-muted">Technique / OWASP</span>
-            <Input
-              className="h-8 focus:border-status-critical"
-              placeholder="LLM01, metadata…"
-              value={technique}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                setTechnique(e.target.value);
-                resetPage();
-              }}
-            />
-          </label>
-        </div>
-        <label className="block space-y-1">
-          <span className="text-xs uppercase tracking-wide text-fg-muted">Q (request_id / payload)</span>
-          <Input
-            className="h-8 focus:border-status-critical"
-            placeholder="req_… or search within findings"
-            value={q}
-            onChange={(e: ChangeEvent<HTMLInputElement>) => {
-              setQ(e.target.value);
-              resetPage();
-            }}
-          />
-        </label>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" onClick={saveHunt}>
-            <BookmarkPlus className="h-3.5 w-3.5" />
-            Save hunt
-          </Button>
-          <span className="text-xs text-fg-muted">
-            {isLoading || isFetching ? "Loading…" : `${total} matches (page ${page})`}
-          </span>
+
+        <div className="flex items-center gap-3">
+          <Switch id="hunt-shadow" checked={shadow} onCheckedChange={setShadow} />
+          <Label htmlFor="hunt-shadow">Only providers outside the routing table (shadow AI)</Label>
         </div>
       </div>
     </Panel>
+  );
+}
+
+function SaveHuntPopover({ onSave }: { onSave: (name: string) => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="xs">
+          <BookmarkPlus />
+          Save Hunt
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-72">
+        <form
+          className="space-y-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!name.trim()) return;
+            void onSave(name).then(() => {
+              setName("");
+              setOpen(false);
+            });
+          }}
+        >
+          <FormField label="Name" htmlFor="hunt-name" hint="The current filters and range are saved with it.">
+            <Input
+              id="hunt-name"
+              name="hunt-name"
+              autoComplete="off"
+              placeholder="Leaked cloud keys…"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </FormField>
+          <Button type="submit" size="sm" disabled={!name.trim()}>
+            Save Hunt
+          </Button>
+        </form>
+      </PopoverContent>
+    </Popover>
   );
 }

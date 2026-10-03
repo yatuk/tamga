@@ -1,23 +1,22 @@
 "use client";
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Plus, Trash2 } from "lucide-react";
+import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { SeverityBadge } from "@/components/app/status-badge";
+import { ConfirmButton } from "@/components/app/confirm-button";
+import { FormField } from "@/components/app/form-field";
+import { Panel } from "@/components/app/panel";
+import { EmptyState, SkeletonRows } from "@/components/app/states";
+import { ActionBadge, SeverityBadge } from "@/components/app/status-badge";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api } from "@/lib/api/client";
 import type { CustomEntity } from "@/lib/api/types-core";
-import { Input } from "@/components/ui/input";
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
-import { ConfirmButton } from "@/components/app/confirm-button";
+import { toast } from "@/lib/toast";
 
 function isValidRegex(pattern: string): boolean {
   try {
@@ -28,12 +27,15 @@ function isValidRegex(pattern: string): boolean {
   }
 }
 
+const SEVERITIES = ["critical", "high", "medium", "low"] as const;
+const ACTIONS = ["block", "redact", "warn", "log"] as const;
+
 const customEntitySchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  pattern: z.string().min(1, "Pattern is required").refine(isValidRegex, "Pattern is not a valid regular expression"),
+  name: z.string().min(1, "Give the entity a name."),
+  pattern: z.string().min(1, "Enter a regular expression.").refine(isValidRegex, "This is not a valid regular expression."),
   description: z.string().optional(),
-  severity: z.enum(["critical", "high", "medium", "low"]),
-  action: z.enum(["block", "redact", "warn", "log"]),
+  severity: z.enum(SEVERITIES),
+  action: z.enum(ACTIONS),
 });
 
 type CustomEntityFormValues = z.infer<typeof customEntitySchema>;
@@ -46,6 +48,16 @@ const DEFAULTS: CustomEntityFormValues = {
   action: "log",
 };
 
+function FieldError({ id, message }: { id: string; message?: string }) {
+  if (!message) return null;
+  return (
+    <p id={id} role="alert" className="text-xs text-status-critical">
+      {message}
+    </p>
+  );
+}
+
+/** Organisation-specific patterns: project names, internal IDs, customer codes. */
 export function CustomEntityForm({ adminKey }: { adminKey: string }) {
   const qc = useQueryClient();
 
@@ -53,16 +65,11 @@ export function CustomEntityForm({ adminKey }: { adminKey: string }) {
     register,
     handleSubmit,
     reset,
-    setValue,
-    watch,
     formState: { errors },
   } = useForm<CustomEntityFormValues>({
     resolver: zodResolver(customEntitySchema),
     defaultValues: DEFAULTS,
   });
-
-  const watchedSeverity = watch("severity");
-  const watchedAction = watch("action");
 
   const { data, isLoading } = useQuery({
     queryKey: ["custom-entities", adminKey],
@@ -72,72 +79,135 @@ export function CustomEntityForm({ adminKey }: { adminKey: string }) {
 
   const createMut = useMutation({
     mutationFn: (entity: CustomEntity) => api.createCustomEntity(adminKey, entity),
-    onSuccess: () => {
+    onSuccess: (_data, entity) => {
       qc.invalidateQueries({ queryKey: ["custom-entities", adminKey] });
       reset(DEFAULTS);
+      toast.success("Entity added", entity.name);
     },
+    onError: (e) => toast.error("Could not add the entity", e.message),
   });
 
   const deleteMut = useMutation({
     mutationFn: (name: string) => api.deleteCustomEntity(adminKey, name),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["custom-entities", adminKey] });
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["custom-entities", adminKey] }),
+    onError: (e) => toast.error("Could not delete the entity", e.message),
   });
-
-  function onSubmit(values: CustomEntityFormValues) {
-    createMut.mutate({ ...values, confidence: 0.85 });
-  }
 
   const items = data?.items ?? [];
 
   return (
     <div className="space-y-6">
-      {/* Entity list */}
-      <div className="rounded-sm border border-border bg-surface-subtle/50">
-        <div className="border-b border-border px-4 py-2">
-          <span className="text-xs uppercase tracking-widest text-fg-muted">
-            Custom Entities ({items.length})
-          </span>
-        </div>
-        {isLoading ? (
-          <div className="px-4 py-3 text-xs text-fg-muted">Loading…</div>
-        ) : items.length === 0 ? (
-          <div className="px-4 py-3 text-xs text-fg-muted">
-            No custom entities yet. Add one below.
+      <Panel title="Add a custom entity" description="A regular expression the scanners match in addition to the built-in ones">
+        <form
+          noValidate
+          className="space-y-4 p-4"
+          onSubmit={handleSubmit((values) => createMut.mutate({ ...values, confidence: 0.85 }))}
+        >
+          <div className="grid gap-4 md:grid-cols-2">
+            <FormField label="Name" htmlFor="entity-name">
+              <Input
+                id="entity-name"
+                autoComplete="off"
+                spellCheck={false}
+                placeholder="project_mercury…"
+                aria-invalid={!!errors.name}
+                aria-describedby={errors.name ? "entity-name-error" : undefined}
+                {...register("name")}
+              />
+              <FieldError id="entity-name-error" message={errors.name?.message} />
+            </FormField>
+            <FormField label="Pattern (regular expression)" htmlFor="entity-pattern">
+              <Input
+                id="entity-pattern"
+                autoComplete="off"
+                spellCheck={false}
+                className="font-mono"
+                placeholder="Project[ -]?Mercury…"
+                aria-invalid={!!errors.pattern}
+                aria-describedby={errors.pattern ? "entity-pattern-error" : undefined}
+                {...register("pattern")}
+              />
+              <FieldError id="entity-pattern-error" message={errors.pattern?.message} />
+            </FormField>
+            <FormField label="Severity" htmlFor="entity-severity">
+              <NativeSelect id="entity-severity" {...register("severity")}>
+                {SEVERITIES.map((s) => (
+                  <NativeSelectOption key={s} value={s}>
+                    {s}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            </FormField>
+            <FormField label="Action" htmlFor="entity-action">
+              <NativeSelect id="entity-action" {...register("action")}>
+                {ACTIONS.map((a) => (
+                  <NativeSelectOption key={a} value={a}>
+                    {a}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            </FormField>
           </div>
+          <FormField label="Description (optional)" htmlFor="entity-description">
+            <Input
+              id="entity-description"
+              autoComplete="off"
+              placeholder="Confidential project code name…"
+              {...register("description")}
+            />
+          </FormField>
+          <Button type="submit" disabled={createMut.isPending}>
+            <Plus />
+            {createMut.isPending ? "Adding…" : "Add Entity"}
+          </Button>
+        </form>
+      </Panel>
+
+      <Panel title="Custom entities" aside={`${items.length} defined`}>
+        {isLoading ? (
+          <SkeletonRows rows={3} />
+        ) : items.length === 0 ? (
+          <EmptyState title="No custom entities" description="Add one above to detect values specific to your organisation." />
         ) : (
-          <Table className="w-full">
+          <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="text-left">Name</TableHead>
-                <TableHead className="text-left">Pattern</TableHead>
-                <TableHead className="text-left">Severity</TableHead>
-                <TableHead className="text-left">Action</TableHead>
-                <TableHead />
+                <TableHead>Name</TableHead>
+                <TableHead>Pattern</TableHead>
+                <TableHead>Severity</TableHead>
+                <TableHead>Action</TableHead>
+                <TableHead>
+                  <span className="sr-only">Actions</span>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {items.map((ce) => (
                 <TableRow key={ce.name}>
-                  <TableCell>{ce.name}</TableCell>
-                  <TableCell className="max-w-[200px] truncate">
+                  <TableCell className="font-medium">
+                    {ce.name}
+                    {ce.description ? <p className="text-xs font-normal text-muted-foreground">{ce.description}</p> : null}
+                  </TableCell>
+                  <TableCell className="max-w-72 truncate font-mono text-xs" title={ce.pattern}>
                     {ce.pattern}
                   </TableCell>
                   <TableCell>
                     <SeverityBadge severity={ce.severity} />
                   </TableCell>
-                  <TableCell className="uppercase">{ce.action}</TableCell>
+                  <TableCell>
+                    <ActionBadge action={ce.action} />
+                  </TableCell>
                   <TableCell className="text-right">
                     <ConfirmButton
-                      size="sm"
+                      size="icon-sm"
                       variant="ghost"
+                      aria-label={`Delete entity ${ce.name}`}
                       title={`Delete entity ${ce.name}?`}
-                      description="It is removed from the active policy."
+                      description="The scanners stop matching this pattern."
                       onConfirm={() => deleteMut.mutate(ce.name)}
                       disabled={deleteMut.isPending}
                     >
-                      Delete
+                      <Trash2 />
                     </ConfirmButton>
                   </TableCell>
                 </TableRow>
@@ -145,72 +215,7 @@ export function CustomEntityForm({ adminKey }: { adminKey: string }) {
             </TableBody>
           </Table>
         )}
-      </div>
-
-      {/* Add form */}
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 rounded-sm border border-border bg-surface-subtle/50 p-4">
-        <span className="text-xs uppercase tracking-widest text-fg-muted">
-          New custom entity
-        </span>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <label className="block text-xs uppercase tracking-widest text-fg-muted">Name *</label>
-            <Input
-              {...register("name")}
-              className="w-full"
-              placeholder="ProjectMercury" aria-label="ProjectMercury" />
-            {errors.name && <p className="text-xs text-status-critical">{errors.name.message}</p>}
-          </div>
-          <div className="space-y-1">
-            <label className="block text-xs uppercase tracking-widest text-fg-muted">Pattern (regex) *</label>
-            <Input
-              {...register("pattern")}
-              className="w-full"
-              placeholder="Project[ -]?Mercury" aria-label="Project[ -]?Mercury" />
-            {errors.pattern && <p className="text-xs text-status-critical">{errors.pattern.message}</p>}
-          </div>
-          <div className="space-y-1">
-            <label className="block text-xs uppercase tracking-widest text-fg-muted">Severity</label>
-            <Select value={watchedSeverity} onValueChange={(v) => setValue("severity", v as CustomEntityFormValues["severity"])}>
-              <SelectTrigger className="rounded-sm border-border-strong bg-surface-card text-xs text-fg">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="rounded-sm border-border bg-surface-card">
-                {["critical", "high", "medium", "low"].map((s) => (
-                  <SelectItem key={s} value={s} className="text-xs uppercase">{s}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1">
-            <label className="block text-xs uppercase tracking-widest text-fg-muted">Action</label>
-            <Select value={watchedAction} onValueChange={(v) => setValue("action", v as "block" | "redact" | "warn" | "log")}>
-              <SelectTrigger className="rounded-sm border-border-strong bg-surface-card text-xs text-fg">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="rounded-sm border-border bg-surface-card">
-                {["block", "redact", "warn", "log"].map((a) => (
-                  <SelectItem key={a} value={a} className="text-xs uppercase">{a}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-        <div className="space-y-1">
-          <label className="block text-xs uppercase tracking-widest text-fg-muted">Description (optional)</label>
-          <Input
-            {...register("description")}
-            className="w-full"
-            placeholder="Confidential project code name" aria-label="Confidential project code name" />
-        </div>
-        {createMut.error && (
-          <p className="text-xs text-status-critical">{createMut.error.message}</p>
-        )}
-        <Button type="submit" disabled={createMut.isPending}>
-          {createMut.isPending ? "Adding…" : "Add entity"}
-        </Button>
-      </form>
+      </Panel>
     </div>
   );
 }
-

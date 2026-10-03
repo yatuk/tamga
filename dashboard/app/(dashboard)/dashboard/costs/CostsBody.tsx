@@ -1,34 +1,41 @@
 "use client";
 
+import { useMemo } from "react";
 import { Download } from "lucide-react";
+import { BarList } from "@/components/app/bar-list";
+import { TimeSeriesChart, type ChartSeries } from "@/components/app/charts";
 import { PageHeader } from "@/components/app/page-header";
 import { Panel } from "@/components/app/panel";
 import { Stat, StatGrid } from "@/components/app/stat";
-import { EmptyState } from "@/components/app/states";
-import { formatInt } from "@/lib/utils/format";
-import { Button } from "@/components/ui/button";
-import type { TimeRange } from "@/lib/types";
-import type { useCostsPage } from "./useCostsPage";
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { AdminKeyRequired, EmptyState, ErrorState, SkeletonRows } from "@/components/app/states";
 import { TimeRangeToggle } from "@/components/app/time-range";
+import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { humanizeProvider } from "@/lib/humanize";
+import { formatInt } from "@/lib/utils/format";
+import type { useCostsPage } from "./useCostsPage";
 
-function formatCost(usd: number): string {
+/** US dollars, with more decimals the smaller the amount. */
+export function formatCost(usd: number): string {
   if (usd === 0) return "$0";
-  if (usd < 0.01) return `$${(usd * 100).toFixed(2)}¢`;
+  if (usd < 0.01) return `$${usd.toFixed(4)}`;
   if (usd < 1) return `$${usd.toFixed(3)}`;
   if (usd < 100) return `$${usd.toFixed(2)}`;
   return `$${formatInt(Math.round(usd))}`;
 }
 
-function formatTokens(n: number): string {
+export function formatTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
+  return String(Math.round(n));
 }
+
+const COST_SERIES: ChartSeries[] = [{ key: "cost", label: "Estimated cost", color: "var(--chart-1)" }];
 
 type Props = ReturnType<typeof useCostsPage>;
 
 export function CostsBody({
+  adminKey,
   range,
   setRange,
   isLoading,
@@ -38,7 +45,6 @@ export function CostsBody({
   limitTokens,
   limitCost,
   remainingPct,
-  chartData,
   modelCostRows,
   dailyRows,
   totalCostEstimate,
@@ -48,335 +54,177 @@ export function CostsBody({
   costPerRequest,
   avgTokensPerRequest,
   modelFamilyBars,
-  dailySparkline,
 }: Props) {
-  const costPerReqStr =
-    costPerRequest < 0.01
-      ? `<$${(costPerRequest * 100).toFixed(3)}¢`
-      : `$${costPerRequest.toFixed(4)}`;
-  const avgTokensStr =
-    avgTokensPerRequest >= 1000
-      ? `${(avgTokensPerRequest / 1000).toFixed(1)}K`
-      : Math.round(avgTokensPerRequest).toString();
+  // One bar per day: the daily rows are per provider and model.
+  const dailyCost = useMemo(() => {
+    const byDate = new Map<string, number>();
+    for (const row of dailyRows) byDate.set(row.date, (byDate.get(row.date) ?? 0) + row.cost_usd);
+    return [...byDate.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([date, cost]) => ({ date: date.slice(5), cost: Number(cost.toFixed(4)) }));
+  }, [dailyRows]);
 
-  const sparklineEl =
-    dailySparkline.length > 0 ? (
-      <div className="flex items-end gap-px h-5">
-        {dailySparkline.map((d, i) => {
-          const h =
-            d.cost > 0 ? Math.max(2, (d.cost / dailySparkline.maxCost) * 20) : 2;
-          const color =
-            limitCost > 0 && d.cost > limitCost * 0.8
-              ? "bg-status-critical"
-              : limitCost > 0 && d.cost > limitCost * 0.5
-                ? "bg-status-medium"
-                : "bg-status-pass";
-          return (
-            <div
-              key={i}
-              className={`w-[3px] rounded-t-sm ${color}`}
-              style={{ height: `${h}px` }}
-            />
-          );
-        })}
-      </div>
-    ) : undefined;
-
-  return (
-    <div className="space-y-2">
-      <PageHeader
-        title="Token Costs"
-        description="Estimated spend per model against the daily budget."
-        actions={
-          <>
-            <TimeRangeToggle value={range} onChange={setRange} />
-            <Button variant="outline" onClick={exportCsv}>
-              <Download className="mr-1 h-4 w-4" /> CSV
-            </Button>
-          </>
-        }
-      />
-
-      {hasError ? (
-        <EmptyState
-          icon="database"
-          title="Billing data unavailable"
-          description="Failed to load cost data. Check your admin key and proxy connection."
-          action={{ label: "Retry", onClick: () => window.location.reload() }}
-        />
-      ) : null}
-
-      {/* Budget + MTD + Projected metric cards */}
-      <StatGrid>
-        {isLoading ? (
-          Array.from({ length: 4 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-[88px] animate-pulse rounded-sm bg-surface-subtle"
-            />
-          ))
-        ) : (
-          <>
-            <Stat
-              label="TODAY'S BURN"
-              value={`${formatTokens(tokensToday)} · ${formatCost(costToday)}`}
-              sparkline={sparklineEl}
-            />
-            <Stat
-              label="DAILY LIMIT"
-              value={`${formatTokens(limitTokens)} · ${formatCost(limitCost)}`}
-            />
-            <Stat
-              label="REMAINING"
-              value={`${remainingPct}%`}
-              tone={Number(remainingPct) < 20 ? "critical" : Number(remainingPct) < 50 ? "warn" : "pass"}
-            />
-            <Stat
-              label="MTD · PROJECTED"
-              value={`${formatCost(mtdTotalUSD)} · ${formatCost(projectedMonthlyUSD)}`}
-            />
-          </>
-        )}
-      </StatGrid>
-
-      {/* Derived metric cards */}
-      <StatGrid>
-        {!isLoading && (
-          <>
-            <Stat
-              label="COST PER REQUEST"
-              value={costPerReqStr}
-            />
-            <Stat
-              label="AVG TOKENS / REQ"
-              value={avgTokensStr}
-            />
-          </>
-        )}
-      </StatGrid>
-
-      {/* Token consumption trend */}
-      <Panel
-        title="Token Consumption"
-        aside={
-          <span className="px-2 text-xs uppercase tracking-[0.18em] text-fg-muted">
-            {chartData.length} pts
-          </span>
-        }
-      >
-        <div className="p-3">
-          {isLoading ? (
-            <div className="h-[200px] w-full animate-pulse rounded-sm bg-surface-subtle" />
-          ) : chartData.length === 0 ? (
-            <div className="py-16 text-center text-xs text-fg-muted">
-              No usage data for this period
-            </div>
-          ) : (
-            <SimpleTokenChart data={chartData} />
-          )}
-        </div>
-      </Panel>
-
-      {/* Per-model cost breakdown */}
-      <Panel
-        title="Model Costs"
-        aside={
-          <span className="px-2 text-xs uppercase tracking-[0.18em] text-fg-subtle">
-            est. total: {formatCost(totalCostEstimate)}
-          </span>
-        }
-      >
-        <div className="overflow-x-auto">
-          {isLoading ? (
-            <div className="p-3 space-y-2">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="h-[28px] animate-pulse rounded-sm bg-surface-subtle" />
-              ))}
-            </div>
-          ) : modelCostRows.length === 0 ? (
-            <div className="py-12 text-center text-xs text-fg-muted">
-              No usage data for this period
-            </div>
-          ) : (
-            <Table className="w-full">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-left font-medium uppercase">
-                    Model
-                  </TableHead>
-                  <TableHead className="text-right font-medium uppercase">
-                    Tokens
-                  </TableHead>
-                  <TableHead className="text-right font-medium uppercase">
-                    Est. Cost
-                  </TableHead>
-                  <TableHead className="text-right font-medium uppercase">
-                    % of Total
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {modelCostRows.map((r) => {
-                  const pct =
-                    totalCostEstimate > 0
-                      ? ((r.cost / totalCostEstimate) * 100).toFixed(1)
-                      : "0.0";
-                  return (
-                    <TableRow
-                      key={r.model}
-                    >
-                      <TableCell className="font-mono">{r.model}</TableCell>
-                      <TableCell className="text-right tabular-nums font-mono">
-                        {formatTokens(r.tokens)}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums font-mono">
-                        {formatCost(r.cost)}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {pct}%
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          )}
-        </div>
-        <div className="border-t border-border px-3 py-2 text-xs text-fg-subtle">
-          Pricing as of June 2026. Costs are server-side estimates; verify them against provider invoices.
-        </div>
-      </Panel>
-
-      {/* Model family stacked bar */}
-      {modelFamilyBars.length > 0 && !isLoading ? (
-        <Panel
-          title="Model Family Distribution"
-          aside={
-            <span className="px-2 text-xs uppercase tracking-[0.18em] text-fg-muted">
-              {modelFamilyBars.length} families
-            </span>
-          }
-        >
-          <div className="p-4 space-y-3">
-            {/* Stacked bar */}
-            <div className="flex h-5 w-full overflow-hidden rounded-sm">
-              {modelFamilyBars.map((f) => (
-                <div
-                  key={f.family}
-                  className={`${f.color} h-full`}
-                  style={{ width: `${Math.max(f.pct, 1)}%` }}
-                  title={`${f.family}: $${f.cost.toFixed(2)} (${f.pct}%)`}
-                />
-              ))}
-            </div>
-            {/* Legend */}
-            <div className="flex flex-wrap gap-3">
-              {modelFamilyBars.map((f) => (
-                <div key={f.family} className="flex items-center gap-1.5 text-xs">
-                  <span className={`h-2 w-2 shrink-0 rounded-sm ${f.color}`} />
-                  <span className="text-fg-muted">{f.family}</span>
-                  <span className="font-mono tabular-nums text-fg-subtle">{f.pct}%</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </Panel>
-      ) : null}
-
-      {/* Daily breakdown table */}
-      {dailyRows.length > 0 && (
-        <Panel
-          title="Daily Breakdown"
-          aside={
-            <span className="px-2 text-xs uppercase tracking-[0.18em] text-fg-subtle">
-              {dailyRows.length} rows
-            </span>
-          }
-        >
-          <div className="overflow-x-auto">
-            <Table className="w-full">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-left font-medium uppercase">
-                    Date
-                  </TableHead>
-                  <TableHead className="text-left font-medium uppercase">
-                    Provider
-                  </TableHead>
-                  <TableHead className="text-left font-medium uppercase">
-                    Model
-                  </TableHead>
-                  <TableHead className="text-right font-medium uppercase">
-                    Input Tokens
-                  </TableHead>
-                  <TableHead className="text-right font-medium uppercase">
-                    Output Tokens
-                  </TableHead>
-                  <TableHead className="text-right font-medium uppercase">
-                    Cost USD
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {dailyRows.map((r, i) => (
-                  <TableRow
-                    key={`${r.date}-${r.provider}-${r.model}-${i}`}
-                  >
-                    <TableCell className="font-mono">
-                      {r.date}
-                    </TableCell>
-                    <TableCell className="font-mono">{r.provider}</TableCell>
-                    <TableCell className="font-mono">{r.model}</TableCell>
-                    <TableCell className="text-right tabular-nums font-mono">
-                      {formatTokens(r.input_tokens)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums font-mono">
-                      {formatTokens(r.output_tokens)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums font-mono">
-                      {formatCost(r.cost_usd)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </Panel>
-      )}
-    </div>
+  const header = (
+    <PageHeader
+      title="Token costs"
+      description="Estimated spend per model, against the daily budget."
+      actions={
+        <>
+          <TimeRangeToggle value={range} onChange={setRange} />
+          <Button variant="outline" size="sm" onClick={exportCsv} disabled={modelCostRows.length === 0}>
+            <Download />
+            Export CSV
+          </Button>
+        </>
+      }
+    />
   );
-}
 
-/** Minimal bar chart for token consumption -- no gradient, solid fills */
-function SimpleTokenChart({
-  data,
-}: {
-  data: { time: string; total: number; blocked: number }[];
-}) {
-  const max = Math.max(...data.map((d) => d.total), 1);
+  if (!adminKey || hasError) {
+    return (
+      <div className="space-y-6">
+        {header}
+        <Panel>
+          {!adminKey ? (
+            <AdminKeyRequired />
+          ) : (
+            <ErrorState title="Could not load cost data" error="Check the admin key and that the proxy is reachable." />
+          )}
+        </Panel>
+      </div>
+    );
+  }
+
+  const hasLimit = limitTokens > 0;
+  const remaining = Number(remainingPct);
+  const v = (text: string) => (isLoading ? "…" : text);
+
   return (
-    <div className="flex items-end gap-px h-[160px]">
-      {data.map((d, i) => {
-        const h = Math.max(4, (d.total / max) * 100);
-        const blockedH = d.total > 0 ? (d.blocked / d.total) * h : 0;
-        return (
-          <div
-            key={i}
-            className="group relative flex-1 min-w-[2px]"
-            title={`${d.time}: ${formatInt(d.total)} total, ${d.blocked.toLocaleString("en-US")} blocked`}
-          >
-            <div
-              className="absolute bottom-0 left-0 right-0 rounded-t-sm bg-surface-subtle"
-              style={{ height: `${h}%` }}
-            >
-              <div
-                className="absolute bottom-0 left-0 right-0 rounded-t-sm bg-status-critical/70"
-                style={{ height: `${blockedH}%` }}
+    <div className="space-y-6">
+      {header}
+
+      <StatGrid>
+        <Stat label="Spend today" value={v(formatCost(costToday))} hint={`${formatTokens(tokensToday)} tokens`} />
+        <Stat
+          label="Daily budget"
+          value={v(hasLimit ? formatCost(limitCost) : "No limit")}
+          hint={hasLimit ? `${formatTokens(limitTokens)} tokens` : "Set a budget in the policy"}
+        />
+        <Stat
+          label="Budget left today"
+          value={v(hasLimit ? `${remainingPct}%` : "—")}
+          tone={!hasLimit ? "default" : remaining < 20 ? "critical" : remaining < 50 ? "warn" : "default"}
+          tooltip="Share of today's token budget not yet used."
+        />
+        <Stat label={`Spend · ${range}`} value={v(formatCost(totalCostEstimate))} />
+        <Stat label="Month to date" value={v(formatCost(mtdTotalUSD))} />
+        <Stat
+          label="Projected month"
+          value={v(formatCost(projectedMonthlyUSD))}
+          tooltip="Month-to-date spend extrapolated to the end of the month."
+        />
+        <Stat label="Cost per request" value={v(formatCost(costPerRequest))} />
+        <Stat label="Tokens per request" value={v(formatTokens(avgTokensPerRequest))} />
+      </StatGrid>
+
+      <div className="grid gap-6 xl:grid-cols-3">
+        <Panel title={`Cost per day · ${range}`} className="xl:col-span-2">
+          {isLoading ? (
+            <SkeletonRows rows={6} />
+          ) : dailyCost.length === 0 ? (
+            <EmptyState
+              icon="chart"
+              title="No usage in this window"
+              description="Costs appear once requests with token counts have gone through the proxy."
+            />
+          ) : (
+            <div className="p-4">
+              <TimeSeriesChart
+                kind="bar"
+                data={dailyCost}
+                xKey="date"
+                series={COST_SERIES}
+                height={260}
+                formatValue={formatCost}
+                label={`Estimated cost per day over the last ${range}`}
               />
             </div>
-          </div>
-        );
-      })}
+          )}
+        </Panel>
+
+        <Panel title="Model families" description="Share of estimated cost">
+          {isLoading ? (
+            <SkeletonRows rows={3} />
+          ) : modelFamilyBars.length === 0 ? (
+            <EmptyState icon="chart" title="No usage" />
+          ) : (
+            <BarList items={modelFamilyBars.map((f) => ({ label: f.family, value: f.cost }))} formatValue={formatCost} mono />
+          )}
+        </Panel>
+      </div>
+
+      <Panel title="Cost by model" aside={<span className="font-mono">{formatCost(totalCostEstimate)} total</span>}>
+        {isLoading ? (
+          <SkeletonRows rows={4} />
+        ) : modelCostRows.length === 0 ? (
+          <EmptyState icon="database" title="No usage in this window" />
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Model</TableHead>
+                <TableHead className="text-right">Tokens</TableHead>
+                <TableHead className="text-right">Estimated cost</TableHead>
+                <TableHead className="text-right">Share</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {modelCostRows.map((r) => (
+                <TableRow key={r.model}>
+                  <TableCell className="font-mono text-xs">{r.model}</TableCell>
+                  <TableCell className="text-right font-mono text-xs tabular-nums">{formatTokens(r.tokens)}</TableCell>
+                  <TableCell className="text-right font-mono text-xs tabular-nums">{formatCost(r.cost)}</TableCell>
+                  <TableCell className="text-right font-mono text-xs text-muted-foreground tabular-nums">
+                    {totalCostEstimate > 0 ? ((r.cost / totalCostEstimate) * 100).toFixed(1) : "0.0"}%
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+        <p className="border-t px-4 py-3 text-xs text-muted-foreground">
+          Costs are estimates from the proxy&apos;s pricing table (June 2026). Check them against provider invoices.
+        </p>
+      </Panel>
+
+      {dailyRows.length > 0 ? (
+        <Panel title="Daily usage" aside={`${dailyRows.length} rows`}>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Date</TableHead>
+                <TableHead>Provider</TableHead>
+                <TableHead>Model</TableHead>
+                <TableHead className="text-right">Input tokens</TableHead>
+                <TableHead className="text-right">Output tokens</TableHead>
+                <TableHead className="text-right">Estimated cost</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {dailyRows.map((r, i) => (
+                <TableRow key={`${r.date}-${r.provider}-${r.model}-${i}`}>
+                  <TableCell className="font-mono text-xs">{r.date}</TableCell>
+                  <TableCell>{humanizeProvider(r.provider)}</TableCell>
+                  <TableCell className="font-mono text-xs">{r.model}</TableCell>
+                  <TableCell className="text-right font-mono text-xs tabular-nums">{formatTokens(r.input_tokens)}</TableCell>
+                  <TableCell className="text-right font-mono text-xs tabular-nums">{formatTokens(r.output_tokens)}</TableCell>
+                  <TableCell className="text-right font-mono text-xs tabular-nums">{formatCost(r.cost_usd)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Panel>
+      ) : null}
     </div>
   );
 }

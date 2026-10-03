@@ -1,20 +1,19 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { toast } from "@/lib/toast";
 import { toUpperEn, toLowerEn } from "@/lib/utils/case";
-import { type ReportRange } from "./_constants";
 import { useAdminKey } from "@/hooks/useAdminKey";
 import { useCsvExport } from "@/hooks/useCsvExport";
+import { useDownload } from "@/hooks/useDownload";
 import { useRangeParam } from "@/hooks/useRangeParam";
 
 export function useReportsPage() {
   const [adminKey] = useAdminKey();
   const [range, setRange] = useRangeParam("7d");
   const [isExporting, setIsExporting] = useState(false);
-  const reportRef = useRef<HTMLDivElement | null>(null);
 
   const { data: stats } = useQuery({
     queryKey: ["tamga-reports-stats", adminKey, range],
@@ -121,8 +120,9 @@ export function useReportsPage() {
     const secondTotal = secondHalf.reduce((a, p) => a + p.total, 0);
     const firstBlocked = firstHalf.reduce((a, p) => a + p.blocked, 0);
     const secondBlocked = secondHalf.reduce((a, p) => a + p.blocked, 0);
-    const reqDelta = firstTotal > 0 ? ((secondTotal - firstTotal) / firstTotal) * 100 : 0;
-    const blockedDelta = firstBlocked > 0 ? ((secondBlocked - firstBlocked) / firstBlocked) * 100 : 0;
+    // A change against zero is not a percentage; report it as unknown.
+    const reqDelta = firstTotal > 0 ? ((secondTotal - firstTotal) / firstTotal) * 100 : null;
+    const blockedDelta = firstBlocked > 0 ? ((secondBlocked - firstBlocked) / firstBlocked) * 100 : null;
     return { reqDelta, blockedDelta };
   }, [ts]);
 
@@ -133,9 +133,7 @@ export function useReportsPage() {
     const totalFindings = Object.values(stats?.top_finding_types || {}).reduce(
       (a, v) => a + Number(v), 0,
     );
-    const criticalCount = Object.entries(stats?.top_finding_types || {}).reduce(
-      (a, [k, v]) => (k.toLowerCase().includes("critical") ? a + Number(v) : a), 0,
-    );
+    const criticalCount = Number(breakdown?.by_severity?.critical ?? 0);
     const topFinding = topFindingEntries[0]?.[0] || null;
     const topFindingCount = topFindingEntries[0]?.[1] || 0;
     const mttrMinutes = mttrData?.overall_mttr_minutes ?? 0;
@@ -151,7 +149,7 @@ export function useReportsPage() {
       mttrMinutes,
       mttrTrend,
     };
-  }, [stats, topFindingEntries, mttrData]);
+  }, [stats, breakdown, topFindingEntries, mttrData]);
 
   const { exportCsv: doExport } = useCsvExport();
 
@@ -167,19 +165,20 @@ export function useReportsPage() {
     doExport(`tamga-reports-blocked-${range}.csv`, headers, rows, { quote: true });
   };
 
-  const downloadBlob = useCallback(
-    (blob: Blob, filename: string) => {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    },
-    [],
-  );
+  const downloadBlob = useDownload();
+
+  const exportEventsCsv = useCallback(async () => {
+    if (!adminKey) return;
+    setIsExporting(true);
+    try {
+      const blob = await api.getEventsExport(adminKey, { range, format: "csv" });
+      downloadBlob(blob, `tamga-events-${range}.csv`);
+    } catch (err) {
+      toast.error("Could not export events", err instanceof Error ? err.message : undefined);
+    } finally {
+      setIsExporting(false);
+    }
+  }, [adminKey, range, downloadBlob]);
 
   const exportOwaspPdf = useCallback(async () => {
     if (!adminKey) return;
@@ -187,10 +186,10 @@ export function useReportsPage() {
     try {
       const blob = await api.getOwaspPdfReport(adminKey, { range });
       downloadBlob(blob, `tamga-owasp-report-${range}.pdf`);
-      toast.success("OWASP PDF report downloaded");
+      toast.success("OWASP report downloaded");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not generate the PDF";
-      toast.error("PDF export failed", message);
+      toast.error("Could not generate the PDF", message);
     } finally {
       setIsExporting(false);
     }
@@ -213,17 +212,16 @@ export function useReportsPage() {
         period_hours: String(periodHours),
       });
       downloadBlob(blob, `tamga-incident-report-${range}.pdf`);
-      toast.success("Incident PDF report downloaded");
+      toast.success("Incident report downloaded");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not generate the PDF";
-      toast.error("PDF export failed", message);
+      toast.error("Could not generate the PDF", message);
     } finally {
       setIsExporting(false);
     }
   }, [adminKey, range, stats, downloadBlob]);
 
   return {
-    reportRef,
     adminKey,
     range,
     setRange,
@@ -234,6 +232,7 @@ export function useReportsPage() {
     topFindingsTotal,
     owaspCoverageRows,
     exportBlockedCsv,
+    exportEventsCsv,
     exportOwaspPdf,
     exportIncidentPdf,
     isExporting,

@@ -1,12 +1,13 @@
 "use client";
 
 import { useMemo } from "react";
-import type { PolicySimulateResult } from "@/lib/api";
-import { toUpperEn } from "@/lib/utils/case";
-import { Badge } from "@/components/ui/badge";
 import { Panel } from "@/components/app/panel";
-import { playgroundActionClass, playgroundSeverityClass } from "./playgroundUi";
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { EmptyState, SkeletonRows } from "@/components/app/states";
+import { ActionBadge, SeverityBadge } from "@/components/app/status-badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import type { PolicySimulateResult } from "@/lib/api";
+import { humanizeFindingType } from "@/lib/humanize";
+import { toLowerEn } from "@/lib/utils/case";
 
 type Props = {
   result: PolicySimulateResult | null;
@@ -14,201 +15,125 @@ type Props = {
   loading?: boolean;
 };
 
-// ── Diff highlight helper ──────────────────────────────────────────────────────
+type Finding = PolicySimulateResult["findings"][number];
+type Span = { start: number; end: number; finding: Finding };
 
-function highlightMatches(text: string, findings: PolicySimulateResult["findings"]): React.ReactNode {
-  if (!text || findings.length === 0) {
-    return <span className="text-fg-subtle">{text || "—"}</span>;
-  }
-
-  // Collect all match positions
-  interface Span {
-    start: number;
-    end: number;
-    finding: (typeof findings)[number];
-  }
-
+/** Every place a finding's matched text occurs in the prompt, merged where they overlap. */
+function matchSpans(text: string, findings: Finding[]): Span[] {
   const spans: Span[] = [];
   for (const f of findings) {
     if (!f.match) continue;
-    let idx = 0;
-    while (idx < text.length) {
-      const pos = text.indexOf(f.match, idx);
+    let from = 0;
+    for (;;) {
+      const pos = text.indexOf(f.match, from);
       if (pos === -1) break;
       spans.push({ start: pos, end: pos + f.match.length, finding: f });
-      idx = pos + 1;
+      from = pos + 1;
     }
   }
-
-  if (spans.length === 0) {
-    return <span className="text-fg-subtle">{text}</span>;
-  }
-
-  // Sort and merge overlapping spans
   spans.sort((a, b) => a.start - b.start);
-  const merged: Span[] = [spans[0]];
-  for (let i = 1; i < spans.length; i++) {
+  const merged: Span[] = [];
+  for (const span of spans) {
     const last = merged[merged.length - 1];
-    if (spans[i].start <= last.end) {
-      last.end = Math.max(last.end, spans[i].end);
-    } else {
-      merged.push(spans[i]);
-    }
+    if (last && span.start <= last.end) last.end = Math.max(last.end, span.end);
+    else merged.push({ ...span });
   }
+  return merged;
+}
 
-  // Build highlighted output
+/** The prompt with the text that triggered a block or a redaction marked. */
+function HighlightedPrompt({ text, findings }: { text: string; findings: Finding[] }) {
+  const spans = matchSpans(text, findings);
   const parts: React.ReactNode[] = [];
   let cursor = 0;
-  merged.forEach((span, i) => {
-    // Text before match
-    if (span.start > cursor) {
-      parts.push(
-        <span key={`txt-${i}`} className="text-fg-subtle">
-          {text.slice(cursor, span.start)}
-        </span>,
-      );
-    }
-    // Matched portion — red background (redacted) or amber (warn)
-    const isBlock = span.finding.action === "block";
+  spans.forEach((span, i) => {
+    if (span.start > cursor) parts.push(text.slice(cursor, span.start));
+    const blocked = toLowerEn(span.finding.action) === "block";
     parts.push(
-      <span
-        key={`match-${i}`}
-        className={`rounded-sm px-0.5 text-xs ${
-          isBlock
-            ? "bg-status-critical/25 text-status-critical line-through"
-            : "bg-status-medium/20 text-status-medium"
-        }`}
-        title={`${span.finding.type}:${span.finding.category} → ${span.finding.action}`}
+      <mark
+        key={i}
+        className={
+          blocked
+            ? "bg-status-critical-bg px-0.5 text-status-critical underline decoration-wavy underline-offset-4"
+            : "bg-status-medium-bg px-0.5 text-status-medium underline underline-offset-4"
+        }
+        title={`${span.finding.category}: ${toLowerEn(span.finding.action)}`}
       >
         {text.slice(span.start, span.end)}
-      </span>,
+      </mark>,
     );
     cursor = span.end;
   });
-  // Remaining text
-  if (cursor < text.length) {
-    parts.push(
-      <span key="txt-end" className="text-fg-subtle">
-        {text.slice(cursor)}
-      </span>,
-    );
-  }
-
+  if (cursor < text.length) parts.push(text.slice(cursor));
   return <>{parts}</>;
 }
 
-// ── Main Export ────────────────────────────────────────────────────────────────
-
 export function PlaygroundSimulateResult({ result, originalPrompt, loading = false }: Props) {
-  // Find redacted/blocked matches for diff view
-  const actionableFindings = useMemo(
-    () => result?.findings.filter((f) => f.action === "redact" || f.action === "block") ?? [],
+  const actionable = useMemo(
+    () => result?.findings.filter((f) => ["redact", "block"].includes(toLowerEn(f.action))) ?? [],
     [result],
   );
 
   return (
-    <div>
-      <Panel
-        title="Simulation result"
-        aside={
-          <Badge className={`rounded-sm border text-xs uppercase tracking-[0.18em] ${playgroundActionClass(result?.action || "")}`}>
-            {result?.action || "—"}
-          </Badge>
-        }
-
-      >
-        {loading ? (
-          <div className="p-6 space-y-2" role="status" aria-label="Running simulation">
-            <div className="h-4 w-48 animate-pulse rounded bg-surface-subtle" />
-            <div className="h-[160px] animate-pulse rounded bg-surface-subtle" />
-            <span className="sr-only">Running simulation…</span>
-          </div>
-        ) : !result ? (
-          <div className="p-6 text-center text-xs text-fg-muted">
-            Run simulate to see findings…
-          </div>
-        ) : (
-          <div className="space-y-4 p-3">
-            {/* Policy info */}
-            <div className="text-xs uppercase tracking-[0.14em] text-fg-muted">
-              policy: {result.policy_name} @ {result.policy_version} · findings {result.findings.length}
+    <Panel
+      title="Decision"
+      description={result ? `${result.policy_name} v${result.policy_version}` : undefined}
+      aside={result ? <ActionBadge action={result.action || "PASS"} /> : undefined}
+    >
+      {loading ? (
+        <SkeletonRows rows={4} />
+      ) : !result ? (
+        <EmptyState icon="search" title="No result yet" description="Run the simulation to see what the policy would do." />
+      ) : result.findings.length === 0 ? (
+        <EmptyState icon="shield" title="No findings" description="The policy would pass this prompt unchanged." />
+      ) : (
+        <>
+          {originalPrompt && actionable.length > 0 ? (
+            <div className="border-b p-4">
+              <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                <span>What matched</span>
+                <span className="text-status-critical underline decoration-wavy underline-offset-4">blocked</span>
+                <span className="text-status-medium underline underline-offset-4">redacted</span>
+              </div>
+              <p className="max-h-52 overflow-y-auto font-mono text-xs leading-relaxed break-words whitespace-pre-wrap text-fg-muted">
+                <HighlightedPrompt text={originalPrompt} findings={actionable} />
+              </p>
             </div>
-
-            {/* ── Diff view: original text with highlighted matches ── */}
-            {originalPrompt && actionableFindings.length > 0 && (
-              <div className="space-y-1.5">
-                <div className="text-xs uppercase tracking-[0.14em] text-fg-muted">
-                  Content Analysis
-                </div>
-                <div className="relative rounded-sm border border-border bg-surface-subtle p-3">
-                  {/* Legend */}
-                  <div className="mb-2 flex items-center gap-3 text-xs">
-                    <span className="inline-flex items-center gap-1">
-                      <span className="h-2 w-2 rounded-sm bg-status-critical/50" />
-                      <span className="text-fg-muted">Blocked</span>
-                    </span>
-                    <span className="inline-flex items-center gap-1">
-                      <span className="h-2 w-2 rounded-sm bg-status-medium/50" />
-                      <span className="text-fg-muted">Redacted</span>
-                    </span>
-                    <span className="text-fg-muted text-[8px]">
-                      original text with matches highlighted
-                    </span>
-                  </div>
-                  {/* Highlighted text */}
-                  <div className="max-h-[200px] overflow-y-auto text-xs leading-relaxed whitespace-pre-wrap wrap-break-word">
-                    {highlightMatches(originalPrompt, actionableFindings)}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Findings table */}
-            {result.findings.length === 0 ? (
-              <div className="text-xs text-fg-muted">no findings</div>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table className="w-full text-left">
-                  <TableHeader className="uppercase">
-                    <TableRow>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Category</TableHead>
-                      <TableHead>Severity</TableHead>
-                      <TableHead>Confidence</TableHead>
-                      <TableHead>Action</TableHead>
-                      <TableHead>Match</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {result.findings.map((f, i) => (
-                      <TableRow key={i}>
-                        <TableCell>{f.type}</TableCell>
-                        <TableCell>{f.category}</TableCell>
-                        <TableCell>
-                          <Badge className={`rounded-sm border text-xs ${playgroundSeverityClass(f.severity)}`}>
-                            {toUpperEn(f.severity || "—")}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="tabular-nums">
-                          {Math.round((f.confidence || 0) * 100)}%
-                        </TableCell>
-                        <TableCell>
-                          <Badge className={`rounded-sm border text-xs ${playgroundActionClass(f.action)}`}>
-                            {toUpperEn(f.action || "—")}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          {f.match ? f.match.slice(0, 40) : "—"}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </div>
-        )}
-      </Panel>
-    </div>
+          ) : null}
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Type</TableHead>
+                <TableHead>Category</TableHead>
+                <TableHead>Severity</TableHead>
+                <TableHead className="text-right">Confidence</TableHead>
+                <TableHead>Action</TableHead>
+                <TableHead>Matched text</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {result.findings.map((f, i) => (
+                <TableRow key={i}>
+                  <TableCell>{humanizeFindingType(f.type)}</TableCell>
+                  <TableCell className="font-mono text-xs">{f.category}</TableCell>
+                  <TableCell>
+                    <SeverityBadge severity={f.severity} />
+                  </TableCell>
+                  <TableCell className="text-right font-mono text-xs tabular-nums">
+                    {Math.round((f.confidence || 0) * 100)}%
+                  </TableCell>
+                  <TableCell>
+                    <ActionBadge action={f.action} />
+                  </TableCell>
+                  <TableCell className="max-w-64 truncate font-mono text-xs text-muted-foreground" title={f.match} translate="no">
+                    {f.match || "—"}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </>
+      )}
+    </Panel>
   );
 }

@@ -1,98 +1,72 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
+import { RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
+import { Panel } from "@/components/app/panel";
+import { AdminKeyRequired } from "@/components/app/states";
+import { TimeRangeToggle } from "@/components/app/time-range";
+import { Button } from "@/components/ui/button";
 import { HuntingFilters } from "./HuntingFilters";
 import { HuntingResults } from "./HuntingResults";
 import { SavedHuntsPanel } from "./SavedHuntsPanel";
 import { useHuntingPage } from "./useHuntingPage";
 
 export default function HuntingPage() {
-  const {
-    page,
-    setPage,
-    action,
-    setAction,
-    provider,
-    setProvider,
-    shadow,
-    setShadow,
-    findingType,
-    setFindingType,
-    severity,
-    setSeverity,
-    category,
-    setCategory,
-    technique,
-    setTechnique,
-    q,
-    setQ,
-    range,
-    setRange,
-    savedHunts,
-    data,
-    isLoading,
-    error,
-    refetch,
-    isFetching,
-    applyHunt,
-    saveHunt,
-    deleteHunt,
-  } = useHuntingPage();
+  const m = useHuntingPage();
 
-  const events = data?.events ?? [];
-  const total = data?.total ?? 0;
-
-  return (
-    <div className="space-y-2">
-      <PageHeader
-        title="Threat Hunting"
-        description="Search every scanned request by action, finding, technique or text."
-        actions={
-          <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
+  const header = (
+    <PageHeader
+      title="Threat hunting"
+      description="Search every scanned request by action, finding, technique or text."
+      actions={
+        <>
+          <TimeRangeToggle value={m.range} onChange={m.setRange} />
+          <Button variant="outline" size="sm" onClick={() => void m.refetch()} disabled={m.isFetching || !m.adminKey}>
+            <RefreshCw />
             Refresh
           </Button>
-        }
-      />
+        </>
+      }
+    />
+  );
 
-      <div className="grid gap-3 lg:grid-cols-[1fr_220px]">
+  if (!m.adminKey) {
+    return (
+      <div className="space-y-6">
+        {header}
+        <Panel>
+          <AdminKeyRequired />
+        </Panel>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {header}
+
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
         <HuntingFilters
-          action={action}
-          setAction={setAction}
-          provider={provider}
-          setProvider={setProvider}
-          shadow={shadow}
-          setShadow={setShadow}
-          findingType={findingType}
-          setFindingType={setFindingType}
-          severity={severity}
-          setSeverity={setSeverity}
-          category={category}
-          setCategory={setCategory}
-          technique={technique}
-          setTechnique={setTechnique}
-          q={q}
-          setQ={setQ}
-          range={range}
-          setRange={setRange}
-          resetPage={() => setPage(1)}
-          saveHunt={saveHunt}
-          total={total}
-          page={page}
-          isLoading={isLoading}
-          isFetching={isFetching}
+          filters={m.filters}
+          setFilter={m.setFilter}
+          shadow={m.shadow}
+          setShadow={m.setShadow}
+          activeFilterCount={m.activeFilterCount}
+          clearFilters={m.clearFilters}
+          saveHunt={m.saveHunt}
         />
-
-        <SavedHuntsPanel savedHunts={savedHunts} onApply={applyHunt} onDelete={deleteHunt} />
+        <SavedHuntsPanel savedHunts={m.savedHunts} onApply={m.applyHunt} onDelete={m.deleteHunt} />
       </div>
 
       <HuntingResults
-        events={events}
-        total={total}
-        page={page}
-        setPage={setPage}
-        isLoading={isLoading}
-        error={error as Error | null}
+        events={m.data?.events ?? []}
+        total={m.data?.total ?? 0}
+        page={m.page}
+        setPage={m.setPage}
+        isLoading={m.isLoading}
+        error={m.error}
+        onRetry={() => void m.refetch()}
+        onClearFilters={m.activeFilterCount > 0 ? m.clearFilters : undefined}
       />
     </div>
   );

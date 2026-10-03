@@ -1,82 +1,95 @@
 "use client";
 
+import { BarList } from "@/components/app/bar-list";
+import { TimeSeriesChart, type ChartSeries } from "@/components/app/charts";
 import { PageHeader } from "@/components/app/page-header";
-import { Stat, StatGrid } from "@/components/app/stat";
 import { Panel } from "@/components/app/panel";
-import { VALID_TIMERANGES } from "@/lib/types";
-import { TrendsAreaChart } from "./TrendsAreaChart";
+import { Stat, StatGrid } from "@/components/app/stat";
+import { AdminKeyRequired, EmptyState, ErrorState, SkeletonRows } from "@/components/app/states";
+import { TimeRangeToggle } from "@/components/app/time-range";
+import { humanizeFindingType } from "@/lib/humanize";
+import { formatInt } from "@/lib/utils/format";
 import { useTrendsPage } from "./useTrendsPage";
 
+const SERIES: ChartSeries[] = [
+  { key: "attempted", label: "Scanned", color: "var(--chart-1)" },
+  { key: "caught", label: "Enforced", color: "var(--status-critical)" },
+];
+
 export default function TrendsPage() {
-  const { range, setRange, isLoading, totals, chartData, byType } = useTrendsPage();
-  const catchRate =
-    totals.attempted > 0 ? ((totals.caught / totals.attempted) * 100).toFixed(1) : "0.0";
-  const maxType = byType.length > 0 ? byType[0][1] : 1;
+  const { adminKey, error, refetch, range, setRange, isLoading, totals, chartData, byType } = useTrendsPage();
+  const rate = totals.attempted > 0 ? ((totals.caught / totals.attempted) * 100).toFixed(1) : null;
+
+  const header = (
+    <PageHeader
+      title="Detection trends"
+      description="How much traffic was scanned and how much of it a policy acted on."
+      actions={<TimeRangeToggle value={range} onChange={setRange} />}
+    />
+  );
+
+  if (!adminKey) {
+    return (
+      <div className="space-y-6">
+        {header}
+        <Panel>
+          <AdminKeyRequired />
+        </Panel>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <PageHeader
-          title="Detection Trends"
-          description="Requests scanned, findings caught, and category mix over time"
-        />
-        <div className="flex gap-1">
-          {VALID_TIMERANGES.filter((r) => r !== "1h").map((r) => (
-            <button
-              key={r}
-              onClick={() => setRange(r)}
-              className={`rounded-sm border px-2 py-1 text-xs ${
-                range === r
-                  ? "border-status-critical/50 bg-status-critical/10 text-status-critical"
-                  : "border-border text-fg-muted hover:border-border"
-              }`}
-            >
-              {r}
-            </button>
-          ))}
-        </div>
-      </div>
+    <div className="space-y-6">
+      {header}
 
-      <StatGrid className="lg:grid-cols-3">
-        <Stat label="Requests scanned" value={totals.attempted.toLocaleString("en-US")} />
-        <Stat label="Findings caught" value={totals.caught.toLocaleString("en-US")} tone="critical" />
-        <Stat label="Catch rate" value={`${catchRate}%`} tone="pass" />
+      <StatGrid>
+        <Stat label="Requests scanned" value={formatInt(totals.attempted)} />
+        <Stat
+          label="Enforced"
+          value={formatInt(totals.caught)}
+          tone={totals.caught > 0 ? "critical" : "default"}
+          tooltip="Requests that were blocked, redacted or warned."
+        />
+        <Stat label="Passed" value={formatInt(totals.passed)} tooltip="Requests forwarded unchanged." />
+        <Stat
+          label="Enforcement rate"
+          value={rate === null ? "—" : `${rate}%`}
+          hint={rate === null ? "No traffic in this window" : undefined}
+          tooltip="Enforced requests as a share of everything scanned."
+        />
       </StatGrid>
 
-      <Panel title={`trend · ${range}`}>
-        <div className="p-3">
-          {isLoading ? (
-            <p className="py-16 text-center text-xs text-fg-subtle">Loading…</p>
-          ) : chartData.length === 0 ? (
-            <p className="py-16 text-center text-xs text-fg-subtle">
-              No data for this window yet.
-            </p>
+      <div className="grid gap-6 xl:grid-cols-3">
+        <Panel title={`Scanned and enforced · ${range}`} className="xl:col-span-2">
+          {error ? (
+            <ErrorState error={error} onRetry={() => void refetch()} />
+          ) : isLoading ? (
+            <SkeletonRows rows={6} />
+          ) : totals.attempted === 0 ? (
+            <EmptyState icon="chart" title="No traffic in this window" suggestion="Pick a longer range." />
           ) : (
-            <TrendsAreaChart data={chartData} />
+            <div className="p-4">
+              <TimeSeriesChart
+                data={chartData}
+                xKey="time"
+                series={SERIES}
+                label={`Requests scanned and enforced over the last ${range}`}
+              />
+            </div>
           )}
-        </div>
-      </Panel>
+        </Panel>
 
-      <Panel title="findings by type">
-        <div className="space-y-2 p-3">
-          {byType.length === 0 ? (
-            <p className="py-6 text-center text-xs text-fg-subtle">No findings in this window.</p>
+        <Panel title="Findings by type" description="Detections, not requests">
+          {isLoading ? (
+            <SkeletonRows rows={4} />
+          ) : byType.length === 0 ? (
+            <EmptyState icon="shield" title="No findings" description="Nothing was detected in this window." />
           ) : (
-            byType.map(([type, count]) => (
-              <div key={type} className="flex items-center gap-2 text-xs">
-                <span className="w-32 shrink-0 truncate text-fg-muted">{type}</span>
-                <div className="h-2 flex-1 overflow-hidden rounded-sm bg-surface-subtle">
-                  <div
-                    className="h-full bg-status-critical/60"
-                    style={{ width: `${Math.max(3, (count / maxType) * 100)}%` }}
-                  />
-                </div>
-                <span className="w-12 shrink-0 text-right tabular-nums text-fg-subtle">{count}</span>
-              </div>
-            ))
+            <BarList items={byType.map(([type, value]) => ({ label: humanizeFindingType(type), value }))} />
           )}
-        </div>
-      </Panel>
+        </Panel>
+      </div>
     </div>
   );
 }

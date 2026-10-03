@@ -100,3 +100,13 @@ vi.mock("@/hooks/useRangeParam", async () => {
   const { useState } = await import("react");
   return { useRangeParam: (initial: string) => useState(initial) };
 });
+
+// The same for the other URL-backed choices (tabs, modes, search text).
+vi.mock("@/hooks/useUrlState", async () => {
+  const { useState } = await import("react");
+  return {
+    useEnumParam: (_key: string, _values: readonly string[], initial: string) => useState(initial),
+    useStringParam: () => useState(""),
+    useFlagParam: () => useState(false),
+  };
+});

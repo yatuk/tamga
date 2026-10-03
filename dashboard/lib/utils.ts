@@ -1,6 +1,6 @@
-import { clsx, type ClassValue } from "clsx";
-import { twMerge } from "tailwind-merge";
-
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
+/**
+ * Merges class names and resolves conflicting Tailwind utilities, last one
+ * wins. One implementation for the whole app: the generated shadcn/ui
+ * components import it from the package, everything else from here.
+ */
+export { cn } from "cn";

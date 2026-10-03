@@ -1,5 +1,6 @@
 "use client";
 
+import { Plus } from "lucide-react";
 import { toast } from "@/lib/toast";
 import { Button } from "@/components/ui/button";
 
@@ -45,7 +46,7 @@ export function appendCustomEntity(draft: string): string {
 export function strengthenInjection(draft: string): string {
   const o = parsePolicyDraft(draft);
   if (!o) {
-    toast.error("Policy JSON parse edilemedi");
+    toast.error("The draft is not valid JSON");
     return draft;
   }
   const rules = o.rules;
@@ -68,7 +69,7 @@ export function strengthenInjection(draft: string): string {
 export function appendRateLimitTemplate(draft: string): string {
   const o = parsePolicyDraft(draft);
   if (!o) {
-    toast.error("Policy JSON parse edilemedi");
+    toast.error("The draft is not valid JSON");
     return draft;
   }
   if (o.rate_limit) {
@@ -84,23 +85,21 @@ export function appendRateLimitTemplate(draft: string): string {
   return stringifyPolicy(o);
 }
 
+/** One-click edits that insert a common block into the draft. */
 export function PolicySnippetsBar({ draft, onApply }: { draft: string; onApply: (next: string) => void }) {
   return (
-    <div className="flex flex-wrap gap-2 rounded-sm border border-border bg-surface-subtle/50 p-2">
-      <span className="w-full text-xs uppercase tracking-wide text-fg-muted">Quick templates</span>
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="mr-1 text-xs text-muted-foreground">Insert into draft</span>
       <Button type="button" variant="outline" size="sm" onClick={() => onApply(appendCustomEntity(draft))}>
-        + Custom entity (regex)
+        <Plus />
+        Custom Entity
+      </Button>
+      <Button type="button" variant="outline" size="sm" onClick={() => onApply(appendRateLimitTemplate(draft))}>
+        <Plus />
+        Rate Limit
       </Button>
       <Button type="button" variant="outline" size="sm" onClick={() => onApply(strengthenInjection(draft))}>
-        Injection → BLOCK
-      </Button>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={() => onApply(appendRateLimitTemplate(draft))}
-      >
-        + Rate limit
+        Set Injection to BLOCK
       </Button>
     </div>
   );

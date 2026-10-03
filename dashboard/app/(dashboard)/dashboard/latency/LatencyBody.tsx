@@ -1,50 +1,36 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { RefreshCw, RotateCw } from "lucide-react";
+import { RotateCcw } from "lucide-react";
+import { BarList } from "@/components/app/bar-list";
+import { TimeSeriesChart, type ChartSeries } from "@/components/app/charts";
+import { GlossaryButton } from "@/components/app/glossary";
 import { PageHeader } from "@/components/app/page-header";
 import { Panel } from "@/components/app/panel";
 import { Stat, StatGrid } from "@/components/app/stat";
-import { HealthScoreBadge } from "@/components/common/HealthScoreBadge";
-import { GlossaryToggle, GlossaryPanel } from "@/components/dashboard/GlossaryPanel";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import type { TimeRange } from "@/lib/types";
-import type { useLatencyPage } from "./useLatencyPage";
-import { formatMs, formatRate, formatSince, formatUptime } from "@/lib/utils/format";
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { AdminKeyRequired, EmptyState, ErrorState, SkeletonRows } from "@/components/app/states";
+import { CircuitBadge, StatusBadge } from "@/components/app/status-badge";
 import { TimeRangeToggle } from "@/components/app/time-range";
+import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { formatInt, formatMs, formatRate, formatSince, formatUptime } from "@/lib/utils/format";
+import type { useLatencyPage } from "./useLatencyPage";
 
-const P95_THRESHOLD_MS = 2000; // P95 above 2s is considered slow
+/** Scan P95 above this is flagged as slow. */
+const P95_TARGET_MS = 2000;
+
+const SERIES: ChartSeries[] = [{ key: "p95", label: "P95 scan latency", color: "var(--chart-1)" }];
 
 type Props = ReturnType<typeof useLatencyPage>;
 
-function stateBadge(state: string) {
-  const cls =
-    state === "OPEN" || state === "connected" || state === "healthy"
-      ? "border-status-pass/40 bg-status-pass/10 text-status-pass"
-      : state === "HALF" || state === "degraded"
-        ? "border-status-medium/40 bg-status-medium/10 text-status-medium"
-        : "border-status-critical/40 bg-status-critical/10 text-status-critical";
-  return (
-    <Badge className={`rounded-sm border text-xs uppercase ${cls}`}>
-      {state}
-    </Badge>
-  );
-}
-
-
 export function LatencyBody({
+  adminKey,
   range,
   setRange,
   isLoading,
   hasError,
   p50,
-  p75,
-  p90,
   p95,
   p99,
-  histogramBars,
   slowestEndpoints,
   scannerCount,
   chartData,
@@ -52,325 +38,187 @@ export function LatencyBody({
   circuitReset,
   uptimeSeconds,
 }: Props) {
-  const latencyHealthScore = useMemo(() => {
-    if (p95 === undefined || p95 === null) return 50;
-    const ratio = Math.min(1, p95 / (P95_THRESHOLD_MS * 2));
-    return Math.round(100 * (1 - ratio));
-  }, [p95]);
+  const header = (
+    <PageHeader
+      title="Latency"
+      description="How long the proxy takes to scan a request, and the state of each upstream."
+      actions={
+        <>
+          <GlossaryButton />
+          <TimeRangeToggle value={range} onChange={setRange} />
+        </>
+      }
+    />
+  );
 
-  const [glossaryOpen, setGlossaryOpen] = useState(false);
+  if (!adminKey || hasError) {
+    return (
+      <div className="space-y-6">
+        {header}
+        <Panel>
+          {!adminKey ? (
+            <AdminKeyRequired />
+          ) : (
+            <ErrorState title="Could not load latency data" error="Check the admin key and that the proxy is reachable." />
+          )}
+        </Panel>
+      </div>
+    );
+  }
+
+  const measured = p95 > 0;
+  const slow = p95 > P95_TARGET_MS;
+  const v = (ms: number) => (isLoading ? "…" : measured ? formatMs(ms) : "—");
+  const series = chartData.map((d) => ({ time: d.time, p95: Number((d.p95 ?? 0).toFixed(2)) }));
+  const hasSeries = series.some((d) => d.p95 > 0);
 
   return (
-    <div className="space-y-2">
-      <PageHeader
-        title="Latency"
-        description={`Scan latency percentiles. Proxy uptime ${formatUptime(uptimeSeconds)}.`}
-        actions={
-          <>
-            <GlossaryToggle onClick={() => setGlossaryOpen(true)} />
-            <HealthScoreBadge score={latencyHealthScore} label="P95" size="sm" showScore />
-            <TimeRangeToggle value={range} onChange={setRange} />
-          </>
-        }
-      />
+    <div className="space-y-6">
+      {header}
 
-      {hasError ? (
-        <div className="rounded-sm border border-status-critical/30 bg-status-critical/10 p-4 text-xs text-status-critical" role="alert">
-          Failed to load latency data. Check your admin key and proxy connection.
-        </div>
-      ) : null}
-
-      {/* P50 / P95 / P99 */}
-      <StatGrid className="lg:grid-cols-3">
-        {isLoading ? (
-          Array.from({ length: 3 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-[88px] animate-pulse rounded-sm bg-surface-subtle"
-            role="status" />
-          ))
-        ) : (
-          <>
-            <Stat
-              label="P50 LATENCY"
-              value={formatMs(p50)}
-              tone="pass"
-            />
-            <Stat
-              label="P95 LATENCY"
-              value={formatMs(p95)}
-              tone="warn"
-            />
-            <Stat
-              label="P99 LATENCY"
-              value={formatMs(p99)}
-              tone="critical"
-            />
-          </>
-        )}
+      <StatGrid>
+        <Stat label="P50 scan" value={v(p50)} tooltip="Half of the requests were scanned faster than this." />
+        <Stat
+          label="P95 scan"
+          value={v(p95)}
+          tone={slow ? "critical" : "default"}
+          hint={measured ? (slow ? `Above the ${formatMs(P95_TARGET_MS)} target` : `Target ${formatMs(P95_TARGET_MS)}`) : "No scans yet"}
+          tooltip="95% of requests were scanned faster than this."
+        />
+        <Stat label="P99 scan" value={v(p99)} tooltip="The slowest 1% of scans took at least this long." />
+        <Stat
+          label="Scanners"
+          value={isLoading ? "…" : formatInt(scannerCount)}
+          hint={uptimeSeconds > 0 ? `Proxy up ${formatUptime(uptimeSeconds)}` : undefined}
+          tooltip="Detectors that run on every request. More scanners means more work per request."
+        />
       </StatGrid>
 
-      {/* Percentile histogram bars */}
-      {!isLoading && histogramBars.length > 0 ? (
-        <Panel
-          title="Latency Percentiles"
-          aside={
-            <span className="px-2 text-xs uppercase tracking-[0.18em] text-fg-muted">
-              P50→P99
-            </span>
-          }
-        >
-          <div className="p-4 space-y-3">
-            {histogramBars.map((bar) => (
-              <div key={bar.label} className="space-y-1">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-mono text-fg-muted">{bar.label}</span>
-                  <span className="ml-2 shrink-0 tabular-nums text-fg-subtle font-mono">
-                    {formatMs(bar.ms)}
-                  </span>
-                </div>
-                <div className="h-2.5 w-full overflow-hidden rounded-sm bg-surface-subtle">
-                  <div
-                    className={`h-full rounded-sm ${bar.color}`}
-                    style={{ width: `${Math.max(bar.pct, 2)}%` }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
+      <div className="grid gap-6 xl:grid-cols-3">
+        <Panel title={`P95 scan latency · ${range}`} description="Refreshes every 10 seconds" className="xl:col-span-2">
+          {isLoading ? (
+            <SkeletonRows rows={6} />
+          ) : !hasSeries ? (
+            <EmptyState icon="chart" title="No scans in this window" suggestion="Pick a longer range." />
+          ) : (
+            <div className="p-4">
+              <TimeSeriesChart
+                data={series}
+                xKey="time"
+                series={SERIES}
+                height={260}
+                formatValue={(n) => `${n} ms`}
+                label={`P95 scan latency over the last ${range}`}
+              />
+            </div>
+          )}
         </Panel>
-      ) : null}
 
-      {/* Slowest endpoints */}
+        <Panel title="Percentiles" description="Current, in milliseconds">
+          {isLoading ? (
+            <SkeletonRows rows={3} />
+          ) : !measured ? (
+            <EmptyState icon="chart" title="No scans yet" />
+          ) : (
+            <BarList
+              scale="max"
+              mono
+              items={[
+                { label: "P50", value: p50 },
+                { label: "P95", value: p95 },
+                { label: "P99", value: p99 },
+              ]}
+              formatValue={formatMs}
+            />
+          )}
+        </Panel>
+      </div>
+
       {slowestEndpoints.length > 0 && !isLoading ? (
-        <Panel
-          title="SLOWEST TIME BUCKETS"
-          aside={
-            <span className="px-2 text-xs uppercase tracking-[0.18em] text-fg-muted">
-              top 5 by P95 latency
-            </span>
-          }
-        >
-          <div className="overflow-x-auto">
-            <Table className="w-full">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-left font-medium uppercase">
-                    Time
-                  </TableHead>
-                  <TableHead className="text-right font-medium uppercase">
-                    P95 Latency
-                  </TableHead>
-                  <TableHead className="text-right font-medium uppercase">
-                    Requests
-                  </TableHead>
+        <Panel title="Slowest buckets" description="Time buckets with the highest P95">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Time</TableHead>
+                <TableHead className="text-right">P95 scan</TableHead>
+                <TableHead className="text-right">Requests</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {slowestEndpoints.map((ep) => (
+                <TableRow key={ep.time}>
+                  <TableCell className="font-mono text-xs">{ep.time}</TableCell>
+                  <TableCell className="text-right font-mono text-xs tabular-nums">{formatMs(ep.p95)}</TableCell>
+                  <TableCell className="text-right font-mono text-xs tabular-nums">{formatInt(ep.requests)}</TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {slowestEndpoints.map((ep, i) => (
-                  <TableRow
-                    key={i}
-                  >
-                    <TableCell className="font-mono">{ep.time}</TableCell>
-                    <TableCell className="text-right tabular-nums font-mono text-status-medium">
-                      {formatMs(ep.p95)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {ep.requests}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+              ))}
+            </TableBody>
+          </Table>
         </Panel>
       ) : null}
 
-      {/* Scanner impact note */}
-      {scannerCount > 0 && !isLoading ? (
-        <div className="flex items-center gap-2 rounded-sm border border-border bg-surface-card px-3 py-2 text-xs text-fg-muted">
-          <span className="uppercase tracking-[0.12em]">Scanner Impact</span>
-          <span className="font-mono text-fg-muted">
-            {scannerCount} active scanner{scannerCount !== 1 ? "s" : ""}
-          </span>
-          <span className="font-mono text-fg-subtle">
-            · P95 latency: {formatMs(p95)}
-          </span>
-        </div>
-      ) : null}
-
-      {/* Latency trend chart */}
-      <Panel
-        title={`Latency · ${range === "24h" ? "24 hours" : range === "7d" ? "7 days" : "30 days"}`}
-        aside={
-          <span className="flex items-center gap-1 px-2 text-xs uppercase tracking-[0.18em] text-fg-muted">
-            <RefreshCw className="h-3 w-3" /> 10s
-          </span>
-        }
-      >
-        <div className="p-3">
-          {isLoading ? (
-            <div className="h-[200px] w-full animate-pulse rounded-sm bg-surface-subtle" />
-          ) : chartData.length === 0 ? (
-            <div className="py-16 text-center text-xs text-fg-muted">
-              no data for selected range
-            </div>
-          ) : (
-            <LatencyLineChart data={chartData} />
-          )}
-        </div>
-      </Panel>
-
-      {/* Provider pool health */}
-      <Panel
-        title="Provider pool status"
-        aside={
-          <span className="px-2 text-xs uppercase tracking-[0.18em] text-fg-muted">
-            {providerPools.length} providers
-          </span>
-        }
-      >
-        <div className="overflow-x-auto">
-          {isLoading ? (
-            <div className="p-3 space-y-2">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="h-[28px] animate-pulse rounded-sm bg-surface-subtle" />
-              ))}
-            </div>
-          ) : providerPools.length === 0 ? (
-            <div className="py-12 text-center text-xs text-fg-muted">
-              no provider pool data available
-            </div>
-          ) : (
-            <Table className="w-full">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-left font-medium uppercase">
-                    Provider
-                  </TableHead>
-                  <TableHead className="text-left font-medium uppercase">
-                    State
-                  </TableHead>
-                  <TableHead className="text-right font-medium uppercase">
-                    P95
-                  </TableHead>
-                  <TableHead className="text-right font-medium uppercase">
-                    Success
-                  </TableHead>
-                  <TableHead className="text-right font-medium uppercase">
-                    Reqs
-                  </TableHead>
-                  <TableHead className="text-right font-medium uppercase">
-                    Last Failure
-                  </TableHead>
-                  <TableHead className="text-center font-medium uppercase">
-                    Reset
-                  </TableHead>
+      <Panel title="Upstream providers" description="Circuit breaker state per endpoint" aside={`${providerPools.length} endpoints`}>
+        {isLoading ? (
+          <SkeletonRows rows={4} />
+        ) : providerPools.length === 0 ? (
+          <EmptyState
+            icon="database"
+            title="No provider pools"
+            description={
+              <>
+                Define <span className="font-mono">providers.pools</span> in the policy to track upstream health here.
+              </>
+            }
+          />
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Endpoint</TableHead>
+                <TableHead>Circuit</TableHead>
+                <TableHead className="text-right">P95</TableHead>
+                <TableHead className="text-right">Success</TableHead>
+                <TableHead className="text-right">Requests</TableHead>
+                <TableHead>Last failure</TableHead>
+                <TableHead>
+                  <span className="sr-only">Actions</span>
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {providerPools.map((p) => (
+                <TableRow key={`${p.pool}-${p.name}`}>
+                  <TableCell>
+                    <span className="font-mono text-xs">{p.name}</span>
+                    <StatusBadge className="ml-2">{p.pool}</StatusBadge>
+                  </TableCell>
+                  <TableCell>
+                    <CircuitBadge state={p.state} />
+                  </TableCell>
+                  <TableCell className="text-right font-mono text-xs tabular-nums">{formatMs(p.p95LatencyMs)}</TableCell>
+                  <TableCell className="text-right font-mono text-xs tabular-nums">{formatRate(p.successRate)}</TableCell>
+                  <TableCell className="text-right font-mono text-xs tabular-nums">{p.requestsInWindow ?? "—"}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    {formatSince(p.lastFailure)}
+                    {p.failureReason ? <span className="text-status-critical"> · {p.failureReason}</span> : null}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => circuitReset.mutate({ pool: p.pool, endpoint: p.name })}
+                      disabled={circuitReset.isPending}
+                    >
+                      <RotateCcw />
+                      {circuitReset.isPending ? "Resetting…" : "Reset Circuit"}
+                    </Button>
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {providerPools.map((p) => (
-                  <TableRow
-                    key={`${p.pool}-${p.name}`}
-                  >
-                    <TableCell className="font-mono">
-                      {p.name}
-                      <span className="ml-1 text-fg-subtle">({p.pool})</span>
-                    </TableCell>
-                    <TableCell>{stateBadge(p.state)}</TableCell>
-                    <TableCell className="text-right tabular-nums font-mono">
-                      {formatMs(p.p95LatencyMs)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums font-mono">
-                      {formatRate(p.successRate)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {p.requestsInWindow ?? "—"}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {formatSince(p.lastFailure)}
-                      {p.failureReason ? (
-                        <span className="ml-1 text-status-critical">· {p.failureReason}</span>
-                      ) : null}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {(p.state === "HALF" || p.state === "OPEN" || p.state === "CLOSED" || p.state === "degraded") ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="uppercase"
-                          onClick={() =>
- circuitReset.mutate({ pool: p.pool, endpoint: p.name })
- }
-                          disabled={circuitReset.isPending}
-                        >
-                          <RotateCw className="mr-1 h-3 w-3" />
-                          {circuitReset.isPending ? "..." : "Reset"}
-                        </Button>
-                      ) : null}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </div>
+              ))}
+            </TableBody>
+          </Table>
+        )}
       </Panel>
-      <GlossaryPanel open={glossaryOpen} onClose={() => setGlossaryOpen(false)} />
     </div>
-  );
-}
-
-/** Simple line chart for P95 scan latency — solid strokes, no gradient */
-function LatencyLineChart({
-  data,
-}: {
-  data: { time: string; p95: number; total: number }[];
-}) {
-  const max = Math.max(...data.map((d) => d.p95), 1);
-  const w = data.length > 1 ? data.length : 2;
-  const points = data
-    .map((d, i) => {
-      const x = (i / (w - 1)) * 100;
-      const y = 100 - (d.p95 / max) * 100;
-      return `${x},${y}`;
-    })
-    .join(" ");
-
-  return (
-    <svg
-      viewBox="0 0 100 100"
-      className="h-[160px] w-full"
-      preserveAspectRatio="none"
-      role="img"
-      aria-label="Scan latency trend"
-    >
-      {/* Grid lines */}
-      {[25, 50, 75].map((y) => (
-        <line
-          key={y}
-          x1="0"
-          y1={y}
-          x2="100"
-          y2={y}
-          stroke="var(--border-strong)"
-          strokeOpacity={0.3}
-          strokeDasharray="2 3"
-        />
-      ))}
-      {/* Area fill */}
-      <polygon
-        points={`0,100 ${points} 100,100`}
-        fill="color-mix(in oklab, var(--status-high) 15%, transparent)"
-      />
-      {/* Line */}
-      <polyline
-        points={points}
-        fill="none"
-        stroke="var(--status-high)"
-        strokeWidth="1.5"
-        vectorEffect="non-scaling-stroke"
-      />
-    </svg>
   );
 }

@@ -1,21 +1,18 @@
 "use client";
 
-import { Fragment, useMemo, useState, type Dispatch, type SetStateAction, useCallback } from "react";
+import { Fragment, useState, type Dispatch, type SetStateAction } from "react";
 import Link from "next/link";
-import { ChevronDown, ChevronRight, Clock, ExternalLink, Tag, X } from "lucide-react";
-import type { SecurityEvent, SecurityFinding } from "@/lib/api";
-import { toUpperEn } from "@/lib/utils/case";
-import { humanizeFindingType } from "@/lib/humanize";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { SeverityBadge } from "@/components/app/status-badge";
-import { severityClass } from "@/lib/badges";
-import { EmptyState } from "@/components/app/states";
-import { Stat, StatGrid } from "@/components/app/stat";
-import { SkeletonRows } from "@/components/app/states";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { Panel } from "@/components/app/panel";
+import { EmptyState, ErrorState, SkeletonRows } from "@/components/app/states";
+import { ActionBadge, SeverityBadge } from "@/components/app/status-badge";
+import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import type { SecurityEvent, SecurityFinding } from "@/lib/api";
+import { humanizeFindingType, humanizeProvider } from "@/lib/humanize";
+import { toLowerEn } from "@/lib/utils/case";
+import { formatInt } from "@/lib/utils/format";
 import { PAGE_SIZE } from "./_constants";
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 
 type Props = {
   events: SecurityEvent[];
@@ -23,357 +20,178 @@ type Props = {
   page: number;
   setPage: Dispatch<SetStateAction<number>>;
   isLoading: boolean;
-  error: Error | null;
+  error: unknown;
+  onRetry: () => void;
+  onClearFilters?: () => void;
 };
 
-const MAX_EXPANDED_CHARS = 120;
-const MAX_COLSPAN = 7;
+const SEVERITY_ORDER = ["critical", "high", "medium", "low"];
+const MAX_MATCH_CHARS = 120;
 
-function truncateMatch(match: string, maxLen: number): string {
-  if (!match) return "—";
-  if (match.length <= maxLen) return match;
-  return match.slice(0, maxLen) + "…";
+/** The severities present in a set of findings, worst first. */
+function severitiesOf(findings: SecurityFinding[]): string[] {
+  const seen = new Set(findings.map((f) => toLowerEn(f.severity || "")).filter(Boolean));
+  return SEVERITY_ORDER.filter((s) => seen.has(s));
 }
 
-function uniqueSeverities(findings: SecurityFinding[]): string[] {
-  const seen = new Set<string>();
-  (findings || []).forEach((f) => {
-    if (f.severity) seen.add(f.severity.toLowerCase());
-  });
-  return Array.from(seen);
-}
+export function HuntingResults({ events, total, page, setPage, isLoading, error, onRetry, onClearFilters }: Props) {
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
-export function HuntingResults({ events, total, page, setPage, isLoading, error }: Props) {
-  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
-  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
-
-  const toggleExpand = useCallback((id: string) => {
-    setExpandedRows((prev) => {
+  const toggle = (id: string) =>
+    setExpanded((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
-  }, []);
-
-  const toggleSelect = useCallback((id: string) => {
-    setSelectedRows((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
-
-  const toggleSelectAll = useCallback(() => {
-    if (selectedRows.size === events.length) {
-      setSelectedRows(new Set());
-    } else {
-      setSelectedRows(new Set(events.map((e) => e.request_id)));
-    }
-  }, [events, selectedRows.size]);
-
-  const clearSelection = useCallback(() => {
-    setSelectedRows(new Set());
-  }, []);
-
-  const severityCounts = useMemo(() => {
-    const counts: Record<string, number> = { critical: 0, high: 0, medium: 0, low: 0 };
-    events.forEach((ev) => {
-      (ev.findings || []).forEach((f) => {
-        const s = (f.severity || "").toLowerCase();
-        if (s in counts) counts[s]++;
-        else counts[s] = 1;
-      });
-    });
-    return counts;
-  }, [events]);
-
-  const findingTypeCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    events.forEach((ev) => {
-      (ev.findings || []).forEach((f) => {
-        const t = f.type || "unknown";
-        counts[t] = (counts[t] || 0) + 1;
-      });
-    });
-    return Object.entries(counts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 6);
-  }, [events]);
-
-  const totalFindings = useMemo(
-    () => events.reduce((sum, ev) => sum + (ev.findings?.length || 0), 0),
-    [events],
-  );
-
-  const lastRunMeta = useMemo(() => {
-    if (events.length === 0) return null;
-    const timestamps = events.map((e) => new Date(e.timestamp).getTime()).filter((t) => !isNaN(t));
-    if (timestamps.length === 0) return null;
-    const latest = new Date(Math.max(...timestamps));
-    const totalLatencyMs = events.reduce((sum, e) => sum + (e.scan_latency_ms || 0), 0);
-    return { latest, totalLatencyMs };
-  }, [events]);
-
-  const hasResults = events.length > 0;
 
   return (
-    <>
+    <Panel
+      title="Matches"
+      aside={
+        isLoading ? "Searching…" : <span className="font-mono tabular-nums">{formatInt(total)} requests</span>
+      }
+    >
       {error ? (
-        <div className="rounded-sm border border-status-critical/50 bg-status-critical/20 p-3 text-sm text-status-critical">{error.message}</div>
-      ) : null}
-
-      {/* Results summary bar */}
-      {hasResults && !isLoading && (
-        <div className="flex flex-wrap items-center gap-2 rounded-sm border border-border bg-surface-card p-2">
-          <span className="text-xs font-semibold text-fg">
-            {total} results found
-          </span>
-          <span className="text-xs text-fg-muted">·</span>
-          <Badge className="rounded-sm border border-status-critical/40 bg-status-critical/10 text-xs text-status-critical">
-            {severityCounts.critical} Critical
-          </Badge>
-          <Badge className="rounded-sm border border-status-medium/40 bg-status-medium/10 text-xs text-status-medium">
-            {severityCounts.high} High
-          </Badge>
-          <Badge className="rounded-sm border border-status-medium/40 bg-status-medium/10 text-xs text-status-medium">
-            {severityCounts.medium} Medium
-          </Badge>
-          <Badge className="rounded-sm border border-border-strong/40 bg-surface-subtle0/10 text-xs text-fg-subtle">
-            {severityCounts.low} Low
-          </Badge>
-          {lastRunMeta && (
-            <>
-              <span className="text-xs text-fg-muted">·</span>
-              <span className="flex items-center gap-1 text-xs text-fg-muted">
-                <Clock className="h-3 w-3" />
-                {lastRunMeta.latest.toLocaleString("en-GB")}
-              </span>
-              <span className="text-xs text-fg-muted">
-                {totalFindings} findings in {lastRunMeta.totalLatencyMs} ms
-              </span>
-            </>
-          )}
-        </div>
-      )}
-
-      {/* Finding type breakdown */}
-      {hasResults && !isLoading && findingTypeCounts.length > 0 && (
-        <StatGrid className="lg:grid-cols-3">
-          {findingTypeCounts.map(([type, count]) => (
-            <Stat
-              key={type}
-              label={humanizeFindingType(type)}
-              value={count}
-            />
-          ))}
-        </StatGrid>
-      )}
-
-      {/* Bulk-action toolbar */}
-      {selectedRows.size > 0 && (
-        <div className="flex items-center gap-2 rounded-sm border border-status-pass/30 bg-status-pass/5 px-3 py-2">
-          <span className="text-xs font-semibold text-status-pass">
-            {selectedRows.size} selected
-          </span>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled
-            title="Bulk tagging will be available in a future release"
-          >
-            <Tag className="h-3 w-3 mr-1" />
-            Tag selected
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled
-            title="Bulk status change will be available in a future release"
-          >
-            Change status
-          </Button>
-          <button
-            type="button"
-            className="ml-auto text-fg-subtle hover:text-fg-muted"
-            onClick={clearSelection}
-            aria-label="Clear selection"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-      )}
-
-      <Panel title="Search results">
-        {isLoading ? (
-          <SkeletonRows rows={8} />
-        ) : (
-          <div className="overflow-x-auto">
-            {events.length === 0 ? (
-              <EmptyState
-                icon="search"
-                title="No results"
-                suggestion="Loosen the filters or widen the time range."
-              />
-            ) : (
-              <Table className="w-full text-left">
-                <TableHeader>
-                  <TableRow className="uppercase">
-                    <TableHead className="w-8">
-                      <input
-                        type="checkbox"
-                        checked={selectedRows.size === events.length && events.length > 0}
-                        onChange={toggleSelectAll}
-                        className="rounded-sm border-border"
-                        aria-label="Select all"
-                      />
-                    </TableHead>
-                    <TableHead className="w-6" />
-                    <TableHead>request_id</TableHead>
-                    <TableHead>action</TableHead>
-                    <TableHead>severity</TableHead>
-                    <TableHead>findings</TableHead>
-                    <TableHead />
+        <ErrorState error={error} onRetry={onRetry} />
+      ) : isLoading ? (
+        <SkeletonRows rows={8} />
+      ) : events.length === 0 ? (
+        <EmptyState
+          icon="search"
+          title="No requests match"
+          description="Nothing in this window fits the query."
+          suggestion="Loosen a filter or pick a longer range."
+          action={onClearFilters ? { label: "Clear Filters", onClick: onClearFilters } : undefined}
+        />
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-8">
+                <span className="sr-only">Details</span>
+              </TableHead>
+              <TableHead>Time</TableHead>
+              <TableHead>Action</TableHead>
+              <TableHead>Severity</TableHead>
+              <TableHead>Finding</TableHead>
+              <TableHead>Provider / model</TableHead>
+              <TableHead>Request</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {events.map((ev) => {
+              const findings = ev.findings || [];
+              const open = expanded.has(ev.request_id);
+              const first = findings[0];
+              const detailsId = `hunt-findings-${ev.request_id}`;
+              return (
+                <Fragment key={ev.request_id}>
+                  <TableRow data-state={open ? "selected" : undefined}>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        onClick={() => toggle(ev.request_id)}
+                        aria-expanded={open}
+                        aria-controls={detailsId}
+                        aria-label={`${open ? "Hide" : "Show"} findings of ${ev.request_id}`}
+                        disabled={findings.length === 0}
+                      >
+                        {open ? <ChevronDown /> : <ChevronRight />}
+                      </Button>
+                    </TableCell>
+                    <TableCell className="font-mono text-xs whitespace-nowrap text-muted-foreground">
+                      {ev.timestamp ? new Date(ev.timestamp).toLocaleString("en-GB") : "—"}
+                    </TableCell>
+                    <TableCell>
+                      <ActionBadge action={ev.action || "pass"} />
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {severitiesOf(findings).map((s) => (
+                          <SeverityBadge key={s} severity={s} />
+                        ))}
+                        {findings.length === 0 ? <span className="text-muted-foreground">—</span> : null}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {first ? (
+                        <>
+                          {first.category || humanizeFindingType(first.type)}
+                          {findings.length > 1 ? (
+                            <span className="ml-2 text-xs text-muted-foreground">+{findings.length - 1}</span>
+                          ) : null}
+                        </>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      {humanizeProvider(ev.provider || "")}
+                      <span className="text-muted-foreground"> / {ev.model || "—"}</span>
+                    </TableCell>
+                    <TableCell>
+                      <Link
+                        href={`/dashboard/security?request_id=${encodeURIComponent(ev.request_id)}`}
+                        className="font-mono text-xs underline decoration-border-strong underline-offset-4 hover:decoration-foreground"
+                        translate="no"
+                      >
+                        {ev.request_id.slice(0, 13)}
+                      </Link>
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {events.map((ev) => {
-                    const isExpanded = expandedRows.has(ev.request_id);
-                    const isSelected = selectedRows.has(ev.request_id);
-                    const sevs = uniqueSeverities(ev.findings || []);
+                  {open ? (
+                    <TableRow id={detailsId} className="bg-muted/40 hover:bg-muted/40">
+                      <TableCell />
+                      <TableCell colSpan={6} className="py-3 whitespace-normal">
+                        <ul className="space-y-1.5">
+                          {findings.map((f, i) => (
+                            <li key={i} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                              <SeverityBadge severity={f.severity} />
+                              <span className="w-24 shrink-0">{humanizeFindingType(f.type)}</span>
+                              <span className="w-40 shrink-0 truncate text-muted-foreground">{f.category || "—"}</span>
+                              {f.confidence != null ? (
+                                <span className="w-10 shrink-0 font-mono text-muted-foreground tabular-nums">
+                                  {(f.confidence * 100).toFixed(0)}%
+                                </span>
+                              ) : null}
+                              <span className="min-w-0 flex-1 truncate font-mono text-muted-foreground" translate="no">
+                                {f.match
+                                  ? f.match.length > MAX_MATCH_CHARS
+                                    ? `${f.match.slice(0, MAX_MATCH_CHARS)}…`
+                                    : f.match
+                                  : "—"}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                </Fragment>
+              );
+            })}
+          </TableBody>
+        </Table>
+      )}
 
-                    return (
-                      <Fragment key={ev.request_id}>
-                        <TableRow className={`border-b border-border ${isSelected ? "bg-status-pass/5" : "hover:bg-surface-subtle/30"}`}>
-                          <TableCell>
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => toggleSelect(ev.request_id)}
-                              className="rounded-sm border-border"
-                              aria-label={`Select ${ev.request_id.slice(0, 10)}`}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <button
-                              type="button"
-                              className="flex items-center justify-center text-fg-subtle hover:text-fg-muted"
-                              onClick={() => toggleExpand(ev.request_id)}
-                              aria-label={isExpanded ? "Collapse row" : "Expand row"}
-                            >
-                              {isExpanded ? (
-                                <ChevronDown className="h-3.5 w-3.5" />
-                              ) : (
-                                <ChevronRight className="h-3.5 w-3.5" />
-                              )}
-                            </button>
-                          </TableCell>
-                          <TableCell className="font-mono min-w-[120px] max-w-[150px] truncate whitespace-nowrap">{ev.request_id}</TableCell>
-                          <TableCell className="whitespace-nowrap">
-                            <Badge className="rounded-sm border border-border-strong bg-surface-card text-xs text-fg-muted">
-                              {toUpperEn(ev.action || "—")}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex gap-1 flex-wrap">
-                              {sevs.length > 0 ? (
-                                sevs.map((s) => (
-                                  <span
-                                    key={s}
-                                    className={`inline-flex items-center rounded-sm border px-1.5 py-0.5 text-xs uppercase tracking-wide ${severityClass(s)}`}
-                                  >
-                                    {s}
-                                  </span>
-                                ))
-                              ) : (
-                                <span className="text-fg-subtle">—</span>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap">{ev.findings_count ?? ev.findings?.length ?? 0}</TableCell>
-                          <TableCell className="whitespace-nowrap">
-                            <Link
-                              href={`/dashboard/security?request_id=${encodeURIComponent(ev.request_id)}`}
-                              className="inline-flex items-center gap-1 text-xs text-status-critical hover:underline"
-                            >
-                              Incidents
-                              <ExternalLink className="h-3 w-3" />
-                            </Link>
-                          </TableCell>
-                        </TableRow>
-                        {/* Expanded row — shown as a separate row below the main row */}
-                        {isExpanded && (
-                          <TableRow>
-                            <TableCell colSpan={MAX_COLSPAN}>
-                              <div className="text-xs uppercase tracking-wide text-fg-subtle mb-1.5">
-                                Findings ({(ev.findings || []).length})
-                              </div>
-                              {(ev.findings || []).length === 0 ? (
-                                <div className="text-fg-subtle py-1 text-xs">
-                                  No findings in this event.
-                                </div>
-                              ) : (
-                                <div className="space-y-1">
-                                  {(ev.findings || []).map((f, fi) => {
-                                    const confPct = f.confidence != null ? `${(f.confidence * 100).toFixed(0)}%` : null;
-                                    return (
-                                      <div
-                                        key={fi}
-                                        className="flex items-center gap-2 py-1 border-b border-border-subtle last:border-0 text-xs"
-                                      >
-                                        <span className="w-20 shrink-0 text-fg-muted">
-                                          {f.type || "—"}
-                                        </span>
-                                        <SeverityBadge severity={f.severity} />
-                                        {confPct && (
-                                          <span className="text-xs tabular-nums text-fg-subtle w-10 shrink-0">
-                                            {confPct}
-                                          </span>
-                                        )}
-                                        <span className="flex-1 truncate font-mono text-xs text-fg-subtle">
-                                          {truncateMatch(f.match, MAX_EXPANDED_CHARS)}
-                                        </span>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        )}
-                      </Fragment>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            )}
-          </div>
-        )}
-        <div className="flex items-center justify-between border-t border-border px-3 py-2 text-xs text-fg-muted">
-          <span>
-            {total} total · page {page} / {Math.max(1, Math.ceil(total / PAGE_SIZE))}
+      {total > 0 ? (
+        <div className="flex items-center justify-between gap-3 border-t px-4 py-2">
+          <span className="font-mono text-xs text-muted-foreground tabular-nums">
+            Page {page} of {pages}
           </span>
           <div className="flex gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={page <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-            >
+            <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
               Previous
             </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={page * PAGE_SIZE >= total}
-              onClick={() => setPage((p) => p + 1)}
-            >
+            <Button size="sm" variant="outline" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>
               Next
             </Button>
           </div>
         </div>
-      </Panel>
-    </>
+      ) : null}
+    </Panel>
   );
 }

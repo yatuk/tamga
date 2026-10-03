@@ -35,7 +35,7 @@ export function usePatternsPage() {
       setDraft(EMPTY_DRAFT);
       qc.invalidateQueries({ queryKey: ["tamga-patterns", adminKey] });
     },
-    onError: (e: Error) => toast.error("Create failed", e.message),
+    onError: (e: Error) => toast.error("Could not create the pattern", e.message),
   });
 
   const updateMut = useMutation({
@@ -52,7 +52,7 @@ export function usePatternsPage() {
       setDraft(EMPTY_DRAFT);
       qc.invalidateQueries({ queryKey: ["tamga-patterns", adminKey] });
     },
-    onError: (e: Error) => toast.error("Update failed", e.message),
+    onError: (e: Error) => toast.error("Could not update the pattern", e.message),
   });
 
   const deleteMut = useMutation({
@@ -61,7 +61,7 @@ export function usePatternsPage() {
       toast.success("Pattern deleted");
       qc.invalidateQueries({ queryKey: ["tamga-patterns", adminKey] });
     },
-    onError: (e: Error) => toast.error("Delete failed", e.message),
+    onError: (e: Error) => toast.error("Could not delete the pattern", e.message),
   });
 
   const items = data?.items ?? [];
@@ -77,7 +77,7 @@ export function usePatternsPage() {
 
   function onSubmit() {
     if (!draft.name.trim() || !draft.pattern.trim()) {
-      toast.error("Name and pattern required");
+      toast.error("Enter a name and a pattern");
       return;
     }
     if (draft.id) {
@@ -89,12 +89,12 @@ export function usePatternsPage() {
 
   function onTest() {
     if (!draft.pattern) {
-      toast.error("Pattern is empty");
+      toast.error("Enter a pattern to test");
       return;
     }
     if (draft.kind === "regex") {
       if (compiledRegex === "invalid" || !compiledRegex) {
-        toast.error("Invalid regex");
+        toast.error("This is not a valid regular expression");
         return;
       }
       const m = testInput.match(compiledRegex);
@@ -102,7 +102,7 @@ export function usePatternsPage() {
       return;
     }
     const idx = toLowerEn(testInput).indexOf(toLowerEn(draft.pattern));
-    setTestMatch(idx >= 0 ? `matched @ ${idx}` : "no match");
+    setTestMatch(idx >= 0 ? `at position ${idx}` : "no match");
   }
 
   function editPattern(p: CustomPattern) {

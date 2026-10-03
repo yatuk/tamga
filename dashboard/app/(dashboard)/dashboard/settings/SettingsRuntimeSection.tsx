@@ -1,7 +1,9 @@
 "use client";
 
+import { DetailList } from "@/components/app/detail-list";
 import { Panel } from "@/components/app/panel";
-import { SettingsStatusChip } from "./SettingsStatusChip";
+import { StatusBadge, type Tone } from "@/components/app/status-badge";
+import { formatUptime } from "@/lib/utils/format";
 
 type Health = Awaited<ReturnType<typeof import("@/lib/api").api.getHealthDetailed>>;
 type Runtime = Awaited<ReturnType<typeof import("@/lib/api").api.getHealthDetail>>;
@@ -12,53 +14,70 @@ type Props = {
 };
 
 export function SettingsRuntimeSection({ health, runtime }: Props) {
-  return (
-    <div>
-      <div className="space-y-4">
-        <div className="flex flex-wrap gap-2">
-          <SettingsStatusChip label="proxy" value={runtime?.proxy ?? health?.proxy ?? "?"} good={(runtime?.proxy ?? health?.proxy) === "up"} />
-          <SettingsStatusChip label="tls" value={runtime?.tls_enabled ? "enabled" : "plain http"} good={!!runtime?.tls_enabled} />
-          <SettingsStatusChip
-            label="mtls"
-            value={runtime?.mtls_enabled ? "required" : "disabled"}
-            good={!!runtime?.mtls_enabled}
-            neutral={!runtime?.mtls_enabled}
-          />
-          <SettingsStatusChip
-            label="redis"
-            value={runtime?.redis_enabled ? "distributed" : "single-node"}
-            good={!!runtime?.redis_enabled}
-            neutral={!runtime?.redis_enabled}
-          />
-          <SettingsStatusChip
-            label="database"
-            value={runtime?.database ?? health?.database ?? "?"}
-            good={(runtime?.database ?? health?.database) === "connected"}
-            neutral={(runtime?.database ?? health?.database) === "not_configured"}
-          />
-        </div>
+  const proxy = runtime?.proxy ?? health?.proxy;
+  const database = runtime?.database ?? health?.database;
+  // An optional feature that is off is a neutral fact, not a failure.
+  const optional = (on: boolean | undefined): Tone => (on ? "pass" : "neutral");
+  const uptime = runtime?.uptime_seconds ?? health?.uptime_seconds;
 
-        <Panel title="Runtime status">
-          <div className="space-y-1 p-3 text-xs text-fg-muted">
-            <div>
-              version: <span className="text-fg">{runtime?.version || "—"}</span>
-            </div>
-            <div>
-              policy_name: <span className="text-fg">{runtime?.policy_name || "—"}</span>
-            </div>
-            <div>
-              scanner_count: <span className="text-fg">{runtime?.scanner_count ?? health?.scanner_count ?? 0}</span>
-            </div>
-            <div>
-              uptime: <span className="text-fg">{runtime?.uptime_seconds ?? health?.uptime_seconds ?? 0}s</span>
-            </div>
-            <div className="text-xs text-fg-muted">policy_path: {runtime?.policy_path ?? health?.policy_path ?? "—"}</div>
-            <div className="text-xs text-fg-muted">
-              endpoint: <code>/api/v1/health/detail</code>
-            </div>
-          </div>
-        </Panel>
-      </div>
+  return (
+    <div className="grid gap-6 lg:grid-cols-2">
+      <Panel title="Transport and storage">
+        <DetailList
+          items={[
+            {
+              label: "Proxy",
+              value: (
+                <StatusBadge tone={proxy === "up" ? "pass" : proxy ? "critical" : "neutral"}>{proxy ?? "unknown"}</StatusBadge>
+              ),
+            },
+            {
+              label: "TLS",
+              value: (
+                <StatusBadge tone={runtime?.tls_enabled ? "pass" : "medium"}>
+                  {runtime?.tls_enabled ? "enabled" : "plain HTTP"}
+                </StatusBadge>
+              ),
+            },
+            {
+              label: "Mutual TLS",
+              value: (
+                <StatusBadge tone={optional(runtime?.mtls_enabled)}>{runtime?.mtls_enabled ? "required" : "off"}</StatusBadge>
+              ),
+            },
+            {
+              label: "Rate limit state",
+              value: (
+                <StatusBadge tone={optional(runtime?.redis_enabled)}>
+                  {runtime?.redis_enabled ? "Redis, shared" : "in memory, single node"}
+                </StatusBadge>
+              ),
+            },
+            {
+              label: "Database",
+              value: (
+                <StatusBadge
+                  tone={database === "connected" ? "pass" : !database || database === "not_configured" ? "neutral" : "critical"}
+                >
+                  {(database ?? "unknown").replace(/_/g, " ")}
+                </StatusBadge>
+              ),
+            },
+          ]}
+        />
+      </Panel>
+
+      <Panel title="Build and policy" aside={<span className="font-mono">/api/v1/health/detail</span>}>
+        <DetailList
+          items={[
+            { label: "Version", value: runtime?.version || "—", mono: true },
+            { label: "Policy", value: runtime?.policy_name || "—", mono: true },
+            { label: "Policy file", value: runtime?.policy_path ?? health?.policy_path ?? "—", mono: true },
+            { label: "Scanners", value: runtime?.scanner_count ?? health?.scanner_count ?? 0, mono: true },
+            { label: "Uptime", value: typeof uptime === "number" ? formatUptime(uptime) : "—", mono: true },
+          ]}
+        />
+      </Panel>
     </div>
   );
 }

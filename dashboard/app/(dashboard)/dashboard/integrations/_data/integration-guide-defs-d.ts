@@ -4,12 +4,11 @@ import { LAST_VERIFIED } from "@/app/(dashboard)/dashboard/integrations/_data/in
 export const GENERIC: IntegrationGuide = {
   kind: "generic",
   name: "Generic Webhook",
-  badge: "border-border-strong bg-surface-subtle text-fg-muted",
   overview:
     "POST Tamga events to any HTTPS endpoint as raw JSON. Use this when no named preset fits — it forwards the Tamga event body unmodified.",
   lastVerified: LAST_VERIFIED,
   urlHint: "https://hooks.your-soc.example/ingest",
-  docsLinks: [{ label: "Tamga docs", href: "https://www.tamga.ai/docs" }],
+  docsLinks: [{ label: "Tamga docs", href: "https://tamgaproxy.com/docs" }],
   prerequisites: [
     "Endpoint reachable from the proxy (public or peered) over HTTPS",
     "Server responds 2xx on success",
@@ -51,7 +50,6 @@ export const GENERIC: IntegrationGuide = {
 export const PAGERDUTY: IntegrationGuide = {
   kind: "pagerduty",
   name: "PagerDuty",
-  badge: "border-[#06A94D]/60 bg-[#06A94D]/20 text-[#06A94D]",
   overview:
     "Trigger PagerDuty incidents via the Events API v2. The routing_key (integration key) lives in the JSON body, not the URL — Tamga stores it encrypted as the webhook's auth token and injects it at render time.",
   lastVerified: LAST_VERIFIED,
@@ -103,7 +101,6 @@ export const PAGERDUTY: IntegrationGuide = {
 export const OPSGENIE: IntegrationGuide = {
   kind: "opsgenie",
   name: "Opsgenie",
-  badge: "border-[#172B4D]/60 bg-[#172B4D]/40 text-[#4C9AFF]",
   overview:
     "Create Opsgenie alerts via the v2 Alert API. Auth is an API key sent as `Authorization: GenieKey <token>` — Tamga injects it automatically when you paste the key into the auth-token field.",
   lastVerified: LAST_VERIFIED,
@@ -159,7 +156,6 @@ export const OPSGENIE: IntegrationGuide = {
 export const SERVICENOW: IntegrationGuide = {
   kind: "servicenow",
   name: "ServiceNow",
-  badge: "border-[#81B5A1]/60 bg-[#81B5A1]/20 text-[#81B5A1]",
   overview:
     "Open incidents on ServiceNow's Incident table (/api/now/table/incident) via the inbound REST API. Auth is Basic or OAuth and varies by instance — add the header manually.",
   lastVerified: LAST_VERIFIED,

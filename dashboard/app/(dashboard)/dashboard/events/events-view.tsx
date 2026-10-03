@@ -77,15 +77,15 @@ function EventRow({
         {event.model ? <span className="text-muted-foreground"> / {event.model}</span> : null}
       </div>
       <div role="gridcell" className="px-2">
-        <button
-          type="button"
+        <Button
+          variant="link"
           onClick={onOpen}
-          className="font-mono text-xs underline decoration-border-strong underline-offset-4 hover:decoration-foreground"
+          className="h-auto p-0 font-mono text-xs text-foreground underline decoration-border-strong underline-offset-4 hover:decoration-foreground"
           aria-label={`Open event ${event.request_id}`}
           translate="no"
         >
           {event.request_id.slice(0, 13)}
-        </button>
+        </Button>
       </div>
       <div role="gridcell" className="px-4 text-right font-mono text-xs text-muted-foreground tabular-nums">
         {Math.round(event.scan_latency_ms || 0)} ms
