@@ -2,8 +2,6 @@ package api
 
 import (
 	"net/http"
-
-	"github.com/rs/zerolog/log"
 )
 
 // These thin stubs keep the router compiling while their corresponding
@@ -37,16 +35,5 @@ func (cfg Config) handleBudgetStats(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg Config) handleProvidersList(w http.ResponseWriter, r *http.Request) {
-	// When the pricing store is wired, build the provider catalog from
-	// active DB rows. Otherwise fall back to the hardcoded catalog.
-	if cfg.PricingStore != nil {
-		pricing, err := cfg.PricingStore.ListActive(r.Context())
-		if err == nil && len(pricing) > 0 {
-			writeJSON(w, http.StatusOK, providerCatalogDB(pricing))
-			return
-		} else if err != nil {
-			log.Warn().Err(err).Msg("pricing store lookup failed, falling back to hardcoded catalog")
-		}
-	}
-	writeJSON(w, http.StatusOK, providerCatalog())
+	writeJSON(w, http.StatusOK, providerCatalog(cfg.Recent, cfg.activePricing(r.Context())))
 }

@@ -215,7 +215,7 @@ func BenchmarkPriceFor(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			_ = priceFor(nil, "openai", "gpt-4o", 1_000_000, 500_000)
+			_, _ = priceFor(nil, "openai", "gpt-4o", 1_000_000, 500_000)
 		}
 	})
 
@@ -223,7 +223,7 @@ func BenchmarkPriceFor(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			_ = priceFor(nil, "openai", "gpt-999", 1_000_000, 500_000)
+			_, _ = priceFor(nil, "openai", "gpt-999", 1_000_000, 500_000)
 		}
 	})
 
@@ -231,7 +231,7 @@ func BenchmarkPriceFor(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			_ = priceFor(nil, "anthropic", "claude-3-5-sonnet-20250219", 1_000_000, 0)
+			_, _ = priceFor(nil, "anthropic", "claude-3-5-sonnet-20250219", 1_000_000, 0)
 		}
 	})
 
@@ -239,7 +239,7 @@ func BenchmarkPriceFor(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			_ = priceFor(nil, "openai", "", 1_000_000, 500_000)
+			_, _ = priceFor(nil, "openai", "", 1_000_000, 500_000)
 		}
 	})
 
@@ -248,7 +248,7 @@ func BenchmarkPriceFor(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			_ = priceFor(r, "openai", "gpt-4o", 500_000, 250_000)
+			_, _ = priceFor(r, "openai", "gpt-4o", 500_000, 250_000)
 		}
 	})
 
@@ -256,7 +256,7 @@ func BenchmarkPriceFor(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			_ = priceFor(nil, "OpenAI", "GPT-4o-Mini", 1_000_000, 0)
+			_, _ = priceFor(nil, "OpenAI", "GPT-4o-Mini", 1_000_000, 0)
 		}
 	})
 }

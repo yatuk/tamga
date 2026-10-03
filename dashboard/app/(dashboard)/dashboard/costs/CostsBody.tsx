@@ -54,6 +54,7 @@ export function CostsBody({
   costPerRequest,
   avgTokensPerRequest,
   modelFamilyBars,
+  unpriced,
 }: Props) {
   // One bar per day: the daily rows are per provider and model.
   const dailyCost = useMemo(() => {
@@ -183,9 +184,11 @@ export function CostsBody({
                 <TableRow key={r.model}>
                   <TableCell className="font-mono text-xs">{r.model}</TableCell>
                   <TableCell className="text-right font-mono text-xs tabular-nums">{formatTokens(r.tokens)}</TableCell>
-                  <TableCell className="text-right font-mono text-xs tabular-nums">{formatCost(r.cost)}</TableCell>
+                  <TableCell className="text-right font-mono text-xs tabular-nums">
+                    {r.priced ? formatCost(r.cost) : <span className="text-muted-foreground">No price</span>}
+                  </TableCell>
                   <TableCell className="text-right font-mono text-xs text-muted-foreground tabular-nums">
-                    {totalCostEstimate > 0 ? ((r.cost / totalCostEstimate) * 100).toFixed(1) : "0.0"}%
+                    {!r.priced ? "—" : totalCostEstimate > 0 ? `${((r.cost / totalCostEstimate) * 100).toFixed(1)}%` : "0.0%"}
                   </TableCell>
                 </TableRow>
               ))}
@@ -193,7 +196,17 @@ export function CostsBody({
           </Table>
         )}
         <p className="border-t px-4 py-3 text-xs text-muted-foreground">
-          Costs are estimates from the proxy&apos;s pricing table (June 2026). Check them against provider invoices.
+          Costs are estimates from the proxy&apos;s pricing table. Check them against provider invoices.
+          {unpriced.models > 0 ? (
+            <>
+              {" "}
+              <span className="text-foreground">
+                {formatTokens(unpriced.tokens)} tokens across {unpriced.models} {unpriced.models === 1 ? "model" : "models"} have
+                no price and are in none of the totals on this page.
+              </span>{" "}
+              Add a row to <span className="font-mono">model_pricing</span> to price them.
+            </>
+          ) : null}
         </p>
       </Panel>
 
@@ -218,7 +231,9 @@ export function CostsBody({
                   <TableCell className="font-mono text-xs">{r.model}</TableCell>
                   <TableCell className="text-right font-mono text-xs tabular-nums">{formatTokens(r.input_tokens)}</TableCell>
                   <TableCell className="text-right font-mono text-xs tabular-nums">{formatTokens(r.output_tokens)}</TableCell>
-                  <TableCell className="text-right font-mono text-xs tabular-nums">{formatCost(r.cost_usd)}</TableCell>
+                  <TableCell className="text-right font-mono text-xs tabular-nums">
+                    {r.priced === false ? <span className="text-muted-foreground">No price</span> : formatCost(r.cost_usd)}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

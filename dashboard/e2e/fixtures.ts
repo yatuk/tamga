@@ -94,6 +94,23 @@ const HEALTH = {
   scan_latency_ms_p99: 6,
 };
 
+/** One model the proxy can price and one, newer than its price list, it cannot. */
+const COSTS = {
+  range: "7d",
+  daily: [
+    { date: "2026-10-02", provider: "openai", model: "gpt-4o", input_tokens: 5000, output_tokens: 1000, cost_usd: 0.0225, priced: true },
+    { date: "2026-10-02", provider: "anthropic", model: "claude-sonnet-4-6", input_tokens: 10000, output_tokens: 2000, cost_usd: 0, priced: false },
+  ],
+  breakdown: [
+    { provider: "anthropic", model: "claude-sonnet-4-6", model_family: "claude-4", model_version: "claude-sonnet-4-6", input_tokens: 10000, output_tokens: 2000, input_cost: 0, output_cost: 0, total_cost: 0, currency: "USD", pricing_id: 0, priced: false },
+    { provider: "openai", model: "gpt-4o", model_family: "gpt-4o", model_version: "gpt-4o", input_tokens: 5000, output_tokens: 1000, input_cost: 0.0125, output_cost: 0.01, total_cost: 0.0225, currency: "USD", pricing_id: 0, priced: true },
+  ],
+  unpriced: [{ provider: "anthropic", model: "claude-sonnet-4-6", tokens: 12000 }],
+  total_usd: 0.0225,
+  mtd_total_usd: 0.0225,
+  projected_monthly_usd: 0.35,
+};
+
 function answer(path: string, url: URL): unknown {
   if (path.endsWith("/health/detailed")) return HEALTH;
   if (path.endsWith("/health/detail")) return { ...HEALTH, version: "v0.1.0", policy_name: "default-policy", tls_enabled: false, mtls_enabled: false, redis_enabled: false };
@@ -125,6 +142,7 @@ function answer(path: string, url: URL): unknown {
     };
   }
   if (path.endsWith("/mttr")) return { overall_mttr_minutes: 0, by_severity: null, trend: "", sla_compliance: 0 };
+  if (path.endsWith("/billing/costs/breakdown")) return COSTS;
   if (path.endsWith("/budget/stats")) return { tokens_today: 0, cost_today_usd: 0, limit_tokens: 0, limit_cost_usd: 0 };
   if (path.endsWith("/incidents")) return { items: [], total: 0 };
   if (path.endsWith("/apikeys")) return { items: [], total: 0 };

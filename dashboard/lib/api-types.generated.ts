@@ -2973,8 +2973,13 @@ export interface paths {
                     content: {
                         "application/json": {
                             range?: string;
+                            daily?: components["schemas"]["DailyCostRow"][];
                             breakdown?: components["schemas"]["CostBreakdownRow"][];
+                            /** @description Models with usage but no price. Their tokens are in no USD total. */
+                            unpriced?: components["schemas"]["UnpricedModel"][];
                             total_usd?: number;
+                            mtd_total_usd?: number;
+                            projected_monthly_usd?: number;
                         };
                     };
                 };
@@ -3143,7 +3148,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List supported providers and models (with pricing) */
+        /** List provider routes and the models seen on each (with pricing when known) */
         get: {
             parameters: {
                 query?: never;
@@ -3803,8 +3808,27 @@ export interface components {
             source?: string;
             notes?: string;
         };
+        DailyCostRow: {
+            date?: string;
+            provider?: string;
+            model?: string;
+            input_tokens?: number;
+            output_tokens?: number;
+            cost_usd?: number;
+            /** @description False when the model has no price; cost_usd is then 0 and means "unknown". */
+            priced?: boolean;
+        };
+        UnpricedModel: {
+            provider?: string;
+            model?: string;
+            tokens?: number;
+        };
         CostBreakdownRow: {
             provider?: string;
+            /** @description The model name as the client sent it. */
+            model?: string;
+            /** @description False when the model has no price; the cost fields are then 0 and mean "unknown". */
+            priced?: boolean;
             model_family?: string;
             model_version?: string;
             input_tokens?: number;
@@ -3825,8 +3849,11 @@ export interface components {
             note?: string;
         };
         ProviderModelEntry: {
+            /** @description A model name seen in recent traffic on this route. */
             id?: string;
-            family?: string;
+            requests?: number;
+            /** @description False when the model has no price; input_usd and output_usd are then absent. */
+            priced?: boolean;
             input_usd?: number;
             output_usd?: number;
         };

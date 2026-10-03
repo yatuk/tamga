@@ -3,13 +3,13 @@ package billing
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
+	"github.com/yatuk/tamga/internal/pricing"
 	"github.com/yatuk/tamga/internal/store"
 )
 
@@ -112,8 +112,7 @@ func (c *Calculator) ResolveUSD(provider, model string) (inputPer1M, outputPer1M
 	}
 	c.mu.RUnlock()
 
-	// Determine family+version from model string via prefix matching against
-	// the active pricing list.
+	// The active rows are matched by the same rule every other price lookup uses.
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	all, err := c.pricing.ListActive(ctx)
@@ -122,20 +121,7 @@ func (c *Calculator) ResolveUSD(provider, model string) (inputPer1M, outputPer1M
 		return 0, 0
 	}
 
-	var matched *store.ModelPricing
-	for i := range all {
-		p := &all[i]
-		if !strings.EqualFold(p.Provider, provider) {
-			continue
-		}
-		// Prefix match: model "claude-3-5-sonnet-20241022" matches version "sonnet-20241022".
-		if strings.HasPrefix(strings.ToLower(model), strings.ToLower(p.ModelFamily)) ||
-			strings.HasPrefix(strings.ToLower(model), strings.ToLower(p.ModelVersion)) ||
-			strings.Contains(strings.ToLower(model), strings.ToLower(p.ModelVersion)) {
-			matched = p
-			break
-		}
-	}
+	matched, _ := pricing.Match(all, provider, model)
 
 	// Cache write (even misses, to avoid repeated DB scans).
 	c.mu.Lock()

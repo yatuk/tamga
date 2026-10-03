@@ -1,91 +1,41 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"sort"
-	"strings"
 	"time"
 
+	"github.com/rs/zerolog/log"
+
+	"github.com/yatuk/tamga/internal/pricing"
 	"github.com/yatuk/tamga/internal/store"
 )
-
-// hardcodedPrices mirrors the fallback price map in proxy/pricing.go
-// (pricePer1MTokens). Used when the DB-backed PricingStore is nil so the
-// billing dashboard still renders useful data without Postgres.
-var hardcodedPrices = map[string]struct{ in, out float64 }{
-	// OpenAI
-	"openai:gpt-4o":      {2.50, 10.00},
-	"openai:gpt-4o-mini": {0.15, 0.60},
-	"openai:gpt-4.1":     {2.00, 8.00},
-	// Anthropic
-	"anthropic:claude-3-5-sonnet": {3.00, 15.00},
-	"anthropic:claude-3-5-haiku":  {0.80, 4.00},
-	"anthropic:claude-opus-4":     {15.00, 75.00},
-	// Gemini
-	"gemini:gemini-2.0-flash": {0.10, 0.40},
-	"gemini:gemini-1.5-pro":   {1.25, 5.00},
-	// Mistral
-	"mistral:mistral-large": {2.00, 6.00},
-	"mistral:mistral-small": {0.20, 0.60},
-	// Bedrock
-	"bedrock:claude-3-5-sonnet-v2": {3.00, 15.00},
-	"bedrock:llama-3.1-70b":        {0.99, 0.99},
-}
-
-// hardcodedPricingEntries converts the hardcoded price map to store.ModelPricing entries.
-func hardcodedPricingEntries() []store.ModelPricing {
-	entries := make([]store.ModelPricing, 0, len(hardcodedPrices))
-	for k, v := range hardcodedPrices {
-		parts := strings.SplitN(k, ":", 2)
-		if len(parts) != 2 {
-			continue
-		}
-		entries = append(entries, store.ModelPricing{
-			Provider:     parts[0],
-			ModelFamily:  parts[1],
-			ModelVersion: parts[1],
-			InputPer1K:   v.in / 1000.0,
-			OutputPer1K:  v.out / 1000.0,
-			Currency:     "USD",
-			Source:       "hardcoded_fallback",
-		})
-	}
-	// Sort for deterministic output.
-	sort.Slice(entries, func(i, j int) bool {
-		if entries[i].Provider != entries[j].Provider {
-			return entries[i].Provider < entries[j].Provider
-		}
-		return entries[i].ModelFamily < entries[j].ModelFamily
-	})
-	return entries
-}
 
 // handlePricingList returns all active pricing entries.
 // GET /api/v1/billing/pricing
 //
-// When the DB-backed PricingStore is nil (no Postgres), falls back to the
-// hardcoded price map from proxy/pricing.go so the dashboard can still
-// render a useful pricing table.
+// Without Postgres the built-in list in internal/pricing is returned.
 func (cfg Config) handlePricingList(w http.ResponseWriter, r *http.Request) {
 	if cfg.PricingStore == nil {
 		writeJSON(w, http.StatusOK, map[string]interface{}{
-			"pricing":    hardcodedPricingEntries(),
+			"pricing":    pricing.Defaults(),
 			"currency":   "USD",
 			"updated_at": time.Now().UTC(),
-			"source":     "hardcoded_fallback",
+			"source":     pricing.SourceBuiltin,
 		})
 		return
 	}
-	pricing, err := cfg.PricingStore.ListActive(r.Context())
+	rows, err := cfg.PricingStore.ListActive(r.Context())
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	if pricing == nil {
-		pricing = []store.ModelPricing{}
+	if rows == nil {
+		rows = []store.ModelPricing{}
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"pricing":    pricing,
+		"pricing":    rows,
 		"currency":   "USD",
 		"updated_at": time.Now().UTC(),
 	})
@@ -95,8 +45,9 @@ func (cfg Config) handlePricingList(w http.ResponseWriter, r *http.Request) {
 // and projected monthly cost for a time range.
 // GET /api/v1/billing/costs/breakdown?range=24h|7d|30d
 //
-// Aggregates token usage from request_logs grouped by date+provider+model,
-// cross-references active pricing entries, and computes USD costs.
+// Token usage comes from request_logs grouped by date+provider+model and is
+// priced with internal/pricing. A model without a price is reported with
+// priced=false and listed under "unpriced"; its tokens are in no USD total.
 func (cfg Config) handleCostsBreakdown(w http.ResponseWriter, r *http.Request) {
 	rng := r.URL.Query().Get("range")
 	if rng == "" {
@@ -110,10 +61,12 @@ func (cfg Config) handleCostsBreakdown(w http.ResponseWriter, r *http.Request) {
 		InputTokens  int64   `json:"input_tokens"`
 		OutputTokens int64   `json:"output_tokens"`
 		CostUSD      float64 `json:"cost_usd"`
+		Priced       bool    `json:"priced"`
 	}
 
 	type breakdownRow struct {
 		Provider     string  `json:"provider"`
+		Model        string  `json:"model"`
 		ModelFamily  string  `json:"model_family"`
 		ModelVersion string  `json:"model_version"`
 		InputTokens  int64   `json:"input_tokens"`
@@ -123,6 +76,13 @@ func (cfg Config) handleCostsBreakdown(w http.ResponseWriter, r *http.Request) {
 		TotalCost    float64 `json:"total_cost"`
 		Currency     string  `json:"currency"`
 		PricingID    int     `json:"pricing_id"`
+		Priced       bool    `json:"priced"`
+	}
+
+	type unpricedRow struct {
+		Provider string `json:"provider"`
+		Model    string `json:"model"`
+		Tokens   int64  `json:"tokens"`
 	}
 
 	to := time.Now().UTC()
@@ -131,30 +91,20 @@ func (cfg Config) handleCostsBreakdown(w http.ResponseWriter, r *http.Request) {
 	// Fetch daily token usage from DB.
 	dailyUsage, _ := cfg.Store.GetDailyTokenUsage(r.Context(), cfg.DefaultOrgID, from, to)
 
-	// Fetch active pricing for matching.
-	var pricing []store.ModelPricing
-	if cfg.PricingStore != nil {
-		pricing, _ = cfg.PricingStore.ListActive(r.Context())
-	}
+	rows := cfg.activePricing(r.Context())
 
 	// Build daily rows.
 	daily := make([]dailyRow, 0, len(dailyUsage))
 	for _, u := range dailyUsage {
-		p, ok := matchPricing(pricing, u.Provider, u.Model, u.ModelFamily)
-		inPer1K, outPer1K := 0.0, 0.0
-		if ok {
-			inPer1K = p.InputPer1K
-			outPer1K = p.OutputPer1K
-		}
-		inputCost := float64(u.InputTokens) / 1000.0 * inPer1K
-		outputCost := float64(u.OutputTokens) / 1000.0 * outPer1K
+		p, ok := pricing.Match(rows, u.Provider, u.Model)
 		daily = append(daily, dailyRow{
 			Date:         u.Date.Format("2006-01-02"),
 			Provider:     u.Provider,
 			Model:        u.Model,
 			InputTokens:  u.InputTokens,
 			OutputTokens: u.OutputTokens,
-			CostUSD:      truncateUSD(inputCost + outputCost),
+			CostUSD:      truncateUSD(pricing.CostUSD(p, u.InputTokens, u.OutputTokens)),
+			Priced:       ok,
 		})
 	}
 
@@ -164,13 +114,8 @@ func (cfg Config) handleCostsBreakdown(w http.ResponseWriter, r *http.Request) {
 	mtdUsage, _ := cfg.Store.GetDailyTokenUsage(r.Context(), cfg.DefaultOrgID, monthStart, to)
 	var mtdTotalUSD float64
 	for _, u := range mtdUsage {
-		p, ok := matchPricing(pricing, u.Provider, u.Model, u.ModelFamily)
-		inPer1K, outPer1K := 0.0, 0.0
-		if ok {
-			inPer1K = p.InputPer1K
-			outPer1K = p.OutputPer1K
-		}
-		mtdTotalUSD += float64(u.InputTokens)/1000.0*inPer1K + float64(u.OutputTokens)/1000.0*outPer1K
+		p, _ := pricing.Match(rows, u.Provider, u.Model)
+		mtdTotalUSD += pricing.CostUSD(p, u.InputTokens, u.OutputTokens)
 	}
 	mtdTotalUSD = truncateUSD(mtdTotalUSD)
 
@@ -182,74 +127,74 @@ func (cfg Config) handleCostsBreakdown(w http.ResponseWriter, r *http.Request) {
 	daysInMonth := daysInMonthFor(now)
 	projectedMonthly := truncateUSD(mtdTotalUSD / float64(daysElapsed) * float64(daysInMonth))
 
-	// Build per-model breakdown for backward compatibility.
-	var totalUSD float64
-	breakdownRows := make(map[string]*breakdownRow)
+	// Per-model breakdown: tokens are summed over the days first, then priced.
+	type usageKey struct{ provider, model string }
+	tokens := map[usageKey]*breakdownRow{}
+	var order []usageKey
 	for _, u := range dailyUsage {
-		key := u.Provider + "|" + u.Model
-		if row, exists := breakdownRows[key]; exists {
-			row.InputTokens += u.InputTokens
-			row.OutputTokens += u.OutputTokens
-			continue
+		key := usageKey{u.Provider, u.Model}
+		row, exists := tokens[key]
+		if !exists {
+			row = &breakdownRow{Provider: u.Provider, Model: u.Model, ModelFamily: u.ModelFamily, ModelVersion: u.Model, Currency: "USD"}
+			tokens[key] = row
+			order = append(order, key)
 		}
-		p, ok := matchPricing(pricing, u.Provider, u.Model, u.ModelFamily)
-		pid := 0
-		inPer1K, outPer1K := 0.0, 0.0
-		currency := "USD"
-		mf := u.ModelFamily
-		mv := u.Model
-		if ok {
-			pid = p.ID
-			inPer1K = p.InputPer1K
-			outPer1K = p.OutputPer1K
-			currency = p.Currency
-			mf = p.ModelFamily
-			mv = p.ModelVersion
-		}
-		inputCost := float64(u.InputTokens) / 1000.0 * inPer1K
-		outputCost := float64(u.OutputTokens) / 1000.0 * outPer1K
-		total := inputCost + outputCost
-		row := &breakdownRow{
-			Provider:     u.Provider,
-			ModelFamily:  mf,
-			ModelVersion: mv,
-			InputTokens:  u.InputTokens,
-			OutputTokens: u.OutputTokens,
-			InputCost:    truncateUSD(inputCost),
-			OutputCost:   truncateUSD(outputCost),
-			TotalCost:    truncateUSD(total),
-			Currency:     currency,
-			PricingID:    pid,
-		}
-		breakdownRows[key] = row
-		totalUSD += total
+		row.InputTokens += u.InputTokens
+		row.OutputTokens += u.OutputTokens
 	}
-	breakdown := make([]breakdownRow, 0, len(breakdownRows))
-	for _, row := range breakdownRows {
+
+	var totalUSD float64
+	breakdown := make([]breakdownRow, 0, len(order))
+	unpriced := make([]unpricedRow, 0)
+	for _, key := range order {
+		row := tokens[key]
+		if p, ok := pricing.Match(rows, row.Provider, row.Model); ok {
+			inputCost := float64(row.InputTokens) / 1000.0 * p.InputPer1K
+			outputCost := float64(row.OutputTokens) / 1000.0 * p.OutputPer1K
+			row.Priced = true
+			row.PricingID = p.ID
+			row.Currency = p.Currency
+			row.ModelFamily = p.ModelFamily
+			row.ModelVersion = p.ModelVersion
+			row.InputCost = truncateUSD(inputCost)
+			row.OutputCost = truncateUSD(outputCost)
+			row.TotalCost = truncateUSD(inputCost + outputCost)
+			totalUSD += inputCost + outputCost
+		} else {
+			unpriced = append(unpriced, unpricedRow{Provider: row.Provider, Model: row.Model, Tokens: row.InputTokens + row.OutputTokens})
+		}
 		breakdown = append(breakdown, *row)
 	}
 	sort.Slice(breakdown, func(i, j int) bool {
 		if breakdown[i].Provider != breakdown[j].Provider {
 			return breakdown[i].Provider < breakdown[j].Provider
 		}
-		return breakdown[i].ModelFamily < breakdown[j].ModelFamily
+		return breakdown[i].Model < breakdown[j].Model
 	})
-
-	if len(daily) == 0 {
-		daily = []dailyRow{}
-	}
-	if len(breakdown) == 0 {
-		breakdown = []breakdownRow{}
-	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"range":                 rng,
 		"daily":                 daily,
 		"breakdown":             breakdown,
+		"unpriced":              unpriced,
 		"total_usd":             truncateUSD(totalUSD),
 		"mtd_total_usd":         mtdTotalUSD,
 		"projected_monthly_usd": projectedMonthly,
 	})
+}
+
+// activePricing returns the price rows in force: the database rows when
+// Postgres is wired, followed by the built-in list for models it lacks.
+func (cfg Config) activePricing(ctx context.Context) []store.ModelPricing {
+	if cfg.PricingStore == nil {
+		return pricing.Defaults()
+	}
+	rows, err := cfg.PricingStore.ListActive(ctx)
+	if err != nil {
+		log.Warn().Err(err).Msg("pricing store lookup failed, using the built-in price list")
+		return pricing.Defaults()
+	}
+	return pricing.WithDefaults(rows)
 }
 
 // daysInMonthFor returns the number of days in the given month.
@@ -271,121 +216,8 @@ func rangeDuration(rng string) time.Duration {
 	}
 }
 
-// matchPricing finds the best pricing entry for a provider+model pair using
-// prefix matching on both model_family and model_version. Returns nil, false
-// when no match is found (unknown model).
-func matchPricing(pricing []store.ModelPricing, provider, model, family string) (*store.ModelPricing, bool) {
-	if model == "" || len(pricing) == 0 {
-		return nil, false
-	}
-	mod := strings.ToLower(model)
-	fam := strings.ToLower(family)
-
-	// First pass: try exact match on model_family (when request_logs has it).
-	if fam != "" {
-		for i := range pricing {
-			p := &pricing[i]
-			if strings.EqualFold(p.Provider, provider) &&
-				strings.EqualFold(p.ModelFamily, family) {
-				return p, true
-			}
-		}
-	}
-
-	// Second pass: version substring match (more specific than family prefix).
-	for i := range pricing {
-		p := &pricing[i]
-		if !strings.EqualFold(p.Provider, provider) {
-			continue
-		}
-		if strings.Contains(mod, strings.ToLower(p.ModelVersion)) {
-			return p, true
-		}
-	}
-
-	// Third pass: model_family prefix match.
-	for i := range pricing {
-		p := &pricing[i]
-		if !strings.EqualFold(p.Provider, provider) {
-			continue
-		}
-		if strings.HasPrefix(mod, strings.ToLower(p.ModelFamily)) {
-			return p, true
-		}
-	}
-
-	// Fourth pass: model_family substring match (loosest).
-	for i := range pricing {
-		p := &pricing[i]
-		if strings.EqualFold(p.Provider, provider) &&
-			strings.Contains(mod, strings.ToLower(p.ModelFamily)) {
-			return p, true
-		}
-	}
-
-	return nil, false
-}
-
 // truncateUSD rounds a USD amount to 6 decimal places to avoid floating-point
 // noise in JSON output. Sufficient for per-1K-token pricing granularity.
 func truncateUSD(v float64) float64 {
 	return float64(int64(v*1_000_000+0.5)) / 1_000_000
-}
-
-// providerCatalogDB builds a provider->models grouped catalog from active
-// pricing rows. Used by handleProvidersList when PricingStore is wired.
-func providerCatalogDB(pricing []store.ModelPricing) []map[string]interface{} {
-	type modelEntry struct {
-		ID        string  `json:"id"`
-		Family    string  `json:"family"`
-		InputUSD  float64 `json:"input_usd"`
-		OutputUSD float64 `json:"output_usd"`
-	}
-
-	type provEntry struct {
-		idx    int
-		models []modelEntry
-	}
-
-	byProvider := map[string]*provEntry{}
-	var order []string
-
-	for _, p := range pricing {
-		pid := p.Provider
-		e, ok := byProvider[pid]
-		if !ok {
-			order = append(order, pid)
-			e = &provEntry{idx: len(order) - 1}
-			byProvider[pid] = e
-		}
-		e.models = append(e.models, modelEntry{
-			ID:        p.ModelVersion,
-			Family:    p.ModelFamily,
-			InputUSD:  p.InputPer1K * 1000,
-			OutputUSD: p.OutputPer1K * 1000,
-		})
-	}
-
-	catalog := make([]map[string]interface{}, 0, len(order))
-	for _, pid := range order {
-		e := byProvider[pid]
-		models := make([]map[string]interface{}, 0, len(e.models))
-		for _, m := range e.models {
-			models = append(models, map[string]interface{}{
-				"id":         m.ID,
-				"family":     m.Family,
-				"input_usd":  m.InputUSD,
-				"output_usd": m.OutputUSD,
-			})
-		}
-		catalog = append(catalog, map[string]interface{}{
-			"id":        pid,
-			"label":     pid,
-			"path":      "/" + pid + "/",
-			"usage":     true,
-			"streaming": true,
-			"models":    models,
-		})
-	}
-	return catalog
 }

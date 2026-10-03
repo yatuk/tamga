@@ -1,12 +1,12 @@
 package billing
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"sync"
 	"testing"
 	"time"
-	"bytes"
 
 	"github.com/rs/zerolog"
 
@@ -859,8 +859,9 @@ func TestCalculator_ResolveUSD_ProviderCaseInsensitive(t *testing.T) {
 	}
 }
 
-func TestCalculator_ResolveUSD_FirstMatchWins(t *testing.T) {
-	// When multiple entries match, the first one in the list wins.
+func TestCalculator_ResolveUSD_VariantIsNotPricedAsItsBase(t *testing.T) {
+	// A variant of a model is a different model. Pricing it as the row it
+	// happens to start with would report a cost nobody was charged.
 	mock := &mockPricingStore{
 		activeList: []store.ModelPricing{
 			{
@@ -875,12 +876,11 @@ func TestCalculator_ResolveUSD_FirstMatchWins(t *testing.T) {
 	}
 	calc := New(mock, 5*time.Minute)
 
-	// "gpt-4o-long-context" matches both "gpt-4o" (prefix) and "gpt-4o-long" (prefix).
-	// The first entry wins.
-	inPer1M, outPer1M := calc.ResolveUSD("openai", "gpt-4o-long-context")
-	if inPer1M != 0.0025*1000 || outPer1M != 0.01*1000 {
-		t.Errorf("first-match-wins: got in=%v out=%v, want first entry values (in=%v out=%v)",
-			inPer1M, outPer1M, 0.0025*1000, 0.01*1000)
+	if in, out := calc.ResolveUSD("openai", "gpt-4o-long-context"); in != 0 || out != 0 {
+		t.Errorf("a variant with no row of its own must be unpriced, got in=%v out=%v", in, out)
+	}
+	if in, out := calc.ResolveUSD("openai", "gpt-4o-long"); in != 0.005*1000 || out != 0.02*1000 {
+		t.Errorf("gpt-4o-long must match its own row, got in=%v out=%v", in, out)
 	}
 }
 

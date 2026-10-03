@@ -72,6 +72,23 @@ test.describe("product dashboard", () => {
     });
   }
 
+  test("a model without a price is shown as unpriced, not as free", async ({ page }) => {
+    await withAdminKey(page);
+    await mockProxy(page);
+    await page.goto("/dashboard/costs");
+
+    const priced = page.getByRole("row", { name: /openai\/gpt-4o/ });
+    await expect(priced).toContainText("$0.022");
+    await expect(priced).toContainText("100.0%");
+
+    const unpriced = page.getByRole("row", { name: /anthropic\/claude-sonnet-4-6/ });
+    await expect(unpriced).toContainText("12.0K");
+    await expect(unpriced).toContainText("No price");
+    await expect(unpriced).not.toContainText("$");
+
+    await expect(page.getByText("12.0K tokens across 1 model have no price")).toBeVisible();
+  });
+
   test("a tab is part of the URL and survives a reload", async ({ page }) => {
     await withAdminKey(page);
     await mockProxy(page);

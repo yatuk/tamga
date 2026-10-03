@@ -1,14 +1,14 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"bytes"
-	"errors"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -65,116 +65,6 @@ func TestTruncateUSD(t *testing.T) {
 	}
 }
 
-func TestMatchPricing(t *testing.T) {
-	pricing := []store.ModelPricing{
-		{ID: 1, Provider: "anthropic", ModelFamily: "claude-3-5", ModelVersion: "sonnet-20241022", InputPer1K: 0.003, OutputPer1K: 0.015, Currency: "USD"},
-		{ID: 2, Provider: "anthropic", ModelFamily: "claude-3", ModelVersion: "haiku-20240307", InputPer1K: 0.00025, OutputPer1K: 0.00125, Currency: "USD"},
-		{ID: 3, Provider: "openai", ModelFamily: "gpt-4o", ModelVersion: "2024-08-06", InputPer1K: 0.0025, OutputPer1K: 0.01, Currency: "USD"},
-		{ID: 4, Provider: "openai", ModelFamily: "gpt-4o", ModelVersion: "mini-2024-07-18", InputPer1K: 0.00015, OutputPer1K: 0.0006, Currency: "USD"},
-		{ID: 5, Provider: "google", ModelFamily: "gemini-1.5", ModelVersion: "flash", InputPer1K: 0.000075, OutputPer1K: 0.0003, Currency: "USD"},
-		{ID: 6, Provider: "local", ModelFamily: "llama-3", ModelVersion: "8b", InputPer1K: 0, OutputPer1K: 0, Currency: "USD"},
-	}
-
-	t.Run("exact family match on request_logs model_family", func(t *testing.T) {
-		p, ok := matchPricing(pricing, "openai", "gpt-4o-2024-08-06", "gpt-4o")
-		if !ok {
-			t.Fatal("expected match on family")
-		}
-		if p.ID != 3 {
-			t.Fatalf("want pricing ID 3 (gpt-4o), got %d", p.ID)
-		}
-	})
-
-	t.Run("prefix match on model string without family", func(t *testing.T) {
-		p, ok := matchPricing(pricing, "anthropic", "claude-3-5-sonnet-20241022", "")
-		if !ok {
-			t.Fatal("expected match on prefix")
-		}
-		if p.ID != 1 {
-			t.Fatalf("want pricing ID 1 (sonnet), got %d", p.ID)
-		}
-	})
-
-	t.Run("prefix match on version substring", func(t *testing.T) {
-		p, ok := matchPricing(pricing, "anthropic", "claude-3-haiku-20240307", "")
-		if !ok {
-			t.Fatal("expected match on version substring")
-		}
-		if p.ID != 2 {
-			t.Fatalf("want pricing ID 2 (haiku), got %d", p.ID)
-		}
-	})
-
-	t.Run("gpt-4o-mini matches mini version", func(t *testing.T) {
-		p, ok := matchPricing(pricing, "openai", "gpt-4o-mini-2024-07-18", "")
-		if !ok {
-			t.Fatal("expected match")
-		}
-		if p.ID != 4 {
-			t.Fatalf("want pricing ID 4 (mini), got %d", p.ID)
-		}
-	})
-
-	t.Run("gemini flash matches", func(t *testing.T) {
-		p, ok := matchPricing(pricing, "google", "gemini-1.5-flash", "")
-		if !ok {
-			t.Fatal("expected match")
-		}
-		if p.ID != 5 {
-			t.Fatalf("want pricing ID 5 (gemini flash), got %d", p.ID)
-		}
-	})
-
-	t.Run("unknown model returns false", func(t *testing.T) {
-		_, ok := matchPricing(pricing, "deepseek", "deepseek-v3", "")
-		if ok {
-			t.Fatal("expected no match for unknown model")
-		}
-	})
-
-	t.Run("empty model returns false", func(t *testing.T) {
-		_, ok := matchPricing(pricing, "openai", "", "")
-		if ok {
-			t.Fatal("expected no match for empty model")
-		}
-	})
-
-	t.Run("empty pricing list returns false", func(t *testing.T) {
-		_, ok := matchPricing(nil, "openai", "gpt-4o", "")
-		if ok {
-			t.Fatal("expected no match for nil pricing")
-		}
-	})
-
-	t.Run("zero-cost local model matches", func(t *testing.T) {
-		p, ok := matchPricing(pricing, "local", "llama-3-8b", "")
-		if !ok {
-			t.Fatal("expected match for local model")
-		}
-		if p.InputPer1K != 0 || p.OutputPer1K != 0 {
-			t.Fatalf("want zero cost, got in=%v out=%v", p.InputPer1K, p.OutputPer1K)
-		}
-	})
-
-	t.Run("case-insensitive provider", func(t *testing.T) {
-		p, ok := matchPricing(pricing, "OpenAI", "gpt-4o", "gpt-4o")
-		if !ok {
-			t.Fatal("expected match for case-different provider")
-		}
-		if p.ID != 3 {
-			t.Fatalf("want pricing ID 3, got %d", p.ID)
-		}
-	})
-
-	t.Run("substring family match as third pass", func(t *testing.T) {
-		// Test third pass: substring match on model_family within model
-		_, ok := matchPricing(pricing, "openai", "some-gpt-4o-variant", "")
-		if !ok {
-			t.Fatal("expected substring match on model_family")
-		}
-	})
-}
-
 // ── HTTP tests: billing endpoints ────────────────────────────────────────
 
 func TestPricingList_FallbackWhenNoPricingStore(t *testing.T) {
@@ -206,8 +96,8 @@ func TestPricingList_FallbackWhenNoPricingStore(t *testing.T) {
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
 		t.Fatal(err)
 	}
-	if body["source"] != "hardcoded_fallback" {
-		t.Fatalf("expected source=hardcoded_fallback, got %v", body["source"])
+	if body["source"] != "builtin" {
+		t.Fatalf("expected source=builtin, got %v", body["source"])
 	}
 	if body["currency"] != "USD" {
 		t.Fatalf("expected USD currency, got %v", body["currency"])
@@ -444,55 +334,6 @@ func TestProvidersList_FallbackToHardcoded(t *testing.T) {
 	}
 }
 
-// ── providerCatalogDB pure function tests ─────────────────────────────────
-
-func TestProviderCatalogDB_WithPricing(t *testing.T) {
-	pricing := []store.ModelPricing{
-		{Provider: "openai", ModelFamily: "gpt-4o", ModelVersion: "2024-08-06", InputPer1K: 0.0025, OutputPer1K: 0.01, Currency: "USD"},
-		{Provider: "openai", ModelFamily: "gpt-4o", ModelVersion: "mini-2024-07-18", InputPer1K: 0.00015, OutputPer1K: 0.0006, Currency: "USD"},
-		{Provider: "anthropic", ModelFamily: "claude-3-5", ModelVersion: "sonnet-20241022", InputPer1K: 0.003, OutputPer1K: 0.015, Currency: "USD"},
-	}
-	catalog := providerCatalogDB(pricing)
-	if len(catalog) != 2 {
-		t.Fatalf("expected 2 providers, got %d", len(catalog))
-	}
-	openai := catalog[0]
-	if openai["id"] != "openai" {
-		t.Errorf("expected first provider openai, got %v", openai["id"])
-	}
-	models, ok := openai["models"].([]map[string]interface{})
-	if !ok {
-		t.Fatal("expected models array")
-	}
-	if len(models) != 2 {
-		t.Fatalf("expected 2 openai models, got %d", len(models))
-	}
-	if models[0]["id"] != "2024-08-06" {
-		t.Errorf("expected first model 2024-08-06, got %v", models[0]["id"])
-	}
-	if models[0]["family"] != "gpt-4o" {
-		t.Errorf("expected family gpt-4o, got %v", models[0]["family"])
-	}
-	if models[0]["input_usd"].(float64) != 2.5 {
-		t.Errorf("expected input_usd=2.5, got %v", models[0]["input_usd"])
-	}
-	anthropic := catalog[1]
-	if anthropic["id"] != "anthropic" {
-		t.Errorf("expected second provider anthropic, got %v", anthropic["id"])
-	}
-}
-
-func TestProviderCatalogDB_Empty(t *testing.T) {
-	catalog := providerCatalogDB(nil)
-	if len(catalog) != 0 {
-		t.Fatalf("expected empty catalog, got %d items", len(catalog))
-	}
-	catalog = providerCatalogDB([]store.ModelPricing{})
-	if len(catalog) != 0 {
-		t.Fatalf("expected empty catalog for empty slice, got %d items", len(catalog))
-	}
-}
-
 // ── mock store for costs breakdown with usage data ────────────────────────
 
 // usageStore embeds NoopStore and overrides GetModelTokenUsage and
@@ -615,8 +456,25 @@ func TestCostsBreakdown_WithUsageData(t *testing.T) {
 	if !foundProviders["anthropic"] {
 		t.Error("anthropic not found in breakdown")
 	}
-	if total, ok := out["total_usd"].(float64); !ok || total != 0 {
-		t.Fatalf("total_usd should be 0 without pricing, got %v", out["total_usd"])
+	// Without a database the built-in list prices gpt-4o:
+	// 5000 in at $2.50/1M + 1000 out at $10.00/1M = 0.0225.
+	if total, ok := out["total_usd"].(float64); !ok || total != 0.0225 {
+		t.Fatalf("total_usd should be 0.0225 from the built-in price of gpt-4o, got %v", out["total_usd"])
+	}
+	// claude-sonnet-4-6 has no price: it is reported, not counted as free.
+	unpriced, ok := out["unpriced"].([]interface{})
+	if !ok || len(unpriced) != 1 {
+		t.Fatalf("want exactly one unpriced model, got %v", out["unpriced"])
+	}
+	u := unpriced[0].(map[string]interface{})
+	if u["model"] != "claude-sonnet-4-6" || u["tokens"].(float64) != 12000 {
+		t.Fatalf("unpriced row: %v", u)
+	}
+	for _, b := range breakdown {
+		row := b.(map[string]interface{})
+		if want := row["provider"] == "openai"; row["priced"] != want {
+			t.Errorf("%v priced = %v, want %v", row["model"], row["priced"], want)
+		}
 	}
 	// MTD and projected should be present.
 	if _, ok := out["mtd_total_usd"]; !ok {
@@ -1061,7 +919,7 @@ func TestProvidersList_PricingStoreError_Fallback(t *testing.T) {
 	if logOutput == "" {
 		t.Error("expected WARN log output on pricing store error, got none")
 	}
-	if !bytes.Contains([]byte(logOutput), []byte("falling back to hardcoded catalog")) {
-		t.Errorf("expected WARN about falling back to hardcoded catalog, got: %s", logOutput)
+	if !bytes.Contains([]byte(logOutput), []byte("using the built-in price list")) {
+		t.Errorf("expected WARN about using the built-in price list, got: %s", logOutput)
 	}
 }

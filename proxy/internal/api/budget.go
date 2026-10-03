@@ -1,6 +1,13 @@
 package api
 
-import "net/http"
+import (
+	"net/http"
+	"sort"
+
+	"github.com/yatuk/tamga/internal/events"
+	"github.com/yatuk/tamga/internal/pricing"
+	"github.com/yatuk/tamga/internal/store"
+)
 
 // handleBudgetStatsImpl exposes the token/cost budget counters. When
 // cfg.Budget is nil (legacy wiring) we still return a well-formed JSON body
@@ -24,46 +31,66 @@ func handleBudgetStatsImpl(cfg Config, w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, cfg.Budget.Stats(org))
 }
 
-// providerCatalog is a read-only list for Settings > Providers. Pricing is
-// expressed in USD per 1M tokens. Dashboards localise to TRY using the live
-// rate configured via TAMGA_TRY_RATE (defaults to 33.0).
-func providerCatalog() []map[string]interface{} {
-	return []map[string]interface{}{
-		{"id": "openai", "label": "OpenAI", "path": "/v1/", "usage": true, "streaming": true,
-			"models": []map[string]interface{}{
-				{"id": "gpt-4o", "input_usd": 2.50, "output_usd": 10.00},
-				{"id": "gpt-4o-mini", "input_usd": 0.15, "output_usd": 0.60},
-				{"id": "gpt-4.1", "input_usd": 2.00, "output_usd": 8.00},
-			}},
-		{"id": "anthropic", "label": "Anthropic", "path": "/anthropic/", "usage": true, "streaming": true,
-			"models": []map[string]interface{}{
-				{"id": "claude-3-5-sonnet", "input_usd": 3.00, "output_usd": 15.00},
-				{"id": "claude-3-5-haiku", "input_usd": 0.80, "output_usd": 4.00},
-				{"id": "claude-opus-4", "input_usd": 15.00, "output_usd": 75.00},
-			}},
-		{"id": "gemini", "label": "Google Gemini", "path": "/gemini/", "usage": true, "streaming": true,
-			"models": []map[string]interface{}{
-				{"id": "gemini-2.0-flash", "input_usd": 0.10, "output_usd": 0.40},
-				{"id": "gemini-1.5-pro", "input_usd": 1.25, "output_usd": 5.00},
-			}},
-		{"id": "azure", "label": "Azure OpenAI", "path": "/azure/", "usage": true, "streaming": true,
-			"models": []map[string]interface{}{
-				{"id": "gpt-4o", "input_usd": 2.50, "output_usd": 10.00},
-			}},
-		{"id": "bedrock", "label": "AWS Bedrock", "path": "/bedrock/", "usage": true, "streaming": true,
-			"models": []map[string]interface{}{
-				{"id": "claude-3-5-sonnet-v2", "input_usd": 3.00, "output_usd": 15.00},
-				{"id": "llama-3.1-70b", "input_usd": 0.99, "output_usd": 0.99},
-			}},
-		{"id": "mistral", "label": "Mistral", "path": "/mistral/", "usage": true, "streaming": true,
-			"models": []map[string]interface{}{
-				{"id": "mistral-large", "input_usd": 2.00, "output_usd": 6.00},
-				{"id": "mistral-small", "input_usd": 0.20, "output_usd": 0.60},
-			}},
-		{"id": "local", "label": "Self-hosted (vLLM / Ollama)", "path": "/local/", "usage": false, "streaming": true,
-			"models": []map[string]interface{}{
-				{"id": "llama3.1:8b", "input_usd": 0.0, "output_usd": 0.0},
-				{"id": "qwen2.5:14b", "input_usd": 0.0, "output_usd": 0.0},
-			}},
+// providerRoutes lists the routes the proxy serves. It names no models: a
+// fixed list of models is out of date as soon as a provider ships a new one.
+var providerRoutes = []struct {
+	id, label, path string
+	usage           bool
+}{
+	{"openai", "OpenAI", "/v1/", true},
+	{"anthropic", "Anthropic", "/anthropic/", true},
+	{"gemini", "Google Gemini", "/gemini/", true},
+	{"azure", "Azure OpenAI", "/azure/", true},
+	{"bedrock", "AWS Bedrock", "/bedrock/", true},
+	{"mistral", "Mistral", "/mistral/", true},
+	{"local", "Self-hosted (vLLM / Ollama)", "/local/", false},
+}
+
+// providerCatalog lists the provider routes and, under each, the models that
+// have actually passed through it: taken from the recent events, with the
+// request count and the price when one is known (USD per 1M tokens).
+func providerCatalog(recent *events.RecentBuffer, rows []store.ModelPricing) []map[string]interface{} {
+	seen := map[string]map[string]int64{}
+	if recent != nil {
+		for _, e := range recent.Latest(0) {
+			if e.Model == "" || (e.EventType != "request_scanned" && e.EventType != "request_blocked") {
+				continue
+			}
+			prov := pricing.CanonicalProvider(e.Provider)
+			if seen[prov] == nil {
+				seen[prov] = map[string]int64{}
+			}
+			seen[prov][e.Model]++
+		}
 	}
+
+	catalog := make([]map[string]interface{}, 0, len(providerRoutes))
+	for _, route := range providerRoutes {
+		models := make([]map[string]interface{}, 0, len(seen[route.id]))
+		for model, requests := range seen[route.id] {
+			entry := map[string]interface{}{"id": model, "requests": requests, "priced": false}
+			if p, ok := pricing.Match(rows, route.id, model); ok {
+				entry["priced"] = true
+				entry["input_usd"] = p.InputPer1K * 1000
+				entry["output_usd"] = p.OutputPer1K * 1000
+			}
+			models = append(models, entry)
+		}
+		sort.Slice(models, func(i, j int) bool {
+			ri, rj := models[i]["requests"].(int64), models[j]["requests"].(int64)
+			if ri != rj {
+				return ri > rj
+			}
+			return models[i]["id"].(string) < models[j]["id"].(string)
+		})
+		catalog = append(catalog, map[string]interface{}{
+			"id":        route.id,
+			"label":     route.label,
+			"path":      route.path,
+			"usage":     route.usage,
+			"streaming": true,
+			"models":    models,
+		})
+	}
+	return catalog
 }

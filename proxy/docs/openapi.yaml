@@ -1568,11 +1568,22 @@ paths:
                 type: object
                 properties:
                   range: { type: string }
+                  daily:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/DailyCostRow"
                   breakdown:
                     type: array
                     items:
                       $ref: "#/components/schemas/CostBreakdownRow"
+                  unpriced:
+                    type: array
+                    description: Models with usage but no price. Their tokens are in no USD total.
+                    items:
+                      $ref: "#/components/schemas/UnpricedModel"
                   total_usd: { type: number }
+                  mtd_total_usd: { type: number }
+                  projected_monthly_usd: { type: number }
 
   # ────────────────────────────────────────────────────────────────────
   # Budget
@@ -1649,7 +1660,7 @@ paths:
   /api/v1/providers:
     get:
       tags: [providers]
-      summary: List supported providers and models (with pricing)
+      summary: List provider routes and the models seen on each (with pricing when known)
       responses:
         "200":
           description: OK
@@ -2378,10 +2389,36 @@ components:
         source: { type: string }
         notes: { type: string }
 
+    DailyCostRow:
+      type: object
+      properties:
+        date: { type: string }
+        provider: { type: string }
+        model: { type: string }
+        input_tokens: { type: integer }
+        output_tokens: { type: integer }
+        cost_usd: { type: number }
+        priced:
+          type: boolean
+          description: False when the model has no price; cost_usd is then 0 and means "unknown".
+
+    UnpricedModel:
+      type: object
+      properties:
+        provider: { type: string }
+        model: { type: string }
+        tokens: { type: integer }
+
     CostBreakdownRow:
       type: object
       properties:
         provider: { type: string }
+        model:
+          type: string
+          description: The model name as the client sent it.
+        priced:
+          type: boolean
+          description: False when the model has no price; the cost fields are then 0 and mean "unknown".
         model_family: { type: string }
         model_version: { type: string }
         input_tokens: { type: integer }
@@ -2410,8 +2447,13 @@ components:
     ProviderModelEntry:
       type: object
       properties:
-        id: { type: string }
-        family: { type: string }
+        id:
+          type: string
+          description: A model name seen in recent traffic on this route.
+        requests: { type: integer }
+        priced:
+          type: boolean
+          description: False when the model has no price; input_usd and output_usd are then absent.
         input_usd: { type: number }
         output_usd: { type: number }
 

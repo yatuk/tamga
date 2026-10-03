@@ -56,6 +56,23 @@
 - Docker Compose: the Quick Start now passes `--env-file .env`; Compose does
   not read the repo-root `.env` on its own, which left the database password
   empty. `TAMGA_MOCK_UPSTREAM` is now passed through to the proxy container.
+- **Model prices come from one place and are no longer guessed.** Three
+  separate price lists and three matching rules are replaced by
+  `internal/pricing`. A model is priced only by a row that names it; dates and
+  revision numbers aside, `gpt-4o-mini` is no longer priced as `gpt-4o`, nor
+  `claude-opus-4-7` as `claude-opus-4`. Behaviour changes:
+  - A model without a price is reported as such: `priced: false` and an
+    `unpriced` list in `GET /api/v1/billing/costs/breakdown`, no
+    `X-Tamga-Cost-USD` header, and one warning in the log per model. Its tokens
+    still count against the token budget; the cost budget cannot see it.
+  - Rows stored under provider `google` now price the `/gemini/` route.
+  - Models on the `/local/` route are always priced at zero.
+  - Per-model totals in the cost breakdown summed only the first day of the
+    range; they now cover the whole range.
+  - `GET /api/v1/providers` lists the models seen in recent traffic on each
+    route instead of a fixed list.
+  - Model families are derived from the name for models the proxy does not
+    know (`gpt-5-mini` → `gpt-5`, `qwen3:32b` → `qwen3`).
 
 ### Tests
 - Stress suite: runs against a mocked upstream, sets up the operator_state

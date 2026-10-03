@@ -12,15 +12,6 @@ export function useCostsPage() {
   const [adminKey] = useAdminKey();
   const [range, setRange] = useRangeParam("7d");
 
-  // Fetch pricing table.
-  const { data: pricingData, isLoading: pricingLoading } = useQuery({
-    queryKey: ["tamga-costs-pricing", adminKey],
-    queryFn: () => api.getPricing(adminKey),
-    enabled: !!adminKey,
-    retry: 1,
-    staleTime: 5 * 60 * 1000,
-  });
-
   // Fetch budget stats.
   const {
     data: budget,
@@ -56,7 +47,7 @@ export function useCostsPage() {
     staleTime: 60 * 1000,
   });
 
-  const isLoading = pricingLoading || budgetLoading || tsLoading || breakdownLoading;
+  const isLoading = budgetLoading || tsLoading || breakdownLoading;
   const hasError = !!(budgetError || breakdownError);
 
   // Budget stats.
@@ -89,11 +80,19 @@ export function useCostsPage() {
     const breakdown: CostBreakdownRow[] = costBreakdown?.breakdown ?? [];
     return breakdown
       .map((b) => ({
-        model: `${b.provider}/${b.model_family}-${b.model_version}`,
+        model: `${b.provider}/${b.model ?? `${b.model_family}-${b.model_version}`}`,
         tokens: b.input_tokens + b.output_tokens,
         cost: b.total_cost,
+        // Older proxies send no flag: every row they send is priced.
+        priced: b.priced !== false,
       }))
-      .sort((a, b) => b.cost - a.cost);
+      .sort((a, b) => Number(b.priced) - Number(a.priced) || b.cost - a.cost || b.tokens - a.tokens);
+  }, [costBreakdown]);
+
+  /** Usage the proxy has no price for. It is in none of the USD figures. */
+  const unpriced = useMemo(() => {
+    const rows = costBreakdown?.unpriced ?? [];
+    return { models: rows.length, tokens: rows.reduce((sum, r) => sum + r.tokens, 0) };
   }, [costBreakdown]);
 
   /** Daily usage rows for the daily breakdown table. */
@@ -109,14 +108,11 @@ export function useCostsPage() {
   const mtdTotalUSD = costBreakdown?.mtd_total_usd ?? 0;
   const projectedMonthlyUSD = costBreakdown?.projected_monthly_usd ?? 0;
 
-  // Pricing entries from backend.
-  const pricingEntries = pricingData?.pricing ?? [];
-
   const { exportCsv: doExport } = useCsvExport();
 
   const exportCsv = () => {
     const headers = ["Model", "Tokens", "Cost USD"];
-    const rows = modelCostRows.map((r) => [r.model, String(r.tokens), r.cost.toFixed(4)]);
+    const rows = modelCostRows.map((r) => [r.model, String(r.tokens), r.priced ? r.cost.toFixed(4) : ""]);
     doExport(`tamga-costs-${range}.csv`, headers, rows);
   };
 
@@ -143,6 +139,7 @@ export function useCostsPage() {
     const breakdown: CostBreakdownRow[] = costBreakdown?.breakdown ?? [];
     const familyMap = new Map<string, number>();
     for (const b of breakdown) {
+      if (b.priced === false) continue;
       const fam = b.model_family || "unknown";
       familyMap.set(fam, (familyMap.get(fam) ?? 0) + b.total_cost);
     }
@@ -199,7 +196,7 @@ export function useCostsPage() {
     totalCostEstimate,
     mtdTotalUSD,
     projectedMonthlyUSD,
-    pricingEntries,
+    unpriced,
     exportCsv,
     costPerRequest,
     avgTokensPerRequest,

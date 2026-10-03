@@ -11,6 +11,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -808,7 +809,10 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 				model := extractModelFromBody(body)
 				// Conservative: treat all preflight tokens as input since
 				// output tokens are unknown for streams.
-				costUSD := priceFor(cfg.PricingResolver, provider, model, preflightTokens, 0)
+				costUSD, priced := priceFor(cfg.PricingResolver, provider, model, preflightTokens, 0)
+				if !priced {
+					warnUnpriced(provider, model)
+				}
 				cfg.Budget.Record(orgID, preflightTokens, costUSD)
 				resp.Header.Set("X-Tamga-Tokens-Estimated", strconv.Itoa(preflightTokens))
 			}
@@ -825,11 +829,16 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 				if inTok+outTok > 0 {
 					orgID := orgIDForRequest(r, cfg)
 					model := extractModelFromBody(body)
-					costUSD := priceFor(cfg.PricingResolver, provider, model, inTok, outTok)
+					costUSD, priced := priceFor(cfg.PricingResolver, provider, model, inTok, outTok)
 					cfg.Budget.Record(orgID, inTok+outTok, costUSD)
 					resp.Header.Set("X-Tamga-Tokens-In", strconv.Itoa(inTok))
 					resp.Header.Set("X-Tamga-Tokens-Out", strconv.Itoa(outTok))
-					resp.Header.Set("X-Tamga-Cost-USD", strconv.FormatFloat(costUSD, 'f', 6, 64))
+					// No header rather than a zero the client would read as free.
+					if priced {
+						resp.Header.Set("X-Tamga-Cost-USD", strconv.FormatFloat(costUSD, 'f', 6, 64))
+					} else {
+						warnUnpriced(provider, model)
+					}
 					span.SetAttributes(
 						attribute.Int("gen_ai.usage.input_tokens", inTok),
 						attribute.Int("gen_ai.usage.output_tokens", outTok),
@@ -1742,12 +1751,22 @@ func extractModelFromBody(body []byte) string {
 	return ""
 }
 
+var (
+	claudeTierFamily = regexp.MustCompile(`^claude-(?:opus|sonnet|haiku)-(\d+)`)
+	geminiFamily     = regexp.MustCompile(`^gemini-(\d+)`)
+	familySeparator  = regexp.MustCompile(`[-:/]`)
+)
+
 // extractModelFamily maps a model ID to a coarse family name for grouping.
+// The named cases keep the families already stored for older models; any
+// other model, including ones released after this was written, gets its
+// family from the shape of its name.
 func extractModelFamily(model string) string {
 	m := strings.ToLower(model)
+	if match := claudeTierFamily.FindStringSubmatch(m); match != nil {
+		return "claude-" + match[1] // claude-opus-4-7, claude-sonnet-5 → claude-4, claude-5
+	}
 	switch {
-	case strings.HasPrefix(m, "claude-opus-4"), strings.HasPrefix(m, "claude-sonnet-4"), strings.HasPrefix(m, "claude-haiku-4"):
-		return "claude-4"
 	case strings.HasPrefix(m, "claude-3-5"), strings.HasPrefix(m, "claude-3.5"):
 		return "claude-3.5"
 	case strings.HasPrefix(m, "claude-3"):
@@ -1762,11 +1781,12 @@ func extractModelFamily(model string) string {
 		return "gpt-3.5"
 	case strings.HasPrefix(m, "o1"), strings.HasPrefix(m, "o3"):
 		return m // o1-mini, o3, etc. — keep as-is
-	case strings.HasPrefix(m, "gemini-2"):
-		return "gemini-2"
 	case strings.HasPrefix(m, "gemini-1.5"):
 		return "gemini-1.5"
 	case strings.HasPrefix(m, "gemini"):
+		if match := geminiFamily.FindStringSubmatch(m); match != nil {
+			return "gemini-" + match[1]
+		}
 		return "gemini"
 	case strings.HasPrefix(m, "mistral"):
 		return "mistral"
@@ -1774,18 +1794,25 @@ func extractModelFamily(model string) string {
 		return "llama-3"
 	case strings.HasPrefix(m, "llama"):
 		return "llama"
-	default:
-		if model == "" {
-			return ""
-		}
-		// truncate at first slash or colon (Bedrock ARNs etc.)
-		for _, sep := range []byte{'/', ':', '-'} {
-			if i := strings.IndexByte(model, string(sep)[0]); i > 0 {
-				return strings.ToLower(model[:i])
-			}
-		}
-		return strings.ToLower(model)
 	}
+	return genericModelFamily(m)
+}
+
+// genericModelFamily names the family of a model nobody listed: the name up
+// to its first part that carries a number ("gpt-5-mini" → "gpt-5",
+// "qwen3:32b" → "qwen3", "deepseek-r1:14b" → "deepseek-r1"), or the first
+// part when no part does ("deepseek-chat" → "deepseek").
+func genericModelFamily(m string) string {
+	if m == "" {
+		return ""
+	}
+	parts := familySeparator.Split(m, -1)
+	for i, part := range parts {
+		if strings.ContainsAny(part, "0123456789") {
+			return strings.Join(parts[:i+1], "-")
+		}
+	}
+	return parts[0]
 }
 
 func copyBodyOptional(body []byte) []byte {
