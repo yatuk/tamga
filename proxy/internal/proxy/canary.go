@@ -1,10 +1,13 @@
 package proxy
 
 import (
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"strings"
+	"sync"
 )
 
 // Canary tokens detect system-prompt leakage. Before forwarding, a unique
@@ -25,6 +28,40 @@ func generateCanaryToken() string {
 		return canaryMarkerPrefix + "0000000000000000"
 	}
 	return canaryMarkerPrefix + hex.EncodeToString(b)
+}
+
+// canarySecret keys the tokens. It comes from TAMGA_VAULT_KEY when that is
+// set, so every replica derives the same token; otherwise it is drawn once
+// per process.
+var canarySecret = struct {
+	once sync.Once
+	key  []byte
+}{}
+
+func canaryKey(cfg HandlerConfig) []byte {
+	canarySecret.once.Do(func() {
+		if cfg.Config != nil && cfg.Config.VaultKey != "" {
+			sum := sha256.Sum256([]byte("tamga-canary|" + cfg.Config.VaultKey))
+			canarySecret.key = sum[:]
+			return
+		}
+		b := make([]byte, 32)
+		if _, err := rand.Read(b); err != nil {
+			b = []byte("tamga-canary-fallback-key")
+		}
+		canarySecret.key = b
+	})
+	return canarySecret.key
+}
+
+// canaryTokenFor returns the token for one organisation and key. It is the
+// same on every request from that caller, so the system prompt it is added
+// to does not change from request to request, and it cannot be guessed
+// without the secret.
+func canaryTokenFor(cfg HandlerConfig, orgID, keyID string) string {
+	mac := hmac.New(sha256.New, canaryKey(cfg))
+	mac.Write([]byte(orgID + "|" + keyID))
+	return canaryMarkerPrefix + hex.EncodeToString(mac.Sum(nil)[:8])
 }
 
 // canaryMarker is the exact string injected into (and detected in) the prompt.

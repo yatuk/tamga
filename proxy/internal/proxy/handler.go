@@ -838,7 +838,10 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 	// before forwarding/signing since it changes the body.
 	var canaryToken string
 	if pol != nil && pol.Canary.CanaryAppliesTo(provider) {
-		token := generateCanaryToken()
+		// One token per organisation and key, not per request: a token that
+		// changed every time made every request body unique, which defeated
+		// the response cache and the provider's prompt cache.
+		token := canaryTokenFor(cfg, orgIDForRequest(r, cfg), who.KeyID)
 		if newBody, ok := injectCanary(body, provider, token); ok {
 			body = newBody
 			canaryToken = token
@@ -961,7 +964,13 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 			go publishOutputScanHint(ctx, cfg, requestID, provider, ct)
 
 			prov := ProviderFor(provider)
-			respBody, respBuffered, errWrap := wrapResponseForOutputScan(resp, pol, vaultActive)
+			// A server-sent-event stream is not collected to be worked on;
+			// the stream guard does the same work as the text goes by.
+			streamScan := pol != nil && pol.OutputRules != nil && pol.OutputRules.Enabled &&
+				pol.OutputRules.Streaming != nil && pol.OutputRules.Streaming.Enabled
+			guardStream := containsCI(ct, "text/event-stream") && resp.StatusCode < 300 &&
+				(streamScan || vaultActive || canaryToken != "")
+			respBody, respBuffered, errWrap := wrapResponseForOutputScan(resp, pol, vaultActive && !guardStream)
 			if errWrap != nil {
 				return errWrap
 			}
@@ -971,7 +980,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 
 			// Canary: force-buffer (if needed) and scan the response for the
 			// injected token. Its presence means the system prompt leaked.
-			if canaryToken != "" {
+			if canaryToken != "" && !guardStream {
 				if !respBuffered {
 					raw, rerr := io.ReadAll(io.LimitReader(resp.Body, int64(canaryMaxScanBytes)+1))
 					if rerr == nil {
@@ -1024,6 +1033,53 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 				}
 				cfg.Budget.Record(orgID, preflightTokens, costUSD)
 				resp.Header.Set("X-Tamga-Tokens-Estimated", strconv.Itoa(preflightTokens))
+			}
+			if guardStream {
+				g := newStreamGuard()
+				if streamScan {
+					pipeCfg := scanner.PipelineConfig{
+						Mode:     scanner.PipelineMode(cfg.Config.ScannerPipelineMode),
+						Timeout:  time.Duration(cfg.Config.ScannerPipelineTimeoutMs) * time.Millisecond,
+						Pool:     cfg.ScannerPool,
+						LoadShed: cfg.Config.ScannerLoadShed,
+					}
+					g.scan = func(text []byte) ([]scanner.Finding, error) {
+						return scanStreamText(ctx, cfg.Registry, cfg.OutputOnlyRegistry, text, pipeCfg)
+					}
+					g.blocks = func(f scanner.Finding) bool {
+						return pol.EvaluateOutput([]scanner.Finding{f}) == policy.ActionBlock
+					}
+					g.redacts = pol.OutputRedacts
+					g.failOpen = pol.OutputRules.FailOpen
+					if n := pol.OutputRules.Streaming.MaxBufferBytes; n > 0 {
+						g.maxHeld = n
+					}
+					resp.Header.Set("X-Tamga-Stream-Scan", "enabled")
+				}
+				if vaultActive {
+					g.restore = vaultMapping
+				}
+				if canaryToken != "" {
+					g.canary = canaryToken
+					g.canaryBlocks = pol.Canary != nil && pol.Canary.BlockOnLeak
+				}
+				streamStart := time.Now()
+				attachStreamGuard(resp, g, func(g *streamGuard) {
+					if streamScan && g.recognised == 0 {
+						// An event stream in a shape the guard has no rule
+						// for went through unread.
+						scanner.RecordDegraded("stream_unrecognised")
+					}
+					if len(g.findings) == 0 {
+						return
+					}
+					act := policy.ActionRedact
+					if g.stopReason != "" || g.leaked {
+						act = policy.ActionBlock
+					}
+					publishOutputEvent(ctx, cfg, requestID, provider, g.findings, act, time.Since(streamStart))
+				})
+				return nil
 			}
 			if !respBuffered && pol != nil && pol.OutputRules != nil && pol.OutputRules.Enabled &&
 				pol.OutputRules.Streaming != nil && pol.OutputRules.Streaming.Enabled &&

@@ -67,6 +67,19 @@
   `REDACT`. Other findings in the request are still redacted under their own
   rules; if the text cannot be replaced the request is blocked
   (`X-Tamga-Strip-Fallback`). The response carries `X-Tamga-Stripped-Count`.
+- **Streamed responses are scanned, redacted and restored as they stream.**
+  With `output_rules.streaming` on, the model's text is reassembled from the
+  events and its last 64 characters are kept back until nothing in them can
+  still be growing, so a value the provider cut across two events is found.
+  `redact_on` masks it in place; `block_on` ends the stream. Before, each
+  chunk of raw bytes was scanned on its own, a value split across events was
+  missed, and a redaction ended the stream.
+- **Vault and canary no longer hold a streamed response.** Both collected the
+  whole stream before sending any of it. Placeholders are now restored and
+  the canary token looked for as the text goes by.
+- **The canary token is stable per organisation and key.** A new token on
+  every request made every request body unique, which defeated the response
+  cache and the provider's prompt cache.
 - New: [docs/agents.md](docs/agents.md).
 
 ### Inline classifier (optional)

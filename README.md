@@ -186,8 +186,8 @@ Docker Compose stack with a mocked upstream:
 | 1000 RPS | 1.6 ms | 5.0 ms | 9.9 ms | 0% |
 
 16-core laptop CPU, Docker limited to 12 GB. The medians repeat from run to
-run; the tails do not: three runs on this day gave a P95 at 1000 RPS of 3.2,
-4.6 and 5.0 ms. These also depend on hardware: an earlier run on a 4-core
+run; the tails do not: runs on this day gave a P95 at 1000 RPS anywhere from
+3.0 to 5.0 ms. These also depend on hardware: an earlier run on a 4-core
 machine held the same P95 to 500 RPS and reached 130 ms at 1000. The prompts
 are chat-sized; for large requests see [docs/agents.md](docs/agents.md#speed).
 
@@ -344,16 +344,22 @@ custom entity UI · the security fixes listed in the [changelog](CHANGELOG.md).
 
 **Known limits:**
 
-- Recall on semantic attacks is low (see [Benchmarks](#benchmarks)).
-- Scanners read the raw request body rather than individual messages, so they
-  cannot yet apply different rules to system, user and tool content.
-- The proxy does not authenticate callers itself and fails open if a scanner
-  errors. Deploy it where only trusted applications can reach it; see
-  [SECURITY.md](SECURITY.md).
-- Canary detection and vault restore buffer streaming responses.
+- The rules match wording. An attack phrased in a way no rule anticipates
+  needs the optional [classifier](docs/operations.md#inline-classifier), and
+  that has not been measured on a set its author did not write (see
+  [Benchmarks](#benchmarks)).
+- Images, audio and PDFs are not read.
+- Callers are authenticated only when you issue keys; requests without one
+  are refused only with `TAMGA_REQUIRE_KEY=true`. See [SECURITY.md](SECURITY.md).
+- Streamed responses are scanned only with `output_rules.streaming` on, and
+  then only the model's text: tool-call arguments and thinking pass unread.
+- The first scan of a very large request is slow, about 250 KB of new text a
+  second per core ([agents](docs/agents.md#speed)).
+- Traffic from a browser to a chat site, and between an agent and its MCP
+  servers, does not pass through a proxy at all.
 
-**Next:** message- and role-aware scanning · an inline classifier for semantic
-injection · virtual keys with verified identity · tool-call and MCP inspection.
+**Next:** a browser extension for chat sites · MCP inspection · an
+independent benchmark for the classifier.
 
 ## Related projects
 

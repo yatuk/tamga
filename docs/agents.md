@@ -70,14 +70,15 @@ The shipped policy is written for chat traffic. For agents, look at:
   over that. Give the agent its own Tamga key and raise the limit.
 - **`rate_limit.max_tokens_per_day`** (500,000). A long session with a large
   context uses that in minutes.
-- **`canary`**. Leave it off. It adds a fresh token to the system prompt on
-  every request, which changes the prompt each time and defeats the
-  provider's prompt cache; with it on, a streamed response is also held
-  until it is complete.
-- **`vault`**. Restoring vaulted values in the response holds a streamed
-  response until it is complete.
-- **`output_rules`**. Streamed responses are not scanned on the way back;
-  only non-streamed ones are.
+- **`canary`** and **`vault`** work on streams without holding them. The
+  canary token is the same on every request from one key, so the system
+  prompt does not change between turns and the provider's prompt cache
+  holds. Both rewrite the request body, though: the canary re-encodes it and
+  the vault replaces values with placeholders. An agent that depends on the
+  body arriving byte for byte should leave them off.
+- **`output_rules.streaming`**. Off by default. With it on the model's text
+  is scanned as it streams and reaches the agent about 64 characters late;
+  tool-call arguments in the stream are not read.
 - **A block in the middle of a session ends the turn.** The agent sees a 403
   where it expected a model response. For tool results use `STRIP`, below.
 
@@ -140,6 +141,6 @@ read that file, and the turns after it are not.
 
 ## What does not work yet
 
-- Scanning or redacting **streamed responses**.
+- Scanning the **tool-call arguments** and thinking in a streamed response.
 - Traffic between the agent and its **MCP servers** does not pass through
   Tamga. What a tool returns does, in the next request, as a tool result.

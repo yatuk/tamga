@@ -113,14 +113,15 @@ base64 32-byte AES key) is set, also stored AES-256-GCM-encrypted in Redis
 under `tamga:vault:<request-id>` with a short TTL (`TAMGA_VAULT_TTL_SECONDS`,
 default 300). Without a key an ephemeral single-instance key is minted at
 startup. The `X-Tamga-Vault: restored` response header marks a restored
-response. Streaming responses are buffered to restore; a boundary-safe
-streaming rewrite is a follow-up.
+response. In a streamed response the placeholders are restored as the text
+goes by, including one the provider cut across two events; the stream is not
+held back for it.
 
 ### Canary tokens (system-prompt leak detection)
 
 Prompt-injection attacks often try to exfiltrate the system prompt. With canary
-tokens enabled, the proxy injects a unique invisible token into the outgoing
-system prompt; if that token appears in the model's response, the system prompt
+tokens enabled, the proxy adds an invisible token to the outgoing system
+prompt; if that token appears in the model's response, the system prompt
 has leaked and Tamga raises a `system_prompt_leak` finding (and blocks the
 response with `block_on_leak`).
 
@@ -132,8 +133,39 @@ canary:
 ```
 
 Injection happens before the request is signed, so Bedrock/SigV4 is unaffected.
-Detection runs on non-streaming responses (`X-Tamga-System-Prompt-Leak: true`
-header on a leak); streaming leak detection is a follow-up.
+A leak in a non-streamed response sets `X-Tamga-System-Prompt-Leak: true`. In
+a streamed response the token is looked for as the text goes by, and with
+`block_on_leak` the stream ends with an error event before the token is sent.
+
+The token is the same for every request from one organisation and key, so
+adding it does not make each request body unique: the response cache and the
+provider's prompt cache keep working. It is derived from `TAMGA_VAULT_KEY`
+when that is set (so replicas agree) and from a per-process secret otherwise.
+
+### Scanning streamed responses
+
+```yaml
+output_rules:
+  enabled: true
+  block_on: [tc_kimlik, credit_card, secret]
+  redact_on: [email, phone_tr]
+  streaming:
+    enabled: true
+```
+
+A streamed response reaches the client as it is produced, and the provider
+cuts the text wherever it likes: an address can arrive as `ayse@exa` in one
+event and `mple.com` in the next. Tamga reassembles the model's text and
+keeps its last 64 characters back until more text shows that nothing in them
+is still growing. A `redact_on` finding is masked in place; a `block_on`
+finding ends the stream with an error event. The client sees the text about
+64 characters later than it would have.
+
+What is read is the model's prose, in OpenAI (chat, completions, Responses),
+Anthropic and Gemini streams. Tool-call arguments and thinking are forwarded
+unread. A stream in a shape Tamga does not know is forwarded unread too and
+counted in `tamga_scan_degraded_total{reason="stream_unrecognised"}`. If the
+scanner fails the stream ends, unless `output_rules.fail_open` is set.
 
 ## Keys for applications
 
