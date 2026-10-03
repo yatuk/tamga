@@ -7,7 +7,7 @@ interface AuthCardProps {
   children?: React.ReactNode;
 }
 
-/** The centered card used by the sign-in, sign-up and OAuth callback pages. */
+/** The centered card used by the sign-in and sign-up pages. */
 export function AuthCard({ title, description, children }: AuthCardProps) {
   return (
     <main className="flex min-h-dvh items-center justify-center bg-background px-4 py-10 text-foreground">
