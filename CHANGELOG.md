@@ -20,6 +20,18 @@
   ignored unless `TAMGA_TRUST_ROLE_HEADER=true` (for deployments behind an
   authenticating gateway). Caller-supplied `X-Tamga-*` headers are no longer
   forwarded to the provider.
+- **`X-Forwarded-For` was trusted from anyone.** The first entry of the header
+  was taken as the client address, so a caller could pass `TAMGA_IP_ALLOWLIST`
+  by writing an allowed address into it, and a caller without a key could
+  reset its rate limit on every request. The header is now read only when the
+  connection comes from `TAMGA_TRUSTED_PROXIES`, and from the right. **If
+  Tamga runs behind a load balancer, set `TAMGA_TRUSTED_PROXIES` to its
+  address range**; without it the allowlist and the limiter see the load
+  balancer's address.
+- **Rate-limit buckets were named after the provider key.** The caller's
+  `Authorization` / `X-API-Key` value was used as the bucket name, stored in
+  Redis and returned by `GET /api/v1/ratelimit/stats` under `top_keys`. The
+  name is now a truncated SHA-256 of the key.
 - **Blocked responses could be served from cache.** The response cache was
   written before the output scan; it is now written after, and only for
   responses with no output findings.

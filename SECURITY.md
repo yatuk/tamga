@@ -33,6 +33,10 @@ deploy it where only trusted applications can reach it, and note:
   `X-Tamga-Last-Verifiable-By`) are taken from the request as sent. They drive
   budget attribution and operator-state checks, so the same gateway rule
   applies if callers are not fully trusted.
+- `X-Forwarded-For` is ignored unless the connection comes from an address
+  in `TAMGA_TRUSTED_PROXIES`. The IP allowlist and the per-address rate limit
+  use the connecting address otherwise. List only proxies that append to the
+  header; a proxy that passes it through unchanged makes it forgeable again.
 - When a scanner errors, panics or is shed under load, `scan.on_error` decides:
   `block` (the shipped policy) answers 503, `pass` or no setting forwards the
   request. Watch `tamga_scan_degraded_total` and the `X-Tamga-Scan-Degraded`

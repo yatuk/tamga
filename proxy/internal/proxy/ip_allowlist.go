@@ -12,12 +12,13 @@ import (
 // NewIPAllowlistMiddleware returns an HTTP middleware that enforces IP allowlist.
 // When allowlistRaw is empty, the returned middleware is a no-op (passes all traffic).
 // Otherwise, it parses the comma-separated CIDR ranges and rejects any request whose
-// client IP does not match at least one range.
+// client IP does not match at least one range. The client IP is the peer
+// address unless the peer is one of the trusted proxies; see clientIP.
 //
 // Invalid CIDR entries are logged as warnings and skipped rather than causing a
 // hard failure — this keeps the proxy running even when an operator fat-fingers
 // a range, but the misconfiguration is visible in logs.
-func NewIPAllowlistMiddleware(allowlistRaw string) func(http.Handler) http.Handler {
+func NewIPAllowlistMiddleware(allowlistRaw string, trusted []*net.IPNet) func(http.Handler) http.Handler {
 	cidrs := parseIPAllowlist(allowlistRaw)
 
 	return func(next http.Handler) http.Handler {
@@ -27,7 +28,7 @@ func NewIPAllowlistMiddleware(allowlistRaw string) func(http.Handler) http.Handl
 				return
 			}
 
-			ip := clientIP(r)
+			ip := clientIP(r, trusted)
 			parsed := net.ParseIP(ip)
 			if parsed == nil {
 				log.Warn().

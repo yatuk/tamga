@@ -886,20 +886,20 @@ func TestExtractAPIKey_NoKey(t *testing.T) {
 // clientIP
 // ---------------------------------------------------------------------------
 
-func TestClientIP_XForwardedFor(t *testing.T) {
+func TestClientIP_XForwardedForIgnoredWithoutTrustedProxies(t *testing.T) {
 	req, _ := http.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set("X-Forwarded-For", "10.0.0.1, 10.0.0.2")
 	req.RemoteAddr = "127.0.0.1:12345"
-	got := clientIP(req)
-	if got != "10.0.0.1" {
-		t.Errorf("got %q, want 10.0.0.1", got)
+	got := clientIP(req, nil)
+	if got != "127.0.0.1" {
+		t.Errorf("got %q, want the peer address 127.0.0.1", got)
 	}
 }
 
 func TestClientIP_RemoteAddr(t *testing.T) {
 	req, _ := http.NewRequest(http.MethodGet, "/", nil)
 	req.RemoteAddr = "192.168.1.1:8080"
-	got := clientIP(req)
+	got := clientIP(req, nil)
 	if got != "192.168.1.1" {
 		t.Errorf("got %q, want 192.168.1.1", got)
 	}
@@ -1578,7 +1578,7 @@ func TestExtractAPIKey_BearerPrefixCaseInsensitive(t *testing.T) {
 func TestClientIP_NoPort(t *testing.T) {
 	req, _ := http.NewRequest(http.MethodGet, "/", nil)
 	req.RemoteAddr = "192.168.1.1" // no port → SplitHostPort fails → returns raw RemoteAddr.
-	got := clientIP(req)
+	got := clientIP(req, nil)
 	if got != "192.168.1.1" {
 		t.Errorf("got %q, want 192.168.1.1", got)
 	}

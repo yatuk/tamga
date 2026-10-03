@@ -262,6 +262,7 @@ unknown or misplaced key is a load error, not a silent no-op.
 | `TAMGA_MOCK_UPSTREAM` | `false` | Answer with a canned response instead of calling a provider |
 | `TAMGA_VAULT_KEY` | — | Base64 32-byte AES key for vault entries at rest |
 | `TAMGA_TRUST_ROLE_HEADER` | `false` | Honour `X-Tamga-Role` for policy exceptions; only behind an authenticating gateway |
+| `TAMGA_TRUSTED_PROXIES` | — | IPs / CIDR ranges of the load balancers allowed to set `X-Forwarded-For`. Empty: the header is ignored |
 | `TAMGA_SCANNER_SERVICE_ADDR` | — | Delegate stateless scanners to a scanner-service over gRPC |
 | `TAMGA_RETENTION_REQUEST_LOGS_DAYS` | `30` | How long request metadata is kept |
 

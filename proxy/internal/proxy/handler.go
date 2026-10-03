@@ -171,7 +171,7 @@ func RegisterRoutes(mux *http.ServeMux, cfg HandlerConfig) {
 	// IP allowlist middleware (KVKK/BDDK compliance). When empty, wrap is a no-op.
 	var wrap func(http.HandlerFunc) http.HandlerFunc
 	if cfg.Config != nil && cfg.Config.IPAllowlist != "" {
-		ipMW := NewIPAllowlistMiddleware(cfg.Config.IPAllowlist)
+		ipMW := NewIPAllowlistMiddleware(cfg.Config.IPAllowlist, cfg.Config.TrustedProxies)
 		wrap = func(h http.HandlerFunc) http.HandlerFunc {
 			return func(w http.ResponseWriter, r *http.Request) {
 				ipMW(http.HandlerFunc(h)).ServeHTTP(w, r)
@@ -303,7 +303,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 
 	if cfg.RateLimit != nil {
 		_, rlSpan := telemetry.Tracer().Start(ctx, "rate_limit.check")
-		res := cfg.RateLimit.Check(rateLimitKeyForRequest(r))
+		res := cfg.RateLimit.Check(rateLimitKeyForRequest(r, trustedProxies(cfg)))
 		if res.Limit > 0 {
 			w.Header().Set("X-RateLimit-Limit", strconv.Itoa(res.Limit))
 			if res.Allowed {
@@ -363,7 +363,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 	// per-minute=BLOCK but per-day=WARN. Splitting into separate actions
 	// is deferred to a future phase.
 	if cfg.RateLimit != nil {
-		apiKey := rateLimitKeyForRequest(r)
+		apiKey := rateLimitKeyForRequest(r, trustedProxies(cfg))
 		preflightTokens = estimateRequestTokens(r)
 		tokRes := cfg.RateLimit.CheckDailyTokenQuota(apiKey, preflightTokens)
 		if tokRes.TokensLimit > 0 {
@@ -1673,25 +1673,12 @@ func extractAPIKey(r *http.Request) string {
 	return ""
 }
 
-func rateLimitKeyForRequest(r *http.Request) string {
-	if k := extractAPIKey(r); k != "" {
-		return k
+// trustedProxies returns the configured trusted proxy ranges, if any.
+func trustedProxies(cfg HandlerConfig) []*net.IPNet {
+	if cfg.Config == nil {
+		return nil
 	}
-	return "ip:" + clientIP(r)
-}
-
-func clientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		parts := strings.Split(xff, ",")
-		if len(parts) > 0 {
-			return strings.TrimSpace(parts[0])
-		}
-	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
+	return cfg.Config.TrustedProxies
 }
 
 // upstreamTransportOrDefault returns the shared transport from config, or

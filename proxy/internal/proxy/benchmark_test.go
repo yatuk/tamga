@@ -423,7 +423,7 @@ func BenchmarkClientIP(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = clientIP(req)
+		_ = clientIP(req, nil)
 	}
 }
 
@@ -434,7 +434,7 @@ func BenchmarkRateLimitKeyForRequest(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = rateLimitKeyForRequest(req)
+		_ = rateLimitKeyForRequest(req, nil)
 	}
 }
 

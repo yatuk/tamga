@@ -30,6 +30,7 @@ Essential environment variables:
 | `TAMGA_MOCK_UPSTREAM` | `false` | Demo mode without real providers |
 | `TAMGA_STRICT_MODE` | `false` | Ignore all policy exceptions |
 | `TAMGA_TRUST_ROLE_HEADER` | `false` | Honour `X-Tamga-Role` for policy exceptions. Enable only behind an authenticating gateway that sets the header itself |
+| `TAMGA_TRUSTED_PROXIES` | — | Comma-separated IPs and CIDR ranges of the load balancers or reverse proxies in front of Tamga. Only a connection from one of them may supply the client address through `X-Forwarded-For`; the address used is the first one from the right that is not itself a trusted proxy. Empty: the header is ignored and the connecting address is used, so behind a load balancer every caller without a key shares one rate-limit bucket and `TAMGA_IP_ALLOWLIST` sees the load balancer. An invalid entry stops startup |
 | `TAMGA_OTLP_ENDPOINT` | — | OpenTelemetry collector endpoint |
 | `ANTHROPIC_API_KEY` | — | Anthropic provider key |
 | `OPENAI_API_KEY` | — | OpenAI provider key |

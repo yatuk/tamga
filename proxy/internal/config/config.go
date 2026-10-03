@@ -1,6 +1,7 @@
 package config
 
 import (
+	"net"
 	"os"
 	"strconv"
 )
@@ -148,6 +149,13 @@ type Config struct {
 	// Set via TAMGA_IP_ALLOWLIST.
 	IPAllowlist string
 
+	// TrustedProxies are the load balancers and reverse proxies allowed to
+	// tell Tamga the client's address through X-Forwarded-For. Empty (the
+	// default) means the header is ignored and the connecting address is
+	// used. Set via TAMGA_TRUSTED_PROXIES as a comma-separated list of IPs
+	// and CIDR ranges.
+	TrustedProxies []*net.IPNet
+
 	// --- Vault / KMS ---
 	// VaultEnabled enables HashiCorp Vault integration. When true, secrets are
 	// resolved from Vault with env-var fallback. When false (default), env vars
@@ -176,7 +184,13 @@ func Load() (*Config, error) {
 		}
 	}
 
+	trustedProxies, err := ParseTrustedProxies(os.Getenv("TAMGA_TRUSTED_PROXIES"))
+	if err != nil {
+		return nil, err
+	}
+
 	return &Config{
+		TrustedProxies:           trustedProxies,
 		Port:                     port,
 		PolicyPath:               envOrDefault("TAMGA_POLICY_PATH", "./tamga-policy.yaml"),
 		AnalyzerAddr:             envOrDefault("TAMGA_ANALYZER_ADDR", "localhost:50051"),

@@ -239,7 +239,7 @@ providers:
 }
 
 func TestIPAllowlist_XForwardedFor(t *testing.T) {
-	// When X-Forwarded-For is present, the middleware uses it for the IP check.
+	// X-Forwarded-For is used for the IP check when the peer is a trusted proxy.
 	upstream := newUpstreamEcho(t)
 	pol := mustPolicy(t, `
 version: "1.0"
@@ -254,6 +254,9 @@ providers:
 		},
 		Config: &config.Config{
 			IPAllowlist: "10.250.0.0/16", // only this range
+			// The test client connects from loopback; it stands in for a
+			// trusted reverse proxy.
+			TrustedProxies: mustTrusted(t, "127.0.0.0/8, ::1"),
 		},
 	})
 	srv := httptest.NewServer(h)
