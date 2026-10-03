@@ -22,7 +22,7 @@ type Props = {
   saveHunt: (name: string) => Promise<void>;
 };
 
-const ACTIONS = ["BLOCK", "REDACT", "WARN", "PASS"];
+const ACTIONS = ["BLOCK", "STRIP", "REDACT", "WARN", "PASS"];
 const SEVERITIES = ["critical", "high", "medium", "low"];
 
 export function HuntingFilters({ filters, setFilter, shadow, setShadow, activeFilterCount, clearFilters, saveHunt }: Props) {

@@ -281,6 +281,8 @@ func (cfg Config) handlePolicySimulate(w http.ResponseWriter, r *http.Request) {
 func policyActionSeverity(a policy.Action) int {
 	switch a {
 	case policy.ActionBlock:
+		return 5
+	case policy.ActionStrip:
 		return 4
 	case policy.ActionRedact:
 		return 3

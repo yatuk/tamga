@@ -691,6 +691,28 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 		}
 	}
 
+	// STRIP is worked out here for the same reason: if the segments cannot
+	// be replaced, or something else in the request needed redacting and
+	// could not be, the request is blocked.
+	var stripped stripResult
+	if action == policy.ActionStrip {
+		actionOf := func(f scanner.Finding) policy.Action { return pol.FindingAction(f, userRole, strictMode) }
+		res, stripErr := stripSegments(provider, body, segs, findings, actionOf, vaultOn)
+		if stripErr != nil {
+			reason := "rewrite_failed"
+			if errors.Is(stripErr, errStripRaw) || errors.Is(stripErr, errStripUnplaced) {
+				reason = stripErr.Error()
+			}
+			logger.Warn().Err(stripErr).Str("reason", reason).Msg("STRIP not possible, blocking instead")
+			scanner.RecordDegraded("strip_" + reason)
+			w.Header().Set("X-Tamga-Strip-Fallback", "block:"+reason)
+			action = policy.ActionBlock
+		} else {
+			stripped = res
+			vaultMapping = res.mapping
+		}
+	}
+
 	polSpan.SetAttributes(attribute.String("policy.action", string(action)))
 	polSpan.SetAttributes(attribute.Int("policy.exceptions_applied", len(exceptionMatches)))
 	polSpan.End()
@@ -767,6 +789,28 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 			Int("input_risk", inputRisk.Percentage).
 			Str("risk_level", inputRisk.Level).
 			Msg("↻ REDACT content redacted")
+
+	case policy.ActionStrip:
+		body = stripped.body
+		redactedCount = stripped.redacted
+		vaultActive = len(vaultMapping) > 0
+		if vaultActive && cfg.VaultStore != nil && cfg.VaultStore.Enabled() {
+			if err := cfg.VaultStore.Save(scanCtx, requestID, vaultMapping); err != nil {
+				logger.Warn().Err(err).Msg("vault: encrypted store save failed; using in-memory mapping")
+			}
+		}
+		w.Header().Set("X-Tamga-Stripped-Count", strconv.Itoa(stripped.stripped))
+		logger.Warn().
+			Int("findings", len(findings)).
+			Int("stripped_segments", stripped.stripped).
+			Int("redacted", stripped.redacted).
+			Int64("total_ms", time.Since(start).Milliseconds()).
+			Str("action", "STRIP").
+			Str("model", model).
+			Int("input_risk", inputRisk.Percentage).
+			Str("risk_level", inputRisk.Level).
+			Msg("✂ STRIP content removed — request forwarded")
+		notifyWarnWebhooks(pol, findings, requestID, provider, logger)
 
 	case policy.ActionWarn:
 		logger.Warn().
@@ -907,7 +951,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 			resp.Header.Set("X-Tamga-Scanner-Version", scanner.ScannerVersion)
 			setRiskHeaders(resp.Header, inputRisk, outputRisk)
 			setConfidenceHeaders(resp.Header, findings)
-			if action == policy.ActionRedact && redactedCount > 0 {
+			if (action == policy.ActionRedact || action == policy.ActionStrip) && redactedCount > 0 {
 				resp.Header.Set("X-Tamga-Redacted-Count", strconv.Itoa(redactedCount))
 			}
 			if p := resp.Header.Get("X-Tamga-Upstream-Provider"); p != "" {
@@ -1401,6 +1445,8 @@ func requestLogMessage(a policy.Action) string {
 		return "✓ PASS request proxied"
 	case policy.ActionRedact:
 		return "↻ REDACT request proxied"
+	case policy.ActionStrip:
+		return "✂ STRIP request proxied"
 	case policy.ActionWarn:
 		return "⚠ WARN request proxied"
 	case policy.ActionLog:

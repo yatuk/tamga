@@ -105,7 +105,7 @@ export function IncidentsToolbar({ m }: { m: IncidentsConsoleModel }) {
           label="Action"
           value={m.actionFilter}
           onChange={(v) => m.setActionFilter(v as ActionFilter)}
-          options={[ALL, ...["BLOCK", "REDACT", "WARN", "LOG", "PASS"].map((a) => ({ value: a, label: a }))]}
+          options={[ALL, ...["BLOCK", "STRIP", "REDACT", "WARN", "LOG", "PASS"].map((a) => ({ value: a, label: a }))]}
         />
         <Filter
           label="Type"

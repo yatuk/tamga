@@ -13,7 +13,7 @@ export const EVENTS_FETCH_LIMIT = 200;
 
 export { VALID_TIMERANGES, type TimeRange } from "@/lib/types";
 
-export const VALID_ACTIONS = ["all", "BLOCK", "REDACT", "WARN", "LOG"] as const;
+export const VALID_ACTIONS = ["all", "BLOCK", "STRIP", "REDACT", "WARN", "LOG"] as const;
 export const VALID_TYPES = ["all", "pii", "secret", "injection"] as const;
 export const VALID_SEVERITIES = ["all", "critical", "high", "medium", "low"] as const;
 export const VALID_TRIAGE = ["all", "Open", "In Progress", "Closed", "False Positive"] as const;

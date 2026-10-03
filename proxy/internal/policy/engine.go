@@ -20,6 +20,11 @@ type Action string
 
 const (
 	ActionBlock  Action = "BLOCK"
+	// ActionStrip replaces the whole piece of text a finding is in with a
+	// placeholder and forwards the request. It is what an agent session
+	// needs when a tool result carries an injection: the model never sees
+	// the text, and the session goes on.
+	ActionStrip  Action = "STRIP"
 	ActionRedact Action = "REDACT"
 	ActionWarn   Action = "WARN"
 	ActionLog    Action = "LOG"
@@ -629,7 +634,7 @@ func containsOutputKey(list []string, typ, cat string) bool {
 func ParseAction(s string) Action {
 	a := Action(strings.ToUpper(strings.TrimSpace(s)))
 	switch a {
-	case ActionBlock, ActionRedact, ActionWarn, ActionLog, ActionPass:
+	case ActionBlock, ActionStrip, ActionRedact, ActionWarn, ActionLog, ActionPass:
 		return a
 	default:
 		return ActionPass
@@ -741,7 +746,7 @@ func (s *PolicyStore) Reload(path string) error {
 
 // Evaluate determines the action to take for a set of findings.
 // When multiple rules apply, the highest-severity action wins:
-// BLOCK > REDACT > WARN > LOG > PASS.
+// BLOCK > STRIP > REDACT > WARN > LOG > PASS.
 func (p *Policy) Evaluate(findings []scanner.Finding) Action {
 	if len(findings) == 0 {
 		return ActionPass
@@ -871,6 +876,8 @@ func meetsThreshold(findingSeverity, ruleSensitivity string) bool {
 func actionSeverity(a Action) int {
 	switch a {
 	case ActionBlock:
+		return 5
+	case ActionStrip:
 		return 4
 	case ActionRedact:
 		return 3
@@ -988,4 +995,48 @@ func CanonicalProvider(name string) string {
 		return canon
 	}
 	return n
+}
+
+// FindingAction returns the action the rules assign to one finding, for a
+// caller with the given role. It is the per-finding view of what
+// EvaluateWithRole reduces to a single verdict: STRIP and REDACT act on
+// particular findings, so the caller needs to know which.
+func (p *Policy) FindingAction(f scanner.Finding, role string, strictMode bool) Action {
+	if p == nil {
+		return ActionPass
+	}
+	if f.Type == "custom" {
+		a, _ := p.ActionForCustomCategory(f.Category)
+		return a
+	}
+	exempt := func(key string) bool {
+		if strictMode || role == "" {
+			return false
+		}
+		for _, exc := range p.Exceptions {
+			if !strings.EqualFold(exc.Rule, key) || isExceptionExpired(exc.ExpiresAt) {
+				continue
+			}
+			for _, r := range exc.Roles {
+				if strings.EqualFold(strings.TrimSpace(r), strings.TrimSpace(role)) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	max := ActionPass
+	for _, key := range []string{f.Type + "_detection", f.Type} {
+		rule, ok := p.Rules[key]
+		if !ok || exempt(key) {
+			continue
+		}
+		if a, ok := evalRuleAction(rule, f); ok && actionSeverity(a) > actionSeverity(max) {
+			max = a
+		}
+	}
+	if a, ok := p.unruledAction(f); ok && actionSeverity(a) > actionSeverity(max) {
+		max = a
+	}
+	return max
 }

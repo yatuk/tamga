@@ -367,7 +367,7 @@ export interface paths {
                 query?: {
                     page?: number;
                     limit?: number;
-                    /** @description BLOCK, REDACT, WARN, PASS, ... */
+                    /** @description BLOCK, STRIP, REDACT, WARN, LOG or PASS */
                     action?: string;
                     /** @description Küçük harf provider adı veya `shadow` */
                     provider?: string;

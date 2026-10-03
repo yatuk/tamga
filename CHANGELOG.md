@@ -61,6 +61,12 @@
   Anthropic API: `count_tokens` passes, `anthropic-*` headers are forwarded,
   a request and response with nothing to find pass byte for byte, and a
   stream is not held back.
+- **New action `STRIP`.** Replaces the whole piece of text a finding is in
+  with a placeholder and forwards the request, so an injection in a tool
+  result does not end an agent's session. Ranks between `BLOCK` and
+  `REDACT`. Other findings in the request are still redacted under their own
+  rules; if the text cannot be replaced the request is blocked
+  (`X-Tamga-Strip-Fallback`). The response carries `X-Tamga-Stripped-Count`.
 - New: [docs/agents.md](docs/agents.md).
 
 ### Inline classifier (optional)

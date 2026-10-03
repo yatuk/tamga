@@ -54,7 +54,7 @@ func hasEnforcingRule(p *Policy, findingType string) bool {
 			return true
 		}
 		switch Action(strings.ToUpper(strings.TrimSpace(string(rule.Action)))) {
-		case ActionBlock, ActionRedact, ActionWarn:
+		case ActionBlock, ActionStrip, ActionRedact, ActionWarn:
 			return true
 		}
 	}

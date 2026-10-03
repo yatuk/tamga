@@ -15,6 +15,7 @@ const toneClass: Record<Tone, string> = {
 
 const ACTION_TONE: Record<string, Tone> = {
   block: "critical",
+  strip: "high",
   redact: "medium",
   warn: "high",
   pass: "pass",
@@ -46,7 +47,7 @@ export function StatusBadge({ tone = "neutral", className, ...props }: BadgeProp
   );
 }
 
-/** Policy action: BLOCK, REDACT, WARN, PASS. */
+/** Policy action: BLOCK, STRIP, REDACT, WARN, PASS. */
 export function ActionBadge({ action, ...props }: Omit<BadgeProps, "tone"> & { action?: string }) {
   const key = toLowerEn(action || "");
   return (

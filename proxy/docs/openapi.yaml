@@ -227,7 +227,7 @@ paths:
           schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
         - in: query
           name: action
-          description: BLOCK, REDACT, WARN, PASS, ...
+          description: BLOCK, STRIP, REDACT, WARN, LOG or PASS
           schema: { type: string }
         - in: query
           name: provider

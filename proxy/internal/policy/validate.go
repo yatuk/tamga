@@ -113,7 +113,7 @@ func ValidateSemantics(p *Policy) []ValidationIssue {
 		if rule.Action != "" {
 			a := Action(strings.ToUpper(strings.TrimSpace(string(rule.Action))))
 			switch a {
-			case ActionBlock, ActionRedact, ActionWarn, ActionLog, ActionPass:
+			case ActionBlock, ActionStrip, ActionRedact, ActionWarn, ActionLog, ActionPass:
 			default:
 				issues = append(issues, ValidationIssue{
 					Field:    "rules." + name + ".action",
@@ -313,7 +313,7 @@ func ValidateSemantics(p *Policy) []ValidationIssue {
 		if c.Action != "" {
 			a := Action(strings.ToUpper(strings.TrimSpace(c.Action)))
 			switch a {
-			case ActionBlock, ActionRedact, ActionWarn, ActionLog, ActionPass:
+			case ActionBlock, ActionStrip, ActionRedact, ActionWarn, ActionLog, ActionPass:
 			default:
 				issues = append(issues, ValidationIssue{
 					Field:    fmt.Sprintf("competitors[%d].action", i),

@@ -193,6 +193,17 @@ providers:
 # (BLOCK, WARN, LOG or PASS). It does not affect findings a rule leaves
 # alone on purpose (below its sensitivity, outside its types or roles).
 #
+# Actions, strongest first: BLOCK, STRIP, REDACT, WARN, LOG, PASS.
+#   STRIP replaces the whole piece of text a finding is in with a placeholder
+#   and forwards the request. It is for agents: an injection in a tool result
+#   is taken out and the session goes on, where BLOCK would end the turn. To
+#   strip in tool results and block everywhere else, use the two rule keys a
+#   finding type has:
+#
+#     injection_detection: { action: STRIP, sensitivity: low, applies_to: [tool] }
+#     injection:           { action: BLOCK, sensitivity: low,
+#                            applies_to: [system, user, assistant, tool_definition, request] }
+#
 # classifier: a local model that reads the text the rules did not block and
 # reports what it takes for an injection as an `injection` finding of
 # category `classifier`. Off here because it needs the classifier service
