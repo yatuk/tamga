@@ -81,3 +81,6 @@ docs/TAMGA_DASHBOARD_SOC_SPEC_V2.md
 docs/CURSOR_*.md
 docs/FAZ2_ENTERPRISE_PROMPTS.md
 docs/FAZ3_ADVANCED_PROMPTS.md
+
+# Classifier models are downloaded, not committed (see docs/operations.md)
+/models/

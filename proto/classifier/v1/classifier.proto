@@ -1,0 +1,50 @@
+// Tamga Classifier — gRPC API of the prompt-injection classifier service.
+//
+// Unlike the analyzer, this service is on the decision path: the proxy calls
+// it inline, under a short deadline, when its own rules found nothing
+// conclusive. It runs a local ONNX model on CPU and holds no other state.
+
+syntax = "proto3";
+
+package proto.classifier.v1;
+
+option go_package = "github.com/yatuk/tamga/proto/classifier/v1;classifierv1";
+
+service ClassifierService {
+  // Classify scores texts. UNAVAILABLE means no model is loaded.
+  rpc Classify(ClassifyRequest) returns (ClassifyResponse);
+
+  // Health reports whether a model is loaded and which one.
+  rpc Health(HealthRequest) returns (HealthResponse);
+}
+
+message ClassifyRequest {
+  string request_id = 1;
+
+  // Texts to score, one per segment of the request.
+  repeated string texts = 2;
+}
+
+message ClassifyResponse {
+  // Probability that each text is an injection attempt, in request order.
+  repeated float scores = 1;
+
+  // True for a text too long to score whole: only its first windows were
+  // read, so a low score does not mean it is clean.
+  repeated bool truncated = 2;
+
+  // Name of the loaded model (its directory name).
+  string model = 3;
+
+  double duration_ms = 4;
+}
+
+message HealthRequest {}
+
+message HealthResponse {
+  bool available = 1;
+  string model = 2;
+
+  // Why no model is loaded, when available is false.
+  string reason = 3;
+}

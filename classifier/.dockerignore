@@ -1,0 +1,7 @@
+# Keep the build context and the image to what the service runs.
+tests/
+Dockerfile
+.dockerignore
+__pycache__/
+*.pyc
+.pytest_cache/
