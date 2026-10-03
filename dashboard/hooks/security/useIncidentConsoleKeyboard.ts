@@ -40,7 +40,12 @@ export function useIncidentConsoleKeyboard({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
+      // Single-letter shortcuts must not fire on browser shortcuts: Ctrl+C
+      // copies, it does not close the incident.
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      // Leave the keyboard to an open dialog, menu or the command palette.
+      if (t?.closest('[role="dialog"], [role="menu"], [role="listbox"]')) return;
       if (e.key === "j") {
         e.preventDefault();
         setSelectedRow((p) => Math.min(tableRows.length - 1, p + 1));
