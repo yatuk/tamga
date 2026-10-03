@@ -125,6 +125,7 @@ services:
       - ./migrations/011_tenant_rls.up.sql:/docker-entrypoint-initdb.d/011_tenant_rls.sql:ro
       - ./migrations/012_incident_lifecycle.up.sql:/docker-entrypoint-initdb.d/012_incident_lifecycle.sql:ro
       - ./migrations/013_saved_hunts.up.sql:/docker-entrypoint-initdb.d/013_saved_hunts.sql:ro
+      - ./migrations/014_incident_lifecycle_align.up.sql:/docker-entrypoint-initdb.d/014_incident_lifecycle_align.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tamga}"]
       interval: 5s

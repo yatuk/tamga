@@ -215,8 +215,10 @@ func TestPostgresStore_EnsureTable_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EnsureTable: %v", err)
 	}
-	if mock.execCalls != 1 {
-		t.Errorf("expected 1 Exec call, got %d", mock.execCalls)
+	// One CREATE TABLE IF NOT EXISTS, then the schema alignment for tables
+	// that migration 012 created without org_id and comments.
+	if mock.execCalls != 2 {
+		t.Errorf("expected 2 Exec calls, got %d", mock.execCalls)
 	}
 }
 

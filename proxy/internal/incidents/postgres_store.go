@@ -61,8 +61,38 @@ func (s *PostgresStore) ensureTable(ctx context.Context) error {
 		created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 		updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 	)`)
+	if err != nil {
+		return err
+	}
+	// A table created by migration 012 predates org_id and comments and has
+	// nullable text columns, which this store cannot scan. Bring it in line;
+	// every statement is a no-op on an up-to-date table. Mirrors migration 014.
+	_, err = s.pool.Exec(ctx2, alignLifecycleSchemaSQL)
 	return err
 }
+
+const alignLifecycleSchemaSQL = `
+ALTER TABLE incident_lifecycle ADD COLUMN IF NOT EXISTS org_id TEXT NOT NULL DEFAULT '';
+ALTER TABLE incident_lifecycle ADD COLUMN IF NOT EXISTS comments JSONB NOT NULL DEFAULT '[]'::jsonb;
+UPDATE incident_lifecycle
+SET assignee         = COALESCE(assignee, ''),
+    reason           = COALESCE(reason, ''),
+    tags             = COALESCE(tags, '{}'),
+    triaged_by       = COALESCE(triaged_by, ''),
+    resolved_by      = COALESCE(resolved_by, ''),
+    resolution       = COALESCE(resolution, ''),
+    resolution_notes = COALESCE(resolution_notes, '')
+WHERE assignee IS NULL OR reason IS NULL OR tags IS NULL OR triaged_by IS NULL
+   OR resolved_by IS NULL OR resolution IS NULL OR resolution_notes IS NULL;
+ALTER TABLE incident_lifecycle
+    ALTER COLUMN assignee SET DEFAULT '',         ALTER COLUMN assignee SET NOT NULL,
+    ALTER COLUMN reason SET DEFAULT '',           ALTER COLUMN reason SET NOT NULL,
+    ALTER COLUMN tags SET DEFAULT '{}',           ALTER COLUMN tags SET NOT NULL,
+    ALTER COLUMN triaged_by SET DEFAULT '',       ALTER COLUMN triaged_by SET NOT NULL,
+    ALTER COLUMN resolved_by SET DEFAULT '',      ALTER COLUMN resolved_by SET NOT NULL,
+    ALTER COLUMN resolution SET DEFAULT '',       ALTER COLUMN resolution SET NOT NULL,
+    ALTER COLUMN resolution_notes SET DEFAULT '', ALTER COLUMN resolution_notes SET NOT NULL;
+`
 
 func (s *PostgresStore) EnsureTable(ctx context.Context) error {
 	return s.ensureTable(ctx)
