@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { toUpperEn } from "@/lib/utils/case";
 import { useOverviewDerived } from "./useOverviewDerived";
 import { useAdminKey } from "@/hooks/useAdminKey";
+import { useHealth } from "@/hooks/useHealth";
 import { useCsvExport } from "@/hooks/useCsvExport";
 import { useRangeParam } from "@/hooks/useRangeParam";
 
@@ -13,15 +14,11 @@ export function useOverviewPage() {
   const [adminKey] = useAdminKey();
   const [range, setRange] = useRangeParam("7d");
 
-  const { data: health } = useQuery({
-    queryKey: ["tamga-health-detailed"],
-    queryFn: () => api.getHealthDetailed(),
-    staleTime: 60_000,
-  });
+  const { data: health } = useHealth();
 
   const { data: stats, error: statsError, isSuccess: statsOk } = useQuery({
-    queryKey: ["tamga-stats-v2", adminKey],
-    queryFn: () => api.getStats(adminKey),
+    queryKey: ["tamga-stats", adminKey, range],
+    queryFn: () => api.getStats(adminKey, range),
     enabled: !!adminKey,
     refetchInterval: 30_000,
     retry: 1,
@@ -55,7 +52,7 @@ export function useOverviewPage() {
 
   const refreshAll = async () => {
     await Promise.all(
-      ["tamga-health-detailed", "tamga-stats-v2", "tamga-events-v2", "tamga-timeseries", "tamga-mttr"].map((key) =>
+      ["tamga-health", "tamga-stats", "tamga-events-v2", "tamga-timeseries", "tamga-mttr"].map((key) =>
         queryClient.invalidateQueries({ queryKey: [key] }),
       ),
     );

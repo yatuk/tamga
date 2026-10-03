@@ -1,12 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import { PageHeader } from "@/components/app/page-header";
 import { useSecurityIncidentsConsole } from "@/hooks/security/useSecurityIncidentsConsole";
-import { FalsePositiveDialog } from "./false-positive-dialog";
 import { IncidentDetail } from "./incident-detail";
 import { IncidentsTable } from "./incidents-table";
 import { IncidentsToolbar } from "./incidents-toolbar";
+
+// Only needed once an analyst marks something as a false positive.
+const FalsePositiveDialog = dynamic(() => import("./false-positive-dialog").then((m) => m.FalsePositiveDialog), { ssr: false });
 
 /** Triage console: filter bar, the virtualised queue and the selected incident. */
 export function IncidentsView() {
@@ -28,14 +31,16 @@ export function IncidentsView() {
         </div>
       </div>
 
-      <FalsePositiveDialog
-        open={fpRequestId !== null}
-        onClose={() => setFpRequestId(null)}
-        onConfirm={(reason) => {
-          if (fpRequestId) m.markFalsePositive(fpRequestId, reason);
-          setFpRequestId(null);
-        }}
-      />
+      {fpRequestId !== null ? (
+        <FalsePositiveDialog
+          open
+          onClose={() => setFpRequestId(null)}
+          onConfirm={(reason) => {
+            m.markFalsePositive(fpRequestId, reason);
+            setFpRequestId(null);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

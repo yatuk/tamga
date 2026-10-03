@@ -10,7 +10,7 @@ import { AdminKeyRequired, EmptyState, ErrorState, SkeletonRows } from "@/compon
 import { ActionBadge, SeverityBadge } from "@/components/app/status-badge";
 import { TimeRangeToggle } from "@/components/app/time-range";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { SecurityEvent } from "@/lib/api/types-core";
 import { humanizeProvider } from "@/lib/humanize";
@@ -194,23 +194,22 @@ export function EventsView() {
                   </ToggleGroupItem>
                 ))}
               </ToggleGroup>
-              <Select
-                value={filters.provider || ALL_PROVIDERS}
-                onValueChange={(v) => p.updateFilters({ provider: v === ALL_PROVIDERS ? "" : v })}
-              >
-                <SelectTrigger size="sm" aria-label="Filter by provider" className="min-w-40">
-                  <span className="text-muted-foreground">Provider</span>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL_PROVIDERS}>All</SelectItem>
+              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                Provider
+                <NativeSelect
+                  size="sm"
+                  name="provider"
+                  value={filters.provider || ALL_PROVIDERS}
+                  onChange={(e) => p.updateFilters({ provider: e.target.value === ALL_PROVIDERS ? "" : e.target.value })}
+                >
+                  <NativeSelectOption value={ALL_PROVIDERS}>All</NativeSelectOption>
                   {PROVIDERS.map((name) => (
-                    <SelectItem key={name} value={name}>
+                    <NativeSelectOption key={name} value={name}>
                       {humanizeProvider(name)}
-                    </SelectItem>
+                    </NativeSelectOption>
                   ))}
-                </SelectContent>
-              </Select>
+                </NativeSelect>
+              </label>
               {filtered ? (
                 <Button variant="ghost" size="sm" onClick={() => p.updateFilters({ actions: [], provider: "" })}>
                   <X />

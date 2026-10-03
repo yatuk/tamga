@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { RotateCcw, Save } from "lucide-react";
 import { ConfirmButton } from "@/components/app/confirm-button";
 import { PageHeader } from "@/components/app/page-header";
@@ -7,17 +8,24 @@ import { PageTabsList, PageTabsTrigger } from "@/components/app/page-tabs";
 import { Panel } from "@/components/app/panel";
 import { AdminKeyRequired, ErrorState, SkeletonRows } from "@/components/app/states";
 import { StatusBadge } from "@/components/app/status-badge";
-import { PolicyDiff } from "@/components/dashboard/policies/PolicyDiff";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { POLICY_TABS, type PolicyTabKey } from "./_constants";
-import { CompetitorsForm } from "./CompetitorsForm";
-import { CustomEntityForm } from "./CustomEntityForm";
-import { PoliciesDiffPanel } from "./PoliciesDiffPanel";
-import { PoliciesSimulatePanel } from "./PoliciesSimulatePanel";
 import { PolicyEditor } from "./policy-editor";
 import { usePoliciesPage } from "./usePoliciesPage";
+
+// Each tab is its own chunk, fetched when the tab is first opened.
+const tabLoading = () => <SkeletonRows rows={6} />;
+const PoliciesDiffPanel = dynamic(() => import("./PoliciesDiffPanel").then((m) => m.PoliciesDiffPanel), { loading: tabLoading });
+const PoliciesSimulatePanel = dynamic(() => import("./PoliciesSimulatePanel").then((m) => m.PoliciesSimulatePanel), {
+  loading: tabLoading,
+});
+const PolicyDiff = dynamic(() => import("@/components/dashboard/policies/PolicyDiff").then((m) => m.PolicyDiff), {
+  loading: tabLoading,
+});
+const CustomEntityForm = dynamic(() => import("./CustomEntityForm").then((m) => m.CustomEntityForm), { loading: tabLoading });
+const CompetitorsForm = dynamic(() => import("./CompetitorsForm").then((m) => m.CompetitorsForm), { loading: tabLoading });
 
 export default function PoliciesPage() {
   const m = usePoliciesPage();

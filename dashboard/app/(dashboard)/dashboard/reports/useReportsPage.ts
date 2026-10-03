@@ -16,7 +16,7 @@ export function useReportsPage() {
   const [isExporting, setIsExporting] = useState(false);
 
   const { data: stats } = useQuery({
-    queryKey: ["tamga-reports-stats", adminKey, range],
+    queryKey: ["tamga-stats", adminKey, range],
     queryFn: () => api.getStats(adminKey, range),
     enabled: !!adminKey,
     retry: 1,
@@ -32,7 +32,7 @@ export function useReportsPage() {
   });
 
   const { data: ts } = useQuery({
-    queryKey: ["tamga-reports-timeseries", adminKey, range],
+    queryKey: ["tamga-timeseries", adminKey, range],
     queryFn: () => api.getTimeseries(adminKey, range),
     enabled: !!adminKey,
     retry: 1,
@@ -40,7 +40,7 @@ export function useReportsPage() {
   });
 
   const { data: breakdown } = useQuery({
-    queryKey: ["tamga-reports-breakdown", adminKey, range],
+    queryKey: ["tamga-breakdown", adminKey, range],
     queryFn: () => api.getBreakdown(adminKey, range),
     enabled: !!adminKey,
     retry: 1,
@@ -48,7 +48,7 @@ export function useReportsPage() {
   });
 
   const { data: mttrData } = useQuery({
-    queryKey: ["tamga-reports-mttr", adminKey, range],
+    queryKey: ["tamga-mttr", adminKey, range],
     queryFn: () => api.getMttr(adminKey, range),
     enabled: !!adminKey,
     retry: 1,

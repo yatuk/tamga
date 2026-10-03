@@ -1,6 +1,6 @@
 "use client";
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { keepPreviousData, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 
 export function QueryProvider({ children }: { children: React.ReactNode }) {
@@ -16,6 +16,9 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
             staleTime: 60 * 1000,
             gcTime: 5 * 60 * 1000,
             refetchOnWindowFocus: false,
+            // Switching the time range or a filter keeps the previous numbers
+            // on screen until the new ones arrive, instead of a skeleton.
+            placeholderData: keepPreviousData,
             retry: 1,
           },
         },

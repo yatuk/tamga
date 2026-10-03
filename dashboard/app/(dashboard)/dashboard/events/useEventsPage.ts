@@ -89,7 +89,7 @@ export function useEventsPage() {
   });
 
   const { data: ts } = useQuery({
-    queryKey: ["tamga-events-timeseries", adminKey, filters.range],
+    queryKey: ["tamga-timeseries", adminKey, filters.range, "hour"],
     queryFn: () => api.getTimeseries(adminKey, filters.range, "hour"),
     enabled: !!adminKey,
     staleTime: 60 * 1000,

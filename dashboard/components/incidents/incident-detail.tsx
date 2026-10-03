@@ -1,18 +1,25 @@
 "use client";
 
 import { useMemo } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { FlaskConical } from "lucide-react";
 import { Panel } from "@/components/app/panel";
 import { EmptyState } from "@/components/app/states";
 import { ActionBadge, SeverityBadge, StatusBadge } from "@/components/app/status-badge";
-import { JsonInspector } from "@/components/dashboard/JsonInspector";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { IncidentsConsoleModel } from "@/hooks/security/useSecurityIncidentsConsole";
 import type { SecurityEvent } from "@/lib/api";
 import { humanizeProvider } from "@/lib/humanize";
 import { primaryOwasp } from "@/lib/owasp-llm";
 import { primarySeverity } from "@/lib/security/security-events-model";
+
+// The raw-event viewer is only needed once an incident is selected.
+const JsonInspector = dynamic(() => import("@/components/dashboard/JsonInspector").then((m) => m.JsonInspector), {
+  ssr: false,
+  loading: () => <Skeleton className="h-40 w-full" />,
+});
 
 interface Props {
   event: SecurityEvent | null;

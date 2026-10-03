@@ -1,10 +1,8 @@
 "use client";
 
-import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2 } from "lucide-react";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
+import { useState } from "react";
 import { ConfirmButton } from "@/components/app/confirm-button";
 import { FormField } from "@/components/app/form-field";
 import { Panel } from "@/components/app/panel";
@@ -30,15 +28,24 @@ function isValidRegex(pattern: string): boolean {
 const SEVERITIES = ["critical", "high", "medium", "low"] as const;
 const ACTIONS = ["block", "redact", "warn", "log"] as const;
 
-const customEntitySchema = z.object({
-  name: z.string().min(1, "Give the entity a name."),
-  pattern: z.string().min(1, "Enter a regular expression.").refine(isValidRegex, "This is not a valid regular expression."),
-  description: z.string().optional(),
-  severity: z.enum(SEVERITIES),
-  action: z.enum(ACTIONS),
-});
+type CustomEntityFormValues = {
+  name: string;
+  pattern: string;
+  description: string;
+  severity: (typeof SEVERITIES)[number];
+  action: (typeof ACTIONS)[number];
+};
 
-type CustomEntityFormValues = z.infer<typeof customEntitySchema>;
+type FormErrors = Partial<Record<"name" | "pattern", string>>;
+
+/** One small form does not need a form library and a schema library. */
+function validate(values: CustomEntityFormValues): FormErrors {
+  const errors: FormErrors = {};
+  if (!values.name.trim()) errors.name = "Give the entity a name.";
+  if (!values.pattern.trim()) errors.pattern = "Enter a regular expression.";
+  else if (!isValidRegex(values.pattern)) errors.pattern = "This is not a valid regular expression.";
+  return errors;
+}
 
 const DEFAULTS: CustomEntityFormValues = {
   name: "",
@@ -61,15 +68,15 @@ function FieldError({ id, message }: { id: string; message?: string }) {
 export function CustomEntityForm({ adminKey }: { adminKey: string }) {
   const qc = useQueryClient();
 
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors },
-  } = useForm<CustomEntityFormValues>({
-    resolver: zodResolver(customEntitySchema),
-    defaultValues: DEFAULTS,
-  });
+  const [values, setValues] = useState<CustomEntityFormValues>(DEFAULTS);
+  const [submitted, setSubmitted] = useState(false);
+  const errors = submitted ? validate(values) : {};
+  const set = <K extends keyof CustomEntityFormValues>(key: K, value: CustomEntityFormValues[K]) =>
+    setValues((v) => ({ ...v, [key]: value }));
+  const reset = () => {
+    setValues(DEFAULTS);
+    setSubmitted(false);
+  };
 
   const { data, isLoading } = useQuery({
     queryKey: ["custom-entities", adminKey],
@@ -81,7 +88,7 @@ export function CustomEntityForm({ adminKey }: { adminKey: string }) {
     mutationFn: (entity: CustomEntity) => api.createCustomEntity(adminKey, entity),
     onSuccess: (_data, entity) => {
       qc.invalidateQueries({ queryKey: ["custom-entities", adminKey] });
-      reset(DEFAULTS);
+      reset();
       toast.success("Entity added", entity.name);
     },
     onError: (e) => toast.error("Could not add the entity", e.message),
@@ -101,7 +108,11 @@ export function CustomEntityForm({ adminKey }: { adminKey: string }) {
         <form
           noValidate
           className="space-y-4 p-4"
-          onSubmit={handleSubmit((values) => createMut.mutate({ ...values, confidence: 0.85 }))}
+          onSubmit={(e) => {
+            e.preventDefault();
+            setSubmitted(true);
+            if (Object.keys(validate(values)).length === 0) createMut.mutate({ ...values, confidence: 0.85 });
+          }}
         >
           <div className="grid gap-4 md:grid-cols-2">
             <FormField label="Name" htmlFor="entity-name">
@@ -112,9 +123,11 @@ export function CustomEntityForm({ adminKey }: { adminKey: string }) {
                 placeholder="project_mercury…"
                 aria-invalid={!!errors.name}
                 aria-describedby={errors.name ? "entity-name-error" : undefined}
-                {...register("name")}
+                name="name"
+                value={values.name}
+                onChange={(e) => set("name", e.target.value)}
               />
-              <FieldError id="entity-name-error" message={errors.name?.message} />
+              <FieldError id="entity-name-error" message={errors.name} />
             </FormField>
             <FormField label="Pattern (regular expression)" htmlFor="entity-pattern">
               <Input
@@ -125,12 +138,19 @@ export function CustomEntityForm({ adminKey }: { adminKey: string }) {
                 placeholder="Project[ -]?Mercury…"
                 aria-invalid={!!errors.pattern}
                 aria-describedby={errors.pattern ? "entity-pattern-error" : undefined}
-                {...register("pattern")}
+                name="pattern"
+                value={values.pattern}
+                onChange={(e) => set("pattern", e.target.value)}
               />
-              <FieldError id="entity-pattern-error" message={errors.pattern?.message} />
+              <FieldError id="entity-pattern-error" message={errors.pattern} />
             </FormField>
             <FormField label="Severity" htmlFor="entity-severity">
-              <NativeSelect id="entity-severity" {...register("severity")}>
+              <NativeSelect
+                id="entity-severity"
+                name="severity"
+                value={values.severity}
+                onChange={(e) => set("severity", e.target.value as CustomEntityFormValues["severity"])}
+              >
                 {SEVERITIES.map((s) => (
                   <NativeSelectOption key={s} value={s}>
                     {s}
@@ -139,7 +159,12 @@ export function CustomEntityForm({ adminKey }: { adminKey: string }) {
               </NativeSelect>
             </FormField>
             <FormField label="Action" htmlFor="entity-action">
-              <NativeSelect id="entity-action" {...register("action")}>
+              <NativeSelect
+                id="entity-action"
+                name="action"
+                value={values.action}
+                onChange={(e) => set("action", e.target.value as CustomEntityFormValues["action"])}
+              >
                 {ACTIONS.map((a) => (
                   <NativeSelectOption key={a} value={a}>
                     {a}
@@ -153,7 +178,9 @@ export function CustomEntityForm({ adminKey }: { adminKey: string }) {
               id="entity-description"
               autoComplete="off"
               placeholder="Confidential project code name…"
-              {...register("description")}
+              name="description"
+              value={values.description}
+              onChange={(e) => set("description", e.target.value)}
             />
           </FormField>
           <Button type="submit" disabled={createMut.isPending}>

@@ -12,6 +12,9 @@ export function authHeaders(adminKey?: string): HeadersInit {
   return key ? { "X-Tamga-Admin-Key": key } : {};
 }
 
+/** A response the server answered with: retrying a 4xx gives the same answer. */
+class ClientError extends Error {}
+
 export async function fetchAPI<T>(path: string, options?: APIOptions): Promise<T> {
   const retries = options?.retry ?? 1;
   const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -32,21 +35,17 @@ export async function fetchAPI<T>(path: string, options?: APIOptions): Promise<T
 
       if (!res.ok) {
         const errBody = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-        const message = formatFetchErrorMessage(res.status, errBody);
-        const err = new Error(res.status === 401 ? "Admin key is wrong or missing" : message);
-        if (res.status >= 500 && attempt < retries) {
-          lastError = err;
-          continue;
-        }
-        throw err;
+        const message = res.status === 401 ? "Admin key is wrong or missing" : formatFetchErrorMessage(res.status, errBody);
+        // Only a server fault (5xx) is worth asking again. A wrong key or a
+        // bad request fails the same way every time.
+        if (res.status < 500) throw new ClientError(message);
+        throw new Error(message);
       }
 
       return res.json();
     } catch (error) {
       lastError = error instanceof Error ? error : new Error("API request failed");
-      if (attempt >= retries) {
-        break;
-      }
+      if (error instanceof ClientError) break;
     } finally {
       clearTimeout(timeout);
     }

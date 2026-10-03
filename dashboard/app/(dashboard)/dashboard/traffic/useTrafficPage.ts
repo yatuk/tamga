@@ -12,7 +12,7 @@ export function useTrafficPage() {
   const [range, setRange] = useRangeParam("7d");
 
   const { data: stats, isLoading: statsLoading, error: statsError } = useQuery({
-    queryKey: ["tamga-traffic-stats", adminKey, range],
+    queryKey: ["tamga-stats", adminKey, range],
     queryFn: () => api.getStats(adminKey, range),
     enabled: !!adminKey,
     retry: 1,
@@ -20,7 +20,7 @@ export function useTrafficPage() {
   });
 
   const { data: ts, isLoading: tsLoading } = useQuery({
-    queryKey: ["tamga-traffic-timeseries", adminKey, range],
+    queryKey: ["tamga-timeseries", adminKey, range],
     queryFn: () => api.getTimeseries(adminKey, range),
     enabled: !!adminKey,
     retry: 1,
@@ -28,7 +28,7 @@ export function useTrafficPage() {
   });
 
   const { data: modelStats, isLoading: modelLoading } = useQuery({
-    queryKey: ["tamga-traffic-models", adminKey, range],
+    queryKey: ["tamga-model-stats", adminKey, range],
     queryFn: () => api.getModelStats(adminKey, range),
     enabled: !!adminKey,
     retry: 1,
@@ -36,7 +36,7 @@ export function useTrafficPage() {
   });
 
   const { data: breakdown, isLoading: breakdownLoading } = useQuery({
-    queryKey: ["tamga-traffic-breakdown", adminKey, range],
+    queryKey: ["tamga-breakdown", adminKey, range],
     queryFn: () => api.getBreakdown(adminKey, range),
     enabled: !!adminKey,
     retry: 1,

@@ -10,6 +10,10 @@ const nextConfig = {
   // 30s and static ones for 3 minutes so repeat navs inside the same
   // session render instantly without refetching the tree.
   experimental: {
+    // Import only what is used from these barrel packages. radix-ui in
+    // particular re-exports every primitive, which the dev server otherwise
+    // compiles in full on every page.
+    optimizePackageImports: ["radix-ui", "lucide-react", "recharts", "cmdk", "@tanstack/react-query", "@tanstack/react-virtual", "nuqs"],
     staleTimes: {
       dynamic: 30,
       static: 180,

@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api/client";
 import { parsePoolMetrics, type PoolMetrics } from "@/lib/parse-metrics";
 import { useAdminKey } from "@/hooks/useAdminKey";
+import { useHealth } from "@/hooks/useHealth";
 
 export interface ScannerPoolPageData {
   /** Whether the pool is enabled (metrics came back non-empty). */
@@ -30,17 +31,11 @@ export function useScannerPoolPage(): ScannerPoolPageData {
       const text = await api.getMetricsText(adminKey);
       return parsePoolMetrics(text);
     },
-    refetchInterval: 5000, // 5s polling for live metrics
+    refetchInterval: 10_000,
     enabled: !!adminKey,
   });
 
-  const health = useQuery({
-    queryKey: ["health-detailed", adminKey],
-    queryFn: () =>
-      adminKey ? api.getHealthDetailed() : Promise.resolve(null),
-    refetchInterval: 15000,
-    enabled: !!adminKey,
-  });
+  const health = useHealth();
 
   const pool = metrics.data ?? null;
   const poolEnabled = pool !== null && pool.queueSize > 0;

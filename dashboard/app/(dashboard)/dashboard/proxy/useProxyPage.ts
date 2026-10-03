@@ -1,30 +1,14 @@
 "use client";
 
 import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api";
 import { useAdminKey } from "@/hooks/useAdminKey";
+import { useHealth, useHealthDetail } from "@/hooks/useHealth";
 
 export function useProxyPage() {
   const [adminKey] = useAdminKey();
 
-  const { data: health, isLoading: healthLoading, error: healthError } = useQuery({
-    queryKey: ["tamga-proxy-health-detailed", adminKey],
-    queryFn: () => api.getHealthDetailed(),
-    enabled: !!adminKey,
-    retry: 1,
-    staleTime: 10 * 1000,
-    refetchInterval: 15_000,
-  });
-
-  const { data: detail, isLoading: detailLoading } = useQuery({
-    queryKey: ["tamga-proxy-health-detail", adminKey],
-    queryFn: () => api.getHealthDetail(),
-    enabled: !!adminKey,
-    retry: 1,
-    staleTime: 10 * 1000,
-    refetchInterval: 15_000,
-  });
+  const { data: health, isLoading: healthLoading, error: healthError } = useHealth();
+  const { data: detail, isLoading: detailLoading } = useHealthDetail();
 
   const isLoading = healthLoading || detailLoading;
   const hasError = !!healthError;

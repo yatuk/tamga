@@ -4,7 +4,7 @@ import { Bookmark, Download, Pencil, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import type { IncidentsConsoleModel } from "@/hooks/security/useSecurityIncidentsConsole";
 import type {
   ActionFilter,
@@ -31,19 +31,16 @@ function Filter({
   options: Option[];
 }) {
   return (
-    <Select value={value} onValueChange={onChange}>
-      <SelectTrigger size="sm" aria-label={label} className="min-w-32">
-        <span className="text-muted-foreground">{label}</span>
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
+    <label className="flex items-center gap-2 text-xs text-muted-foreground">
+      {label}
+      <NativeSelect size="sm" value={value} onChange={(e) => onChange(e.target.value)}>
         {options.map((o) => (
-          <SelectItem key={o.value} value={o.value}>
+          <NativeSelectOption key={o.value} value={o.value}>
             {o.label}
-          </SelectItem>
+          </NativeSelectOption>
         ))}
-      </SelectContent>
-    </Select>
+      </NativeSelect>
+    </label>
   );
 }
 

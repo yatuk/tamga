@@ -27,7 +27,7 @@ export function useCostsPage() {
     isLoading: budgetLoading,
     error: budgetError,
   } = useQuery({
-    queryKey: ["tamga-costs-budget", adminKey],
+    queryKey: ["tamga-budget", adminKey],
     queryFn: () => api.getBudgetStats(adminKey),
     enabled: !!adminKey,
     retry: 1,
@@ -36,7 +36,7 @@ export function useCostsPage() {
 
   // Fetch timeseries for chart.
   const { data: ts, isLoading: tsLoading } = useQuery({
-    queryKey: ["tamga-costs-timeseries", adminKey, range],
+    queryKey: ["tamga-timeseries", adminKey, range],
     queryFn: () => api.getTimeseries(adminKey, range),
     enabled: !!adminKey,
     retry: 1,

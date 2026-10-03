@@ -16,15 +16,15 @@ export function useTrendsPage() {
   const bucket = range === "24h" || range === "1h" ? "hour" : "day";
 
   const { data: ts, isLoading: tsLoading, error: tsError, refetch } = useQuery({
-    queryKey: ["tamga-trends-ts", adminKey, range, bucket],
-    queryFn: () => api.getTimeseries(adminKey, range, bucket),
+    queryKey: ["tamga-timeseries", adminKey, range],
+    queryFn: () => api.getTimeseries(adminKey, range),
     enabled: !!adminKey,
     retry: 1,
     staleTime: 60 * 1000,
   });
 
   const { data: breakdown, isLoading: bLoading } = useQuery({
-    queryKey: ["tamga-trends-breakdown", adminKey, range],
+    queryKey: ["tamga-breakdown", adminKey, range],
     queryFn: () => api.getBreakdown(adminKey, range),
     enabled: !!adminKey,
     retry: 1,

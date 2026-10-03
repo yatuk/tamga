@@ -27,21 +27,13 @@ const ACTIONS = [
   { label: "Simulate a prompt", href: "/dashboard/playground", icon: FlaskConical },
 ];
 
-/** Ctrl/⌘+K palette: every page, common incident filters, quick actions. */
+/**
+ * Ctrl/⌘+K palette: every page, common incident filters, quick actions.
+ * The shortcut itself is handled by the shell, which loads this on first use.
+ */
 export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && toLowerEn(e.key) === "k") {
-        e.preventDefault();
-        onOpenChange(!open);
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onOpenChange]);
 
   useEffect(() => {
     if (!open) setQuery("");

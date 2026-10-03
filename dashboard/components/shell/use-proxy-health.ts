@@ -1,7 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api";
+import { useHealth } from "@/hooks/useHealth";
 
 export type ProxyHealth = {
   /** undefined until the first probe settles. */
@@ -12,15 +11,9 @@ export type ProxyHealth = {
   scanP50: number | null;
 };
 
-/** Polls the proxy health endpoint. Shared by the sidebar, header and banner. */
+/** The proxy's state for the sidebar, header and banner, from the shared health poll. */
 export function useProxyHealth(): ProxyHealth {
-  const { data, isError, error, isPending } = useQuery({
-    queryKey: ["tamga-health-shell"],
-    queryFn: () => api.getHealthDetailed(),
-    refetchInterval: 10_000,
-    staleTime: 5_000,
-    retry: 0,
-  });
+  const { data, isError, error, isPending } = useHealth();
 
   if (isPending) return { up: undefined, reason: "", scanP50: null };
 

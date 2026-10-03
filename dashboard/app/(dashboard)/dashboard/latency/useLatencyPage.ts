@@ -5,23 +5,17 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useAdminKey } from "@/hooks/useAdminKey";
+import { useHealth } from "@/hooks/useHealth";
 import { useRangeParam } from "@/hooks/useRangeParam";
 
 export function useLatencyPage() {
   const [adminKey] = useAdminKey();
   const [range, setRange] = useRangeParam("24h");
 
-  const { data: health, isLoading: healthLoading, error: healthError } = useQuery({
-    queryKey: ["tamga-latency-health", adminKey],
-    queryFn: () => api.getHealthDetailed(),
-    enabled: !!adminKey,
-    retry: 1,
-    staleTime: 5 * 1000,
-    refetchInterval: 10_000, // auto-refresh every 10s
-  });
+  const { data: health, isLoading: healthLoading, error: healthError } = useHealth();
 
   const { data: ts, isLoading: tsLoading } = useQuery({
-    queryKey: ["tamga-latency-timeseries", adminKey, range],
+    queryKey: ["tamga-timeseries", adminKey, range],
     queryFn: () => api.getTimeseries(adminKey, range),
     enabled: !!adminKey,
     retry: 1,

@@ -57,15 +57,14 @@ describe("fetchAPI", () => {
     );
   });
 
-  it("retries 401 if retries remain (catch block retries any throw), final error is still the 401 message", async () => {
+  it("does not retry a 401: the same key gives the same answer", async () => {
     const mock = vi.fn().mockResolvedValue(res(401, { error: "unauthorized" }));
     vi.stubGlobal("fetch", mock);
 
     await expect(fetchAPI("/test", { retry: 2 })).rejects.toThrow(
       "Admin key is wrong or missing",
     );
-    // retry=2 → 3 total attempts (0, 1, 2)
-    expect(mock).toHaveBeenCalledTimes(3);
+    expect(mock).toHaveBeenCalledTimes(1);
   });
 
   // -- retry on 5xx ----------------------------------------------------------
@@ -94,15 +93,14 @@ describe("fetchAPI", () => {
     expect(mock).toHaveBeenCalledTimes(2);
   });
 
-  // -- 4xx no-implicit-retry (5xx path) but still retried via catch ----------
+  // -- 4xx is never retried ---------------------------------------------------
 
-  it("retries 4xx via the catch path because retries remain, final error is correct", async () => {
+  it("does not retry 4xx even when retries remain", async () => {
     const mock = vi.fn().mockResolvedValue(res(400, { error: "bad request" }));
     vi.stubGlobal("fetch", mock);
 
     await expect(fetchAPI("/test", { retry: 2 })).rejects.toThrow("bad request");
-    // retry=2 → 3 total attempts
-    expect(mock).toHaveBeenCalledTimes(3);
+    expect(mock).toHaveBeenCalledTimes(1);
   });
 
   it("does not retry 4xx when retry is 0", async () => {

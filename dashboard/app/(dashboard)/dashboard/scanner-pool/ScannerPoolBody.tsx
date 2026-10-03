@@ -37,7 +37,7 @@ export function ScannerPoolBody({ poolEnabled, pool, scannerCount, pipelineMode,
       description={
         <>
           The worker pool that runs the scanners. Pipeline mode <span className="font-mono text-xs">{pipelineMode}</span>,
-          refreshed every 5 seconds.
+          refreshed every 10 seconds.
         </>
       }
       actions={state ? <StatusBadge tone={state.tone}>{state.label}</StatusBadge> : undefined}

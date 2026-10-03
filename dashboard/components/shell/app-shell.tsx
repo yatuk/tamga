@@ -1,19 +1,41 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { ServerCrash } from "lucide-react";
 import { SkeletonRows } from "@/components/app/states";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppHeader } from "./app-header";
 import { AppSidebar } from "./app-sidebar";
-import { CommandPalette } from "./command-palette";
 import { useProxyHealth } from "./use-proxy-health";
+
+// cmdk and the dialog it lives in are only needed once the palette is opened.
+const CommandPalette = dynamic(() => import("./command-palette").then((m) => m.CommandPalette), { ssr: false });
 
 /** Dashboard frame: sidebar, header, command palette and the proxy-down banner. */
 export function AppShell({ children }: { children: React.ReactNode }) {
   const health = useProxyHealth();
   const [paletteOpen, setPaletteOpen] = useState(false);
+  // Stays mounted after the first open so closing can animate.
+  const [paletteLoaded, setPaletteLoaded] = useState(false);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteLoaded(true);
+        setPaletteOpen((open) => !open);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const openPalette = () => {
+    setPaletteLoaded(true);
+    setPaletteOpen(true);
+  };
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -27,13 +49,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <AppSidebar health={health} />
         <SidebarInset className="min-w-0">
           {health.up === false ? <ProxyDownBanner reason={health.reason} /> : null}
-          <AppHeader health={health} onOpenPalette={() => setPaletteOpen(true)} />
+          <AppHeader health={health} onOpenPalette={openPalette} />
           <main id="main" tabIndex={-1} className="mx-auto w-full max-w-[1600px] flex-1 px-4 py-5 outline-none sm:px-6 lg:px-8">
             {/* Pages read filters from the URL, which suspends during prerender. */}
             <Suspense fallback={<SkeletonRows rows={8} />}>{children}</Suspense>
           </main>
         </SidebarInset>
-        <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
+        {paletteLoaded ? <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} /> : null}
       </SidebarProvider>
     </TooltipProvider>
   );

@@ -8,25 +8,26 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { toLowerEn } from "@/lib/utils/case";
 
-// Same families as tamgaproxy.com. display: "swap" keeps fallback text
+// Same families as tamgaproxy.com, limited to the weights the interface uses
+// (five font files instead of ten). display: "swap" keeps fallback text
 // painted while the fonts download.
 const barlow = Barlow({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  weight: ["400", "500", "600"],
   variable: "--font-barlow",
   display: "swap",
   fallback: ["system-ui", "Segoe UI", "Arial", "sans-serif"],
 });
 const barlowCondensed = Barlow_Condensed({
   subsets: ["latin"],
-  weight: ["600", "700", "800"],
+  weight: ["800"],
   variable: "--font-barlow-condensed",
   display: "swap",
   fallback: ["Arial Narrow", "Arial", "sans-serif"],
 });
+// A variable font: one file covers every weight.
 const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
-  weight: ["400", "500", "700"],
   variable: "--font-jetbrains-mono",
   display: "swap",
   fallback: ["ui-monospace", "SFMono-Regular", "Menlo", "Consolas", "monospace"],

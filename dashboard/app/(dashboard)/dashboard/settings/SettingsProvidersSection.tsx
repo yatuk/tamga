@@ -7,6 +7,7 @@ import { Panel } from "@/components/app/panel";
 import { EmptyState } from "@/components/app/states";
 import { CircuitBadge, StatusBadge } from "@/components/app/status-badge";
 import { Button } from "@/components/ui/button";
+import { HEALTH_KEY } from "@/hooks/useHealth";
 import { api } from "@/lib/api";
 import type { DashboardHealthDetailed } from "@/lib/api/types-core";
 import { toast } from "@/lib/toast";
@@ -27,7 +28,7 @@ export function SettingsProvidersSection({ health, adminKey }: Props) {
     try {
       await api.resetUpstreamCircuit(adminKey, pool, endpoint);
       toast.success("Circuit reset", `${pool} / ${endpoint}`);
-      await qc.invalidateQueries({ queryKey: ["tamga-settings-health"] });
+      await qc.invalidateQueries({ queryKey: HEALTH_KEY });
     } catch (e) {
       toast.error("Could not reset the circuit", (e as Error).message);
     } finally {

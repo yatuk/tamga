@@ -7,6 +7,7 @@ import { type SSOSettings } from "@/lib/api/client";
 import { toast } from "@/lib/toast";
 import { RETENTION_STORAGE, SETTINGS_TAB_IDS } from "./_constants";
 import { useAdminKey } from "@/hooks/useAdminKey";
+import { useHealth, useHealthDetail } from "@/hooks/useHealth";
 import { useEnumParam } from "@/hooks/useUrlState";
 
 export function useSettingsPage() {
@@ -27,20 +28,8 @@ export function useSettingsPage() {
     setSaved(adminKey);
   }, [adminKey]);
 
-  const { data: health } = useQuery({
-    queryKey: ["tamga-settings-health"],
-    queryFn: () => api.getHealthDetailed(),
-    refetchInterval: 10_000,
-    retry: 1,
-  });
-
-  const { data: runtime } = useQuery({
-    queryKey: ["tamga-settings-runtime"],
-    queryFn: () => api.getHealthDetail(),
-    refetchInterval: 10_000,
-    retry: 1,
-    enabled: tab === "runtime",
-  });
+  const { data: health } = useHealth();
+  const { data: runtime } = useHealthDetail(tab === "runtime");
 
   const {
     data: ssoConfig,

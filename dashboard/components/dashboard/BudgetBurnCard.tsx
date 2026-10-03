@@ -50,7 +50,7 @@ function Meter({ label, used, limit, pct }: { label: string; used: string; limit
 /** Today's token and cost use against the daily budget. */
 export function BudgetBurnCard({ adminKey, className }: { adminKey: string; className?: string }) {
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ["tamga-budget-stats", adminKey],
+    queryKey: ["tamga-budget", adminKey],
     queryFn: () => api.getBudgetStats(adminKey),
     enabled: !!adminKey,
     refetchInterval: 30_000,

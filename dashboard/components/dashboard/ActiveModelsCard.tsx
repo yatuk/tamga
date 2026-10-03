@@ -10,7 +10,7 @@ import type { TimeRange } from "@/lib/types";
 /** Which models the traffic in the window went to. */
 export function ActiveModelsCard({ adminKey, range = "7d" }: { adminKey: string; range?: TimeRange }) {
   const { data, isLoading } = useQuery({
-    queryKey: ["model-stats", adminKey, range],
+    queryKey: ["tamga-model-stats", adminKey, range],
     queryFn: () => api.getModelStats(adminKey, range),
     enabled: !!adminKey,
     staleTime: 60 * 1000,
