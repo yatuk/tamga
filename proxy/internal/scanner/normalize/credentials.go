@@ -165,26 +165,43 @@ func normalizeCredentials(s string) string {
 	return out.String()
 }
 
+// hasPrefixAt reports whether runes[i:] starts with prefix, without copying
+// the rest of the text. The callers run at every position, so building a
+// string of the remainder there made normalisation quadratic: a megabyte of
+// tool output took minutes.
+func hasPrefixAt(runes []rune, i int, prefix string) bool {
+	for _, want := range prefix {
+		if i >= len(runes) || runes[i] != want {
+			return false
+		}
+		i++
+	}
+	return true
+}
+
 // tryAWS checks whether runes[i:] starts with a known AWS access key prefix
 // (including A3T[X] where X is A-Z0-9) followed by, after stripping separators,
 // exactly 16 uppercase alphanumeric chars. Returns the matched prefix and the
 // end position in runes (past the last consumed character).
 func tryAWS(runes []rune, i int) (prefix string, end int) {
-	remaining := string(runes[i:])
+	// Every AWS prefix starts with 'A'. This runs at every position of the
+	// text, so the common case must cost one comparison.
+	if runes[i] != 'A' {
+		return "", i
+	}
 
 	// Collect candidate prefixes: the fixed 4-char set plus A3T + one [A-Z0-9].
-	candidates := make([]string, 0, len(awsPrefixes)+1)
-	candidates = append(candidates, awsPrefixes...)
+	candidates := awsPrefixes
 	// A3T[A-Z0-9]: check that we have at least 5 runes and the 4th is [A-Z0-9].
-	if len(runes)-i >= 5 && strings.HasPrefix(remaining, "A3T") {
+	if len(runes)-i >= 5 && hasPrefixAt(runes, i, "A3T") {
 		fifth := runes[i+3]
 		if (fifth >= 'A' && fifth <= 'Z') || (fifth >= '0' && fifth <= '9') {
-			candidates = append(candidates, string(runes[i:i+4]))
+			candidates = append(append(make([]string, 0, len(awsPrefixes)+1), awsPrefixes...), string(runes[i:i+4]))
 		}
 	}
 
 	for _, p := range candidates {
-		if !strings.HasPrefix(remaining, p) {
+		if !hasPrefixAt(runes, i, p) {
 			continue
 		}
 		prefixRunes := []rune(p)
@@ -213,9 +230,8 @@ func tryAWS(runes []rune, i int) (prefix string, end int) {
 // tryMultiPrefix checks whether runes[i:] starts with any of the given prefixes
 // followed by (after stripping separators) at least minBody valid chars.
 func tryMultiPrefix(runes []rune, i int, prefixes []string, keep func(rune) bool, minBody, maxBody int) (prefix string, end int) {
-	remaining := string(runes[i:])
 	for _, p := range prefixes {
-		if !strings.HasPrefix(remaining, p) {
+		if !hasPrefixAt(runes, i, p) {
 			continue
 		}
 		prefixRunes := []rune(p)
@@ -250,8 +266,7 @@ func tryCredential(runes []rune, i int, spec credentialSpec) (bodyLen int, end i
 		return 0, i
 	}
 	// Check prefix match (case-sensitive).
-	remaining := string(runes[i:])
-	if !strings.HasPrefix(remaining, spec.prefix) {
+	if !hasPrefixAt(runes, i, spec.prefix) {
 		return 0, i
 	}
 

@@ -81,6 +81,15 @@ corpus and will overstate real-world recall.
 > scanner: individual scans were being rounded to 0 or to one timer tick.
 > The numbers above come from Linux, where the clock resolves nanoseconds.
 
+### Large requests
+
+The latency figures on this page are for chat-sized prompts. Text is scanned
+at about 250 KB a second per core, and a long segment is spread over the
+cores: 1 MB of new text measured 1.0 s on the 16-core machine, 4 s on one
+core. Text the proxy has scanned in the last ten minutes is answered from
+memory, which also means that a load test repeating prompts of 2 KB or more
+measures the cache for those, not the scanners.
+
 ### With the inline classifier
 
 `make redteam-classifier-report` runs both sets through the rules and then,

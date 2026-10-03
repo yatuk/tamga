@@ -2,6 +2,7 @@ package scanner
 
 import (
 	"context"
+	"crypto/sha256"
 	"time"
 )
 
@@ -63,5 +64,17 @@ func scanEntry(ctx context.Context, s Scanner, content []byte, reqCtx *RequestCo
 	if cs, ok := s.(ContextualScanner); ok && reqCtx != nil {
 		return cs.ScanWithContext(ctx, content, reqCtx)
 	}
-	return s.Scan(ctx, content)
+	name, pure := pureScannerName(s)
+	if !pure || len(content) < scanCacheMinBytes {
+		return s.Scan(ctx, content)
+	}
+	key := scanCacheKey{scanner: name, sum: sha256.Sum256(content)}
+	if found, ok := scanCacheGet(key); ok {
+		return found, nil
+	}
+	found, err := s.Scan(ctx, content)
+	if err == nil {
+		scanCachePut(key, found)
+	}
+	return found, err
 }

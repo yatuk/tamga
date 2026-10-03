@@ -23,19 +23,9 @@ import (
 // found in.
 func (r *Registry) ScanSegments(ctx context.Context, segs []extract.Segment, cfg PipelineConfig) ([]Finding, error) {
 	var all []Finding
-	var firstErr error
-	perSeg := make([][]Finding, len(segs))
-
-	for i, seg := range segs {
-		found, err := r.ScanAllWithConfig(ctx, []byte(seg.Text), cfg)
-		if err != nil && firstErr == nil {
-			firstErr = err
-		}
-		for j := range found {
-			placeFinding(&found[j], i, seg)
-		}
-		found = r.dropEchoes(ctx, found, i, seg, cfg)
-		perSeg[i] = dedupeFindings(found)
+	perSeg, firstErr := r.scanUnits(ctx, segs, cfg)
+	for i := range perSeg {
+		perSeg[i] = dedupeFindings(perSeg[i])
 		all = append(all, perSeg[i]...)
 	}
 

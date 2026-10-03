@@ -129,7 +129,8 @@ schema are in [docs/architecture](docs/architecture/README.md).
 
 Also in the box: reversible PII tokenization (vault), per-key rate limits and
 token budgets, provider allowlists, a response cache, and a SOC dashboard with
-an incident queue. See [docs/operations.md](docs/operations.md).
+an incident queue. See [docs/operations.md](docs/operations.md), and
+[docs/agents.md](docs/agents.md) for running Claude Code and other agents through it.
 
 <p align="center">
   <img src="docs/incidents.png" alt="Tamga incident queue: blocked prompts with the rule that fired" width="820" />
@@ -180,13 +181,15 @@ Docker Compose stack with a mocked upstream:
 
 | Load | P50 | P95 | P99 | Errors |
 |---|---|---|---|---|
-| 100 RPS | 2.4 ms | 3.8 ms | 5.2 ms | 0% |
-| 500 RPS | 1.6 ms | 2.8 ms | 5.8 ms | 0% |
-| 1000 RPS | 1.6 ms | 3.2 ms | 7.0 ms | 0% |
+| 100 RPS | 2.6 ms | 4.0 ms | 5.4 ms | 0% |
+| 500 RPS | 1.6 ms | 3.3 ms | 6.6 ms | 0% |
+| 1000 RPS | 1.6 ms | 5.0 ms | 9.9 ms | 0% |
 
-16-core laptop CPU, Docker limited to 12 GB. These depend on hardware: an
-earlier run on a 4-core machine held the same P95 to 500 RPS and reached
-130 ms at 1000.
+16-core laptop CPU, Docker limited to 12 GB. The medians repeat from run to
+run; the tails do not: three runs on this day gave a P95 at 1000 RPS of 3.2,
+4.6 and 5.0 ms. These also depend on hardware: an earlier run on a 4-core
+machine held the same P95 to 500 RPS and reached 130 ms at 1000. The prompts
+are chat-sized; for large requests see [docs/agents.md](docs/agents.md#speed).
 
 **Adversarial suite.** 84 attack vectors written to evade the scanners: 78
 detected, 6 bypass. Nineteen of them attack the structure of the request
@@ -196,9 +199,9 @@ differently. The bypasses are published in
 [tests/stress/baseline.json](tests/stress/baseline.json) and include leetspeak
 and character-by-character smuggling. The vectors are known to the authors, so this is a regression
 suite, not an independent evaluation. With the classifier on, the result is
-the same 78 and 6, and the load figures stay within 1.5 ms of the table above
-(the load test repeats its prompts, so it exercises the classifier's cache,
-not the model).
+the same 78 and 6, and the load figures are within the run-to-run spread of
+the table above (the load test repeats its prompts, so it exercises the
+classifier's cache, not the model).
 
 ```bash
 cd proxy && go run ./cmd/redteam -in ./testdata/redteam/prompts.csv   # accuracy

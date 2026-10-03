@@ -40,6 +40,29 @@
   forwarded whole with `X-Tamga-Output-Scan: skipped-too-large`; the default
   limit is raised from 256 KB to 1 MB.
 
+### Agents
+- **A long tool result or file no longer stalls the proxy.** Scanning a large
+  piece of text did not finish: the secret scanner's separator normalisation
+  copied the rest of the text at every character, so its cost grew with the
+  square of the length, and 64 KB took minutes. It is linear now.
+- **Long segments are scanned in parallel.** A segment over 32 KB is cut into
+  overlapping chunks that are scanned on every core; what is found and where
+  does not depend on the cuts. A megabyte of new text takes about a second
+  on 16 cores (four seconds on one).
+- **Repeated text is not scanned again.** The scanners that depend only on
+  the text (PII, secrets, injection, jailbreak, content moderation) keep
+  their findings for each piece of 2 KB or more for ten minutes. An agent
+  resends its whole history every turn; only the new part is scanned.
+  Custom patterns, competitor names and operator-state checks are never
+  cached.
+- The shipped policy accepts up to 32 MB on the Anthropic route (was 2 MB),
+  the API's own limit.
+- Tests pin what an agent needs from a gateway against a stand-in for the
+  Anthropic API: `count_tokens` passes, `anthropic-*` headers are forwarded,
+  a request and response with nothing to find pass byte for byte, and a
+  stream is not held back.
+- New: [docs/agents.md](docs/agents.md).
+
 ### Inline classifier (optional)
 - **A model on the decision path.** The analyzer's semantic checks ran after
   the response and could not change a verdict. A new classifier service runs
