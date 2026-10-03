@@ -7,7 +7,7 @@ versions live alongside this file.
 
 ![Tamga Architecture](tamga.svg)
 
-View the [D2 source](tamga.d2) or [full-size PNG](tamga.png).
+View the [D2 source](tamga.d2).
 
 | Component | Language | Role | Port |
 |---|---|---|---|

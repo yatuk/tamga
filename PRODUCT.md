@@ -50,7 +50,7 @@ Tamga combines inline enforcement, Turkish and regulated-industry data controls,
 ## Evidence on Hand
 
 - Product truth and architecture: `README.md`, `docs/`, `proxy/docs/openapi.yaml`.
-- Existing logo assets: `dashboard/public/tamga-logo.png`, `docs/tamga_logo.png`, and `dashboard/components/TamgaLogo.tsx`.
+- Existing logo assets: `docs/logo/tamga-mark.svg` and `docs/logo/tamga-mark-dark.svg`.
 - Published benchmark and adversarial data: `docs/benchmarks/` and `tests/stress/baseline.json`.
 - Existing dashboard implementation and API-driven states: `dashboard/app/(dashboard)/dashboard/`, `dashboard/components/dashboard/`, and `dashboard/lib/api/`.
 - No customer testimonials or external certification claims are present; future UI must not invent them.

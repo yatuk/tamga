@@ -13,7 +13,6 @@ tamga/
 ├── docs/           Architecture, benchmarks, compliance, OWASP coverage
 ├── proto/          Protobuf service definitions
 ├── scripts/        Load testing (k6), smoke tests, adversarial tests
-├── design-system/  UI design tokens and component specs
 └── .env.example    Environment variable template
 ```
 

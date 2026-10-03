@@ -69,6 +69,7 @@ coverage/
 *.lcov
 *.out
 proxy/coverage_telemetry.html
+proxy/cov
 
 # Internal docs (belt-and-suspenders)
 audit/
