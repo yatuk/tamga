@@ -153,7 +153,7 @@ if (-not $SkipAdversarial) {
     Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Running adversarial bypass tests..." -ForegroundColor Cyan
     $AdvDir = "$ScriptDir\adversarial"
 
-    foreach ($scriptName in @("pii_bypass.py", "injection_bypass.py", "secret_bypass.py", "policy_bypass.py")) {
+    foreach ($scriptName in @("pii_bypass.py", "injection_bypass.py", "secret_bypass.py", "policy_bypass.py", "operator_state_bypass.py", "structure_bypass.py")) {
         $scriptPath = "$AdvDir\$scriptName"
         if (-not (Test-Path $scriptPath)) {
             Write-Host "  ⚠ Skipping $scriptName (not found)"
@@ -182,6 +182,7 @@ for f in sorted(pathlib.Path(r'$ResultsDir').glob('adversarial_*.json')):
             'total': data.get('total', 0),
             'detected': data.get('detected', 0),
             'bypassed': data.get('bypassed', 0),
+            'controls_failed': data.get('controls_failed', 0),
         }
     except: pass
 total_bypassed = sum(r['bypassed'] for r in results.values())

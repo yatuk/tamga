@@ -179,6 +179,11 @@
   flags a benign prompt, so the published numbers are enforced by CI.
 
 ### Tests
+- Stress suite: a sixth category, **request structure** — 19 attacks that keep
+  the text plain and vary where it sits and how the JSON around it is written,
+  and 5 controls that must go through (an image whose bytes spell an ID
+  number, a markdown heading, text cut in the middle of an emoji). All 19 are
+  detected. A refused control now fails the gate in any category.
 - CI runs the store's Postgres integration tests (`TAMGA_INTEGRATION_DB=1`);
   they were skipped before, which is how the retention bug above went unseen.
 - Stress suite: runs against a mocked upstream, sets up the operator_state

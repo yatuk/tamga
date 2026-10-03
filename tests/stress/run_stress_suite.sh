@@ -181,7 +181,7 @@ if ! $SKIP_ADVERSARIAL; then
     log "Running adversarial bypass tests..."
     ADV_DIR="$SCRIPT_DIR/adversarial"
 
-    for script in pii_bypass.py injection_bypass.py secret_bypass.py policy_bypass.py operator_state_bypass.py; do
+    for script in pii_bypass.py injection_bypass.py secret_bypass.py policy_bypass.py operator_state_bypass.py structure_bypass.py; do
         script_path="$ADV_DIR/$script"
         if [ ! -f "$script_path" ]; then
             warn "Skipping $script (not found)"
@@ -206,6 +206,7 @@ for f in sorted(pathlib.Path('$RESULTS_DIR_NATIVE').glob('adversarial_*.json')):
         'total': data.get('total', 0),
         'detected': data.get('detected', 0),
         'bypassed': data.get('bypassed', 0),
+        'controls_failed': data.get('controls_failed', 0),
     }
 total_bypassed = sum(r['bypassed'] for r in results.values())
 results['total_bypassed'] = total_bypassed

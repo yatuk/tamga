@@ -12,8 +12,8 @@ Automated adversarial bypass and load test suite with regression detection.
 This single command:
 1. Starts the full Tamga stack with `docker-compose.stress.yml` layered on top
 2. Waits for the proxy to become healthy (up to 60 seconds)
-3. Runs 5 adversarial bypass test suites (PII, injection, secret, policy,
-   operator state)
+3. Runs 6 adversarial bypass test suites (PII, injection, secret, policy,
+   operator state, request structure)
 4. Runs k6 load tests at 100, 500, and 1000 RPS
 5. Runs a short workload mix test (3 minutes)
 6. Checks results against `baseline.json` for regressions

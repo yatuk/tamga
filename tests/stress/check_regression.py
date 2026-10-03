@@ -61,6 +61,7 @@ def load_adversarial_results(results_dir: Path) -> dict[str, dict[str, int]]:
             "total": data.get("total", 0),
             "detected": data.get("detected", 0),
             "bypassed": data.get("bypassed", 0),
+            "controls_failed": data.get("controls_failed", 0),
         }
     return merged
 
@@ -132,7 +133,12 @@ def check_adversarial(
         total_current += cur_bypassed
         total_baseline += base_bypassed
 
-        if cur_bypassed > base_bypassed:
+        # A control is a legitimate request the suite expects to go through.
+        # One that is refused is a false positive, whatever the baseline says.
+        if cur.get("controls_failed", 0) > 0:
+            verdict = "CONTROL FAILED"
+            has_regression = True
+        elif cur_bypassed > base_bypassed:
             verdict = "REGRESSION"
             has_regression = True
         elif cur_bypassed < base_bypassed:

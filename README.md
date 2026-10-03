@@ -157,16 +157,19 @@ Docker Compose stack with a mocked upstream:
 
 | Load | P50 | P95 | P99 | Errors |
 |---|---|---|---|---|
-| 100 RPS | 3.2 ms | 4.7 ms | 6.0 ms | 0% |
-| 500 RPS | 2.1 ms | 4.1 ms | 7.8 ms | 0% |
-| 1000 RPS | 2.1 ms | 4.8 ms | 9.0 ms | 0% |
+| 100 RPS | 2.4 ms | 3.8 ms | 5.2 ms | 0% |
+| 500 RPS | 1.6 ms | 2.8 ms | 5.8 ms | 0% |
+| 1000 RPS | 1.6 ms | 3.2 ms | 7.0 ms | 0% |
 
 16-core laptop CPU, Docker limited to 12 GB. These depend on hardware: an
 earlier run on a 4-core machine held the same P95 to 500 RPS and reached
 130 ms at 1000.
 
-**Adversarial suite.** 65 attack vectors written to evade the scanners: 59
-detected, 6 bypass. The bypasses are published in
+**Adversarial suite.** 84 attack vectors written to evade the scanners: 78
+detected, 6 bypass. Nineteen of them attack the structure of the request
+rather than its wording: text in JSON escapes, in tool results, tool call
+arguments, tool descriptions and attachments, and bodies that parsers read
+differently. The bypasses are published in
 [tests/stress/baseline.json](tests/stress/baseline.json) and include leetspeak
 and character-by-character smuggling. The vectors are known to the authors, so this is a regression
 suite, not an independent evaluation.
