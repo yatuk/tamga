@@ -122,6 +122,7 @@ export interface SecurityEventDetail {
   event_type?: string;
   input_risk: RiskScore;
   output_risk: RiskScore;
+  /** null, not an empty array, when the request had no findings. */
   findings: Array<{
     type: string;
     category: string;
@@ -130,7 +131,7 @@ export interface SecurityEventDetail {
     confidence: number;
     action_taken: string;
     position: { start: number; end: number };
-  }>;
+  }> | null;
   scan_latency_ms: number;
   total_latency_ms: number;
   policy_name: string;

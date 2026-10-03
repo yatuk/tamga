@@ -1,10 +1,10 @@
-import { test, expect } from "@playwright/test";
+import { expect, test } from "@playwright/test";
+import { mockProxy, withAdminKey } from "./fixtures";
 
 test.describe("Event Explorer", () => {
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(() => {
-      localStorage.setItem("tamga_admin_key", "test-admin-key");
-    });
+    await withAdminKey(page);
+    await mockProxy(page);
   });
 
   test("page loads and shows header", async ({ page }) => {
@@ -13,10 +13,12 @@ test.describe("Event Explorer", () => {
   });
 
   test("renders events table with data", async ({ page }) => {
-    test.skip(!!process.env.CI, "requires backend proxy");
     await page.goto("/dashboard/events?range=7d");
-    // Table or data should appear
-    await expect(page.locator('[role="grid"]')).toBeVisible({ timeout: 10_000 });
+    const grid = page.getByRole("grid");
+    await expect(grid).toBeVisible();
+    // 24 fixture events: the grid has real rows, not just a frame.
+    await expect(grid.getByRole("row").nth(1)).toBeVisible();
+    await expect(page.getByText(/of 24 loaded/)).toBeVisible();
   });
 
   test("filter by block action updates URL", async ({ page }) => {
@@ -26,10 +28,26 @@ test.describe("Event Explorer", () => {
   });
 
   test("URL with filters pre-applies them", async ({ page }) => {
-    test.skip(!!process.env.CI, "requires backend proxy");
     await page.goto("/dashboard/events?action=block&range=7d");
-    // Page should load with filters applied
-    await expect(page.locator('[role="grid"]')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("grid")).toBeVisible();
     await expect(page).toHaveURL(/action=block/);
+    await expect(page.getByRole("button", { name: "block", exact: true })).toHaveAttribute("aria-pressed", "true");
+    // Only the 8 blocked fixture events are listed.
+    await expect(page.getByText(/of 8 loaded/)).toBeVisible();
+  });
+
+  test("opening an event shows its detail", async ({ page }) => {
+    await page.goto("/dashboard/events");
+    await page.getByRole("button", { name: /^Open event/ }).first().click();
+    const sheet = page.getByRole("dialog");
+    await expect(sheet.getByRole("heading", { name: "Event Detail" })).toBeVisible();
+    await expect(sheet.getByText("instruction_override")).toBeVisible();
+  });
+
+  test("an event without findings opens instead of crashing", async ({ page }) => {
+    // The proxy sends findings: null for a clean request.
+    await page.goto("/dashboard/events?action=pass");
+    await page.getByRole("button", { name: /^Open event/ }).first().click();
+    await expect(page.getByRole("dialog").getByText("Nothing was detected in this request.")).toBeVisible();
   });
 });

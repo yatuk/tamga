@@ -1,10 +1,10 @@
-import { test, expect } from "@playwright/test";
+import { expect, test } from "@playwright/test";
+import { mockProxy, withAdminKey } from "./fixtures";
 
 test.describe("API Keys", () => {
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(() => {
-      localStorage.setItem("tamga_admin_key", "test-admin-key");
-    });
+    await withAdminKey(page);
+    await mockProxy(page);
   });
 
   test("page loads and shows keys table", async ({ page }) => {

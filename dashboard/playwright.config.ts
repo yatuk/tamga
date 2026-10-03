@@ -11,6 +11,9 @@ export default defineConfig({
   reporter: process.env.CI ? "github" : "list",
   use: {
     baseURL: process.env.E2E_BASE_URL ?? "http://localhost:3000",
+    // Run on an installed browser (for example "msedge" or "chrome") instead
+    // of Playwright's bundled Chromium, when that build is not downloaded.
+    channel: process.env.E2E_BROWSER_CHANNEL || undefined,
     trace: "on-first-retry",
     screenshot: "only-on-failure",
   },

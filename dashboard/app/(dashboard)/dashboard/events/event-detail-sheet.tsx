@@ -27,6 +27,8 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 /** One scanned request: metadata, findings and token usage. */
 export function EventDetailSheet({ open, event, isLoading, onClose }: Props) {
+  // The proxy sends null, not an empty list, for a request with no findings.
+  const findings = event?.findings ?? [];
   return (
     <Sheet open={open} onOpenChange={(next) => !next && onClose()}>
       <SheetContent className="w-full gap-0 overflow-y-auto overscroll-contain sm:max-w-lg">
@@ -73,13 +75,13 @@ export function EventDetailSheet({ open, event, isLoading, onClose }: Props) {
                 id="event-findings"
                 className="font-mono text-[11px] tracking-[0.1em] text-muted-foreground uppercase"
               >
-                Findings ({event.findings.length})
+                Findings ({findings.length})
               </h3>
-              {event.findings.length === 0 ? (
+              {findings.length === 0 ? (
                 <p className="mt-2 text-muted-foreground">Nothing was detected in this request.</p>
               ) : (
                 <ul className="mt-2 divide-y border">
-                  {event.findings.map((f, i) => (
+                  {findings.map((f, i) => (
                     <li key={`${f.type}-${f.category}-${i}`} className="space-y-1.5 p-3">
                       <div className="flex items-center justify-between gap-3">
                         <span className="min-w-0 truncate">
@@ -87,7 +89,7 @@ export function EventDetailSheet({ open, event, isLoading, onClose }: Props) {
                           {f.category || "—"}
                         </span>
                         <span className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
-                          {Math.round(f.confidence * 100)}% confidence
+                          {Math.round((f.confidence ?? 0) * 100)}% confidence
                         </span>
                       </div>
                       {f.match ? (
