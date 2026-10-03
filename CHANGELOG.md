@@ -71,6 +71,10 @@
     range; they now cover the whole range.
   - `GET /api/v1/providers` lists the models seen in recent traffic on each
     route instead of a fixed list.
+  - The built-in list now covers the current OpenAI, Anthropic and Gemini
+    models, checked against the providers' price pages on 2026-10-03. It
+    carries base rates only: prompts above a provider's long-context
+    threshold are under-estimated.
   - Model families are derived from the name for models the proxy does not
     know (`gpt-5-mini` → `gpt-5`, `qwen3:32b` → `qwen3`).
 

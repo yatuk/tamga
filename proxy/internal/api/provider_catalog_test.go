@@ -46,8 +46,8 @@ func TestProviderCatalog_ListsWhatPassedThrough(t *testing.T) {
 		}
 	}
 	add("openai", "gpt-4o-2024-08-06", "request_scanned", 2)
-	add("openai", "gpt-5", "request_scanned", 3)
-	add("openai", "gpt-5", "request_blocked", 1)
+	add("openai", "gpt-99", "request_scanned", 3)
+	add("openai", "gpt-99", "request_blocked", 1)
 	add("local", "qwen3:32b", "request_scanned", 1)
 	add("openai", "", "request_scanned", 4)        // no model in the body
 	add("openai", "gpt-4.1", "policy_reloaded", 5) // not a request
@@ -56,10 +56,10 @@ func TestProviderCatalog_ListsWhatPassedThrough(t *testing.T) {
 
 	openai := catalogModels(t, catalog, "openai")
 	if len(openai) != 2 {
-		t.Fatalf("want gpt-5 and gpt-4o-2024-08-06, got %v", openai)
+		t.Fatalf("want gpt-99 and gpt-4o-2024-08-06, got %v", openai)
 	}
 	// Most used first; a model without a price says so instead of showing zero.
-	if openai[0]["id"] != "gpt-5" || openai[0]["requests"] != int64(4) || openai[0]["priced"] != false {
+	if openai[0]["id"] != "gpt-99" || openai[0]["requests"] != int64(4) || openai[0]["priced"] != false {
 		t.Fatalf("first openai model: %v", openai[0])
 	}
 	if _, has := openai[0]["input_usd"]; has {

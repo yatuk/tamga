@@ -373,7 +373,7 @@ func TestCostsBreakdown_WithUsageData(t *testing.T) {
 		NoopStore: store.NewNoopStoreSilent(),
 		dailyUsage: []store.DailyTokenUsage{
 			{Date: time.Date(2026, 6, 17, 0, 0, 0, 0, time.UTC), Provider: "openai", Model: "gpt-4o-2024-08-06", ModelFamily: "gpt-4o", InputTokens: 5000, OutputTokens: 1000},
-			{Date: time.Date(2026, 6, 17, 0, 0, 0, 0, time.UTC), Provider: "anthropic", Model: "claude-sonnet-4-6", ModelFamily: "", InputTokens: 10000, OutputTokens: 2000},
+			{Date: time.Date(2026, 6, 17, 0, 0, 0, 0, time.UTC), Provider: "anthropic", Model: "claude-sonnet-99", ModelFamily: "", InputTokens: 10000, OutputTokens: 2000},
 		},
 	}
 	cfg := Config{
@@ -461,13 +461,13 @@ func TestCostsBreakdown_WithUsageData(t *testing.T) {
 	if total, ok := out["total_usd"].(float64); !ok || total != 0.0225 {
 		t.Fatalf("total_usd should be 0.0225 from the built-in price of gpt-4o, got %v", out["total_usd"])
 	}
-	// claude-sonnet-4-6 has no price: it is reported, not counted as free.
+	// claude-sonnet-99 has no price: it is reported, not counted as free.
 	unpriced, ok := out["unpriced"].([]interface{})
 	if !ok || len(unpriced) != 1 {
 		t.Fatalf("want exactly one unpriced model, got %v", out["unpriced"])
 	}
 	u := unpriced[0].(map[string]interface{})
-	if u["model"] != "claude-sonnet-4-6" || u["tokens"].(float64) != 12000 {
+	if u["model"] != "claude-sonnet-99" || u["tokens"].(float64) != 12000 {
 		t.Fatalf("unpriced row: %v", u)
 	}
 	for _, b := range breakdown {

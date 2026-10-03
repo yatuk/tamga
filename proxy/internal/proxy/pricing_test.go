@@ -38,7 +38,8 @@ func TestPriceFor(t *testing.T) {
 
 		{"unknown model", nil, "openai", "gpt-999", 1_000_000, 500_000, 0, false},
 		// A newer minor version is a different model with its own price.
-		{"newer version is not the old one", nil, "anthropic", "claude-opus-4-7", 1_000_000, 1_000_000, 0, false},
+		{"newer version has its own price", nil, "anthropic", "claude-opus-4-7", 1_000_000, 1_000_000, 30.00, true},
+		{"unlisted version is not priced as a listed one", nil, "anthropic", "claude-opus-4-9", 1_000_000, 1_000_000, 0, false},
 		{"unknown provider", nil, "unknown-provider", "some-model", 1_000_000, 500_000, 0, false},
 		{"empty model", nil, "openai", "", 1_000_000, 500_000, 0, false},
 		{"empty provider and model", nil, "", "", 1_000_000, 500_000, 0, false},
