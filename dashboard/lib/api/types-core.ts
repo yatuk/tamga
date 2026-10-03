@@ -85,6 +85,10 @@ export interface SecurityFinding {
   category: string;
   start_pos: number;
   end_pos: number;
+  /** Who the text speaks for: system, user, assistant, tool, tool_definition, request. */
+  role?: string;
+  /** Location of the text in the request body, e.g. messages[2].content[0].text. */
+  path?: string;
   confidence: number;
   confidence_score?: SecurityEventConfidenceScore;
   action_taken?: string;
@@ -130,6 +134,10 @@ export interface SecurityEventDetail {
     match: string;
     confidence: number;
     action_taken: string;
+    /** Who the text speaks for: system, user, assistant, tool, tool_definition, request. */
+    role?: string;
+    /** Location of the text in the request body. */
+    path?: string;
     position: { start: number; end: number };
   }> | null;
   scan_latency_ms: number;

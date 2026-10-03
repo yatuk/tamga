@@ -53,7 +53,7 @@ func TestRewrite_PlainSegment(t *testing.T) {
 	if !json.Valid(out) {
 		t.Fatalf("output is not JSON: %s", out)
 	}
-	got := mustExtract(t, "openai", out).Segments[0].Text
+	got := textAt(t, mustExtract(t, "openai", out), "messages[0].content")
 	if want := "Ad: Ayşe \"Y\"\nTC: [tc_kimlik_REDACTED] son"; got != want {
 		t.Fatalf("text after rewrite = %q, want %q", got, want)
 	}
@@ -75,7 +75,7 @@ func TestRewrite_ReplacementNeedingEscapes(t *testing.T) {
 	if !json.Valid(out) {
 		t.Fatalf("output is not JSON: %s", out)
 	}
-	if got, want := mustExtract(t, "openai", out).Segments[0].Text, "mail he said \"hi\" \\ <b>\n now"; got != want {
+	if got, want := textAt(t, mustExtract(t, "openai", out), "messages[0].content"), "mail he said \"hi\" \\ <b>\n now"; got != want {
 		t.Fatalf("got %q, want %q", got, want)
 	}
 	if bytes.Contains(out, []byte("u003c")) {
@@ -142,17 +142,18 @@ func TestRewrite_Base64Attachment(t *testing.T) {
 func TestRewrite_OverlappingEditsMerge(t *testing.T) {
 	body := []byte(`{"messages":[{"role":"user","content":"abcdefghij"}]}`)
 	res := mustExtract(t, "openai", body)
+	seg := indexOfPath(t, res, "messages[0].content")
 	out, err := Rewrite(body, res.Segments, []Edit{
-		{Seg: 0, From: 2, To: 6, Replacement: "[A]"},
-		{Seg: 0, From: 4, To: 8, Replacement: "[B]"},
-		{Seg: 0, From: 9, To: 10, Replacement: "[C]"},
+		{Seg: seg, From: 2, To: 6, Replacement: "[A]"},
+		{Seg: seg, From: 4, To: 8, Replacement: "[B]"},
+		{Seg: seg, From: 9, To: 10, Replacement: "[C]"},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	// [2,6) and [4,8) overlap: their union [2,8) is replaced once, and no
 	// character of either range is left behind.
-	if got := mustExtract(t, "openai", out).Segments[0].Text; got != "ab[A]i[C]" {
+	if got := textAt(t, mustExtract(t, "openai", out), "messages[0].content"); got != "ab[A]i[C]" {
 		t.Fatalf("got %q, want %q", got, "ab[A]i[C]")
 	}
 }
@@ -160,10 +161,11 @@ func TestRewrite_OverlappingEditsMerge(t *testing.T) {
 func TestRewrite_RejectsEditsThatDoNotFit(t *testing.T) {
 	body := []byte(`{"messages":[{"role":"user","content":"short"}]}`)
 	res := mustExtract(t, "openai", body)
+	seg := indexOfPath(t, res, "messages[0].content")
 	for _, e := range []Edit{
-		{Seg: 0, From: 2, To: 99, Replacement: "x"},
-		{Seg: 0, From: 3, To: 3, Replacement: "x"},
-		{Seg: 0, From: -1, To: 2, Replacement: "x"},
+		{Seg: seg, From: 2, To: 99, Replacement: "x"},
+		{Seg: seg, From: 3, To: 3, Replacement: "x"},
+		{Seg: seg, From: -1, To: 2, Replacement: "x"},
 		{Seg: 5, From: 0, To: 1, Replacement: "x"},
 	} {
 		if out, err := Rewrite(body, res.Segments, []Edit{e}); err == nil {
@@ -218,6 +220,40 @@ func TestRewrite_EverySegmentOfEveryFixture(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+func textAt(t *testing.T, res *Result, path string) string {
+	t.Helper()
+	return res.Segments[indexOfPath(t, res, path)].Text
+}
+
+// RewriteChecked must accept a correct rewrite and refuse to hand back a
+// body when the segments it was given do not describe that body.
+func TestRewriteChecked(t *testing.T) {
+	body := []byte(`{"messages":[{"role":"user","content":"TC 10000000146"},{"role":"user","content":"x"}]}`)
+	res := mustExtract(t, "openai", body)
+	edit := redact(t, res, "messages[0].content", "10000000146", "[tc_kimlik_REDACTED]")
+
+	out, err := RewriteChecked("openai", body, res.Segments, []Edit{edit})
+	if err != nil {
+		t.Fatalf("a correct rewrite was refused: %v", err)
+	}
+	if got := textAt(t, mustExtract(t, "openai", out), "messages[0].content"); got != "TC [tc_kimlik_REDACTED]" {
+		t.Fatalf("got %q", got)
+	}
+
+	// A whole segment redacted away leaves an empty string, which is fine.
+	whole := Edit{Seg: indexOfPath(t, res, "messages[1].content"), From: 0, To: 1, Replacement: ""}
+	if _, err := RewriteChecked("openai", body, res.Segments, []Edit{whole}); err != nil {
+		t.Fatalf("emptying a segment was refused: %v", err)
+	}
+
+	// Segments from another body: the offsets land on the wrong bytes, and
+	// the check must notice rather than return a corrupted request.
+	other := []byte(`{"messages":[{"role":"user","content":"completely different and longer text here"}]}`)
+	if out, err := RewriteChecked("openai", other, res.Segments, []Edit{edit}); err == nil {
+		t.Fatalf("a rewrite against the wrong body was accepted: %s", out)
 	}
 }
 

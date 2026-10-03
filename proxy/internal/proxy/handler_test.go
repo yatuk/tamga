@@ -219,8 +219,9 @@ providers:
 		b, _ := io.ReadAll(resp.Body)
 		t.Fatalf("want 200, got %d: %s", resp.StatusCode, b)
 	}
-	if got := resp.Header.Get("X-Tamga-Redacted-Count"); got != "3" {
-		t.Fatalf("X-Tamga-Redacted-Count: got %q want %q", got, "3")
+	// One address is one finding, however many normalised views repeat it.
+	if got := resp.Header.Get("X-Tamga-Redacted-Count"); got != "1" {
+		t.Fatalf("X-Tamga-Redacted-Count: got %q want %q", got, "1")
 	}
 	if !strings.Contains(string(lastBody), "[email_REDACTED]") {
 		t.Fatalf("upstream should receive redacted body, got %q", string(lastBody))
@@ -436,8 +437,9 @@ providers:
 		b, _ := io.ReadAll(resp.Body)
 		t.Fatalf("want 200, got %d: %s", resp.StatusCode, b)
 	}
-	if got := resp.Header.Get("X-Tamga-Redacted-Count"); got != "24" {
-		t.Fatalf("X-Tamga-Redacted-Count: got %q want %q", got, "24")
+	// Four values in the message: an ID number, a phone, a card, an address.
+	if got := resp.Header.Get("X-Tamga-Redacted-Count"); got != "4" {
+		t.Fatalf("X-Tamga-Redacted-Count: got %q want %q", got, "4")
 	}
 
 	gotBody := string(lastBody)

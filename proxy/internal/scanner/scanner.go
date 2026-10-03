@@ -28,6 +28,14 @@ type Finding struct {
 	// ProximityBoost records the confidence boost applied by contextual
 	// proximity scoring. Zero means no proximity boost was applied.
 	ProximityBoost float64 `json:"proximity_boost,omitempty"`
+	// Role and Path say where in the request the finding is: who the text
+	// speaks for ("user", "tool", …) and its location in the body. Set when
+	// the request was scanned by segment; empty for a raw scan.
+	Role string `json:"role,omitempty"`
+	Path string `json:"path,omitempty"`
+	// Seg is the index of the segment the finding is in; StartPos and EndPos
+	// are then offsets into that segment's text.
+	Seg int `json:"-"`
 }
 
 // ScanResult wraps a scanner's output with execution metadata. Used by the

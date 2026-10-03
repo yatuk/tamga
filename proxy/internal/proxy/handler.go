@@ -441,6 +441,11 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 
 	// A JSON body that two parsers can read differently cannot be scanned
 	// with confidence: the provider may act on a value the scanners never saw.
+	//
+	// segs is set when the body is a request shape the extractor knows. The
+	// scanners then read the decoded text of each message, with its role,
+	// instead of the JSON bytes. Anything else is scanned raw, as before.
+	var segs []extract.Segment
 	if isJSONBody(r, body) {
 		if strictErr := extract.CheckStrict(body); strictErr != nil {
 			extract.RecordMalformed(strictErr.Reason)
@@ -453,8 +458,20 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 				writeInvalidJSON(w, requestID, strictErr)
 				return
 			}
-			w.Header().Set("X-Tamga-Scan-Mode", "raw")
+		} else if res, ok := extract.Extract(provider, body); ok && len(res.Segments) > 0 {
+			segs = res.Segments
+			for _, blockType := range res.Unknown {
+				extract.RecordUnknownBlock(blockType)
+			}
 		}
+	}
+	if len(body) > 0 {
+		scanMode := "raw"
+		if segs != nil {
+			scanMode = "segments"
+		}
+		extract.RecordScanMode(scanMode)
+		w.Header().Set("X-Tamga-Scan-Mode", scanMode)
 	}
 
 	scanCtx, scanSpan := telemetry.Tracer().Start(ctx, "scanner.scan_all",
@@ -470,21 +487,37 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 		LoadShed:   cfg.Config.ScannerLoadShed,
 		RequestCtx: buildRequestContext(r, requestID, pol),
 	}
+	scanWith := func(reg *scanner.Registry) ([]scanner.Finding, error) {
+		if segs != nil {
+			return reg.ScanSegments(scanCtx, segs, pipelineCfg)
+		}
+		return reg.ScanAllWithConfig(scanCtx, body, pipelineCfg)
+	}
 	var findings []scanner.Finding
 	if cfg.ScannerClient != nil && cfg.ScannerClient.Enabled() {
-		findings, err = cfg.ScannerClient.Scan(scanCtx, body)
+		if segs != nil {
+			// The remote service takes one text. It gets the segments joined,
+			// and its findings are put back on the segment they fall in.
+			joined, starts := scanner.JoinSegments(segs)
+			findings, err = cfg.ScannerClient.Scan(scanCtx, joined)
+			if err == nil {
+				findings = scanner.AssignSegments(findings, segs, starts)
+			}
+		} else {
+			findings, err = cfg.ScannerClient.Scan(scanCtx, body)
+		}
 		if err != nil {
 			logger.Warn().Err(err).Msg("gRPC scanner failed, falling back to local registry")
-			findings, err = cfg.Registry.ScanAllWithConfig(scanCtx, body, pipelineCfg)
+			findings, err = scanWith(cfg.Registry)
 		} else if cfg.ProxyBoundRegistry != nil && cfg.ProxyBoundRegistry.Count() > 0 {
 			// The remote service only runs the stateless scanners. Policy- and
 			// request-bound scanners run here, with the request context.
-			local, localErr := cfg.ProxyBoundRegistry.ScanAllWithConfig(scanCtx, body, pipelineCfg)
+			local, localErr := scanWith(cfg.ProxyBoundRegistry)
 			findings = append(findings, local...)
 			err = localErr
 		}
 	} else {
-		findings, err = cfg.Registry.ScanAllWithConfig(scanCtx, body, pipelineCfg)
+		findings, err = scanWith(cfg.Registry)
 	}
 	scanSpan.SetAttributes(attribute.Int("scanner.findings_count", len(findings)))
 	scanSpan.End()
@@ -507,7 +540,11 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 	// ── Proximity scoring (post-scan, pre-policy) ──────────────────────
 	// Boost confidence for findings where contextual keywords appear near
 	// the matched pattern (e.g. "credit card" near a 16-digit number).
-	proximity.ScoreProximity(string(body), findings)
+	if segs != nil {
+		scoreProximityBySegment(segs, findings)
+	} else {
+		proximity.ScoreProximity(string(body), findings)
+	}
 
 	_, polSpan := telemetry.Tracer().Start(ctx, "policy.evaluate")
 
@@ -546,6 +583,46 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 			Msg("policy exception applied")
 	}
 
+	// vaultMapping holds placeholder->original for reversible tokenization when
+	// the vault feature is on. Kept in this request scope (the ModifyResponse
+	// closure reads it) so same-process round-trips restore without Redis.
+	var vaultMapping map[string]string
+	vaultOn := pol != nil && pol.Vault != nil && pol.Vault.Enabled
+
+	// For a request scanned by segment the redaction is worked out here,
+	// before the action is acted on. If it cannot be done — a value found
+	// only in a normalised view has no position to cut at, or the rewritten
+	// body does not read back as intended — the request is blocked: sending
+	// it on unredacted is the one outcome REDACT must never have.
+	var redactedBody []byte
+	if action == policy.ActionRedact && segs != nil {
+		reason := ""
+		if n := scanner.UnplacedRedactions(findings); n > 0 {
+			reason = "unplaced"
+		} else {
+			var edits []extract.Edit
+			if vaultOn {
+				edits, vaultMapping = vault.TokenizeEdits(segs, findings)
+			} else {
+				edits = scanner.RedactEdits(findings)
+			}
+			rewritten, rwErr := extract.RewriteChecked(provider, body, segs, edits)
+			if rwErr != nil {
+				logger.Error().Err(rwErr).Msg("redaction could not be applied")
+				reason = "rewrite_failed"
+				vaultMapping = nil
+			} else {
+				redactedBody = rewritten
+			}
+		}
+		if reason != "" {
+			logger.Warn().Str("reason", reason).Msg("REDACT not possible, blocking instead")
+			scanner.RecordDegraded("redact_" + reason)
+			w.Header().Set("X-Tamga-Redact-Fallback", "block:"+reason)
+			action = policy.ActionBlock
+		}
+	}
+
 	polSpan.SetAttributes(attribute.String("policy.action", string(action)))
 	polSpan.SetAttributes(attribute.Int("policy.exceptions_applied", len(exceptionMatches)))
 	polSpan.End()
@@ -563,10 +640,6 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 	}
 	redactedCount := 0
 	var redactedTypes []string
-	// vaultMapping holds placeholder->original for reversible tokenization when
-	// the vault feature is on. Kept in this request scope (the ModifyResponse
-	// closure reads it) so same-process round-trips restore without Redis.
-	var vaultMapping map[string]string
 	vaultActive := false
 
 	switch action {
@@ -598,18 +671,23 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 		redactFindings := filterRedactFindings(findings)
 		redactedCount = len(redactFindings)
 		redactedTypes = uniqueRedactCategoriesInOrder(redactFindings)
-		if pol != nil && pol.Vault != nil && pol.Vault.Enabled {
+		switch {
+		case redactedBody != nil:
+			// Scanned by segment: the body was rewritten and verified above.
+			body = redactedBody
+			redactedCount = scanner.PlacedRedactions(findings)
+		case vaultOn:
 			// Reversible tokenization: forward numbered placeholders, restore
 			// the originals in the response (ModifyResponse / mock path).
 			body, vaultMapping = vault.Tokenize(body, findings)
-			vaultActive = len(vaultMapping) > 0
-			if vaultActive && cfg.VaultStore != nil && cfg.VaultStore.Enabled() {
-				if err := cfg.VaultStore.Save(scanCtx, requestID, vaultMapping); err != nil {
-					logger.Warn().Err(err).Msg("vault: encrypted store save failed; using in-memory mapping")
-				}
-			}
-		} else {
+		default:
 			body = scanner.RedactContent(body, findings)
+		}
+		vaultActive = len(vaultMapping) > 0
+		if vaultActive && cfg.VaultStore != nil && cfg.VaultStore.Enabled() {
+			if err := cfg.VaultStore.Save(scanCtx, requestID, vaultMapping); err != nil {
+				logger.Warn().Err(err).Msg("vault: encrypted store save failed; using in-memory mapping")
+			}
 		}
 		logger.Info().
 			Int("findings", len(findings)).
@@ -1286,6 +1364,27 @@ func uniqueCategories(findings []scanner.Finding) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// scoreProximityBySegment runs proximity scoring inside each segment, where
+// a finding's position and its neighbouring words are in the same text.
+func scoreProximityBySegment(segs []extract.Segment, findings []scanner.Finding) {
+	bySeg := map[int][]int{}
+	for i, f := range findings {
+		if f.Placed() && f.Seg >= 0 && f.Seg < len(segs) {
+			bySeg[f.Seg] = append(bySeg[f.Seg], i)
+		}
+	}
+	for seg, idxs := range bySeg {
+		sub := make([]scanner.Finding, len(idxs))
+		for j, i := range idxs {
+			sub[j] = findings[i]
+		}
+		proximity.ScoreProximity(segs[seg].Text, sub)
+		for j, i := range idxs {
+			findings[i] = sub[j]
+		}
+	}
 }
 
 func filterRedactFindings(findings []scanner.Finding) []scanner.Finding {

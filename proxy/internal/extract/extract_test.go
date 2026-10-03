@@ -72,12 +72,6 @@ func TestExtract_Golden(t *testing.T) {
 	}
 }
 
-// contentRoots are the top-level keys whose strings the model reads.
-var contentRoots = []string{
-	"messages", "system", "input", "instructions", "prompt", "tools", "functions",
-	"contents", "systemInstruction", "system_instruction",
-}
-
 // stringLeaves lists every non-empty string under v, with the path Extract
 // would give it. It is written against encoding/json, not the extractor's
 // own parser, so the two can disagree.
@@ -112,11 +106,11 @@ func TestExtract_EveryStringIsAccountedFor(t *testing.T) {
 			if err := json.Unmarshal(body, &doc); err != nil {
 				t.Fatal(err)
 			}
+			// Every top-level key counts: text outside the conversation still
+			// leaves with the request.
 			leaves := map[string]string{}
-			for _, root := range contentRoots {
-				if v, ok := doc[root]; ok {
-					stringLeaves(v, root, leaves)
-				}
+			for root, v := range doc {
+				stringLeaves(v, root, leaves)
 			}
 
 			res, ok := Extract(provider, body)

@@ -1,4 +1,5 @@
 format anthropic
+request         parameter   model = "claude-sonnet-5"
 system          text        system[0].text = "You are a careful assistant."
 user            text        messages[0].content[0].text = "What does this document say?"
 user            url         messages[0].content[2].source.url = "https://example.com/a.png"

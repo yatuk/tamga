@@ -14,6 +14,7 @@ import (
 	"github.com/yatuk/tamga/internal/config"
 	"github.com/yatuk/tamga/internal/extract"
 	"github.com/yatuk/tamga/internal/policy"
+	"github.com/yatuk/tamga/internal/scanner"
 )
 
 const strictTestPolicy = `
@@ -43,8 +44,11 @@ func strictServer(t *testing.T, policyYAML string) (proxyURL string, upstreamHit
 	u, _ := url.Parse(upstream.URL)
 
 	pol := mustPolicy(t, policyYAML)
+	// The jailbreak scanner is part of the registry the proxy runs with.
+	registry := testRegistry()
+	registry.Register(scanner.NewJailbreakScanner())
 	srv := httptest.NewServer(NewHandler(HandlerConfig{
-		Registry:     testRegistry(),
+		Registry:     registry,
 		GetPolicy:    func() *policy.Policy { return pol },
 		UpstreamURLs: map[string]*url.URL{"openai": u},
 		Config:       &config.Config{},
@@ -141,13 +145,13 @@ func TestStrictJSON_OtherAmbiguousBodies(t *testing.T) {
 func TestStrictJSON_OrdinaryRequestsPass(t *testing.T) {
 	proxyURL, hits, last := strictServer(t, strictTestPolicy)
 	tests := []struct {
-		name, contentType, body string
+		name, contentType, mode, body string
 	}{
-		{"chat request", "application/json", `{"model":"gpt-4o","messages":[{"role":"user","content":"merhaba 😀"}]}`},
+		{"chat request", "application/json", "segments", `{"model":"gpt-4o","messages":[{"role":"user","content":"merhaba 😀"}]}`},
 		// A client that cut the text in the middle of an emoji.
-		{"unpaired surrogate in a value", "application/json", `{"model":"gpt-4o","messages":[{"role":"user","content":"cut \ud83d"}]}`},
-		// Not JSON and not claiming to be: an upload is left alone.
-		{"multipart upload", "multipart/form-data; boundary=x", "--x\r\nContent-Disposition: form-data; name=\"file\"\r\n\r\n\xff\xfe\r\n--x--\r\n"},
+		{"unpaired surrogate in a value", "application/json", "segments", `{"model":"gpt-4o","messages":[{"role":"user","content":"cut \ud83d"}]}`},
+		// Not JSON and not claiming to be: an upload is scanned as bytes.
+		{"multipart upload", "multipart/form-data; boundary=x", "raw", "--x\r\nContent-Disposition: form-data; name=\"file\"\r\n\r\n\xff\xfe\r\n--x--\r\n"},
 	}
 	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -156,8 +160,8 @@ func TestStrictJSON_OrdinaryRequestsPass(t *testing.T) {
 				b, _ := io.ReadAll(resp.Body)
 				t.Fatalf("status = %d, want 200: %s", resp.StatusCode, b)
 			}
-			if mode := resp.Header.Get("X-Tamga-Scan-Mode"); mode != "" {
-				t.Fatalf("X-Tamga-Scan-Mode = %q on an unambiguous body", mode)
+			if mode := resp.Header.Get("X-Tamga-Scan-Mode"); mode != tt.mode {
+				t.Fatalf("X-Tamga-Scan-Mode = %q, want %q", mode, tt.mode)
 			}
 			if got := atomic.LoadInt32(hits); int(got) != i+1 {
 				t.Fatalf("provider hits = %d, want %d", got, i+1)

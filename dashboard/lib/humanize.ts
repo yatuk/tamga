@@ -139,3 +139,17 @@ export function humanizeProvider(provider: string): string {
   if (!provider) return "—";
   return PROVIDER_MAP[toLowerEn(provider)] ?? provider;
 }
+
+const ROLE_MAP: Record<string, string> = {
+  system: "the system prompt",
+  user: "a user message",
+  assistant: "an assistant message",
+  tool: "a tool result or document",
+  tool_definition: "a tool description",
+  request: "a request parameter",
+};
+
+/** Where in a request a finding was: the proxy's segment role, in words. */
+export function humanizeRole(role: string): string {
+  return ROLE_MAP[toLowerEn(role)] ?? role;
+}

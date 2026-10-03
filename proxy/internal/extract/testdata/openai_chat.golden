@@ -1,4 +1,5 @@
 format openai
+request         parameter   model = "gpt-5"
 system          text        messages[0].content = "You are a support agent for Acme."
 system          text        messages[1].content[0].text = "Answer in Turkish."
 user            text        messages[2].content[0].text = "Faturamda bir sorun var.\nTC: 10000000146"
@@ -16,6 +17,7 @@ tool_definition definition  tools[0].function.description = "Look up an invoice 
 tool_definition definition  tools[0].function.parameters.type = "object"
 tool_definition definition  tools[0].function.parameters.properties.customer.type = "string"
 tool_definition definition  tools[0].function.parameters.properties.customer.description = "Customer full name"
+request         parameter   user = "u-123"
 skipped structural messages[0].role
 skipped structural messages[1].content[0].type
 skipped structural messages[1].role

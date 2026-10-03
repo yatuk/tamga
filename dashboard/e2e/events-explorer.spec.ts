@@ -42,6 +42,9 @@ test.describe("Event Explorer", () => {
     const sheet = page.getByRole("dialog");
     await expect(sheet.getByRole("heading", { name: "Event Detail" })).toBeVisible();
     await expect(sheet.getByText("instruction_override")).toBeVisible();
+    // Where the text was: role and location in the request body.
+    await expect(sheet.getByText("In a tool result or document")).toBeVisible();
+    await expect(sheet.getByText("messages[2].content[0].content")).toBeVisible();
   });
 
   test("an event without findings opens instead of crashing", async ({ page }) => {

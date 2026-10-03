@@ -14,6 +14,7 @@ package vault
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -82,9 +83,16 @@ func Restore(body []byte, mapping map[string]string) []byte {
 	if len(mapping) == 0 {
 		return body
 	}
+	// Whether the body is JSON is decided once, before any value goes in:
+	// the answer must not depend on what an earlier replacement did.
+	isJSON := json.Valid(body)
 	out := body
 	for token, original := range mapping {
-		out = bytes.ReplaceAll(out, []byte(token), []byte(original))
+		value := []byte(original)
+		if isJSON {
+			value = restoreValue(body, original)
+		}
+		out = bytes.ReplaceAll(out, []byte(token), value)
 	}
 	return out
 }

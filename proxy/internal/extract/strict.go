@@ -242,3 +242,39 @@ func MalformedStats() map[string]int64 {
 	})
 	return out
 }
+
+// scanModeCounts tracks how request bodies were scanned: "segments" when the
+// body was a recognised request, "raw" when it was scanned as plain bytes.
+var scanModeCounts sync.Map // map[string]*int64
+
+// RecordScanMode counts one scanned request body.
+func RecordScanMode(mode string) {
+	val, _ := scanModeCounts.LoadOrStore(mode, new(int64))
+	atomic.AddInt64(val.(*int64), 1)
+}
+
+// ScanModeStats returns a snapshot of scan counts by mode.
+func ScanModeStats() map[string]int64 { return snapshot(&scanModeCounts) }
+
+// unknownBlockCounts tracks content blocks the extractor has no rule for.
+// They are scanned generically; a count here says a provider has shipped
+// something worth writing a rule for.
+var unknownBlockCounts sync.Map // map[string]*int64
+
+// RecordUnknownBlock counts one unknown block type seen in a request.
+func RecordUnknownBlock(blockType string) {
+	val, _ := unknownBlockCounts.LoadOrStore(blockType, new(int64))
+	atomic.AddInt64(val.(*int64), 1)
+}
+
+// UnknownBlockStats returns a snapshot of unknown block counts by type.
+func UnknownBlockStats() map[string]int64 { return snapshot(&unknownBlockCounts) }
+
+func snapshot(m *sync.Map) map[string]int64 {
+	out := make(map[string]int64)
+	m.Range(func(key, value any) bool {
+		out[key.(string)] = atomic.LoadInt64(value.(*int64))
+		return true
+	})
+	return out
+}

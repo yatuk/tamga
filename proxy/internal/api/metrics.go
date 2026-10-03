@@ -103,6 +103,22 @@ func (cfg Config) handleMetrics(w http.ResponseWriter, _ *http.Request) {
 		_, _ = fmt.Fprintf(w, "tamga_malformed_json_total{reason=\"%s\"} %d\n", reason, count)
 	}
 
+	// How request bodies were scanned: by message ("segments") or as plain
+	// bytes ("raw", for shapes the extractor does not know).
+	_, _ = fmt.Fprintln(w, "# HELP tamga_scan_mode_total Request bodies scanned, by mode.")
+	_, _ = fmt.Fprintln(w, "# TYPE tamga_scan_mode_total counter")
+	for mode, count := range extract.ScanModeStats() {
+		_, _ = fmt.Fprintf(w, "tamga_scan_mode_total{mode=\"%s\"} %d\n", mode, count)
+	}
+
+	// Content block types the extractor has no rule for. They are scanned
+	// generically; a count here means a provider shipped something new.
+	_, _ = fmt.Fprintln(w, "# HELP tamga_extract_unknown_block_total Content blocks of a type the extractor has no rule for.")
+	_, _ = fmt.Fprintln(w, "# TYPE tamga_extract_unknown_block_total counter")
+	for blockType, count := range extract.UnknownBlockStats() {
+		_, _ = fmt.Fprintf(w, "tamga_extract_unknown_block_total{type=%q} %d\n", blockType, count)
+	}
+
 	// Scanner worker pool metrics (only when pool is enabled).
 	if cfg.ScannerPool != nil {
 		stats := cfg.ScannerPool.Stats()

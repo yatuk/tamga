@@ -1,4 +1,5 @@
 format openai
+request         parameter   model = "gpt-5"
 system          text        instructions = "Be concise."
 user            text        input[0].content[0].text = "Summarise the attached file."
 user            document    input[0].content[2].file_data = "hello"

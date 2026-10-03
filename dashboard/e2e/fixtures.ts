@@ -21,7 +21,17 @@ const EVENTS = Array.from({ length: 24 }, (_, i) => {
     event_type: blocked ? "request_blocked" : "request_scanned",
     action: blocked ? "BLOCK" : i % 3 === 1 ? "REDACT" : "PASS",
     findings: blocked
-      ? [{ type: "injection", category: "instruction_override", severity: "critical", action: "block", confidence: 0.97 }]
+      ? [
+          {
+            type: "injection",
+            category: "instruction_override",
+            severity: "critical",
+            action: "block",
+            confidence: 0.97,
+            role: "tool",
+            path: "messages[2].content[0].content",
+          },
+        ]
       : i % 3 === 1
         ? [{ type: "pii", category: "email", severity: "high", action: "redact", confidence: 0.99 }]
         : [],

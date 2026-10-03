@@ -1,3 +1,4 @@
 format openai
+request         parameter   model = "gpt-3.5-turbo-instruct"
 user            text        prompt[0] = "first prompt"
 user            text        prompt[1] = "second prompt"

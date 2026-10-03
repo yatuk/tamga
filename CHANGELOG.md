@@ -86,6 +86,39 @@
     know (`gpt-5-mini` → `gpt-5`, `qwen3:32b` → `qwen3`).
 
 ### Request parsing
+- **Requests are scanned by message, not as JSON bytes.** For OpenAI (chat,
+  responses, legacy completions), Anthropic and Gemini bodies the scanners now
+  read the decoded text of each message, tool call, tool result, document and
+  tool description, with the role it speaks for. This closes three evasions
+  that relied on the JSON encoding: text written in `\u` escapes, an ID number
+  after an escaped line break, and an instruction split by a line break or
+  over two content parts. Other bodies are scanned as bytes, as before;
+  `X-Tamga-Scan-Mode` (`segments` or `raw`) says which, and
+  `tamga_scan_mode_total` counts both.
+  - **One value, one finding.** A value used to be reported once per view of
+    the text it was found in: one e-mail address gave 3 findings, a message
+    with four values gave 24. It now gives 1 and 4, so finding counts in
+    events, metrics and `X-Tamga-Redacted-Count` drop accordingly.
+  - Findings carry `role` and `path` (`messages[2].content[0].content`).
+  - **Redaction keeps the body valid.** Masks and vault placeholders are
+    written into the decoded text and the string is re-encoded; every other
+    byte of the body is left as the client sent it. This also covers text
+    inside tool call arguments (JSON in a string) and base64 text attachments.
+    The result is extracted again and compared before it is sent.
+  - **REDACT blocks when it cannot redact.** A value found only in a
+    normalised view (spelled-out digits, a fullwidth "@") has no position to
+    cut at. Such a request used to be forwarded with the value in it; it is
+    now blocked, with `X-Tamga-Redact-Fallback: block:unplaced`.
+  - Base64 text attachments are decoded and scanned. Images, audio and PDFs
+    are not readable by the proxy and are no longer scanned as if they were
+    text, which removes false findings on encoded media. What such media says
+    to the model is outside what Tamga can see.
+  - Content block types the extractor does not know are scanned generically
+    and counted in `tamga_extract_unknown_block_total`.
+  - Vault: an original containing a quote, a backslash or a line break no
+    longer breaks the JSON of the response it is restored into.
+  - Request parameters outside the conversation (`metadata`, `user`) are
+    scanned for data too.
 - **Ambiguous JSON bodies are refused.** A request whose body repeats a key
   inside one object, is not valid UTF-8, or is not strict JSON (comments,
   trailing commas, `NaN`) now gets `400` with code `tamga_invalid_json`

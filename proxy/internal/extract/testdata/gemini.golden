@@ -13,6 +13,7 @@ user            text        contents[3].parts[0].text = "No role given."
 tool_definition definition  tools[0].functionDeclarations[0].name = "get_weather"
 tool_definition definition  tools[0].functionDeclarations[0].description = "Current weather for a city."
 tool_definition definition  tools[0].functionDeclarations[0].parameters.type = "OBJECT"
+request         parameter   generationConfig.stopSequences[0] = "END"
 skipped binary     contents[0].parts[1].inlineData.data
 skipped structural contents[0].parts[1].inlineData.mimeType
 skipped structural contents[0].parts[2].fileData.mimeType

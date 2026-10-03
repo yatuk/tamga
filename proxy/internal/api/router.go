@@ -567,7 +567,7 @@ func eventFindingDetail(p *policy.Policy, f scanner.Finding, fallback policy.Act
 			act = string(rule.Action)
 		}
 	}
-	return map[string]interface{}{
+	out := map[string]interface{}{
 		"type":         f.Type,
 		"category":     f.Category,
 		"severity":     f.Severity,
@@ -576,6 +576,15 @@ func eventFindingDetail(p *policy.Policy, f scanner.Finding, fallback policy.Act
 		"action_taken": act,
 		"position":     map[string]int{"start": f.StartPos, "end": f.EndPos},
 	}
+	// Set when the request was scanned by segment: who the text speaks for
+	// and where in the body it is.
+	if f.Role != "" {
+		out["role"] = f.Role
+	}
+	if f.Path != "" {
+		out["path"] = f.Path
+	}
+	return out
 }
 
 func statsEnrichment(recent *events.RecentBuffer) (map[string]int64, map[string]int64, map[string]int64, float64) {

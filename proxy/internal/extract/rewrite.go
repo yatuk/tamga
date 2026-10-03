@@ -164,3 +164,52 @@ func rewriteBase64(token []byte, text string) ([]byte, error) {
 	}
 	return encodeString(prefix + base64.StdEncoding.EncodeToString([]byte(text))), nil
 }
+
+// RewriteChecked is Rewrite followed by proof that it did what was asked: the
+// new body is extracted again and every segment must read exactly as the
+// edits say, the edited ones changed and all others untouched. A rewrite that
+// cannot be confirmed is returned as an error, never as a body.
+//
+// This is the guard against the rewriter and the extractor disagreeing with
+// each other or with the JSON they produce; a redaction that silently did not
+// happen would send the original text to the provider.
+func RewriteChecked(provider string, body []byte, segs []Segment, edits []Edit) ([]byte, error) {
+	out, err := Rewrite(body, segs, edits)
+	if err != nil {
+		return nil, err
+	}
+	if len(edits) == 0 {
+		return out, nil
+	}
+	want := make([]string, len(segs))
+	for i, s := range segs {
+		want[i] = s.Text
+	}
+	bySeg := map[int][]Edit{}
+	for _, e := range edits {
+		bySeg[e.Seg] = append(bySeg[e.Seg], e)
+	}
+	for i, list := range bySeg {
+		want[i] = applyEdits(segs[i].Text, list)
+	}
+
+	after, ok := Extract(provider, out)
+	if !ok {
+		return nil, fmt.Errorf("extract: rewritten body is no longer a recognised request")
+	}
+	// A segment edited down to nothing is no longer emitted.
+	j := 0
+	for i := range segs {
+		if want[i] == "" {
+			continue
+		}
+		if j >= len(after.Segments) || after.Segments[j].Path != segs[i].Path || after.Segments[j].Text != want[i] {
+			return nil, fmt.Errorf("extract: rewrite of %s could not be confirmed", segs[i].Path)
+		}
+		j++
+	}
+	if j != len(after.Segments) {
+		return nil, fmt.Errorf("extract: rewritten body has %d segments, expected %d", len(after.Segments), j)
+	}
+	return out, nil
+}

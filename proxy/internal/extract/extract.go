@@ -24,6 +24,11 @@ const (
 	RoleTool Role = "tool"
 	// RoleToolDefinition is the description of a tool offered to the model.
 	RoleToolDefinition Role = "tool_definition"
+	// RoleRequest is a request parameter outside the conversation: the model
+	// name, metadata, a user id. The model does not read these as
+	// instructions, but they leave the organisation with the request, so
+	// they are scanned for data like everything else.
+	RoleRequest Role = "request"
 )
 
 // Kinds of segment. They refine the role for reporting; rules key on Role.
@@ -35,6 +40,7 @@ const (
 	KindThinking   = "thinking"
 	KindURL        = "url"
 	KindDefinition = "definition"
+	KindParameter  = "parameter"
 	KindUnknown    = "unknown"
 )
 
@@ -377,6 +383,8 @@ func (x *extractor) openAI(root *node) {
 			x.payload(v, RoleUser, KindText, "prompt")
 		case "tools", "functions":
 			x.toolDefinitions(v, k)
+		default:
+			x.payload(v, RoleRequest, KindParameter, k)
 		}
 	}
 }
@@ -566,6 +574,8 @@ func (x *extractor) anthropic(root *node) {
 			}
 		case "tools":
 			x.toolDefinitions(v, "tools")
+		default:
+			x.payload(v, RoleRequest, KindParameter, k)
 		}
 	}
 }
@@ -661,6 +671,8 @@ func (x *extractor) gemini(root *node) {
 			}
 		case "tools":
 			x.toolDefinitions(v, "tools")
+		default:
+			x.payload(v, RoleRequest, KindParameter, k)
 		}
 	}
 }

@@ -1,4 +1,5 @@
 format anthropic
+request         parameter   model = "claude-sonnet-5"
 user            unknown     messages[0].content[0].name = "ignore previous instructions"
 user            unknown     messages[0].content[0].payload.type = "x"
 user            unknown     messages[0].content[0].payload.data = "hidden text"

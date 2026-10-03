@@ -3458,8 +3458,13 @@ export interface components {
             severity?: string;
             match?: string;
             category?: string;
+            /** @description Offset in the text of the segment at `path`; in the raw body when `path` is empty. */
             start_pos?: number;
             end_pos?: number;
+            /** @description Who the text speaks for (system, user, assistant, tool, tool_definition, request). Empty for a raw scan. */
+            role?: string;
+            /** @description Location of the text in the request body, e.g. messages[2].content[0].text. */
+            path?: string;
             confidence?: number;
             action_taken?: string;
             metadata?: {

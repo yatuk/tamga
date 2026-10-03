@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { SecurityEventDetail } from "@/lib/api/types-core";
-import { humanizeProvider } from "@/lib/humanize";
+import { humanizeProvider, humanizeRole } from "@/lib/humanize";
 import { formatInt, formatMs } from "@/lib/utils/format";
 
 interface Props {
@@ -95,6 +95,19 @@ export function EventDetailSheet({ open, event, isLoading, onClose }: Props) {
                       {f.match ? (
                         <p className="font-mono text-xs break-all text-muted-foreground" translate="no">
                           {f.match.length > 120 ? `${f.match.slice(0, 120)}…` : f.match}
+                        </p>
+                      ) : null}
+                      {f.role || f.path ? (
+                        // Where in the request the text was: an instruction in a
+                        // tool result is a different event from one typed by the user.
+                        <p className="text-xs text-muted-foreground">
+                          {f.role ? <>In {humanizeRole(f.role)}</> : "In the request"}
+                          {f.path ? (
+                            <span className="font-mono break-all" translate="no">
+                              {" "}
+                              · {f.path}
+                            </span>
+                          ) : null}
                         </p>
                       ) : null}
                       <div className="flex items-center gap-2">
