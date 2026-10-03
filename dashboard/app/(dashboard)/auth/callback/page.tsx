@@ -1,11 +1,19 @@
 "use client";
 
+import { Suspense, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { AuthCard } from "@/components/app/auth-card";
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
+import { API_BASE } from "@/lib/api/fetch-core";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8443";
+type Session = {
+  token: string;
+  user: { id: string; email: string; name: string; avatar: string; role: string };
+};
 
-export default function AuthCallbackPage() {
+function Callback() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
@@ -15,70 +23,74 @@ export default function AuthCallbackPage() {
     const state = searchParams.get("state");
 
     if (!code) {
-      setError("Missing authorization code from GitHub.");
+      setError("GitHub did not return an authorization code.");
       return;
     }
 
-    // Verify state to prevent CSRF
+    // The response must carry the state this browser generated before it was
+    // sent to GitHub. A missing value is treated the same as a wrong one, so
+    // a response that was not started here cannot sign anyone in.
     const storedState = sessionStorage.getItem("tamga_oauth_state");
-    if (state && storedState && state !== storedState) {
-      setError("Invalid state parameter. Possible CSRF attack.");
+    sessionStorage.removeItem("tamga_oauth_state");
+    if (!state || !storedState || state !== storedState) {
+      setError("This sign-in response does not match a request started in this browser.");
       return;
     }
-    sessionStorage.removeItem("tamga_oauth_state");
 
-    // Exchange code for JWT via the proxy
     fetch(`${API_BASE}/api/v1/auth/github/exchange`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ code }),
     })
-      .then((res) => {
+      .then(async (res) => {
         if (!res.ok) {
-          return res.json().then((err) => {
-            throw new Error(err.error || "Token exchange failed");
-          });
+          const body = (await res.json().catch(() => ({}))) as { error?: string };
+          throw new Error(body.error || "The proxy could not complete the sign-in.");
         }
-        return res.json();
+        return res.json() as Promise<Session>;
       })
-      .then(
-        (data: { token: string; user: { id: string; email: string; name: string; avatar: string; role: string } }) => {
-          // Store session
-          sessionStorage.setItem("tamga_session_token", data.token);
-          sessionStorage.setItem("tamga_session_user", JSON.stringify(data.user));
-          // Redirect to dashboard overview
-          router.push("/dashboard");
-        },
-      )
+      .then((data) => {
+        sessionStorage.setItem("tamga_session_token", data.token);
+        sessionStorage.setItem("tamga_session_user", JSON.stringify(data.user));
+        router.push("/dashboard");
+      })
       .catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : "Authentication failed");
+        setError(err instanceof Error ? err.message : "The sign-in did not complete.");
       });
   }, [searchParams, router]);
 
   if (error) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-surface-subtle">
-        <div className="w-full max-w-md rounded-lg border border-status-critical bg-white p-8 text-center shadow-sm">
-          <div className="mb-4 text-4xl" aria-hidden="true">&#x26A0;</div>
-          <h1 className="mb-2 text-xl font-bold text-status-critical">Authentication Failed</h1>
-          <p className="text-sm text-fg-muted">{error}</p>
-          <button
-            onClick={() => router.push("/login")}
-            className="mt-6 rounded-lg bg-surface-subtle px-4 py-2 text-sm font-medium text-white hover:bg-surface-elevated"
-          >
-            Try Again
-          </button>
+      <AuthCard title="Sign-in failed" description={error}>
+        <div role="alert" className="sr-only">
+          Sign-in failed. {error}
         </div>
-      </div>
+        <Button asChild className="w-full">
+          <Link href="/login">Try Again</Link>
+        </Button>
+      </AuthCard>
     );
   }
 
+  return <Pending />;
+}
+
+function Pending() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-surface-subtle">
-      <div className="text-center">
-        <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4 border-border-strong border-t-border-strong" />
-        <p className="text-sm text-fg-subtle">Completing sign-in…</p>
+    <AuthCard title="Completing sign-in…">
+      <div role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Spinner />
+        Checking with the proxy
       </div>
-    </div>
+    </AuthCard>
+  );
+}
+
+export default function AuthCallbackPage() {
+  // useSearchParams suspends during prerender.
+  return (
+    <Suspense fallback={<Pending />}>
+      <Callback />
+    </Suspense>
   );
 }

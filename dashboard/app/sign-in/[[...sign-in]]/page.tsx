@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import dynamic from "next/dynamic";
+import { AuthCard } from "@/components/app/auth-card";
+import { Button } from "@/components/ui/button";
 import { toLowerEn } from "@/lib/utils/case";
 
 const ClerkSignIn = dynamic(
@@ -20,25 +22,23 @@ export default function SignInPage() {
   const pk = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || "";
   const enabled = pk && !toLowerEn(pk).includes("placeholder");
 
+  if (enabled) {
+    return (
+      <main className="flex min-h-dvh items-center justify-center bg-background px-4 py-10">
+        <h1 className="sr-only">Sign in to Tamga</h1>
+        <ClerkSignIn />
+      </main>
+    );
+  }
+
   return (
-    <main className="flex min-h-screen items-center justify-center bg-surface-card px-4 text-fg">
-      <div className="w-full max-w-md rounded-sm border border-border bg-surface-card p-6">
-        <h1 className="mb-1 text-xl font-semibold tracking-tight">Sign in</h1>
-        <p className="mb-4 text-sm text-fg-muted">Access the Tamga SOC console.</p>
-        {enabled ? (
-          <ClerkSignIn />
-        ) : (
-          <div className="space-y-3 font-mono text-xs text-fg-muted">
-            <p>Clerk is disabled (demo mode). To continue to the dashboard:</p>
-            <Link
-              href="/dashboard"
-              className="inline-flex h-9 items-center rounded-sm bg-status-critical px-4 text-white hover:bg-status-critical"
-            >
-              /dashboard
-            </Link>
-          </div>
-        )}
-      </div>
-    </main>
+    <AuthCard
+      title="Sign in"
+      description="No identity provider is configured for this deployment. The console is open and uses the admin key from Settings."
+    >
+      <Button asChild className="w-full">
+        <Link href="/dashboard">Open the Console</Link>
+      </Button>
+    </AuthCard>
   );
 }
