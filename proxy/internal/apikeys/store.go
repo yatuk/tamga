@@ -52,8 +52,8 @@ type Key struct {
 	Role      string    `json:"role,omitempty"`
 	UserID    string    `json:"user_id,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
-	ExpiresAt time.Time `json:"expires_at,omitempty"`
-	LastUsed  time.Time `json:"last_used,omitempty"`
+	ExpiresAt time.Time `json:"expires_at,omitzero"`
+	LastUsed  time.Time `json:"last_used,omitzero"`
 }
 
 // Expired reports whether the key has an expiry and it has passed.

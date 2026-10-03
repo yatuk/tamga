@@ -30,6 +30,7 @@ Essential environment variables:
 | `TAMGA_MOCK_UPSTREAM` | `false` | Demo mode without real providers |
 | `TAMGA_STRICT_MODE` | `false` | Ignore all policy exceptions |
 | `TAMGA_TRUST_ROLE_HEADER` | `false` | Honour `X-Tamga-Role` for policy exceptions. Enable only behind an authenticating gateway that sets the header itself |
+| `TAMGA_REQUIRE_KEY` | `false` | Answer 401 to any proxy request without a valid `X-Tamga-Key`. Leave off until every application has a key |
 | `TAMGA_TRUSTED_PROXIES` | — | Comma-separated IPs and CIDR ranges of the load balancers or reverse proxies in front of Tamga. Only a connection from one of them may supply the client address through `X-Forwarded-For`; the address used is the first one from the right that is not itself a trusted proxy. Empty: the header is ignored and the connecting address is used, so behind a load balancer every caller without a key shares one rate-limit bucket and `TAMGA_IP_ALLOWLIST` sees the load balancer. An invalid entry stops startup |
 | `TAMGA_OTLP_ENDPOINT` | — | OpenTelemetry collector endpoint |
 | `ANTHROPIC_API_KEY` | — | Anthropic provider key |
@@ -133,6 +134,38 @@ canary:
 Injection happens before the request is signed, so Bedrock/SigV4 is unaffected.
 Detection runs on non-streaming responses (`X-Tamga-System-Prompt-Leak: true`
 header on a leak); streaming leak detection is a follow-up.
+
+## Keys for applications
+
+Give each application its own Tamga key and it is identified on the proxy
+path: its requests are counted against the key's organisation, rate-limited
+per key and, if the key carries a role, evaluated with that role in policy
+exceptions. What the request says about itself in `X-Tamga-Org-Id` or
+`X-Tamga-Role` is ignored.
+
+Create the key in the dashboard under **API keys** (scope **Application**),
+or through the API:
+
+```bash
+curl -s -X POST "$TAMGA_URL/api/v1/apikeys" \
+  -H "X-Tamga-Admin-Key: $TAMGA_ADMIN_KEY" -H "Content-Type: application/json" \
+  -d '{"label":"billing-service","scope":"proxy","org_id":"acme","expires_in_days":90}'
+```
+
+The value is in `raw_key` and is shown this once. The application sends it
+next to the provider's own key:
+
+```python
+client = OpenAI(
+    base_url="https://tamga.internal/v1",
+    api_key=os.environ["OPENAI_API_KEY"],          # goes to the provider
+    default_headers={"X-Tamga-Key": os.environ["TAMGA_KEY"]},  # stays at Tamga
+)
+```
+
+Once every application has a key, set `TAMGA_REQUIRE_KEY=true` and requests
+without one get 401. Keys need the database: without `TAMGA_DB_URL` they are
+kept in memory and lost on restart.
 
 ## Cost control and budget enforcement
 

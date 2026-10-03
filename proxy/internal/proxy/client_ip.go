@@ -87,10 +87,13 @@ func ipNetsContain(nets []*net.IPNet, ip net.IP) bool {
 }
 
 // rateLimitKeyForRequest names the bucket a request is counted in: the
-// caller's provider key when it sent one, its address otherwise. The key is
-// hashed because the bucket name is stored in Redis and returned by the
-// rate-limit stats endpoint.
-func rateLimitKeyForRequest(r *http.Request, trusted []*net.IPNet) string {
+// Tamga key when one verified, else the caller's provider key when it sent
+// one, else its address. The provider key is hashed because the bucket name
+// is stored in Redis and returned by the rate-limit stats endpoint.
+func rateLimitKeyForRequest(r *http.Request, who caller, trusted []*net.IPNet) string {
+	if who.verified() {
+		return "tk:" + who.KeyID
+	}
 	if k := extractAPIKey(r); k != "" {
 		sum := sha256.Sum256([]byte(k))
 		return "key:" + hex.EncodeToString(sum[:8])

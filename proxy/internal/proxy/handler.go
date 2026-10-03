@@ -25,6 +25,7 @@ import (
 	"github.com/yatuk/tamga/internal/api"
 	"github.com/yatuk/tamga/internal/budget"
 	"github.com/yatuk/tamga/internal/cache"
+	"github.com/yatuk/tamga/internal/apikeys"
 	"github.com/yatuk/tamga/internal/config"
 	"github.com/yatuk/tamga/internal/events"
 	"github.com/yatuk/tamga/internal/extract"
@@ -105,6 +106,9 @@ type TierEnforcer interface {
 
 type HandlerConfig struct {
 	Registry *scanner.Registry
+	// Keys verifies X-Tamga-Key on the proxy path (optional; without it no
+	// key verifies).
+	Keys apikeys.Store
 	// GetPolicy returns the current policy (hot-reload safe).
 	GetPolicy func() *policy.Policy
 	RateLimit *ratelimit.Limiter
@@ -285,6 +289,18 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 		return
 	}
 
+	who, authErr, authMsg := authenticate(r, cfg)
+	if authErr != "" {
+		logger.Warn().Str("event", authErr).Str("client_ip", clientIP(r, trustedProxies(cfg))).Msg("proxy request refused: key")
+		span.SetStatus(codes.Error, authErr)
+		writePolicyError(w, requestID, http.StatusUnauthorized, authErr, authMsg)
+		return
+	}
+	if who.verified() {
+		logger = logger.With().Str("key_id", who.KeyID).Logger()
+		span.SetAttributes(attribute.String("tamga.key_id", who.KeyID))
+	}
+
 	if !pol.ProviderAllowed(provider) {
 		logger.Warn().Str("provider", provider).Msg("provider blocked by policy")
 		span.SetStatus(codes.Error, "provider_not_allowed")
@@ -303,7 +319,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 
 	if cfg.RateLimit != nil {
 		_, rlSpan := telemetry.Tracer().Start(ctx, "rate_limit.check")
-		res := cfg.RateLimit.Check(rateLimitKeyForRequest(r, trustedProxies(cfg)))
+		res := cfg.RateLimit.Check(rateLimitKeyForRequest(r, who, trustedProxies(cfg)))
 		if res.Limit > 0 {
 			w.Header().Set("X-RateLimit-Limit", strconv.Itoa(res.Limit))
 			if res.Allowed {
@@ -363,7 +379,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 	// per-minute=BLOCK but per-day=WARN. Splitting into separate actions
 	// is deferred to a future phase.
 	if cfg.RateLimit != nil {
-		apiKey := rateLimitKeyForRequest(r, trustedProxies(cfg))
+		apiKey := rateLimitKeyForRequest(r, who, trustedProxies(cfg))
 		preflightTokens = estimateRequestTokens(r)
 		tokRes := cfg.RateLimit.CheckDailyTokenQuota(apiKey, preflightTokens)
 		if tokRes.TokensLimit > 0 {
@@ -555,16 +571,17 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 
 	_, polSpan := telemetry.Tracer().Start(ctx, "policy.evaluate")
 
-	// Extract user identity for RBAC exception evaluation. X-Tamga-Role is an
-	// unauthenticated request header, so it only counts when the operator has
-	// declared a trusted gateway in front of the proxy (TAMGA_TRUST_ROLE_HEADER).
-	// Otherwise a caller could claim any role and waive the rule it trips.
-	userRole := ""
+	// The role that policy exceptions are evaluated with. A verified key
+	// carries its own. Without one, X-Tamga-Role is an unauthenticated request
+	// header, so it only counts when the operator has declared a trusted
+	// gateway in front of the proxy (TAMGA_TRUST_ROLE_HEADER). Otherwise a
+	// caller could claim any role and waive the rule it trips.
+	userRole := who.Role
 	userID := r.Header.Get("X-Tamga-User-Id")
 	strictMode := false
 	if cfg.Config != nil {
 		strictMode = cfg.Config.StrictMode
-		if cfg.Config.TrustRoleHeader {
+		if !who.verified() && cfg.Config.TrustRoleHeader {
 			userRole = r.Header.Get("X-Tamga-Role")
 		}
 	}

@@ -36,8 +36,8 @@ export function useKeysPage() {
   }, [queryClient, adminKey]);
 
   const createMutation = useMutation({
-    mutationFn: ({ label, scope }: { label: string; scope: string }) =>
-      api.createApiKey(adminKey, label, scope),
+    mutationFn: ({ label, scope, orgId }: { label: string; scope: string; orgId?: string }) =>
+      api.createApiKey(adminKey, label, scope, orgId),
     onSuccess: (result) => {
       invalidate();
       setCreateOpen(false);

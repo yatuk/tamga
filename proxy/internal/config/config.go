@@ -134,6 +134,11 @@ type Config struct {
 	// TAMGA_TRUST_ROLE_HEADER=true.
 	TrustRoleHeader bool
 
+	// RequireKey refuses proxy requests that carry no valid X-Tamga-Key.
+	// Off by default so an existing deployment keeps working; turn it on once
+	// every application has a key. Set via TAMGA_REQUIRE_KEY=true.
+	RequireKey bool
+
 	// mTLS/client-cert verification (KVKK/BDDK compliance for Turkish banks).
 	// MTLSClientCAFile is the path to a CA bundle PEM for validating client certificates.
 	// Set via TAMGA_MTLS_CLIENT_CA_FILE. Required when MTLSStrictVerify is true.
@@ -229,6 +234,7 @@ func Load() (*Config, error) {
 		DevMode:                  envOrDefaultBool("TAMGA_DEV_MODE", false),
 		StrictMode:               envOrDefaultBool("TAMGA_STRICT_MODE", false),
 		TrustRoleHeader:          envOrDefaultBool("TAMGA_TRUST_ROLE_HEADER", false),
+		RequireKey:               envOrDefaultBool("TAMGA_REQUIRE_KEY", false),
 		MTLSClientCAFile:         envOrDefault("TAMGA_MTLS_CLIENT_CA_FILE", ""),
 		MTLSStrictVerify:         envOrDefaultBool("TAMGA_MTLS_STRICT_VERIFY", false),
 		IPAllowlist:              envOrDefault("TAMGA_IP_ALLOWLIST", ""),

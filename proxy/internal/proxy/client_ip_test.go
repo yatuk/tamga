@@ -80,7 +80,7 @@ func TestRateLimitKey_ForgedForwardedForDoesNotChangeBucket(t *testing.T) {
 	b := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
 	b.RemoteAddr = "198.51.100.7:5000"
 	b.Header.Set("X-Forwarded-For", "2.2.2.2")
-	ka, kb := rateLimitKeyForRequest(a, nil), rateLimitKeyForRequest(b, nil)
+	ka, kb := rateLimitKeyForRequest(a, caller{}, nil), rateLimitKeyForRequest(b, caller{}, nil)
 	if ka != kb || ka != "ip:198.51.100.7" {
 		t.Fatalf("buckets %q and %q, want ip:198.51.100.7 for both", ka, kb)
 	}
@@ -90,13 +90,13 @@ func TestRateLimitKey_ForgedForwardedForDoesNotChangeBucket(t *testing.T) {
 func TestRateLimitKey_DoesNotContainTheProviderKey(t *testing.T) {
 	r := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
 	r.Header.Set("Authorization", "Bearer sk-test-key-12345")
-	k := rateLimitKeyForRequest(r, nil)
+	k := rateLimitKeyForRequest(r, caller{}, nil)
 	if strings.Contains(k, "sk-test") || !strings.HasPrefix(k, "key:") {
 		t.Fatalf("bucket name %q", k)
 	}
 	r2 := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
 	r2.Header.Set("X-API-Key", "sk-test-key-12345")
-	if rateLimitKeyForRequest(r2, nil) != k {
+	if rateLimitKeyForRequest(r2, caller{}, nil) != k {
 		t.Fatal("the same key must map to the same bucket whichever header carries it")
 	}
 }

@@ -54,6 +54,16 @@
   (`expires_in_days`).
 - New scope `proxy`: a key for an application on the proxy path. It is refused
   by the management API, so a leaked application key does not expose events.
+- **Keys now authenticate the proxy path.** A request that sends a Tamga key
+  in `X-Tamga-Key` takes its organisation and role from the key; the
+  `X-Tamga-Org-Id` and `X-Tamga-Role` it sends are ignored. Budget, cache
+  partition, events and policy exceptions all use that identity, and the
+  request is rate-limited per key. An unknown, revoked or expired key gets
+  401 `tamga_key_invalid`.
+- `TAMGA_REQUIRE_KEY=true` refuses requests without a key (401
+  `tamga_key_required`). Off by default: requests without a key behave as
+  before.
+- Dashboard: the keys page creates application keys with an organisation.
 
 ### Core Proxy (fixes)
 - Scans that lose coverage — scanner panic or error, worker-pool shedding,

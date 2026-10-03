@@ -22,17 +22,29 @@ within 14 days for critical issues.
 
 ## Trust Assumptions
 
-Tamga does not yet authenticate callers on the proxy path. Until it does,
-deploy it where only trusted applications can reach it, and note:
+Callers on the proxy path are authenticated only when they send a Tamga key
+in `X-Tamga-Key`, and only required to when `TAMGA_REQUIRE_KEY=true`. The
+default accepts requests without one, so an existing deployment keeps
+working; until the setting is on, deploy Tamga where only trusted
+applications can reach it. Note:
 
-- `X-Tamga-Role` is ignored by default. Set `TAMGA_TRUST_ROLE_HEADER=true`
-  only when an authenticating gateway in front of Tamga strips the header
-  from client requests and sets it itself.
-- `X-Tamga-Org-Id`, `X-Tamga-User-Id` and the operator-state headers
-  (`X-Tamga-Operator-Id`, `X-Tamga-Active-Decisions`,
-  `X-Tamga-Last-Verifiable-By`) are taken from the request as sent. They drive
-  budget attribution and operator-state checks, so the same gateway rule
-  applies if callers are not fully trusted.
+- A request with a valid key gets its organisation and role from the key's
+  record. `X-Tamga-Org-Id` and `X-Tamga-Role` sent with it are ignored.
+  `X-Tamga-User-Id` is ignored when the key names a user; a key that names
+  none belongs to a service acting for many users, and that service's own
+  `X-Tamga-User-Id` is kept as its attribution.
+- A request without a key is anonymous. `X-Tamga-Org-Id` and
+  `X-Tamga-User-Id` are then taken as sent and drive budget attribution, and
+  `X-Tamga-Role` is ignored unless `TAMGA_TRUST_ROLE_HEADER=true`, which is
+  only safe when an authenticating gateway in front of Tamga strips the
+  header from client requests and sets it itself.
+- The operator-state headers (`X-Tamga-Operator-Id`,
+  `X-Tamga-Active-Decisions`, `X-Tamga-Last-Verifiable-By`) are taken from
+  the request as sent in both cases.
+- Keys are stored as a SHA-256 hash. A key with the `proxy` scope is refused
+  by the management API. Revocation reaches other replicas within 30
+  seconds, and a key that verified before is accepted for up to five minutes
+  while the database is unreachable.
 - `X-Forwarded-For` is ignored unless the connection comes from an address
   in `TAMGA_TRUSTED_PROXIES`. The IP allowlist and the per-address rate limit
   use the connecting address otherwise. List only proxies that append to the

@@ -12,19 +12,25 @@ import type { KeyScope } from "../_constants";
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onCreate: (label: string, scope: string) => void;
+  onCreate: (label: string, scope: string, orgId?: string) => void;
   isPending: boolean;
 };
 
 const SCOPES: { value: KeyScope; label: string; desc: string }[] = [
-  { value: "read", label: "Read", desc: "Send requests and read stats and events." },
+  {
+    value: "proxy",
+    label: "Application",
+    desc: "For an application that sends requests through the proxy. Opens nothing in this dashboard.",
+  },
+  { value: "read", label: "Read", desc: "Read stats and events through the management API." },
   { value: "write", label: "Write", desc: "Also triage incidents and edit policies and patterns." },
   { value: "admin", label: "Admin", desc: "Everything, including managing other keys." },
 ];
 
 export function CreateKeyDialog({ open, onOpenChange, onCreate, isPending }: Props) {
   const [label, setLabel] = useState("");
-  const [scope, setScope] = useState<KeyScope>("read");
+  const [scope, setScope] = useState<KeyScope>("proxy");
+  const [orgId, setOrgId] = useState("");
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -34,9 +40,10 @@ export function CreateKeyDialog({ open, onOpenChange, onCreate, isPending }: Pro
           onSubmit={(e) => {
             e.preventDefault();
             if (!label.trim()) return;
-            onCreate(label.trim(), scope);
+            onCreate(label.trim(), scope, scope === "proxy" ? orgId.trim() || undefined : undefined);
             setLabel("");
-            setScope("read");
+            setScope("proxy");
+            setOrgId("");
           }}
         >
           <DialogHeader>
@@ -85,6 +92,23 @@ export function CreateKeyDialog({ open, onOpenChange, onCreate, isPending }: Pro
               </div>
             ))}
           </fieldset>
+
+          {scope === "proxy" ? (
+            <FormField
+              label="Organisation"
+              htmlFor="new-key-org"
+              hint="Requests made with this key are counted here, whatever the request says. Leave empty for the default."
+            >
+              <Input
+                id="new-key-org"
+                name="org_id"
+                autoComplete="off"
+                value={orgId}
+                onChange={(e) => setOrgId(e.target.value)}
+                placeholder="acme…"
+              />
+            </FormField>
+          ) : null}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

@@ -699,6 +699,7 @@ func main() {
 
 	proxy.RegisterRoutes(root, proxy.HandlerConfig{
 		Registry:           registry,
+		Keys:               apiKeyStore,
 		OutputOnlyRegistry: outputRegistry,
 		GetPolicy:          getPolicy,
 		RateLimit:          rateLimiter,

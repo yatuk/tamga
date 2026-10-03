@@ -7,11 +7,11 @@ export const apikeys = {
       headers: authHeaders(adminKey),
     }),
 
-  createApiKey: (adminKey: string, label: string, scope: string) =>
+  createApiKey: (adminKey: string, label: string, scope: string, orgId?: string) =>
     fetchAPI<ApiKeyCreated>("/api/v1/apikeys", {
       method: "POST",
       headers: { ...authHeaders(adminKey), "Content-Type": "application/json" },
-      body: JSON.stringify({ label, scope }),
+      body: JSON.stringify({ label, scope, ...(orgId ? { org_id: orgId } : {}) }),
     }),
 
   deleteApiKey: (adminKey: string, id: string) =>

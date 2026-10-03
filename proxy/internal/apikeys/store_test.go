@@ -1,6 +1,7 @@
 package apikeys
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -160,5 +161,17 @@ func TestMemoryStore_IdentityAndExpiry(t *testing.T) {
 	}
 	if _, ok := s.Verify(ck.RawKey); ok {
 		t.Fatal("a revoked key verified")
+	}
+}
+
+// A key that was never used and never expires must not serialise the zero
+// time: the dashboard would show it as a date two thousand years ago.
+func TestKey_JSONOmitsUnsetTimes(t *testing.T) {
+	b, err := json.Marshal(Key{ID: "a", CreatedAt: time.Now()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(b), "last_used") || strings.Contains(string(b), "expires_at") {
+		t.Fatalf("unset times were serialised: %s", b)
 	}
 }

@@ -18,7 +18,9 @@ import type { useKeysPage } from "./useKeysPage";
 type Props = ReturnType<typeof useKeysPage>;
 
 /** The more a key can do, the more it stands out. */
-const SCOPE_TONE: Record<string, Tone> = { admin: "high", write: "low", read: "neutral" };
+const SCOPE_TONE: Record<string, Tone> = { admin: "high", write: "low", read: "neutral", proxy: "neutral" };
+
+const SCOPE_NAME: Record<string, string> = { proxy: "application" };
 
 const STALE_AFTER_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -46,7 +48,7 @@ export function KeysBody({
   const header = (
     <PageHeader
       title="API keys"
-      description="Keys that client applications use to call the proxy. Each carries a scope: read, write or admin."
+      description="Application keys identify a caller on the proxy, sent as X-Tamga-Key. Read, write and admin keys open the management API."
       actions={
         <Button size="sm" onClick={() => setCreateOpen(true)} disabled={!adminKey}>
           <Plus />
@@ -84,7 +86,7 @@ export function KeysBody({
             tone={count("admin") > 0 ? "warn" : "default"}
             tooltip="Admin keys can change policy and manage other keys. Keep them few."
           />
-          <Stat label="Write scope" value={count("write")} />
+          <Stat label="Applications" value={count("proxy")} />
           <Stat
             label="Unused for 30 days"
             value={stale}
@@ -121,9 +123,16 @@ export function KeysBody({
             <TableBody>
               {apiKeys.map((key) => (
                 <TableRow key={key.id}>
-                  <TableCell className="font-medium">{key.label}</TableCell>
+                  <TableCell className="font-medium">
+                    {key.label}
+                    {key.scope === "proxy" ? (
+                      <span className="block text-xs font-normal text-muted-foreground">
+                        Organisation: {key.org_id || "default"}
+                      </span>
+                    ) : null}
+                  </TableCell>
                   <TableCell>
-                    <StatusBadge tone={SCOPE_TONE[key.scope] ?? "neutral"}>{key.scope}</StatusBadge>
+                    <StatusBadge tone={SCOPE_TONE[key.scope] ?? "neutral"}>{SCOPE_NAME[key.scope] ?? key.scope}</StatusBadge>
                   </TableCell>
                   <TableCell>
                     <span className="inline-flex items-center gap-1">
@@ -161,7 +170,7 @@ export function KeysBody({
       <CreateKeyDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
-        onCreate={(label, scope) => createMutation.mutate({ label, scope })}
+        onCreate={(label, scope, orgId) => createMutation.mutate({ label, scope, orgId })}
         isPending={createMutation.isPending}
       />
       <KeyRevealDialog revealed={revealedKey} onDismiss={dismissReveal} />
