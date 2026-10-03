@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -429,4 +430,57 @@ func TestPercentile(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestHealthDetailed_ScanLatencyPercentiles(t *testing.T) {
+	get := func(t *testing.T, cfg Config) map[string]interface{} {
+		t.Helper()
+		ts := httptest.NewServer(testMux(cfg))
+		defer ts.Close()
+		resp, err := http.Get(ts.URL + "/api/v1/health/detailed")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = resp.Body.Close() }()
+		var body map[string]interface{}
+		if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		return body
+	}
+
+	t.Run("omitted before any scan", func(t *testing.T) {
+		body := get(t, Config{Started: time.Now(), Recent: events.NewRecentBuffer(10)})
+		if _, ok := body["scan_latency_ms_p95"]; ok {
+			t.Fatalf("expected no percentiles without scans, got %v", body["scan_latency_ms_p95"])
+		}
+	})
+
+	t.Run("computed from scanned and blocked requests", func(t *testing.T) {
+		rb := events.NewRecentBuffer(1000)
+		for i := 1; i <= 100; i++ {
+			typ := "request_scanned"
+			if i%10 == 0 {
+				typ = "request_blocked"
+			}
+			rb.Add(events.Event{RequestID: fmt.Sprintf("r%d", i), EventType: typ, ScanLatencyMs: float64(i)})
+		}
+		// Not a scan: must not skew the percentiles.
+		rb.Add(events.Event{RequestID: "hint", EventType: "output_scan_hint", ScanLatencyMs: 9999})
+
+		body := get(t, Config{Started: time.Now(), Recent: rb})
+		for key, want := range map[string]float64{
+			"scan_latency_ms_p50": 50,
+			"scan_latency_ms_p95": 95,
+			"scan_latency_ms_p99": 99,
+		} {
+			got, ok := body[key].(float64)
+			if !ok {
+				t.Fatalf("%s missing from %v", key, body)
+			}
+			if got != want {
+				t.Errorf("%s = %v, want %v", key, got, want)
+			}
+		}
+	})
 }

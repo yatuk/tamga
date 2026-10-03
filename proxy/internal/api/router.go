@@ -760,12 +760,36 @@ func (cfg Config) handleHealthDetailed(w http.ResponseWriter, r *http.Request) {
 		"policy_path":    cfg.PolicyPath,
 		"events_dropped": dropped,
 	}
+	// Scan latency percentiles over the recent buffer. Omitted until at
+	// least one request has been scanned, so "no data" is not reported as 0 ms.
+	if lat := recentScanLatencies(cfg.Recent); len(lat) > 0 {
+		payload["scan_latency_ms_p50"] = percentile(lat, 0.50)
+		payload["scan_latency_ms_p95"] = percentile(lat, 0.95)
+		payload["scan_latency_ms_p99"] = percentile(lat, 0.99)
+	}
 	if cfg.Upstream != nil {
 		if snap := cfg.Upstream.HealthSnapshot(); len(snap) > 0 {
 			payload["providers"] = snap
 		}
 	}
 	writeJSON(w, statusCode, payload)
+}
+
+// recentScanLatencies returns the scan latency of every scanned or blocked
+// request still in the recent buffer.
+func recentScanLatencies(recent *events.RecentBuffer) []float64 {
+	if recent == nil {
+		return nil
+	}
+	evs := recent.Latest(0)
+	out := make([]float64, 0, len(evs))
+	for _, e := range evs {
+		if e.EventType != "request_scanned" && e.EventType != "request_blocked" {
+			continue
+		}
+		out = append(out, e.ScanLatencyMs)
+	}
+	return out
 }
 
 // handleHealthDetail exposes the runtime operational profile
