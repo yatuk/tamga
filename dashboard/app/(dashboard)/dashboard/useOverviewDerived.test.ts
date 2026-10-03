@@ -113,22 +113,6 @@ describe("useOverviewDerived — top providers", () => {
   });
 });
 
-describe("useOverviewDerived — top finding types", () => {
-  it("maps and sorts finding types", () => {
-    const stats = makeStats({
-      top_finding_types: { injection: 30, pii: 20, secret: 10 },
-    });
-    const { result } = renderHook(() =>
-      useOverviewDerived(stats, undefined, { points: [], range: "7d", bucket: "1d" }, "7d"),
-    );
-    expect(result.current.topFindingTypes).toEqual([
-      { name: "injection", value: 30 },
-      { name: "pii", value: 20 },
-      { name: "secret", value: 10 },
-    ]);
-  });
-});
-
 // ── Events ──────────────────────────────────────────────────────────────────
 
 describe("useOverviewDerived — events", () => {
@@ -361,30 +345,5 @@ describe("useOverviewDerived — incidentsDrill", () => {
     expect(result.current.incidentsDrill.redacted).toContain("action=REDACT");
     expect(result.current.incidentsDrill.openIncidents).toContain("triage=Open");
     expect(result.current.incidentsDrill.highRisk).toContain("severity=high");
-  });
-});
-
-// ── Provider pie ────────────────────────────────────────────────────────────
-
-describe("useOverviewDerived — providerPieData", () => {
-  it("builds pie data from top providers", () => {
-    const stats = makeStats({
-      top_providers: { openai: 100, anthropic: 50 },
-    });
-    const { result } = renderHook(() =>
-      useOverviewDerived(stats, undefined, { points: [], range: "7d", bucket: "1d" }, "7d"),
-    );
-    expect(result.current.providerPieData).toHaveLength(2);
-    expect(result.current.providerPieData[0].name).toBe("openai");
-    expect(result.current.providerPieData[0].sliceKey).toBeTruthy();
-    expect(Object.keys(result.current.providerPieConfig)).toHaveLength(2);
-  });
-
-  it("returns empty arrays when no providers", () => {
-    const { result } = renderHook(() =>
-      useOverviewDerived(undefined, undefined, { points: [], range: "7d", bucket: "1d" }, "7d"),
-    );
-    expect(result.current.providerPieData).toEqual([]);
-    expect(result.current.providerPieConfig).toEqual({});
   });
 });

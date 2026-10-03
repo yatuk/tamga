@@ -34,15 +34,6 @@ const jetbrainsMono = JetBrains_Mono({
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://tamga.dev";
 
-const DESIGN_CONTRACT = `<!--
-THESIS: Tamga is a chain-of-custody workspace for live LLM risk, not a wall of interchangeable security cards.
-OWN-WORLD: Ink-black and paper-white records, graphite rules, Tamga red evidence seals, compact sans labels, and mono measurements.
-STORY: Read posture, isolate the material change, then enter the incident with its source, time range, and evidence intact.
-FIRST VIEWPORT: Persistent case-index navigation; an operational header; one risk disposition; a live evidence queue; compact supporting measurements.
-FORM: Forensic chain-of-custody docket, grounded direction 5, seed 3015f63b.
-FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
--->`;
-
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
@@ -106,50 +97,25 @@ export default async function RootLayout({
   // only carries the font variables.
   const bodyClass = `${barlow.variable} ${barlowCondensed.variable} ${jetbrainsMono.variable} bg-background font-sans text-foreground antialiased`;
 
-  if (!clerkEnabled) {
-    return (
-      <html lang="en" className={htmlClassName} suppressHydrationWarning>
-        <body className={bodyClass}>
-          <template
-            data-impeccable-contract="3015f63b"
-            dangerouslySetInnerHTML={{ __html: DESIGN_CONTRACT }}
-          />
-          <ThemeProvider
-            attribute="class"
-            defaultTheme={defaultTheme}
-            enableSystem={true}
-          >
-            <NuqsAdapter>
-              <QueryProvider>{children}</QueryProvider>
-            </NuqsAdapter>
-            <Toaster richColors position="bottom-right" />
-          </ThemeProvider>
-        </body>
-      </html>
-    );
+  const tree = (
+    <ThemeProvider attribute="class" defaultTheme={defaultTheme} enableSystem={true}>
+      <NuqsAdapter>
+        <QueryProvider>{children}</QueryProvider>
+      </NuqsAdapter>
+      <Toaster richColors position="bottom-right" />
+    </ThemeProvider>
+  );
+
+  // Clerk is only loaded when a real publishable key is configured.
+  let body = tree;
+  if (clerkEnabled) {
+    const { ClerkProvider } = await import("@clerk/nextjs");
+    body = <ClerkProvider>{tree}</ClerkProvider>;
   }
 
-  const { ClerkProvider } = await import("@clerk/nextjs");
   return (
     <html lang="en" className={htmlClassName} suppressHydrationWarning>
-      <body className={bodyClass}>
-        <template
-          data-impeccable-contract="3015f63b"
-          dangerouslySetInnerHTML={{ __html: DESIGN_CONTRACT }}
-        />
-        <ClerkProvider>
-          <ThemeProvider
-            attribute="class"
-            defaultTheme={defaultTheme}
-            enableSystem={true}
-          >
-            <NuqsAdapter>
-              <QueryProvider>{children}</QueryProvider>
-            </NuqsAdapter>
-            <Toaster richColors position="bottom-right" />
-          </ThemeProvider>
-        </ClerkProvider>
-      </body>
+      <body className={bodyClass}>{body}</body>
     </html>
   );
 }

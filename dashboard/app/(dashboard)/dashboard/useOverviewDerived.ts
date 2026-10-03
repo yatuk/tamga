@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { type DashboardStatsV2, type MTTRStats, type SecurityEvent } from "@/lib/api";
 import { pctDelta } from "@/components/common/Sparkline";
 import type { RangeMode } from "./overviewConstants";
-import { buildIncidentsHref, buildProviderPie, mapToTopArray } from "./overviewHelpers";
+import { buildIncidentsHref, mapToTopArray } from "./overviewHelpers";
 import { toUpperEn, toLowerEn } from "@/lib/utils/case";
 
 export function useOverviewDerived(
@@ -20,9 +20,6 @@ export function useOverviewDerived(
   }, [eventsData]);
 
   const topProviders = useMemo(() => mapToTopArray(stats?.top_providers, 5), [stats]);
-  const topFindingTypes = useMemo(() => mapToTopArray(stats?.top_finding_types, 6), [stats]);
-
-  const { providerPieData, providerPieConfig } = useMemo(() => buildProviderPie(topProviders), [topProviders]);
 
   const sevenDayData = useMemo(() => {
     const points = timeseries?.points || [];
@@ -141,9 +138,6 @@ export function useOverviewDerived(
   return {
     events,
     topProviders,
-    topFindingTypes,
-    providerPieData,
-    providerPieConfig,
     sevenDayData,
     kpiSeries,
     totals,

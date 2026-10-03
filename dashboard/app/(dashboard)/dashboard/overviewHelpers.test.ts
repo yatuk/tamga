@@ -4,8 +4,6 @@ import {
   buildIncidentsHref,
   mapToTopArray,
   relTime,
-  buildProviderPie,
-  providerSliceKey,
 } from "./overviewHelpers";
 
 describe("formatInt", () => {
@@ -97,42 +95,5 @@ describe("relTime", () => {
   it("returns days for very old timestamp", () => {
     const daysAgo = new Date(Date.now() - 2 * 86400 * 1000).toISOString();
     expect(relTime(daysAgo)).toMatch(/^\d+d ago$/);
-  });
-});
-
-describe("buildProviderPie", () => {
-  it("returns empty objects for empty input", () => {
-    const { providerPieData, providerPieConfig } = buildProviderPie([]);
-    expect(providerPieData).toEqual([]);
-    expect(providerPieConfig).toEqual({});
-  });
-
-  it("assigns colours from the overview palette", () => {
-    const providers = [
-      { name: "openai", value: 100 },
-      { name: "anthropic", value: 50 },
-    ];
-    const { providerPieData, providerPieConfig } = buildProviderPie(providers);
-    expect(providerPieData).toHaveLength(2);
-    expect(providerPieData[0].name).toBe("openai");
-    expect(providerPieData[0].sliceKey).toBeTruthy();
-    expect(Object.keys(providerPieConfig)).toHaveLength(2);
-    expect(providerPieConfig[providerPieData[0].sliceKey].label).toBe("openai");
-  });
-});
-
-describe("providerSliceKey", () => {
-  it("generates a stable key from name and index", () => {
-    expect(providerSliceKey("openai", 0)).toBe("openai_0");
-  });
-
-  it("replaces non-alphanumeric characters", () => {
-    expect(providerSliceKey("azure openai", 0)).toBe("azure_openai_0");
-  });
-
-  it("truncates long names to 40 chars", () => {
-    const longName = "a".repeat(50);
-    const key = providerSliceKey(longName, 5);
-    expect(key.length).toBeLessThanOrEqual(43); // 40 + "_5"
   });
 });

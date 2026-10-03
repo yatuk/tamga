@@ -1,10 +1,3 @@
-import { OVERVIEW_PALETTE } from "./overviewConstants";
-
-export function providerSliceKey(name: string, index: number) {
-  const slug = name.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40);
-  return `${slug || "p"}_${index}`;
-}
-
 export function formatInt(n: number | undefined) {
   if (typeof n !== "number") return "—";
   return n.toLocaleString("en-US");
@@ -38,15 +31,4 @@ export function relTime(input?: string) {
   if (hour < 24) return `${hour}h ago`;
   const day = Math.floor(hour / 24);
   return `${day}d ago`;
-}
-
-export function buildProviderPie(topProviders: { name: string; value: number }[]) {
-  const data: { name: string; value: number; sliceKey: string }[] = [];
-  const cfg: import("@/components/ui/chart").ChartConfig = {};
-  topProviders.forEach((item, idx) => {
-    const sliceKey = providerSliceKey(item.name, idx);
-    data.push({ name: item.name, value: item.value, sliceKey });
-    cfg[sliceKey] = { label: item.name, color: OVERVIEW_PALETTE[idx % OVERVIEW_PALETTE.length] };
-  });
-  return { providerPieData: data, providerPieConfig: cfg };
 }
