@@ -11,7 +11,9 @@ export function ThemeToggle() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  const dark = resolvedTheme !== "light";
+  // The theme is only known in the browser. Until the component has mounted,
+  // render the dark state the server rendered, so hydration matches.
+  const dark = !mounted || resolvedTheme !== "light";
 
   function toggle() {
     if (!mounted) return;
@@ -39,7 +41,7 @@ export function ThemeToggle() {
       aria-label={dark ? "Switch to light theme" : "Switch to dark theme"}
       aria-pressed={!dark}
     >
-      {mounted && !dark ? <Moon /> : <Sun />}
+      {dark ? <Sun /> : <Moon />}
     </Button>
   );
 }

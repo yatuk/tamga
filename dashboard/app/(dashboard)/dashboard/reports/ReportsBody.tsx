@@ -96,18 +96,18 @@ export function ReportsBody({
           tooltip="Mean time to resolve an incident, from creation to close."
         />
         <Stat
-          label="Resolved within SLA"
+          label="Within SLA"
           value={hasResolved ? `${sla.toFixed(1)}%` : "—"}
           tone={!hasResolved ? "default" : sla >= 95 ? "pass" : sla >= 80 ? "warn" : "critical"}
           tooltip="Share of incidents resolved within 60 minutes."
         />
         <Stat
-          label="Requests, late vs early"
+          label="Requests trend"
           value={signed(comparisonDelta?.reqDelta)}
           tooltip="Second half of this window compared with the first half."
         />
         <Stat
-          label="Blocked, late vs early"
+          label="Blocked trend"
           value={signed(comparisonDelta?.blockedDelta)}
           tone={(comparisonDelta?.blockedDelta ?? 0) > 0 ? "warn" : "default"}
           tooltip="Second half of this window compared with the first half."

@@ -68,7 +68,7 @@ export function Stat({
             </Tooltip>
           ) : null}
         </div>
-        {sparkline ? <div className="shrink-0 text-fg-faint">{sparkline}</div> : null}
+        {sparkline ? <div className="hidden shrink-0 text-fg-faint sm:block">{sparkline}</div> : null}
       </div>
 
       <div>

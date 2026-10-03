@@ -118,9 +118,22 @@ Corners are square everywhere; `rounded-full` is for dots and avatars only. Surf
 - **StatusBadge, ActionBadge, SeverityBadge:** square, mono, uppercase. The text always names the state; color is never the only carrier.
 - **Tables:** shadcn `Table` for short lists; a virtualised ARIA grid (TanStack Virtual) for queues with keyboard navigation. Long lists paginate with an infinite query.
 - **States:** `EmptyState`, `ErrorState`, `AdminKeyRequired`, `SkeletonRows`.
-- **ConfirmButton:** every destructive action asks first, naming the item and the consequence.
+- **ConfirmButton:** every destructive action asks first, naming the item and the consequence. Revoking an API key goes further and asks for the key name to be typed.
 - **TimeRangeToggle:** the 24h / 7d / 30d window, stored in the URL as `?range=`.
-- **Buttons:** primary is the high-contrast fill; outline and ghost for everything else; destructive only for delete and revoke. No per-call color overrides.
+- **PageTabs:** the underlined tab row that splits a page into sections. The active tab is a URL parameter (`?tab=`).
+- **TimeSeriesChart:** the one chart for anything plotted over time, as areas or bars. Pages pass data and series; axes, grid, legend and tooltip stay the same everywhere. It is the stock shadcn chart on Recharts 3, loaded on demand.
+- **BarList:** a ranked list with proportional bars (providers, models, finding types). One bar color: rank is carried by order and length, not by a rainbow.
+- **DiffView:** a unified line diff for policy changes. The +/- marker carries the meaning; color only reinforces it.
+- **DetailList:** label and value rows for configuration and status read-outs.
+- **FormField:** a control with its visible label above and an optional hint below. Every input goes through it.
+- **CopyButton:** copies a value and confirms with a check mark.
+- **CircuitBadge:** circuit breaker state. Closed is healthy; open means the upstream is out of rotation.
+- **Dialogs and sheets:** shadcn `Dialog` for forms, `Sheet` for detail of a row. No hand-rolled overlays; they need the focus trap.
+- **Buttons:** primary is the high-contrast fill; outline and ghost for everything else; destructive only for delete and revoke. No per-call color overrides, and no raw `<button>` outside `components/ui`.
+
+**The measured-data rule.** A number, a status or a chart is shown only if the proxy reported it. No interpolated percentiles, no composite health scores, no placeholder bars, no column that can only show a dash. When something is not configured, say so in neutral wording.
+
+**One place per job.** API keys are managed on the Keys page, alert destinations on Integrations, custom entities in the policy. Other pages link there instead of repeating the form.
 
 ## Accessibility
 
@@ -128,7 +141,8 @@ Corners are square everywhere; `rounded-full` is for dots and avatars only. Surf
 - Skip link to `#main`; one `h1` per page.
 - Form controls have a visible label or an accessible name.
 - Pointer-only interactions have a keyboard equivalent; `prefers-reduced-motion` is respected.
-- Filters, tabs and the time window that change what a page shows belong in the URL.
+- Filters, tabs, search text and the time window that change what a page shows belong in the URL (`hooks/useUrlState.ts`, `hooks/useRangeParam.ts`).
+- Every page is checked at 375px and 1440px for horizontal overflow by the end-to-end suite, which runs against fixtures, not a live proxy.
 
 ## Do and don't
 

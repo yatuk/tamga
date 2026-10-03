@@ -123,6 +123,8 @@ export function OverviewView() {
   const pct = (n: number) => (totals.total > 0 ? Math.round((n / totals.total) * 100) : 0);
   const spark = (series: number[], stroke: string) =>
     series.length > 1 ? <Sparkline data={series} stroke={stroke} width={64} height={22} /> : undefined;
+  // MTTR only means something once an incident has been resolved.
+  const hasResolved = mttrHours !== undefined && (mttrData?.overall_mttr_minutes ?? 0) > 0;
   const mttrTone = mttrData?.trend === "improving" ? "pass" : mttrData?.trend === "worsening" ? "critical" : "default";
 
   return (
@@ -210,9 +212,9 @@ export function OverviewView() {
           />
           <Stat
             label="MTTR"
-            value={mttrHours !== undefined ? `${mttrHours} h` : "—"}
-            tone={mttrTone}
-            hint={mttrData?.trend}
+            value={hasResolved ? `${mttrHours} h` : "—"}
+            tone={hasResolved ? mttrTone : "default"}
+            hint={hasResolved ? mttrData?.trend : "No resolved incidents"}
             href={incidentsDrill.mttr}
             tooltip="Mean time to resolve an incident, from creation to close."
           />
