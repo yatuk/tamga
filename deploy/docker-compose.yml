@@ -47,6 +47,9 @@ services:
       - TAMGA_MOCK_UPSTREAM=${TAMGA_MOCK_UPSTREAM:-false}
       - TAMGA_ORG_ID=${TAMGA_ORG_ID:-}
       - TAMGA_CORS_ORIGIN=${TAMGA_CORS_ORIGIN:-http://localhost:3000}
+      # Exact-match allowlist. Browsers treat localhost and 127.0.0.1 as
+      # different origins, so the dashboard default covers both.
+      - TAMGA_CORS_ORIGINS=${TAMGA_CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
       - TAMGA_OTLP_ENDPOINT=http://jaeger:4318
       - TAMGA_OTEL_SAMPLE_RATE=${TAMGA_OTEL_SAMPLE_RATE:-0.05}
       - TAMGA_TRACE_UI_URL=http://localhost:16686
