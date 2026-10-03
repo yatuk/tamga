@@ -222,3 +222,61 @@ func TestPG_Retention_AnalyzeRequestLogs(t *testing.T) {
 		t.Fatalf("analyzeRequestLogs: %v", err)
 	}
 }
+
+// Rows logged before a month's partition exists sit in the default
+// partition. Creating the partition must take them along instead of failing.
+func TestPG_Retention_CreatePartitionOverRowsInDefault(t *testing.T) {
+	skipIfNoDBRetention(t)
+	s := newTestPostgresStore(t)
+	defer func() { _ = s.Close() }()
+	ctx := context.Background()
+
+	// A month far from anything else the suite touches.
+	const part = "request_logs_2031_03"
+	_, _ = s.pool.Exec(ctx, `DROP TABLE IF EXISTS `+part)
+	_, _ = s.pool.Exec(ctx, `DELETE FROM request_logs WHERE request_id LIKE 'stranded-%'`)
+	for i, ts := range []string{"2031-03-01 00:00:00+00", "2031-03-15 12:00:00+00", "2031-03-31 23:59:59+00", "2031-04-01 00:00:00+00"} {
+		if _, err := s.pool.Exec(ctx,
+			`INSERT INTO request_logs (request_id, provider, created_at) VALUES ($1, 'openai', $2::timestamptz)`,
+			fmt.Sprintf("stranded-%d", i), ts); err != nil {
+			t.Fatalf("seed row %d: %v", i, err)
+		}
+	}
+	count := func(table, where string) int {
+		var n int
+		if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM `+table+` WHERE request_id LIKE 'stranded-%' `+where).Scan(&n); err != nil {
+			t.Fatalf("count %s: %v", table, err)
+		}
+		return n
+	}
+	if got := count("request_logs_default", ""); got != 4 {
+		t.Fatalf("precondition: want 4 rows in the default partition, got %d", got)
+	}
+
+	pm := NewPartitionManager(s.Pool(), DefaultRetentionPolicy(), zerolog.Nop())
+	moved, err := pm.ensurePartition(ctx, part, "2031-03-01", "2031-04-01")
+	if err != nil {
+		t.Fatalf("ensurePartition over stranded rows: %v", err)
+	}
+	if moved != 3 {
+		t.Fatalf("moved = %d, want the 3 March rows", moved)
+	}
+	if got := count(part, ""); got != 3 {
+		t.Fatalf("rows in %s = %d, want 3", part, got)
+	}
+	// The April row is outside the range and stays where it was.
+	if got := count("request_logs_default", ""); got != 1 {
+		t.Fatalf("rows left in the default partition = %d, want 1", got)
+	}
+	if got := count("request_logs", ""); got != 4 {
+		t.Fatalf("rows visible through the parent = %d, want all 4", got)
+	}
+
+	// A second call finds the partition and does nothing.
+	if moved, err := pm.ensurePartition(ctx, part, "2031-03-01", "2031-04-01"); err != nil || moved != 0 {
+		t.Fatalf("second ensurePartition = (%d, %v), want (0, nil)", moved, err)
+	}
+
+	_, _ = s.pool.Exec(ctx, `DELETE FROM request_logs WHERE request_id LIKE 'stranded-%'`)
+	_, _ = s.pool.Exec(ctx, `DROP TABLE IF EXISTS `+part)
+}

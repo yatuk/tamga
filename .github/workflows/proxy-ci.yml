@@ -78,6 +78,10 @@ jobs:
       - name: E2E integration tests (full-stack, mock upstream)
         run: go test -race -count=1 -run "TestE2E_" ./internal/proxy/
       - name: Test all packages
+        # The store's Postgres tests start their own container; without this
+        # flag most of them skip and a schema bug goes unseen.
+        env:
+          TAMGA_INTEGRATION_DB: "1"
         run: go test -race -count=1 -coverprofile=coverage.out -covermode=atomic ./...
       - name: Upload coverage
         uses: actions/upload-artifact@v4

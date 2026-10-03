@@ -44,6 +44,13 @@
   way are missing the audit log, retention log, pricing, outbox, RLS, incident
   lifecycle and saved-hunt tables — recreate the volume or apply the missing
   migrations by hand.
+- **Retention never ran on a database that already had request logs.** The
+  schema starts with only a default partition, so rows logged before a
+  month's partition exists land there, and PostgreSQL refuses to create a
+  partition over them. The maintenance cycle failed at its first step, before
+  dropping or purging anything. Typical case: retention switched on after the
+  proxy had been running. Partition creation now moves those rows into the
+  new partition in the same transaction.
 - **Retention never dropped expired `request_logs` partitions.** The partition
   bound was parsed as a bare date, but PostgreSQL renders it as a timestamp
   with offset, so every partition was skipped.
@@ -118,6 +125,8 @@
   flags a benign prompt, so the published numbers are enforced by CI.
 
 ### Tests
+- CI runs the store's Postgres integration tests (`TAMGA_INTEGRATION_DB=1`);
+  they were skipped before, which is how the retention bug above went unseen.
 - Stress suite: runs against a mocked upstream, sets up the operator_state
   fixtures it needs, uses one API key per load-test request (it was measuring
   the rate limiter's 429s), and the regression checker now reads k6's summary

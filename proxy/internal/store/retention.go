@@ -199,19 +199,90 @@ func (pm *PartitionManager) createUpcomingPartitions(ctx context.Context, months
 		partName := fmt.Sprintf("request_logs_%04d_%02d", y, mo)
 		start := time.Date(y, mo, 1, 0, 0, 0, 0, time.UTC)
 		end := start.AddDate(0, 1, 0)
-		q := fmt.Sprintf(`
-CREATE TABLE IF NOT EXISTS %s PARTITION OF request_logs
-FOR VALUES FROM ('%s') TO ('%s')`,
-			partName,
-			start.Format("2006-01-02"),
-			end.Format("2006-01-02"),
-		)
-		if _, err := pm.db.Exec(ctx, q); err != nil {
+		moved, err := pm.ensurePartition(ctx, partName, start.Format("2006-01-02"), end.Format("2006-01-02"))
+		if err != nil {
 			return fmt.Errorf("create partition %s: %w", partName, err)
 		}
-		pm.log.Info().Str("component", "store").Str("partition", partName).Msg("partition ensured")
+		ev := pm.log.Info().Str("component", "store").Str("partition", partName)
+		if moved > 0 {
+			ev = ev.Int64("rows_moved_from_default", moved)
+		}
+		ev.Msg("partition ensured")
 	}
 	return nil
+}
+
+// ensurePartition creates the partition for [from, to) unless it exists, and
+// returns how many rows it moved into it.
+//
+// The schema starts with only a default partition, so every row written
+// before a month's partition exists lands there — all of them, when retention
+// was switched on after the proxy had been logging. PostgreSQL refuses to
+// create a partition whose range the default partition already holds rows
+// for, which would fail the whole maintenance cycle at its first step and
+// leave retention never running. The rows are therefore taken out of the
+// default partition, the partition is created, and they are written back
+// through the parent so they route into it; one transaction, under a lock
+// that keeps new rows out of the default partition meanwhile.
+func (pm *PartitionManager) ensurePartition(ctx context.Context, name, from, to string) (int64, error) {
+	var exists bool
+	if err := pm.db.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM pg_class WHERE relname = $1)`, name).Scan(&exists); err != nil {
+		return 0, err
+	}
+	if exists {
+		return 0, nil
+	}
+
+	// name, from and to are built from time.Time above, never from input.
+	create := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s PARTITION OF request_logs FOR VALUES FROM ('%s') TO ('%s')`, name, from, to)
+	inRange := fmt.Sprintf(`created_at >= '%s' AND created_at < '%s'`, from, to)
+
+	tx, err := pm.db.Begin(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var hasDefault bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM pg_class WHERE relname = 'request_logs_default')`).Scan(&hasDefault); err != nil {
+		return 0, err
+	}
+	var moved int64
+	if hasDefault {
+		if _, err := tx.Exec(ctx, `LOCK TABLE request_logs_default IN ACCESS EXCLUSIVE MODE`); err != nil {
+			return 0, err
+		}
+		var stranded bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM request_logs_default WHERE `+inRange+`)`).Scan(&stranded); err != nil {
+			return 0, err
+		}
+		if stranded {
+			if _, err := tx.Exec(ctx, `CREATE TEMP TABLE tamga_partition_move ON COMMIT DROP AS SELECT * FROM request_logs_default WHERE `+inRange); err != nil {
+				return 0, err
+			}
+			tag, err := tx.Exec(ctx, `DELETE FROM request_logs_default WHERE `+inRange)
+			if err != nil {
+				return 0, err
+			}
+			moved = tag.RowsAffected()
+		}
+	}
+	if _, err := tx.Exec(ctx, create); err != nil {
+		return 0, err
+	}
+	if moved > 0 {
+		tag, err := tx.Exec(ctx, `INSERT INTO request_logs SELECT * FROM tamga_partition_move`)
+		if err != nil {
+			return 0, err
+		}
+		if tag.RowsAffected() != moved {
+			return 0, fmt.Errorf("moved %d rows out of the default partition but wrote back %d", moved, tag.RowsAffected())
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return 0, err
+	}
+	return moved, nil
 }
 
 var rePartTO = regexp.MustCompile(`TO\s*\(\s*'([^']+)'\s*\)`)
