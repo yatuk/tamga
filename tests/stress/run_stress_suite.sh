@@ -35,6 +35,9 @@ PYTHON_BIN="${PYTHON_BIN:-python3}"
 TOTAL_TIMEOUT="${STRESS_SUITE_TIMEOUT:-600}"  # 10 minutes hard limit
 
 SKIP_LOAD=false
+# --classifier: run with the inline classifier service and scan.classifier on.
+# Needs a model in models/ (or TAMGA_CLASSIFIER_MODEL_PATH); see docs/operations.md.
+WITH_CLASSIFIER=false
 SKIP_ADVERSARIAL=false
 RPS_LEVELS=("100" "500" "1000")
 WORKLOAD_DURATION="180s"  # 3 minutes for CI (full is 12m)
@@ -109,6 +112,7 @@ trap cleanup EXIT
 while [ $# -gt 0 ]; do
     case "$1" in
         --skip-load) SKIP_LOAD=true; shift ;;
+        --classifier) WITH_CLASSIFIER=true; shift ;;
         --skip-adversarial) SKIP_ADVERSARIAL=true; shift ;;
         --rps) RPS_LEVELS=("$2"); shift 2 ;;
         --health-url) HEALTH_URL="$2"; shift 2 ;;
@@ -144,8 +148,17 @@ mkdir -p "$RESULTS_DIR"
 
 # Derive the suite's policy from the shipped default (adds the operator_state
 # authorization allowlist the adversarial vectors expect).
+POLICY_ARGS=()
+if $WITH_CLASSIFIER; then
+    POLICY_ARGS+=(--classifier)
+    # The classifier service sits behind a compose profile, and the proxy only
+    # dials it when it has an address.
+    export COMPOSE_PROFILES="classifier"
+    export TAMGA_CLASSIFIER_ADDR="classifier:50052"
+    log "  Classifier: on"
+fi
 "$PYTHON_BIN" "$SCRIPT_DIR/scripts/make_stress_policy.py" \
-    "$PROJECT_ROOT/proxy/tamga-policy.yaml" "$RESULTS_DIR/policy/tamga-policy.yaml" || {
+    "$PROJECT_ROOT/proxy/tamga-policy.yaml" "$RESULTS_DIR/policy/tamga-policy.yaml" "${POLICY_ARGS[@]}" || {
     _red "could not generate the stress policy"
     exit 2
 }

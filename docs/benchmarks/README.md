@@ -81,6 +81,60 @@ corpus and will overstate real-world recall.
 > scanner: individual scans were being rounded to 0 or to one timer tick.
 > The numbers above come from Linux, where the clock resolves nanoseconds.
 
+### With the inline classifier
+
+`make redteam-classifier-report` runs both sets through the rules and then,
+for every sample the rules did not block, the classifier service, in the
+order the proxy uses. The reports are
+[`redteam_classifier_latest.json`](./redteam_classifier_latest.json) and
+[`redteam_classifier_holdout.json`](./redteam_classifier_holdout.json); each
+carries a `classifier` block with the rules-only score from the same run,
+what the classifier added, its call latency, and a split by language.
+
+Measured 2026-10-03 with `Horizon-Labs/prompt-injection-guard-small`
+(revision `3215a27`, int8 ONNX) at threshold 0.98, the classifier service in
+its container:
+
+| Set | Rules alone | Rules + classifier | Asked | Added TP | Added FP |
+|---|---|---|---|---|---|
+| `prompts.csv` | 1.000 / 0.896 | 1.000 / 0.927 | 124 | 6 | 0 |
+| `holdout.csv` | 1.000 / 1.000 | 1.000 / 1.000 | 98 | 0 | 0 |
+
+By language on `prompts.csv`: English 121 of 129 attacks caught (117 by the
+rules alone), Turkish 57 of 63 (55 by the rules alone). The language is
+guessed from the text.
+
+Threshold sweep on `prompts.csv` (rules + classifier; `-sweep` prints it):
+
+| Threshold | Precision | Recall | FP | FN |
+|---|---|---|---|---|
+| 0.50 | 0.984 | 0.953 | 3 | 9 |
+| 0.90 | 0.994 | 0.938 | 1 | 12 |
+| 0.98 | 1.000 | 0.927 | 0 | 14 |
+| 0.995 | 1.000 | 0.911 | 0 | 17 |
+
+0.98 is the default because it is the lowest value with no false positive
+here. On `holdout.csv` the same sweep gives 12 false positives at 0.50, 2 at
+0.90 and none from 0.98 up.
+
+Classifier call latency over four runs: p50 14–24 ms, p95 23–58 ms, p99
+28–93 ms, worst call 108 ms after warm-up. The spread between runs is large,
+which is why the default deadline is 150 ms and not the 50 ms first planned.
+
+What this does not show:
+
+- **The value of the classifier on unseen attacks.** Both sets are built
+  around what rules catch, and the rules were tuned on one of them. A model
+  earns its place on phrasing nobody wrote a rule for; that needs a set
+  neither the rules nor this author have seen, and none has been run.
+- **False positives on real traffic.** 202 benign samples is a small number.
+  Scored on its own, without the rules in front of it, the model flags
+  hashes, base64 and keys as injections; the proxy strips those before
+  asking, and the rules handle secrets first.
+- **Long documents.** Samples here are one or two sentences. A long tool
+  result costs one model run per 512 tokens and may not fit the deadline or
+  `max_chars`; the response then says `X-Tamga-Classifier: partial`.
+
 ### How to read these numbers honestly
 
 - **Precision (1.000)** — nothing benign in either set was mitigated. This

@@ -24,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/yatuk/tamga/internal/classifier"
 	"github.com/yatuk/tamga/internal/policy"
 	"github.com/yatuk/tamga/internal/scanner"
 )
@@ -49,6 +50,12 @@ type result struct {
 	action  policy.Action
 	count   int
 	elapsed time.Duration
+	// Classifier mode only. rulesAction is the verdict before the classifier
+	// was asked; asked is whether it was; score is its answer.
+	rulesAction policy.Action
+	asked       bool
+	score       float64
+	clsElapsed  time.Duration
 }
 
 func main() {
@@ -58,6 +65,10 @@ func main() {
 	minRecall := flag.Float64("min-recall", 0.70, "Minimum recall before exit=1")
 	verbose := flag.Bool("v", false, "Print per-sample results")
 	jsonOut := flag.String("json", "", "Optional path to write a machine-readable benchmark report (JSON)")
+	clsAddr := flag.String("classifier", "", "gRPC address of the classifier service; when set, it is asked about every sample the rules do not block")
+	clsThreshold := flag.Float64("threshold", policy.DefaultClassifierThreshold, "Classifier score at or above which a sample counts as an injection finding")
+	clsTimeout := flag.Duration("classifier-timeout", 2*time.Second, "Deadline per classifier call (generous: this measures quality, the latency is reported)")
+	sweep := flag.Bool("sweep", false, "With -classifier: also print precision and recall across thresholds")
 	flag.Parse()
 
 	samples, err := loadCSV(*inPath)
@@ -69,6 +80,24 @@ func main() {
 	reg := buildRegistry()
 	pol := loadPolicy(*policyPath)
 
+	var cls *classifier.Client
+	clsModel := ""
+	if *clsAddr != "" {
+		cls, err = classifier.NewClient(*clsAddr)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "classifier: %v\n", err)
+			os.Exit(2)
+		}
+		hctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ok, model, reason, herr := cls.Health(hctx)
+		cancel()
+		if herr != nil || !ok {
+			fmt.Fprintf(os.Stderr, "classifier at %s is not usable: %v %s\n", *clsAddr, herr, reason)
+			os.Exit(2)
+		}
+		clsModel = model
+	}
+
 	var results []result
 	for _, s := range samples {
 		start := time.Now()
@@ -79,7 +108,30 @@ func main() {
 		} else {
 			act = defaultActionForFindings(findings)
 		}
-		results = append(results, result{sample: s, action: act, count: len(findings), elapsed: time.Since(start)})
+		res := result{sample: s, action: act, count: len(findings), rulesAction: act}
+		// The same order as the proxy: the classifier is asked only when the
+		// rules have not already blocked, and only about what the proxy
+		// would send it.
+		if cls != nil && act != policy.ActionBlock {
+			if text := classifier.Prepare(s.Prompt); text != "" {
+				cctx, cancel := context.WithTimeout(context.Background(), *clsTimeout)
+				cstart := time.Now()
+				scores, cerr := cls.Score(cctx, s.ID, []string{text})
+				res.clsElapsed = time.Since(cstart)
+				cancel()
+				if cerr != nil {
+					fmt.Fprintf(os.Stderr, "classifier failed on %s: %v\n", s.ID, cerr)
+					os.Exit(2)
+				}
+				res.asked, res.score = true, scores[0].Score
+				if res.score >= *clsThreshold {
+					res.action = withClassifierFinding(pol, findings, res.score)
+					res.count++
+				}
+			}
+		}
+		res.elapsed = time.Since(start)
+		results = append(results, res)
 	}
 
 	tp, fp, fn, tn := 0, 0, 0, 0
@@ -124,9 +176,17 @@ func main() {
 	fmt.Printf("\nSamples: %d   TP: %d   FP: %d   FN: %d   TN: %d\n", len(results), tp, fp, fn, tn)
 	fmt.Printf("Precision: %.3f   Recall: %.3f   F1: %.3f\n", precision, recall, f1)
 	printBucketTable(buckets)
+	var clsReport *classifierReport
+	if cls != nil {
+		clsReport = buildClassifierReport(results, clsModel, *clsThreshold)
+		printClassifierReport(clsReport)
+		if *sweep {
+			printSweep(results, pol)
+		}
+	}
 
 	if strings.TrimSpace(*jsonOut) != "" {
-		if err := writeJSONReport(*jsonOut, *inPath, results, buckets, precision, recall, f1, tp, fp, fn, tn); err != nil {
+		if err := writeJSONReport(*jsonOut, *inPath, results, buckets, precision, recall, f1, tp, fp, fn, tn, clsReport); err != nil {
 			fmt.Fprintf(os.Stderr, "write json: %v\n", err)
 			os.Exit(2)
 		}
@@ -257,7 +317,7 @@ func printBucketTable(buckets map[string]*categoryBucket) {
 // to disk. The shape is intentionally flat and stable so external
 // dashboards (and our own marketing /evals page) can consume it without
 // schema guessing.
-func writeJSONReport(path, corpus string, results []result, buckets map[string]*categoryBucket, precision, recall, f1 float64, tp, fp, fn, tn int) error {
+func writeJSONReport(path, corpus string, results []result, buckets map[string]*categoryBucket, precision, recall, f1 float64, tp, fp, fn, tn int, cls *classifierReport) error {
 	type catRow struct {
 		Category  string  `json:"category"`
 		N         int     `json:"n"`
@@ -282,6 +342,8 @@ func writeJSONReport(path, corpus string, results []result, buckets map[string]*
 		F1          float64       `json:"f1"`
 		Latency     latencyReport `json:"scan_latency"`
 		Categories  []catRow      `json:"categories"`
+		// Classifier is present when the run asked the inline classifier.
+		Classifier *classifierReport `json:"classifier,omitempty"`
 	}
 
 	keys := make([]string, 0, len(buckets))
@@ -310,6 +372,7 @@ func writeJSONReport(path, corpus string, results []result, buckets map[string]*
 		TP:          tp, FP: fp, FN: fn, TN: tn,
 		Precision: precision, Recall: recall, F1: f1,
 		Latency:    lat,
+		Classifier: cls,
 		Categories: cats,
 	}
 

@@ -23,6 +23,7 @@ import (
 	"github.com/yatuk/tamga/internal/billing"
 	"github.com/yatuk/tamga/internal/budget"
 	"github.com/yatuk/tamga/internal/cache"
+	"github.com/yatuk/tamga/internal/classifier"
 	"github.com/yatuk/tamga/internal/config"
 	"github.com/yatuk/tamga/internal/docstore"
 	"github.com/yatuk/tamga/internal/events"
@@ -371,6 +372,26 @@ func main() {
 		log.Warn().Err(err).Str("addr", cfg.AnalyzerAddr).Msg("analyzer gRPC client unavailable — running without deep NLP")
 	}
 	eventBus.Subscribe(events.AnalyzerHandler(analyzerClient))
+
+	// Inline classifier: on the decision path, unlike the analyzer above.
+	var classifierGuard *classifier.Guard
+	if classifierClient, err := classifier.NewClient(cfg.ClassifierAddr); err != nil {
+		log.Warn().Err(err).Str("addr", cfg.ClassifierAddr).Msg("classifier client unavailable")
+	} else if classifierClient != nil {
+		classifierGuard = classifier.NewGuard(classifierClient)
+		api.SetClassifierStats(classifierGuard.Stats)
+		go func() {
+			hctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if ok, model, reason, err := classifierClient.Health(hctx); err != nil {
+				log.Warn().Err(err).Str("addr", cfg.ClassifierAddr).Msg("classifier not reachable at startup")
+			} else if !ok {
+				log.Warn().Str("reason", reason).Msg("classifier has no model loaded")
+			} else {
+				log.Info().Str("model", model).Msg("classifier ready")
+			}
+		}()
+	}
 	eventBus.Subscribe(events.OperatorStateAnalyzerHandler(analyzerClient))
 	eventBus.Subscribe(events.RecentBufferHandler(recentBuf))
 	eventBus.Subscribe(liveBroker.Publish)
@@ -702,6 +723,7 @@ func main() {
 	proxy.RegisterRoutes(root, proxy.HandlerConfig{
 		Registry:           registry,
 		Keys:               apiKeyStore,
+		Classifier:         classifierGuard,
 		OutputOnlyRegistry: outputRegistry,
 		GetPolicy:          getPolicy,
 		RateLimit:          rateLimiter,

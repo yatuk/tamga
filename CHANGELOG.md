@@ -40,6 +40,36 @@
   forwarded whole with `X-Tamga-Output-Scan: skipped-too-large`; the default
   limit is raised from 256 KB to 1 MB.
 
+### Inline classifier (optional)
+- **A model on the decision path.** The analyzer's semantic checks ran after
+  the response and could not change a verdict. A new classifier service runs
+  a local ONNX prompt-injection model, and the proxy asks it inline about a
+  request its rules did not block. A score at or above the threshold becomes
+  an `injection` finding of category `classifier`, with the role and path of
+  the text, and goes through the policy like any other finding.
+- Off by default. Needs the classifier service (`docker compose --profile
+  classifier`), a model you download, `TAMGA_CLASSIFIER_ADDR`, and
+  `scan.classifier.enabled: true`. No model ships with Tamga and none is
+  named in the code. See docs/operations.md, "Inline classifier".
+- `scan.classifier`: `timeout_ms` (150), `threshold` (0.98), `roles`
+  (`user`, `tool`), `max_chars` (6000).
+- A classifier that cannot answer is a failed scan: `X-Tamga-Scan-Degraded:
+  classifier`, and `scan.on_error` decides between 503 and forwarding. A
+  breaker stops calls for ten seconds after five failures in a row.
+- Text seen in the last ten minutes is answered from memory, so a
+  conversation pays for its new message only.
+- New metrics: `tamga_classifier_calls_total`, `_errors_total`,
+  `_cached_texts_total`, `_short_circuited_total`. New response header
+  `X-Tamga-Classifier: ok | partial`.
+- The classifier is a separate service, not part of the analyzer: it is on
+  the request path, and the analyzer's pinned dependencies cannot read
+  current model files.
+- `cmd/redteam -classifier <addr> [-threshold N] [-sweep]` measures rules and
+  classifier together and reports what the classifier added.
+- Stress suite: `--classifier` runs it with the classifier on.
+- Architecture diagrams corrected: the analyzer was drawn on the request
+  path; it runs after the response.
+
 ### Keys
 - **API keys are stored in PostgreSQL.** They were kept in memory and lost on
   every restart, and differed between replicas. With a database configured

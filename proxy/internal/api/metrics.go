@@ -6,6 +6,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/yatuk/tamga/internal/classifier"
 	"github.com/yatuk/tamga/internal/extract"
 	"github.com/yatuk/tamga/internal/scanner"
 )
@@ -113,6 +114,22 @@ func (cfg Config) handleMetrics(w http.ResponseWriter, _ *http.Request) {
 
 	// Content block types the extractor has no rule for. They are scanned
 	// generically; a count here means a provider shipped something new.
+	if classifierStats != nil {
+		cs := classifierStats()
+		_, _ = fmt.Fprintln(w, "# HELP tamga_classifier_calls_total Calls made to the inline classifier service.")
+		_, _ = fmt.Fprintln(w, "# TYPE tamga_classifier_calls_total counter")
+		_, _ = fmt.Fprintf(w, "tamga_classifier_calls_total %d\n", cs.Calls)
+		_, _ = fmt.Fprintln(w, "# HELP tamga_classifier_errors_total Classifier calls that failed or timed out.")
+		_, _ = fmt.Fprintln(w, "# TYPE tamga_classifier_errors_total counter")
+		_, _ = fmt.Fprintf(w, "tamga_classifier_errors_total %d\n", cs.Errors)
+		_, _ = fmt.Fprintln(w, "# HELP tamga_classifier_cached_texts_total Texts answered from the classifier cache.")
+		_, _ = fmt.Fprintln(w, "# TYPE tamga_classifier_cached_texts_total counter")
+		_, _ = fmt.Fprintf(w, "tamga_classifier_cached_texts_total %d\n", cs.CachedTexts)
+		_, _ = fmt.Fprintln(w, "# HELP tamga_classifier_short_circuited_total Requests not sent to the classifier because its breaker was open.")
+		_, _ = fmt.Fprintln(w, "# TYPE tamga_classifier_short_circuited_total counter")
+		_, _ = fmt.Fprintf(w, "tamga_classifier_short_circuited_total %d\n", cs.ShortCircuited)
+	}
+
 	_, _ = fmt.Fprintln(w, "# HELP tamga_extract_unknown_block_total Content blocks of a type the extractor has no rule for.")
 	_, _ = fmt.Fprintln(w, "# TYPE tamga_extract_unknown_block_total counter")
 	for blockType, count := range extract.UnknownBlockStats() {
@@ -195,3 +212,11 @@ func (cfg Config) handleMetrics(w http.ResponseWriter, _ *http.Request) {
 		_, _ = fmt.Fprintf(w, "tamga_uptime_seconds %.0f\n", time.Since(cfg.Started).Seconds())
 	}
 }
+
+// classifierStats returns the inline classifier's counters; nil when no
+// classifier is configured.
+var classifierStats func() classifier.Stats
+
+// SetClassifierStats registers the source of the classifier counters. Call
+// once at startup.
+func SetClassifierStats(fn func() classifier.Stats) { classifierStats = fn }

@@ -134,6 +134,11 @@ type Config struct {
 	// TAMGA_TRUST_ROLE_HEADER=true.
 	TrustRoleHeader bool
 
+	// ClassifierAddr is the gRPC address of the classifier service (e.g.
+	// "classifier:50052"). Empty means no classifier. Set via
+	// TAMGA_CLASSIFIER_ADDR; the policy's scan.classifier turns it on.
+	ClassifierAddr string
+
 	// RequireKey refuses proxy requests that carry no valid X-Tamga-Key.
 	// Off by default so an existing deployment keeps working; turn it on once
 	// every application has a key. Set via TAMGA_REQUIRE_KEY=true.
@@ -235,6 +240,7 @@ func Load() (*Config, error) {
 		StrictMode:               envOrDefaultBool("TAMGA_STRICT_MODE", false),
 		TrustRoleHeader:          envOrDefaultBool("TAMGA_TRUST_ROLE_HEADER", false),
 		RequireKey:               envOrDefaultBool("TAMGA_REQUIRE_KEY", false),
+		ClassifierAddr:           envOrDefault("TAMGA_CLASSIFIER_ADDR", ""),
 		MTLSClientCAFile:         envOrDefault("TAMGA_MTLS_CLIENT_CA_FILE", ""),
 		MTLSStrictVerify:         envOrDefaultBool("TAMGA_MTLS_STRICT_VERIFY", false),
 		IPAllowlist:              envOrDefault("TAMGA_IP_ALLOWLIST", ""),

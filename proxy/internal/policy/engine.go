@@ -430,6 +430,8 @@ type ScanConfig struct {
 	// touch findings a rule deliberately leaves alone — below its
 	// sensitivity, outside its types or its roles.
 	DefaultAction string `yaml:"default_action" json:"default_action"`
+	// Classifier configures the inline prompt-injection classifier.
+	Classifier *ClassifierConfig `yaml:"classifier" json:"classifier,omitempty"`
 }
 
 // Values of scan.on_error.
@@ -480,7 +482,7 @@ func (c *ScanConfig) validate() error {
 	default:
 		return fmt.Errorf("scan.default_action: unknown value %q (BLOCK, WARN, LOG or PASS)", c.DefaultAction)
 	}
-	return nil
+	return c.Classifier.validate()
 }
 
 // OnMalformedJSON returns the action for an ambiguous JSON body. It blocks

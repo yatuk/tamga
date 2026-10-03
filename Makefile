@@ -9,7 +9,7 @@ LOADTEST_URL  ?= http://localhost:8443
 LOADTEST_VUS  ?= 25
 LOADTEST_DUR  ?= 30s
 
-.PHONY: help build test redteam redteam-report dashboard-build dashboard-test \
+.PHONY: help build test redteam redteam-report redteam-classifier-report dashboard-build dashboard-test \
         test-load vuln lint clean tidy sidecar-test
 
 help:
@@ -46,6 +46,17 @@ redteam-report:
 		-in ./testdata/redteam/holdout.csv \
 		-json ../docs/benchmarks/redteam_holdout.json \
 		-min-precision 0 -min-recall 0
+
+# Rules plus the inline classifier. Needs the classifier service reachable at
+# CLASSIFIER_ADDR (default localhost:50052) with a model loaded.
+CLASSIFIER_ADDR ?= localhost:50052
+redteam-classifier-report:
+	cd $(PROXY_DIR) && go run ./cmd/redteam \
+		-in ./testdata/redteam/prompts.csv -classifier $(CLASSIFIER_ADDR) \
+		-json ../docs/benchmarks/redteam_classifier_latest.json
+	cd $(PROXY_DIR) && go run ./cmd/redteam \
+		-in ./testdata/redteam/holdout.csv -classifier $(CLASSIFIER_ADDR) \
+		-json ../docs/benchmarks/redteam_classifier_holdout.json
 
 # Run the Shadow ML sidecar test suite in stub mode (no transformers,
 # no torch). Mirrors what .github/workflows/sidecar-ci.yml runs.

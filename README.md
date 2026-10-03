@@ -102,6 +102,9 @@ flowchart LR
 1. **Scan.** Deterministic scanners run in-process on every request: an
    Aho-Corasick automaton plus validators (Luhn, TCKN and IBAN checksums) and
    Unicode normalization against homoglyph and zero-width evasion.
+   Optionally, a local model then reads what the rules did not block and
+   flags injection by meaning rather than wording
+   ([inline classifier](docs/operations.md#inline-classifier)).
 2. **Decide.** A YAML policy maps findings to `BLOCK`, `REDACT`, `WARN` or
    `PASS`. It hot-reloads, is parsed strictly, and warns at startup if nothing
    acts on PII, secrets or injection.
@@ -150,7 +153,27 @@ held-out set was written separately but by the same author, in the same attack
 families, so it overstates too. Expect less on your own traffic and measure
 there. What the rules still miss in the corpus is semantic: fictional and
 hypothetical framings, data-exfiltration requests, health data, street
-addresses. An inline classifier for that gap is planned, not shipped.
+addresses.
+
+**With the inline classifier** (optional; a local model asked about what the
+rules did not block,
+[`prompt-injection-guard-small`](https://huggingface.co/Horizon-Labs/prompt-injection-guard-small)
+at threshold 0.98):
+
+| Set | Precision | Recall | Added by the classifier |
+|---|---|---|---|
+| Tuning corpus | 1.000 | 0.927 | 6 attacks caught, 0 benign flagged |
+| Held-out set | 1.000 | 1.000 | nothing: the rules already caught every attack |
+
+The threshold was chosen on the tuning corpus as the lowest that flagged no
+benign sample, then run unchanged on the held-out set. The gain is small
+because both sets were built around what rules can catch; they are the wrong
+instrument for a model whose purpose is phrasing nobody anticipated, and no
+independent set has been run yet. A classifier call took p50 16–24 ms and
+p95 23–58 ms across runs on the machine below; text seen in the last ten
+minutes is answered from memory. At threshold 0.9 the classifier catches two
+more attacks and flags 1 to 2% of benign samples. It did not catch the three
+injection vectors that bypass the adversarial suite: they score 0.83 to 0.94.
 
 **Latency.** Scan stage: p50 0.2 ms, p95 0.7–0.8 ms. End to end through the
 Docker Compose stack with a mocked upstream:
@@ -172,7 +195,10 @@ arguments, tool descriptions and attachments, and bodies that parsers read
 differently. The bypasses are published in
 [tests/stress/baseline.json](tests/stress/baseline.json) and include leetspeak
 and character-by-character smuggling. The vectors are known to the authors, so this is a regression
-suite, not an independent evaluation.
+suite, not an independent evaluation. With the classifier on, the result is
+the same 78 and 6, and the load figures stay within 1.5 ms of the table above
+(the load test repeats its prompts, so it exercises the classifier's cache,
+not the model).
 
 ```bash
 cd proxy && go run ./cmd/redteam -in ./testdata/redteam/prompts.csv   # accuracy
@@ -263,6 +289,7 @@ unknown or misplaced key is a load error, not a silent no-op.
 | `TAMGA_VAULT_KEY` | — | Base64 32-byte AES key for vault entries at rest |
 | `TAMGA_TRUST_ROLE_HEADER` | `false` | Honour `X-Tamga-Role` for policy exceptions; only behind an authenticating gateway |
 | `TAMGA_REQUIRE_KEY` | `false` | Refuse proxy requests that carry no valid `X-Tamga-Key` |
+| `TAMGA_CLASSIFIER_ADDR` | — | gRPC address of the optional classifier service; the policy's `scan.classifier` turns it on |
 | `TAMGA_TRUSTED_PROXIES` | — | IPs / CIDR ranges of the load balancers allowed to set `X-Forwarded-For`. Empty: the header is ignored |
 | `TAMGA_SCANNER_SERVICE_ADDR` | — | Delegate stateless scanners to a scanner-service over gRPC |
 | `TAMGA_RETENTION_REQUEST_LOGS_DAYS` | `30` | How long request metadata is kept |

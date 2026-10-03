@@ -12,7 +12,8 @@ View the [D2 source](tamga.d2).
 | Component | Language | Role | Port |
 |---|---|---|---|
 | Proxy | Go | Inline scanners, policy engine, reverse proxy, rate limiter, REST API | `8443` |
-| Analyzer | Python | Deep PII/injection/toxicity analysis, compliance reports | `8444` |
+| Classifier | Python | Optional. Local prompt-injection model, asked inline when the rules did not block | `50052` |
+| Analyzer | Python | Deep PII/injection/toxicity analysis after the decision, compliance reports | `8444` |
 | Dashboard | Next.js | Admin UI, incident hunting, integrations, OWASP coverage | `3000` |
 | PostgreSQL | — | Optional persistent telemetry and audit storage | `5432` |
 | Redis | — | Rate limiting, caching, distributed counters | `6379` |
@@ -105,24 +106,26 @@ sequenceDiagram
     participant Proxy as Tamga Proxy
     participant Scanner as Scanner Pipeline
     participant Policy as Policy Engine
-    participant Analyzer as Analyzer (Python)
+    participant Classifier as Classifier (optional)
     participant LLM as LLM Provider
     participant DB as PostgreSQL
+    participant Analyzer as Analyzer (Python)
 
     App->>Proxy: POST /v1/messages
-    Note over Proxy: Authenticate API key<br/>Check rate limit (Redis)
+    Note over Proxy: Verify X-Tamga-Key<br/>Check rate limit
 
-    Proxy->>Scanner: Inline scan (input)
-    Note over Scanner: 7 scanners run<br/>(~3-5ms)
-    Scanner-->>Proxy: Findings + confidence
-
-    alt Confidence 0.3-0.9 (uncertain)
-        Proxy->>Analyzer: gRPC deep scan
-        Note over Analyzer: Presidio NER<br/>+ LLM-as-judge
-        Analyzer-->>Proxy: Enriched findings
-    end
+    Proxy->>Scanner: Inline scan, per message
+    Note over Scanner: Deterministic scanners<br/>(under 1 ms)
+    Scanner-->>Proxy: Findings
 
     Proxy->>Policy: Evaluate findings
+
+    opt scan.classifier on, and not already blocked
+        Proxy->>Classifier: gRPC Classify (user and tool text)
+        Note over Classifier: Local ONNX model<br/>about 15-30 ms, 150 ms deadline
+        Classifier-->>Proxy: Score per text
+        Note over Proxy: A score over the threshold<br/>is one more finding
+    end
 
     alt action = block
         Policy-->>Proxy: BLOCK
@@ -144,6 +147,8 @@ sequenceDiagram
     end
 
     Proxy->>DB: Persist request_log (batched)
+    Proxy-)Analyzer: Event (async, after the response)
+    Note over Analyzer: Presidio NER, LLM-as-judge<br/>adds findings to the record,<br/>never changes the verdict
 ```
 
 Scan overhead is a small fraction of total request time — provider latency
@@ -193,10 +198,11 @@ graph LR
     Mod --> Merge
     Jail --> Merge
 
-    Merge --> Confidence{Confidence<br/>Score}
-    Confidence -->|< 0.3| Skip[Skip deep scan]
-    Confidence -->|0.3-0.9| Deep[Analyzer gRPC]
-    Confidence -->|> 0.9| Decisive[Use inline result]
+    Merge --> Verdict{Policy:<br/>blocked?}
+    Verdict -->|yes| Decisive[403]
+    Verdict -->|no, classifier on| Cls[Classifier gRPC<br/>local model]
+    Verdict -->|no, classifier off| Forward[Forward]
+    Cls --> Forward
 
     classDef fast fill:#1e3a5f,stroke:#3b82f6,color:#dbeafe
     classDef slow fill:#3a1f5f,stroke:#a855f7,color:#e9d5ff

@@ -49,6 +49,10 @@ applications can reach it. Note:
   in `TAMGA_TRUSTED_PROXIES`. The IP allowlist and the per-address rate limit
   use the connecting address otherwise. List only proxies that append to the
   header; a proxy that passes it through unchanged makes it forgeable again.
+- The optional classifier service receives prompt text over plain gRPC and
+  has no authentication. Run it on the internal network only. Its model is
+  a file you download and mount; Tamga does not fetch or verify it, so pin
+  the revision you measured.
 - When a scanner errors, panics or is shed under load, `scan.on_error` decides:
   `block` (the shipped policy) answers 503, `pass` or no setting forwards the
   request. Watch `tamga_scan_degraded_total` and the `X-Tamga-Scan-Degraded`

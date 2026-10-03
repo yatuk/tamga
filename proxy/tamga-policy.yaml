@@ -190,6 +190,18 @@ providers:
 # default_action: the action for a finding whose type has no rule at all
 # (BLOCK, WARN, LOG or PASS). It does not affect findings a rule leaves
 # alone on purpose (below its sensitivity, outside its types or roles).
+#
+# classifier: a local model that reads the text the rules did not block and
+# reports what it takes for an injection as an `injection` finding of
+# category `classifier`. Off here because it needs the classifier service
+# and a model (docs/operations.md, "Inline classifier"). To turn it on:
+#
+#   classifier:
+#     enabled: true
+#     timeout_ms: 150     # how long a request may wait; a miss follows on_error
+#     threshold: 0.98     # lower catches more and flags more ordinary text
+#     roles: [user, tool] # whose text is sent
+#     max_chars: 6000     # per request, newest first; the rest is not classified
 scan:
   on_malformed: block
   on_error: block

@@ -37,6 +37,9 @@ services:
       - TAMGA_PROXY_PORT=8443
       - TAMGA_POLICY_PATH=/app/tamga-policy.yaml
       - TAMGA_ANALYZER_ADDR=analyzer:50051
+      # Inline prompt-injection classifier. Empty unless the classifier
+      # profile is in use: set TAMGA_CLASSIFIER_ADDR=classifier:50052 in .env.
+      - TAMGA_CLASSIFIER_ADDR=${TAMGA_CLASSIFIER_ADDR:-}
       - TAMGA_DB_URL=postgresql://${POSTGRES_USER:-tamga}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-tamga}
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
       - TAMGA_NATS_URL=nats://nats:4222
@@ -82,6 +85,29 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      - internal
+    restart: unless-stopped
+
+  # Optional: the inline prompt-injection classifier. Start it with
+  #   docker compose --profile classifier up -d
+  # after downloading a model (docs/operations.md). No model is shipped; with
+  # an empty directory the service runs and reports itself unavailable.
+  classifier:
+    profiles: ["classifier"]
+    build:
+      context: ../classifier
+      dockerfile: Dockerfile
+    expose:
+      - "50052"  # gRPC
+    environment:
+      - TAMGA_CLASSIFIER_PORT=50052
+      - TAMGA_CLASSIFIER_MODEL_DIR=/models/classifier
+      - TAMGA_CLASSIFIER_MODEL_NAME=${TAMGA_CLASSIFIER_MODEL_NAME:-prompt-injection-guard-small}
+      - TAMGA_CLASSIFIER_THREADS=${TAMGA_CLASSIFIER_THREADS:-0}
+      - TAMGA_CLASSIFIER_WINDOW=${TAMGA_CLASSIFIER_WINDOW:-512}
+    volumes:
+      - ${TAMGA_CLASSIFIER_MODEL_PATH:-../models/prompt-injection-guard-small}:/models/classifier:ro
     networks:
       - internal
     restart: unless-stopped

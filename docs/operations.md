@@ -167,6 +167,73 @@ Once every application has a key, set `TAMGA_REQUIRE_KEY=true` and requests
 without one get 401. Keys need the database: without `TAMGA_DB_URL` they are
 kept in memory and lost on restart.
 
+## Inline classifier
+
+The rules are exact and fast, and they match wording. An attack phrased in a
+way no rule anticipates gets past them. The classifier is a local model that
+reads the text for what it means. It is optional and off by default.
+
+When it is on, the proxy asks it about a request the rules did not already
+block, and treats a score at or above the threshold as one more `injection`
+finding (category `classifier`). The finding goes through the same policy
+rules as any other, carries the role and path of the text it is about, and
+can only make the verdict stricter.
+
+**Set it up.** No model ships with Tamga. Download one that is a
+sequence-classification model exported to ONNX with its `tokenizer.json` and
+`config.json`; the numbers in this repository were measured with
+[`Horizon-Labs/prompt-injection-guard-small`](https://huggingface.co/Horizon-Labs/prompt-injection-guard-small)
+(Apache-2.0, 268 MB quantized). Put `config.json`, `tokenizer.json` and
+`onnx/model_quantized.onnx` in `models/prompt-injection-guard-small/`, then:
+
+```bash
+echo 'TAMGA_CLASSIFIER_ADDR=classifier:50052' >> .env
+docker compose --env-file .env -f deploy/docker-compose.yml --profile classifier up -d
+```
+
+and turn it on in the policy:
+
+```yaml
+scan:
+  on_error: block
+  classifier:
+    enabled: true
+    timeout_ms: 150     # a missed deadline is a failed scan: see on_error
+    threshold: 0.98
+    roles: [user, tool]
+    max_chars: 6000
+```
+
+To use another model, point `TAMGA_CLASSIFIER_MODEL_PATH` at its directory.
+Measure it on your own text before trusting it: `go run ./cmd/redteam
+-classifier localhost:50052 -sweep` prints precision and recall across
+thresholds.
+
+**What to expect.**
+
+- A call takes about 15 to 30 ms for a short message on CPU. Text the proxy
+  has seen in the last ten minutes is answered from memory, so in a
+  conversation only the new message costs a call.
+- The classifier is asked about `user` and `tool` text by default: what
+  reaches the model from outside your application. Long hashes, keys and
+  base64 are taken out first; they are not language and the model misreads
+  them.
+- At most `max_chars` of text per request is sent, newest first. When some
+  text did not fit, the response carries `X-Tamga-Classifier: partial`.
+  Otherwise it carries `X-Tamga-Classifier: ok`.
+- When the classifier cannot answer (down, no model loaded, deadline missed)
+  the response carries `X-Tamga-Scan-Degraded: classifier` and
+  `scan.on_error` decides: `block` answers 503, `pass` forwards the request.
+  After five failures in a row the proxy stops calling it for ten seconds.
+- A model is wrong sometimes. At the default threshold it flagged no benign
+  sample in either test set here; at 0.9 it flagged 1 to 2%. Short technical
+  text ("ignore the previous error and retry the build") is where it errs.
+  Start with the `injection_detection` rule on `WARN` if you cannot afford a
+  false block, and watch `tamga_classifier_*` on `/metrics`.
+
+The classifier service has no authentication of its own and receives prompt
+text in the clear. Keep it on the internal network, next to the proxy.
+
 ## What survives a restart
 
 With `TAMGA_DB_URL` set, the following are kept in PostgreSQL and are the same

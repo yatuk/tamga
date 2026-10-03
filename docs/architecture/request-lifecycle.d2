@@ -3,6 +3,7 @@ direction: right
 app: "Your App"
 proxy: "Tamga Proxy"
 scanner: "Scanner\nPipeline"
+classifier: "Classifier\n(optional)"
 analyzer: "Analyzer\n(Python)"
 policy: "Policy\nEngine"
 llm: "LLM Provider"
@@ -12,14 +13,14 @@ app -> proxy: "1. POST /v1/messages" {
   style.stroke: "#3b82f6"
 }
 
-proxy -> scanner: "2. Inline scan (3-5ms)"
+proxy -> scanner: "2. Inline scan (under 1 ms)"
 
-scanner -> analyzer: "3. Deep scan (if uncertain)" {
+scanner -> policy: "3. Evaluate"
+
+policy -> classifier: "4. Not blocked: local model (about 20 ms)" {
   style.stroke-dash: 3
   style.font-size: 11
 }
-
-scanner -> policy: "4. Evaluate"
 
 policy -> llm: "5a. PASS / REDACT" {
   style.stroke: "#14b8a6"
@@ -34,6 +35,11 @@ proxy -> scanner: "7. Output scan"
 proxy -> app: "8. 200 OK + headers"
 
 proxy -> db: "9. Audit log (batched)" {
+  style.stroke-dash: 2
+  style.font-size: 11
+}
+
+proxy -> analyzer: "10. Deep scan, after the response" {
   style.stroke-dash: 2
   style.font-size: 11
 }

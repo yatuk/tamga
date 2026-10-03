@@ -26,6 +26,7 @@ import (
 	"github.com/yatuk/tamga/internal/budget"
 	"github.com/yatuk/tamga/internal/cache"
 	"github.com/yatuk/tamga/internal/apikeys"
+	"github.com/yatuk/tamga/internal/classifier"
 	"github.com/yatuk/tamga/internal/config"
 	"github.com/yatuk/tamga/internal/events"
 	"github.com/yatuk/tamga/internal/extract"
@@ -109,6 +110,9 @@ type HandlerConfig struct {
 	// Keys verifies X-Tamga-Key on the proxy path (optional; without it no
 	// key verifies).
 	Keys apikeys.Store
+	// Classifier is the inline prompt-injection classifier (optional). It is
+	// asked only when the policy turns it on (scan.classifier).
+	Classifier *classifier.Guard
 	// GetPolicy returns the current policy (hot-reload safe).
 	GetPolicy func() *policy.Policy
 	RateLimit *ratelimit.Limiter
@@ -595,6 +599,46 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 	var action policy.Action
 	var exceptionMatches []policy.ExceptionMatch
 	action, exceptionMatches = pol.EvaluateWithRole(findings, userRole, strictMode)
+
+	// ── Inline classifier ───────────────────────────────────────────────
+	// The rules are exact and fast; what they cannot do is recognise an
+	// attack by its meaning. When they have not already blocked the request,
+	// a local model reads the text that came from outside the application.
+	// Its findings can only make the verdict stricter.
+	if set, on := pol.ClassifierSettings(); on && segs != nil && action != policy.ActionBlock {
+		var res classifyOutcome
+		if cfg.Classifier == nil {
+			res.err = errClassifierNotConfigured
+		} else {
+			_, clsSpan := telemetry.Tracer().Start(ctx, "classifier.score")
+			res = classifySegments(ctx, cfg.Classifier, set, requestID, segs, findings)
+			clsSpan.SetAttributes(attribute.Int("classifier.texts", res.asked), attribute.Int("classifier.findings", len(res.findings)))
+			clsSpan.End()
+		}
+		switch {
+		case res.err != nil:
+			// The policy asked for a second opinion and did not get one.
+			scanner.RecordDegraded("classifier")
+			logger.Warn().Err(res.err).Msg("classifier unavailable")
+			w.Header().Set("X-Tamga-Scan-Degraded", "classifier")
+			span.SetAttributes(attribute.Bool("tamga.scan_degraded", true))
+			if pol.BlockOnScanError() {
+				logger.Warn().Msg("classifier unavailable and scan.on_error is block: request refused")
+				polSpan.End()
+				writeScanUnavailable(w, requestID)
+				return
+			}
+		case res.partial:
+			scanner.RecordDegraded("classifier_partial")
+			w.Header().Set("X-Tamga-Classifier", "partial")
+		case res.asked > 0:
+			w.Header().Set("X-Tamga-Classifier", "ok")
+		}
+		if len(res.findings) > 0 {
+			findings = append(findings, res.findings...)
+			action, exceptionMatches = pol.EvaluateWithRole(findings, userRole, strictMode)
+		}
+	}
 
 	// Audit-log each applied exception.
 	for _, match := range exceptionMatches {
