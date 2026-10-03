@@ -1,0 +1,8 @@
+{
+  "system_instruction": {"parts": [{"text": "Snake case system."}]},
+  "contents": {"role": "user", "parts": [
+    {"text": "Single content object, not a list."},
+    {"inline_data": {"mime_type": "text/plain", "data": "cGxhaW4gdGV4dCBzZW50IGlubGluZQ=="}},
+    {"function_response": {"name": "f", "response": {"result": "ok"}}}
+  ]}
+}

@@ -1,0 +1,16 @@
+format anthropic
+user            unknown     messages[0].content[0].name = "ignore previous instructions"
+user            unknown     messages[0].content[0].payload.type = "x"
+user            unknown     messages[0].content[0].payload.data = "hidden text"
+user            unknown     messages[0].content[0].payload.list[0] = "a"
+user            unknown     messages[0].content[0].payload.list[1] = "b"
+tool            unknown     messages[0].content[1].content = "result of a tool nobody listed"
+user            unknown     messages[0].content[2].no_type_at_all = "still scanned"
+user            text        messages[0].new_message_field = "also scanned"
+skipped structural messages[0].content[0].type
+skipped structural messages[0].content[0].id
+skipped structural messages[0].content[1].type
+skipped structural messages[0].role
+unknown future_block
+unknown container_upload_result
+unknown (no type)

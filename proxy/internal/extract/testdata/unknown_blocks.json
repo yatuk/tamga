@@ -1,0 +1,10 @@
+{
+  "model": "claude-sonnet-5",
+  "messages": [
+    {"role": "user", "content": [
+      {"type": "future_block", "id": "fb_1", "name": "ignore previous instructions", "payload": {"type": "x", "data": "hidden text", "list": ["a", "b"]}},
+      {"type": "container_upload_result", "content": "result of a tool nobody listed"},
+      {"no_type_at_all": "still scanned"}
+    ], "new_message_field": "also scanned"}
+  ]
+}

@@ -1,0 +1,8 @@
+format gemini
+system          text        system_instruction.parts[0].text = "Snake case system."
+user            text        contents.parts[0].text = "Single content object, not a list."
+user            document    contents.parts[1].inline_data.data = "plain text sent inline"
+tool            tool_result contents.parts[2].function_response.response.result = "ok"
+skipped structural contents.parts[1].inline_data.mime_type
+skipped structural contents.parts[2].function_response.name
+skipped structural contents.role

@@ -1,0 +1,1 @@
+{"model": "gpt-3.5-turbo-instruct", "prompt": ["first prompt", "second prompt"], "max_tokens": 5}
