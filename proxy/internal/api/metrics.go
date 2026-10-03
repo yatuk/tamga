@@ -36,7 +36,7 @@ func (cfg Config) handleMetrics(w http.ResponseWriter, _ *http.Request) {
 	// would be emitted by the proxy hot path. This derives approximate values
 	// so a scraping Prometheus can plot p50/p95 without extra wiring.
 	if cfg.Recent != nil {
-		evs, _ := cfg.Recent.Page(1, 500)
+		evs := cfg.Recent.Latest(500)
 		lat := make([]float64, 0, len(evs))
 		for _, e := range evs {
 			if e.ScanLatencyMs > 0 {

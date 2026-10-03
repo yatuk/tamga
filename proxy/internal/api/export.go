@@ -38,7 +38,7 @@ func (cfg Config) handleEventsExport(w http.ResponseWriter, r *http.Request) {
 	threshold := time.Now().UTC().UnixMilli() - rangeMillis(rng)
 	rows := []events.EventJSON{}
 	if cfg.Recent != nil {
-		evs, _ := cfg.Recent.Page(1, 1000)
+		evs := cfg.Recent.Latest(0)
 		for _, e := range evs {
 			if e.Timestamp.IsZero() || e.Timestamp.UnixMilli() < threshold {
 				continue

@@ -92,6 +92,26 @@ func (b *RecentBuffer) Page(page, limit int) ([]Event, int) {
 	return out, total
 }
 
+// Latest returns up to max buffered events, newest first, without the page
+// size cap that Page applies. Aggregations (stats, timeseries, breakdowns)
+// use it so they cover the whole buffer; max < 1 means everything.
+func (b *RecentBuffer) Latest(max int) []Event {
+	if b == nil {
+		return nil
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	n := len(b.buf)
+	if max > 0 && max < n {
+		n = max
+	}
+	out := make([]Event, 0, n)
+	for i := len(b.buf) - 1; i >= 0 && len(out) < n; i-- {
+		out = append(out, b.buf[i])
+	}
+	return out
+}
+
 // Search returns newest-first events matching match, then paginates.
 // Used when PostgreSQL is unavailable but the dashboard still needs
 // GET /events?action=&provider= filters against the in-memory ring.

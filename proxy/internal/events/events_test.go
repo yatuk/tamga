@@ -3,6 +3,7 @@ package events
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -804,5 +805,30 @@ func TestMarshalEventsJSON_OutputStructure(t *testing.T) {
 		if !strings.Contains(s, key) {
 			t.Errorf("JSON missing %s", key)
 		}
+	}
+}
+
+func TestRecentBuffer_LatestIsNotCappedAtPageSize(t *testing.T) {
+	rb := NewRecentBuffer(1000)
+	for i := 0; i < 260; i++ {
+		rb.Add(Event{RequestID: fmt.Sprintf("r%d", i)})
+	}
+	// Page silently caps at 200; aggregations must see every event.
+	if page, total := rb.Page(1, 1000); len(page) != 200 || total != 260 {
+		t.Fatalf("Page: got %d of %d", len(page), total)
+	}
+	all := rb.Latest(0)
+	if len(all) != 260 {
+		t.Fatalf("Latest(0): got %d, want 260", len(all))
+	}
+	if all[0].RequestID != "r259" || all[259].RequestID != "r0" {
+		t.Fatalf("Latest(0) is not newest first: %s .. %s", all[0].RequestID, all[259].RequestID)
+	}
+	if got := rb.Latest(50); len(got) != 50 || got[0].RequestID != "r259" {
+		t.Fatalf("Latest(50): got %d, first %s", len(got), got[0].RequestID)
+	}
+	var nilBuf *RecentBuffer
+	if nilBuf.Latest(0) != nil {
+		t.Fatal("nil buffer should return nil")
 	}
 }

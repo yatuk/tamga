@@ -589,8 +589,7 @@ func statsEnrichment(recent *events.RecentBuffer) (map[string]int64, map[string]
 		return topProviders, topFindingTypes, topCategories, 0
 	}
 
-	// RecentBuffer has a fixed cap. Pull everything in one shot.
-	evs, _ := recent.Page(1, 200)
+	evs := recent.Latest(0)
 	for _, e := range evs {
 		switch e.EventType {
 		case "request_scanned", "request_blocked":
@@ -619,7 +618,7 @@ func avgInputRiskPct(recent *events.RecentBuffer) int {
 	if recent == nil {
 		return 0
 	}
-	evs, _ := recent.Page(1, 1000)
+	evs := recent.Latest(0)
 	var sum int
 	var n int
 	for _, e := range evs {

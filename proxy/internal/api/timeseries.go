@@ -70,7 +70,7 @@ func (cfg Config) handleTimeseries(w http.ResponseWriter, r *http.Request) {
 
 	// In-memory fallback (short windows, or no DB): recent events.
 	if !dbServed && cfg.Recent != nil {
-		evs, _ := cfg.Recent.Page(1, 1000)
+		evs := cfg.Recent.Latest(0)
 		for _, e := range evs {
 			if e.Timestamp.IsZero() {
 				continue
@@ -199,7 +199,7 @@ func (cfg Config) handleBreakdown(w http.ResponseWriter, r *http.Request) {
 	bySeverity := map[string]int64{}
 	typeByCategory := map[string]map[string]int64{}
 	if cfg.Recent != nil {
-		evs, _ := cfg.Recent.Page(1, 1000)
+		evs := cfg.Recent.Latest(0)
 		for _, e := range evs {
 			if e.Timestamp.IsZero() || e.Timestamp.UnixMilli() < threshold {
 				continue
@@ -248,7 +248,7 @@ func (cfg Config) handleModelStats(w http.ResponseWriter, r *http.Request) {
 	byFamily := map[string]int64{}
 
 	if cfg.Recent != nil {
-		evs, _ := cfg.Recent.Page(1, 1000)
+		evs := cfg.Recent.Latest(0)
 		for _, e := range evs {
 			if e.Timestamp.IsZero() || e.Timestamp.UnixMilli() < threshold {
 				continue
