@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import "./globals.css";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { QueryProvider } from "@/lib/query-provider";
+import { ClerkBoundary } from "@/components/clerk-boundary";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { toLowerEn } from "@/lib/utils/case";
@@ -110,11 +111,7 @@ export default async function RootLayout({
   );
 
   // Clerk is only loaded when a real publishable key is configured.
-  let body = tree;
-  if (clerkEnabled) {
-    const { ClerkProvider } = await import("@clerk/nextjs");
-    body = <ClerkProvider>{tree}</ClerkProvider>;
-  }
+  const body = clerkEnabled ? <ClerkBoundary>{tree}</ClerkBoundary> : tree;
 
   return (
     <html lang="en" className={htmlClassName} suppressHydrationWarning>
