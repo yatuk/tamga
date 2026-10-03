@@ -133,7 +133,7 @@ an incident queue. See [docs/operations.md](docs/operations.md), and
 [docs/agents.md](docs/agents.md) for running Claude Code and other agents through it.
 
 <p align="center">
-  <img src="docs/incidents.png" alt="Tamga incident queue: blocked prompts with the rule that fired" width="820" />
+  <img src="docs/demo/dashboard.gif" alt="A tour of the Tamga dashboard: the overview, the incident queue with one incident opened, the event explorer, traffic by provider, the policy editor, custom patterns and API keys" width="820" />
 </p>
 
 ## Benchmarks
