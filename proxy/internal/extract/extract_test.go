@@ -368,10 +368,15 @@ func FuzzExtract(f *testing.F) {
 	}
 	f.Add([]byte(`{"messages":[{"role":"assistant","tool_calls":[{"function":{"arguments":"[\"a\",{\"b\":\"c\"}]"}}]}]}`))
 	f.Add([]byte(`{"contents":{"parts":"x"},"tools":"y","messages":3}`))
+	f.Add([]byte(`{"choices":[{"message":{"role":"assistant","content":"a"},"text":"b"}],"candidates":[{"content":{"parts":[{"text":"c"}]}}]}`))
+	f.Add([]byte(`{"role":"assistant","content":[{"type":"text","text":"a"}],"stop_reason":"end_turn","output":[{"type":"message","content":"b"}]}`))
 	f.Fuzz(func(t *testing.T, body []byte) {
 		for _, provider := range []string{"openai", "anthropic", "gemini"} {
 			res, ok := Extract(provider, body) // must not panic
 			if ok {
+				checkOffsets(t, body, res)
+			}
+			if res, ok := ExtractResponse(provider, body); ok {
 				checkOffsets(t, body, res)
 			}
 		}
@@ -387,6 +392,57 @@ func BenchmarkExtract(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		if _, ok := Extract("anthropic", body); !ok {
 			b.Fatal("not recognised")
+		}
+	}
+}
+
+func TestExtractResponse(t *testing.T) {
+	tests := []struct {
+		name, provider, body, path, text string
+		role                             Role
+	}{
+		{"OpenAI chat", "openai",
+			`{"id":"c1","choices":[{"index":0,"message":{"role":"assistant","content":"The answer."},"finish_reason":"stop"}]}`,
+			"choices[0].message.content", "The answer.", RoleAssistant},
+		{"OpenAI tool call", "openai",
+			`{"choices":[{"message":{"role":"assistant","content":null,"tool_calls":[{"id":"c1","type":"function","function":{"name":"f","arguments":"{\"q\":\"x y\"}"}}]}}]}`,
+			"choices[0].message.tool_calls[0].function.arguments#q", "x y", RoleAssistant},
+		{"OpenAI legacy completion", "openai",
+			`{"choices":[{"text":"continued text","index":0}]}`,
+			"choices[0].text", "continued text", RoleAssistant},
+		{"OpenAI responses", "openai",
+			`{"id":"r1","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Done."}]}]}`,
+			"output[0].content[0].text", "Done.", RoleAssistant},
+		{"Anthropic", "anthropic",
+			`{"id":"m1","type":"message","role":"assistant","content":[{"type":"text","text":"Hello."}],"stop_reason":"end_turn"}`,
+			"content[0].text", "Hello.", RoleAssistant},
+		{"Anthropic tool use", "anthropic",
+			`{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"search","input":{"query":"q3 revenue"}}],"stop_reason":"tool_use"}`,
+			"content[0].input.query", "q3 revenue", RoleAssistant},
+		{"Anthropic shape on another route", "local",
+			`{"role":"assistant","content":[{"type":"text","text":"Hi."}],"stop_reason":"end_turn"}`,
+			"content[0].text", "Hi.", RoleAssistant},
+		{"Gemini", "gemini",
+			`{"candidates":[{"content":{"role":"model","parts":[{"text":"Merhaba."}]},"finishReason":"STOP"}]}`,
+			"candidates[0].content.parts[0].text", "Merhaba.", RoleAssistant},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res, ok := ExtractResponse(tt.provider, []byte(tt.body))
+			if !ok {
+				t.Fatal("not recognised")
+			}
+			s := segment(t, res, tt.path)
+			if s.Text != tt.text || s.Role != tt.role {
+				t.Fatalf("got %q role %s, want %q role %s", s.Text, s.Role, tt.text, tt.role)
+			}
+			checkOffsets(t, []byte(tt.body), res)
+		})
+	}
+
+	for _, body := range []string{`{"error":{"message":"rate limited"}}`, `{"object":"list","data":[]}`, `not json`, `[]`} {
+		if res, ok := ExtractResponse("openai", []byte(body)); ok {
+			t.Errorf("%q recognised as a %s response", body, res.Format)
 		}
 	}
 }

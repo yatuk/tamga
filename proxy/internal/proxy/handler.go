@@ -983,6 +983,14 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 						resp.ContentLength = int64(len(blockBody))
 						resp.Header.Set("Content-Type", "application/json")
 						resp.Header.Set("Content-Length", strconv.Itoa(len(blockBody)))
+					} else if res.action == policy.ActionRedact && res.redacted != nil {
+						// The masked response replaces the original; the vault
+						// restore below then works on the masked body.
+						respBody = res.redacted
+						resp.Body = io.NopCloser(bytes.NewReader(respBody))
+						resp.ContentLength = int64(len(respBody))
+						resp.Header.Set("Content-Length", strconv.Itoa(len(respBody)))
+						resp.Header.Set("X-Tamga-Output-Redacted-Count", strconv.Itoa(res.redactedCount))
 					}
 					// Publish the output scan finding into the event bus.
 					go publishOutputEvent(ctx, cfg, requestID, provider, res.findings, res.action, res.elapsed)

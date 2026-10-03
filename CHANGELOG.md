@@ -130,6 +130,21 @@
   counts by reason. Requests that do not claim JSON (uploads) are untouched,
   and an unpaired surrogate inside a string value is still accepted.
 
+### Output scanning
+- **`output_rules.redact_on` is now applied.** REDACT was computed for a
+  response and never carried out: the client received the original. For
+  non-streamed OpenAI, Anthropic and Gemini responses the findings are now
+  masked in place, the JSON stays valid, `Content-Length` is corrected and
+  `X-Tamga-Output-Redacted-Count` reports how many. Streamed responses are
+  unchanged: they can be blocked, not redacted.
+- A response that should be redacted but cannot be — the value has no
+  position, or the response is not a shape the proxy knows — is blocked
+  instead of passed on. This is stricter than before for policies that use
+  `redact_on`.
+- Responses are scanned by segment like requests, so output findings carry
+  `role` and `path` and each value is reported once.
+- A response with output findings is still not cached, redacted or not.
+
 ### Policy
 - **`applies_to` on a rule** limits it to text of some roles: `system`,
   `user`, `assistant`, `tool` (tool results, documents, search results),

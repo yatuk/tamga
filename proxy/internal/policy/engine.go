@@ -594,6 +594,26 @@ func (p *Policy) EvaluateOutput(findings []scanner.Finding) Action {
 	return maxAction
 }
 
+// OutputRedacts reports whether output_rules asks for this finding to be
+// redacted from a response: it is named in redact_on, not in block_on, and
+// clears the minimum confidence.
+func (p *Policy) OutputRedacts(f scanner.Finding) bool {
+	if p == nil || p.OutputRules == nil || !p.OutputRules.Enabled {
+		return false
+	}
+	confScore := 0
+	if f.ConfidenceScore != nil {
+		confScore = f.ConfidenceScore.Total
+	} else if f.Confidence > 0 {
+		confScore = int(f.Confidence * 100)
+	}
+	if p.OutputRules.MinimumConfidence > 0 && confScore < p.OutputRules.MinimumConfidence {
+		return false
+	}
+	return !containsOutputKey(p.OutputRules.BlockOn, f.Type, f.Category) &&
+		containsOutputKey(p.OutputRules.RedactOn, f.Type, f.Category)
+}
+
 func containsOutputKey(list []string, typ, cat string) bool {
 	for _, k := range list {
 		if strings.EqualFold(k, typ) || strings.EqualFold(k, cat) {

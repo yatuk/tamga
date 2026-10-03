@@ -771,3 +771,59 @@ func (x *extractor) list(n *node, role Role, path string) []*node {
 	x.payload(n, role, KindUnknown, path)
 	return nil
 }
+
+// ExtractResponse returns the text segments of a non-streamed provider
+// response, or false when the body is not a response shape it knows. Every
+// segment is the model's output, so its role is assistant unless the
+// response itself carries something else (a tool result echoed back).
+func ExtractResponse(provider string, body []byte) (*Result, bool) {
+	root, err := parseTree(body)
+	if err != nil || root.kind != 'o' {
+		return nil, false
+	}
+	x := &extractor{src: body, res: &Result{}}
+	switch {
+	case root.get("candidates") != nil:
+		x.res.Format = FormatGemini
+		for j, c := range x.list(root.get("candidates"), RoleAssistant, "candidates") {
+			p := index("candidates", j)
+			if c.kind != 'o' || c.get("content") == nil {
+				x.payload(c, RoleAssistant, KindUnknown, p)
+				continue
+			}
+			x.geminiContent(c.get("content"), RoleAssistant, p+".content")
+		}
+	case root.get("choices") != nil:
+		x.res.Format = FormatOpenAI
+		for j, c := range x.list(root.get("choices"), RoleAssistant, "choices") {
+			p := index("choices", j)
+			if c.kind != 'o' {
+				x.payload(c, RoleAssistant, KindUnknown, p)
+				continue
+			}
+			if m := c.get("message"); m != nil {
+				x.openAIMessage(m, p+".message")
+			}
+			// Legacy completions put the text on the choice itself.
+			x.emit(c.get("text"), RoleAssistant, KindText, p+".text")
+		}
+	case root.get("output") != nil && root.get("output").kind == 'a':
+		x.res.Format = FormatOpenAI
+		x.openAIInput(root.get("output"), "output")
+	case root.get("content") != nil && root.get("content").kind == 'a' && isAnthropicResponse(provider, root):
+		x.res.Format = FormatAnthropic
+		x.anthropicContent(root.get("content"), RoleAssistant, KindText, "content")
+	default:
+		return nil, false
+	}
+	return x.res, true
+}
+
+func isAnthropicResponse(provider string, root *node) bool {
+	switch provider {
+	case "anthropic", "bedrock":
+		return true
+	}
+	// An Anthropic-shaped message served on another route.
+	return root.get("stop_reason") != nil
+}

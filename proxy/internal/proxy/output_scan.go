@@ -9,6 +9,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 
+	"github.com/yatuk/tamga/internal/extract"
 	"github.com/yatuk/tamga/internal/policy"
 	"github.com/yatuk/tamga/internal/scanner"
 )
@@ -34,6 +35,10 @@ type outputScanResult struct {
 	action   policy.Action
 	text     string
 	elapsed  time.Duration
+	// redacted is the response with the redact_on findings masked, set when
+	// action is REDACT and the masking was carried out and verified.
+	redacted      []byte
+	redactedCount int
 }
 
 // scanResponseBody reads up to `limit` bytes from `body`, runs both the main
@@ -45,17 +50,43 @@ type outputScanResult struct {
 // run on response bodies (e.g. code_leak).
 func scanResponseBody(ctx context.Context, reg *scanner.Registry, outputReg *scanner.Registry, pol *policy.Policy, provider Provider, raw []byte, windowMs int, pipeCfg scanner.PipelineConfig) (outputScanResult, error) {
 	start := time.Now()
-	text := provider.ExtractOutputText(raw)
-	if text == "" {
-		return outputScanResult{action: policy.ActionPass, elapsed: time.Since(start)}, nil
-	}
-
 	scanCtx := ctx
 	if windowMs > 0 {
 		var cancel context.CancelFunc
 		scanCtx, cancel = context.WithTimeout(ctx, time.Duration(windowMs)*time.Millisecond)
 		defer cancel()
 	}
+
+	// A response shape the extractor knows is scanned by segment, which is
+	// what makes redaction possible: findings then have a place in the body.
+	if res, ok := extract.ExtractResponse(provider.Name(), raw); ok && len(res.Segments) > 0 {
+		findings, err := reg.ScanSegments(scanCtx, res.Segments, pipeCfg)
+		if outputReg != nil {
+			extra, extraErr := outputReg.ScanSegments(scanCtx, res.Segments, pipeCfg)
+			findings = append(findings, extra...)
+			if err == nil {
+				err = extraErr
+			}
+		}
+		out := outputScanResult{findings: findings, action: pol.EvaluateOutput(findings)}
+		if out.action == policy.ActionRedact {
+			out.redacted, out.redactedCount = redactResponse(provider.Name(), raw, res.Segments, findings, pol)
+			if out.redacted == nil {
+				// A value that cannot be located, or a rewrite that did not
+				// read back as intended: the response is not sent as it is.
+				scanner.RecordDegraded("redact_output_failed")
+				out.action = policy.ActionBlock
+			}
+		}
+		out.elapsed = time.Since(start)
+		return out, err
+	}
+
+	text := provider.ExtractOutputText(raw)
+	if text == "" {
+		return outputScanResult{action: policy.ActionPass, elapsed: time.Since(start)}, nil
+	}
+
 	// A scanner that fails or times out degrades the scan but does not void
 	// it: whatever the other scanners found is still evaluated, and the error
 	// is handed back so the caller can flag the response.
@@ -71,12 +102,42 @@ func scanResponseBody(ctx context.Context, reg *scanner.Registry, outputReg *sca
 	}
 
 	act := pol.EvaluateOutput(findings)
+	if act == policy.ActionRedact {
+		// The shape is unknown, so there is no place to redact at. Passing
+		// the response on unredacted is what REDACT exists to prevent.
+		scanner.RecordDegraded("redact_output_failed")
+		act = policy.ActionBlock
+	}
 	return outputScanResult{
 		findings: findings,
 		action:   act,
 		text:     text,
 		elapsed:  time.Since(start),
 	}, err
+}
+
+// redactResponse masks the findings output_rules.redact_on names. It returns
+// nil when any of them has no position, or when the rewritten response
+// cannot be confirmed.
+func redactResponse(provider string, raw []byte, segs []extract.Segment, findings []scanner.Finding, pol *policy.Policy) ([]byte, int) {
+	var edits []extract.Edit
+	for _, f := range findings {
+		if !pol.OutputRedacts(f) {
+			continue
+		}
+		if !f.Placed() || f.Seg < 0 || f.Seg >= len(segs) {
+			return nil, 0
+		}
+		edits = append(edits, extract.Edit{Seg: f.Seg, From: f.StartPos, To: f.EndPos, Replacement: "[" + f.Category + "_REDACTED]"})
+	}
+	if len(edits) == 0 {
+		return nil, 0
+	}
+	out, err := extract.RewriteResponseChecked(provider, raw, segs, edits)
+	if err != nil {
+		return nil, 0
+	}
+	return out, len(edits)
 }
 
 // wrapResponseForOutputScan replaces the upstream response body with a buffered

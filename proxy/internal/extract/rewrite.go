@@ -174,6 +174,15 @@ func rewriteBase64(token []byte, text string) ([]byte, error) {
 // each other or with the JSON they produce; a redaction that silently did not
 // happen would send the original text to the provider.
 func RewriteChecked(provider string, body []byte, segs []Segment, edits []Edit) ([]byte, error) {
+	return rewriteChecked(Extract, provider, body, segs, edits)
+}
+
+// RewriteResponseChecked is RewriteChecked for a provider response.
+func RewriteResponseChecked(provider string, body []byte, segs []Segment, edits []Edit) ([]byte, error) {
+	return rewriteChecked(ExtractResponse, provider, body, segs, edits)
+}
+
+func rewriteChecked(extractFn func(string, []byte) (*Result, bool), provider string, body []byte, segs []Segment, edits []Edit) ([]byte, error) {
 	out, err := Rewrite(body, segs, edits)
 	if err != nil {
 		return nil, err
@@ -193,9 +202,9 @@ func RewriteChecked(provider string, body []byte, segs []Segment, edits []Edit) 
 		want[i] = applyEdits(segs[i].Text, list)
 	}
 
-	after, ok := Extract(provider, out)
+	after, ok := extractFn(provider, out)
 	if !ok {
-		return nil, fmt.Errorf("extract: rewritten body is no longer a recognised request")
+		return nil, fmt.Errorf("extract: rewritten body is no longer a recognised shape")
 	}
 	// A segment edited down to nothing is no longer emitted.
 	j := 0
