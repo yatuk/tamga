@@ -341,6 +341,12 @@ func adminAuth(cfg Config) func(http.Handler) http.Handler {
 			// 2. Scoped API key. Writes require write/admin scope; reads accept any.
 			if cfg.APIKeys != nil {
 				if meta, ok := cfg.APIKeys.Verify(key); ok {
+					// A proxy key identifies an application on the proxy
+					// path. It opens nothing here.
+					if meta.Scope == apikeys.ScopeProxy {
+						writeJSON(w, http.StatusForbidden, map[string]string{"error": "this key is for the proxy path, not the management API"})
+						return
+					}
 					if needsWriteScope(r.Method) && meta.Scope == "read" {
 						writeJSON(w, http.StatusForbidden, map[string]string{"error": "write scope required"})
 						return

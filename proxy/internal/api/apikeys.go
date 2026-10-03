@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/yatuk/tamga/internal/apikeys"
 	"github.com/yatuk/tamga/internal/incidents"
@@ -26,15 +27,27 @@ func (cfg Config) handleAPIKeyCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	defer func() { _ = r.Body.Close() }()
 	var body struct {
-		Label string `json:"label"`
-		Scope string `json:"scope"`
+		Label         string `json:"label"`
+		Scope         string `json:"scope"`
+		OrgID         string `json:"org_id"`
+		Role          string `json:"role"`
+		UserID        string `json:"user_id"`
+		ExpiresInDays int    `json:"expires_in_days"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	body.Scope = strings.ToLower(strings.TrimSpace(body.Scope))
 	if body.Scope == "" {
 		body.Scope = apikeys.ScopeRead
 	}
-	ck, err := cfg.APIKeys.Create(body.Label, body.Scope)
+	if body.ExpiresInDays < 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "expires_in_days must not be negative"})
+		return
+	}
+	p := apikeys.Params{Label: body.Label, Scope: body.Scope, OrgID: body.OrgID, Role: body.Role, UserID: body.UserID}
+	if body.ExpiresInDays > 0 {
+		p.ExpiresAt = time.Now().AddDate(0, 0, body.ExpiresInDays)
+	}
+	ck, err := cfg.APIKeys.CreateWith(p)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
@@ -43,7 +56,7 @@ func (cfg Config) handleAPIKeyCreate(w http.ResponseWriter, r *http.Request) {
 		cfg.Audit.Append(incidents.AuditEntry{
 			Kind:   "apikey.create",
 			Target: ck.ID,
-			Detail: map[string]interface{}{"label": ck.Label, "scope": ck.Scope},
+			Detail: map[string]interface{}{"label": ck.Label, "scope": ck.Scope, "org_id": ck.OrgID, "role": ck.Role},
 		})
 	}
 	writeJSON(w, http.StatusCreated, ck)

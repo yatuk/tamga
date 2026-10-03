@@ -298,7 +298,17 @@ func main() {
 			}
 		})
 	}
-	apiKeyStore := apikeys.NewMemoryStore()
+	var apiKeyStore apikeys.Store = apikeys.NewMemoryStore()
+	if pgStore != nil {
+		if pgKeys, err := apikeys.NewPostgresStore(context.Background(), pgStore.Pool()); err != nil {
+			log.Warn().Err(err).Msg("api keys: postgres store unavailable, keys are kept in memory and lost on restart")
+		} else {
+			apiKeyStore = pgKeys
+			log.Info().Msg("api keys backed by postgres")
+		}
+	} else {
+		log.Warn().Msg("api keys: no database configured, keys are kept in memory and lost on restart")
+	}
 	webhookStore := webhooks.NewMemoryStore()
 	patternStore := patterns.NewMemoryStore()
 	userStore := users.NewMemoryStore()

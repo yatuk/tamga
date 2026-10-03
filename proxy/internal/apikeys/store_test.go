@@ -3,6 +3,7 @@ package apikeys
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestMemoryStore_Create(t *testing.T) {
@@ -132,5 +133,32 @@ func TestIsValidScope(t *testing.T) {
 	}
 	if IsValidScope("superadmin") {
 		t.Fatal("superadmin should be invalid")
+	}
+}
+
+func TestMemoryStore_IdentityAndExpiry(t *testing.T) {
+	s := NewMemoryStore()
+	ck, err := s.CreateWith(Params{Label: "svc", Scope: ScopeProxy, OrgID: "acme", Role: "analyst", UserID: "svc-1", ExpiresAt: time.Now().Add(time.Hour)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	k, ok := s.Verify(ck.RawKey)
+	if !ok || k.OrgID != "acme" || k.Role != "analyst" || k.UserID != "svc-1" || k.Scope != ScopeProxy {
+		t.Fatalf("verify: ok=%v key=%+v", ok, k)
+	}
+	if _, err := s.CreateWith(Params{Scope: ScopeProxy, ExpiresAt: time.Now().Add(-time.Second)}); err == nil {
+		t.Fatal("created a key that is already expired")
+	}
+	if !(Key{ExpiresAt: time.Now().Add(-time.Second)}).Expired(time.Now()) {
+		t.Fatal("a past expiry must count as expired")
+	}
+	if (Key{}).Expired(time.Now()) {
+		t.Fatal("a key with no expiry does not expire")
+	}
+	if err := s.Delete(ck.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := s.Verify(ck.RawKey); ok {
+		t.Fatal("a revoked key verified")
 	}
 }

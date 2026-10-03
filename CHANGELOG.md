@@ -40,6 +40,21 @@
   forwarded whole with `X-Tamga-Output-Scan: skipped-too-large`; the default
   limit is raised from 256 KB to 1 MB.
 
+### Keys
+- **API keys are stored in PostgreSQL.** They were kept in memory and lost on
+  every restart, and differed between replicas. With a database configured
+  they now live in `virtual_keys` (migration 015; the proxy also creates the
+  table at startup, so an existing database needs no manual step). Without a
+  database the in-memory store remains and a warning is logged at startup.
+- Only a SHA-256 hash and an 8-character prefix are stored; the value is
+  returned once, at creation.
+- Revoking a key marks it instead of deleting the row. It stops working at
+  once on the replica that revoked it and within 30 seconds on the others.
+- A key can carry `org_id`, `role`, `user_id` and an expiry
+  (`expires_in_days`).
+- New scope `proxy`: a key for an application on the proxy path. It is refused
+  by the management API, so a leaked application key does not expose events.
+
 ### Core Proxy (fixes)
 - Scans that lose coverage — scanner panic or error, worker-pool shedding,
   oversized response — are no longer silent: counted in

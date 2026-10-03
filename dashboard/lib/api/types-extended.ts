@@ -18,9 +18,13 @@ export interface EventsFilter {
 export interface ApiKey {
   id: string;
   label: string;
-  scope: "read" | "write" | "admin";
+  scope: "read" | "write" | "admin" | "proxy";
   prefix: string;
+  org_id?: string;
+  role?: string;
+  user_id?: string;
   created_at: string;
+  expires_at?: string;
   last_used?: string;
 }
 

@@ -1993,8 +1993,13 @@ export interface paths {
         put?: never;
         /**
          * Create a new scoped API key
-         * @description `scope` varsayılan olarak `read`'dir. Yanıt `raw_key` alanını
-         *     içerir — bu key yalnızca oluşturma anında gösterilir.
+         * @description `scope` defaults to `read`. The response carries `raw_key`, which is
+         *     shown only this once; the server keeps a hash.
+         *
+         *     `read`, `write` and `admin` open the management API. `proxy`
+         *     identifies an application on the proxy path and is refused here.
+         *     `org_id`, `role` and `user_id` are the identity a request made with
+         *     the key has on the proxy path.
          */
         post: {
             parameters: {
@@ -2011,7 +2016,12 @@ export interface paths {
                          * @default read
                          * @enum {string}
                          */
-                        scope?: "read" | "write" | "admin";
+                        scope?: "read" | "write" | "admin" | "proxy";
+                        org_id?: string;
+                        role?: string;
+                        user_id?: string;
+                        /** @description 0 or absent means the key does not expire */
+                        expires_in_days?: number;
                     };
                 };
             };
@@ -3680,10 +3690,15 @@ export interface components {
             id?: string;
             label?: string;
             /** @enum {string} */
-            scope?: "read" | "write" | "admin";
+            scope?: "read" | "write" | "admin" | "proxy";
             prefix?: string;
+            org_id?: string;
+            role?: string;
+            user_id?: string;
             /** Format: date-time */
             created_at?: string;
+            /** Format: date-time */
+            expires_at?: string;
             /** Format: date-time */
             last_used?: string;
         };
