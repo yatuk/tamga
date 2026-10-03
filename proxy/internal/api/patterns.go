@@ -31,7 +31,7 @@ func (cfg Config) handlePatternCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	out, err := cfg.Patterns.Create(body)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		writeStoreError(w, err)
 		return
 	}
 	// Activate the new pattern immediately: the custom scanner caches compiled
@@ -68,7 +68,7 @@ func (cfg Config) handlePatternUpdate(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 			return
 		}
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		writeStoreError(w, err)
 		return
 	}
 	if cfg.CustomScanner != nil {

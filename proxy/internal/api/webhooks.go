@@ -26,12 +26,12 @@ func (cfg Config) handleWebhookCreate(w http.ResponseWriter, r *http.Request) {
 	defer func() { _ = r.Body.Close() }()
 	var body webhooks.Webhook
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		writeStoreError(w, err)
 		return
 	}
 	created, err := cfg.Webhooks.Create(body)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		writeStoreError(w, err)
 		return
 	}
 	if cfg.Audit != nil {
@@ -53,7 +53,7 @@ func (cfg Config) handleWebhookUpdate(w http.ResponseWriter, r *http.Request) {
 	defer func() { _ = r.Body.Close() }()
 	var body webhooks.Webhook
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		writeStoreError(w, err)
 		return
 	}
 	updated, err := cfg.Webhooks.Update(id, body)
@@ -62,7 +62,7 @@ func (cfg Config) handleWebhookUpdate(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 			return
 		}
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		writeStoreError(w, err)
 		return
 	}
 	if cfg.Audit != nil {

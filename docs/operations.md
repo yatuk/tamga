@@ -167,6 +167,18 @@ Once every application has a key, set `TAMGA_REQUIRE_KEY=true` and requests
 without one get 401. Keys need the database: without `TAMGA_DB_URL` they are
 kept in memory and lost on restart.
 
+## What survives a restart
+
+With `TAMGA_DB_URL` set, the following are kept in PostgreSQL and are the same
+on every replica: request logs, incidents, the audit log, policy history,
+saved hunts, API keys, custom patterns and team roles. Webhooks are kept too
+when `TAMGA_VAULT_KEY` is set; they are stored encrypted with it, so without
+the key they stay in memory. A change to keys, patterns, team roles or
+webhooks made on one replica reaches the others within 30 seconds.
+
+Without a database all of these live in memory and startup logs a warning for
+each.
+
 ## Cost control and budget enforcement
 
 Track token spend per API key, team, and provider in real time. Set hard

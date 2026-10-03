@@ -65,6 +65,19 @@
   before.
 - Dashboard: the keys page creates application keys with an organisation.
 
+### Settings storage
+- **Custom patterns, team roles and webhooks are stored in PostgreSQL.** They
+  were kept in memory: lost on restart and different on every replica. With
+  a database they are now written to `stored_documents` (migration 016, also
+  created at startup) before a change takes effect, loaded at startup, and
+  reloaded every 30 seconds so a change on one replica reaches the others.
+- **Webhooks are stored encrypted** (AES-256-GCM, `TAMGA_VAULT_KEY`), because
+  a webhook URL and its token are credentials. Without `TAMGA_VAULT_KEY`
+  webhooks stay in memory and a warning is logged at startup. Keep the key:
+  stored webhooks cannot be read with a different one.
+- A change the database could not take is answered 503 and not applied.
+  Previously every store error was a 400.
+
 ### Core Proxy (fixes)
 - Scans that lose coverage — scanner panic or error, worker-pool shedding,
   oversized response — are no longer silent: counted in

@@ -1,7 +1,8 @@
 // Package webhooks stores outbound alert destinations (Slack / Teams / SIEM).
 //
-// Unlike API keys, the URLs are stored in-memory only; this keeps the scope
-// of the Faz 2 change tight and we can persist later when a DB table exists.
+// The working copy is in memory. With a Persister attached it is loaded from
+// and written through to the database. A webhook's URL and token are
+// credentials, so the persister it is given must encrypt.
 package webhooks
 
 import (
@@ -17,6 +18,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/yatuk/tamga/internal/docstore"
 )
 
 type Kind string
@@ -91,6 +94,9 @@ type Store interface {
 }
 
 type MemoryStore struct {
+	// wmu serialises changes; mu guards the working copy.
+	wmu        sync.Mutex
+	persist    docstore.Persister
 	mu         sync.RWMutex
 	data       map[string]Webhook
 	http       *http.Client
@@ -126,6 +132,48 @@ func (s *MemoryStore) Correlator() *CorrelationEngine {
 
 var ErrNotFound = errors.New("webhook not found")
 
+// Persist attaches backing storage and loads what it holds. From then on a
+// change is written there before it is applied here.
+func (s *MemoryStore) Persist(p docstore.Persister) error {
+	s.wmu.Lock()
+	s.persist = p
+	s.wmu.Unlock()
+	return s.Reload()
+}
+
+// Reload replaces the working copy with what the backing storage holds.
+// When a webhook last fired is known only to the replica that fired it, so
+// that is kept.
+func (s *MemoryStore) Reload() error {
+	s.wmu.Lock()
+	defer s.wmu.Unlock()
+	if s.persist == nil {
+		return nil
+	}
+	fresh := make(map[string]Webhook)
+	err := s.persist.All(func(id string, raw []byte) error {
+		var w Webhook
+		if err := json.Unmarshal(raw, &w); err != nil {
+			return err
+		}
+		fresh[id] = w
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	for id, old := range s.data {
+		if w, ok := fresh[id]; ok && old.LastFired.After(w.LastFired) {
+			w.LastFired = old.LastFired
+			fresh[id] = w
+		}
+	}
+	s.data = fresh
+	s.mu.Unlock()
+	return nil
+}
+
 func (s *MemoryStore) List() []Webhook {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -158,6 +206,13 @@ func (s *MemoryStore) Create(w Webhook) (Webhook, error) {
 	_, _ = rand.Read(buf)
 	w.ID = hex.EncodeToString(buf)
 	w.CreatedAt = time.Now().UTC()
+	s.wmu.Lock()
+	defer s.wmu.Unlock()
+	if s.persist != nil {
+		if err := s.persist.Put(w.ID, w); err != nil {
+			return Webhook{}, err
+		}
+	}
 	s.mu.Lock()
 	s.data[w.ID] = w
 	s.mu.Unlock()
@@ -165,11 +220,11 @@ func (s *MemoryStore) Create(w Webhook) (Webhook, error) {
 }
 
 func (s *MemoryStore) Update(id string, w Webhook) (Webhook, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	cur, ok := s.data[id]
-	if !ok {
-		return Webhook{}, ErrNotFound
+	s.wmu.Lock()
+	defer s.wmu.Unlock()
+	cur, err := s.Get(id)
+	if err != nil {
+		return Webhook{}, err
 	}
 	if strings.TrimSpace(w.Label) != "" {
 		cur.Label = strings.TrimSpace(w.Label)
@@ -205,17 +260,31 @@ func (s *MemoryStore) Update(id string, w Webhook) (Webhook, error) {
 		cur.ThresholdWindowSecs = w.ThresholdWindowSecs
 		cur.CooldownSecs = w.CooldownSecs
 	}
+	if s.persist != nil {
+		if err := s.persist.Put(id, cur); err != nil {
+			return Webhook{}, err
+		}
+	}
+	s.mu.Lock()
 	s.data[id] = cur
+	s.mu.Unlock()
 	return cur, nil
 }
 
 func (s *MemoryStore) Delete(id string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if _, ok := s.data[id]; !ok {
-		return ErrNotFound
+	s.wmu.Lock()
+	defer s.wmu.Unlock()
+	if _, err := s.Get(id); err != nil {
+		return err
 	}
+	if s.persist != nil {
+		if err := s.persist.Delete(id); err != nil {
+			return err
+		}
+	}
+	s.mu.Lock()
 	delete(s.data, id)
+	s.mu.Unlock()
 	return nil
 }
 

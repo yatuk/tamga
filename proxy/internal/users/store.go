@@ -4,11 +4,16 @@
 package users
 
 import (
+	"encoding/json"
 	"errors"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/rs/zerolog/log"
+
+	"github.com/yatuk/tamga/internal/docstore"
 )
 
 // Role is the RBAC role assigned to a team member. It maps to scope in the
@@ -53,8 +58,46 @@ type Store interface {
 }
 
 type MemoryStore struct {
-	mu   sync.RWMutex
-	data map[string]Member
+	// wmu serialises changes; mu guards the working copy that every
+	// dashboard request reads.
+	wmu     sync.Mutex
+	mu      sync.RWMutex
+	data    map[string]Member
+	persist docstore.Persister
+}
+
+// Persist attaches backing storage and loads what it holds. From then on a
+// change is written there before it is applied here.
+func (s *MemoryStore) Persist(p docstore.Persister) error {
+	s.wmu.Lock()
+	s.persist = p
+	s.wmu.Unlock()
+	return s.Reload()
+}
+
+// Reload replaces the working copy with what the backing storage holds.
+func (s *MemoryStore) Reload() error {
+	s.wmu.Lock()
+	defer s.wmu.Unlock()
+	if s.persist == nil {
+		return nil
+	}
+	fresh := make(map[string]Member)
+	err := s.persist.All(func(id string, raw []byte) error {
+		var m Member
+		if err := json.Unmarshal(raw, &m); err != nil {
+			return err
+		}
+		fresh[id] = m
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	s.data = fresh
+	s.mu.Unlock()
+	return nil
 }
 
 func NewMemoryStore() *MemoryStore {
@@ -80,23 +123,43 @@ func (s *MemoryStore) Set(userID, role string) (Member, error) {
 	if !IsValidRole(role) {
 		return Member{}, errors.New("invalid role")
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.wmu.Lock()
+	defer s.wmu.Unlock()
 	m := Member{UserID: userID, Role: role, UpdatedAt: time.Now().UTC()}
-	if cur, ok := s.data[userID]; ok {
+	s.mu.RLock()
+	cur, ok := s.data[userID]
+	s.mu.RUnlock()
+	if ok {
 		cur.Role = role
 		cur.UpdatedAt = m.UpdatedAt
-		s.data[userID] = cur
-		return cur, nil
+		m = cur
 	}
+	if s.persist != nil {
+		// Only the assignment is stored; name and email come from Clerk.
+		if err := s.persist.Put(userID, Member{UserID: m.UserID, Role: m.Role, UpdatedAt: m.UpdatedAt}); err != nil {
+			return Member{}, err
+		}
+	}
+	s.mu.Lock()
 	s.data[userID] = m
+	s.mu.Unlock()
 	return m, nil
 }
 
 func (s *MemoryStore) Delete(userID string) {
+	s.wmu.Lock()
+	defer s.wmu.Unlock()
+	if s.persist != nil {
+		if err := s.persist.Delete(userID); err != nil {
+			// The role stays until the write goes through: removing it
+			// here only would bring it back on the next reload.
+			log.Warn().Err(err).Str("user_id", userID).Msg("team role: delete failed")
+			return
+		}
+	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	delete(s.data, userID)
+	s.mu.Unlock()
 }
 
 func (s *MemoryStore) List() []Member {

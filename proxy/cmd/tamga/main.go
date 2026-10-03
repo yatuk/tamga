@@ -24,6 +24,7 @@ import (
 	"github.com/yatuk/tamga/internal/budget"
 	"github.com/yatuk/tamga/internal/cache"
 	"github.com/yatuk/tamga/internal/config"
+	"github.com/yatuk/tamga/internal/docstore"
 	"github.com/yatuk/tamga/internal/events"
 	"github.com/yatuk/tamga/internal/incidents"
 	"github.com/yatuk/tamga/internal/patterns"
@@ -312,6 +313,7 @@ func main() {
 	webhookStore := webhooks.NewMemoryStore()
 	patternStore := patterns.NewMemoryStore()
 	userStore := users.NewMemoryStore()
+	persistSettings(cfg, pgStore, patternStore, userStore, webhookStore)
 	ssoStore := store.NewMemorySSOSettingsStore()
 	clerkClient := users.NewClerkClient(cfg.ClerkSecretKey)
 	var policyHistory policyhistory.Store
@@ -866,4 +868,64 @@ func intField(m map[string]any, key string) int {
 func retentionSchedulerEnabled() bool {
 	e := strings.TrimSpace(os.Getenv("TAMGA_RETENTION_ENABLED"))
 	return e == "1" || strings.EqualFold(e, "true")
+}
+
+// settingsReloadInterval is how long a change to patterns, team roles or
+// webhooks made on one replica takes to reach the others.
+const settingsReloadInterval = 30 * time.Second
+
+// persistSettings puts the database behind the pattern, team-role and
+// webhook stores, so they survive a restart and agree across replicas.
+// Without a database they stay in memory, as before.
+func persistSettings(cfg *config.Config, pg *store.PostgresStore, pats *patterns.MemoryStore, team *users.MemoryStore, hooks *webhooks.MemoryStore) {
+	if pg == nil {
+		log.Warn().Msg("settings: no database configured, custom patterns, team roles and webhooks are kept in memory and lost on restart")
+		return
+	}
+	pool := pg.Pool()
+	if err := docstore.Init(context.Background(), pool); err != nil {
+		log.Warn().Err(err).Msg("settings: database unavailable, custom patterns, team roles and webhooks are kept in memory and lost on restart")
+		return
+	}
+	type reloadable interface{ Reload() error }
+	var live []reloadable
+
+	if err := pats.Persist(docstore.NewTable(pool, "pattern", nil)); err != nil {
+		log.Warn().Err(err).Msg("settings: custom patterns could not be loaded")
+	}
+	live = append(live, pats)
+	if err := team.Persist(docstore.NewTable(pool, "team_role", nil)); err != nil {
+		log.Warn().Err(err).Msg("settings: team roles could not be loaded")
+	}
+	live = append(live, team)
+
+	// A webhook holds a URL and often a token that are credentials for
+	// someone else's system. They go to the database encrypted or not at
+	// all, and the ephemeral vault key would not survive the restart.
+	if cfg.VaultKey == "" {
+		log.Warn().Msg("settings: TAMGA_VAULT_KEY is not set, webhooks are kept in memory and lost on restart")
+	} else if key, err := vault.KeyFromBase64(cfg.VaultKey); err != nil {
+		log.Warn().Err(err).Msg("settings: invalid TAMGA_VAULT_KEY, webhooks are kept in memory and lost on restart")
+	} else if seal, err := vault.NewCipher(key); err != nil {
+		log.Warn().Err(err).Msg("settings: cipher init failed, webhooks are kept in memory and lost on restart")
+	} else {
+		if err := hooks.Persist(docstore.NewTable(pool, "webhook", seal)); err != nil {
+			log.Warn().Err(err).Msg("settings: webhooks could not be loaded")
+		}
+		live = append(live, hooks)
+	}
+	log.Info().Int("patterns", len(pats.List())).Int("team_roles", len(team.List())).Int("webhooks", len(hooks.List())).
+		Msg("settings backed by postgres")
+
+	go func() {
+		t := time.NewTicker(settingsReloadInterval)
+		defer t.Stop()
+		for range t.C {
+			for _, s := range live {
+				if err := s.Reload(); err != nil {
+					log.Warn().Err(err).Msg("settings: reload failed, keeping the current copy")
+				}
+			}
+		}
+	}()
 }

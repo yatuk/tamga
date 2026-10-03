@@ -80,7 +80,7 @@ func (cfg Config) handleTeamRolePut(w http.ResponseWriter, r *http.Request) {
 	}
 	m, err := cfg.Users.Set(id, body.Role)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		writeStoreError(w, err)
 		return
 	}
 	if cfg.Audit != nil {

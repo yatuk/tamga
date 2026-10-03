@@ -1,5 +1,7 @@
-// Package patterns implements an in-memory store for user-defined custom
-// detection patterns (regex or literal). The dashboard exposes these as a
+// Package patterns implements the store for user-defined custom detection
+// patterns (regex or literal). The working copy is in memory, because the
+// custom scanner reads it on every request; with a Persister attached it is
+// loaded from and written through to the database. The dashboard exposes these as a
 // distinct surface from built-in scanners so analysts can iterate on
 // organization-specific terms without editing policy YAML.
 package patterns
@@ -7,12 +9,15 @@ package patterns
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"regexp"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/yatuk/tamga/internal/docstore"
 )
 
 const (
@@ -54,8 +59,47 @@ type Store interface {
 
 // MemoryStore is a thread-safe in-memory implementation.
 type MemoryStore struct {
-	mu   sync.RWMutex
-	data map[string]Pattern
+	// wmu serialises changes, so a slow write to the database never holds
+	// the lock the scanner reads under.
+	wmu     sync.Mutex
+	mu      sync.RWMutex
+	data    map[string]Pattern
+	persist docstore.Persister
+}
+
+// Persist attaches backing storage and loads what it holds. From then on a
+// change is written there before it is applied here.
+func (s *MemoryStore) Persist(p docstore.Persister) error {
+	s.wmu.Lock()
+	s.persist = p
+	s.wmu.Unlock()
+	return s.Reload()
+}
+
+// Reload replaces the working copy with what the backing storage holds,
+// which is how a change made on another replica arrives.
+func (s *MemoryStore) Reload() error {
+	s.wmu.Lock()
+	defer s.wmu.Unlock()
+	if s.persist == nil {
+		return nil
+	}
+	fresh := make(map[string]Pattern)
+	err := s.persist.All(func(id string, raw []byte) error {
+		var p Pattern
+		if err := json.Unmarshal(raw, &p); err != nil {
+			return err
+		}
+		fresh[id] = p
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	s.data = fresh
+	s.mu.Unlock()
+	return nil
 }
 
 // NewMemoryStore creates an in-memory pattern store.
@@ -138,6 +182,13 @@ func (s *MemoryStore) Create(p Pattern) (Pattern, error) {
 	normalized.ID = newID()
 	normalized.CreatedAt = now
 	normalized.UpdatedAt = now
+	s.wmu.Lock()
+	defer s.wmu.Unlock()
+	if s.persist != nil {
+		if err := s.persist.Put(normalized.ID, normalized); err != nil {
+			return Pattern{}, err
+		}
+	}
 	s.mu.Lock()
 	s.data[normalized.ID] = normalized
 	s.mu.Unlock()
@@ -149,25 +200,39 @@ func (s *MemoryStore) Update(id string, p Pattern) (Pattern, error) {
 	if err != nil {
 		return Pattern{}, err
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	cur, ok := s.data[id]
+	s.wmu.Lock()
+	defer s.wmu.Unlock()
+	cur, ok := s.Get(id)
 	if !ok {
 		return Pattern{}, ErrNotFound
 	}
 	normalized.ID = cur.ID
 	normalized.CreatedAt = cur.CreatedAt
 	normalized.UpdatedAt = time.Now().UTC()
+	if s.persist != nil {
+		if err := s.persist.Put(id, normalized); err != nil {
+			return Pattern{}, err
+		}
+	}
+	s.mu.Lock()
 	s.data[id] = normalized
+	s.mu.Unlock()
 	return normalized, nil
 }
 
 func (s *MemoryStore) Delete(id string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if _, ok := s.data[id]; !ok {
+	s.wmu.Lock()
+	defer s.wmu.Unlock()
+	if _, ok := s.Get(id); !ok {
 		return ErrNotFound
 	}
+	if s.persist != nil {
+		if err := s.persist.Delete(id); err != nil {
+			return err
+		}
+	}
+	s.mu.Lock()
 	delete(s.data, id)
+	s.mu.Unlock()
 	return nil
 }
