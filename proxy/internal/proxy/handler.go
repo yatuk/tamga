@@ -27,6 +27,7 @@ import (
 	"github.com/yatuk/tamga/internal/cache"
 	"github.com/yatuk/tamga/internal/config"
 	"github.com/yatuk/tamga/internal/events"
+	"github.com/yatuk/tamga/internal/extract"
 	"github.com/yatuk/tamga/internal/policy"
 	"github.com/yatuk/tamga/internal/ratelimit"
 	"github.com/yatuk/tamga/internal/scanner"
@@ -437,6 +438,24 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 
 	w.Header().Set("X-Tamga-Max-Body-Bytes", strconv.Itoa(maxBodyBytes))
 	w.Header().Set("X-Tamga-Body-Bytes", strconv.Itoa(len(body)))
+
+	// A JSON body that two parsers can read differently cannot be scanned
+	// with confidence: the provider may act on a value the scanners never saw.
+	if isJSONBody(r, body) {
+		if strictErr := extract.CheckStrict(body); strictErr != nil {
+			extract.RecordMalformed(strictErr.Reason)
+			logger.Warn().
+				Str("reason", strictErr.Reason).
+				Int("offset", strictErr.Offset).
+				Str("on_malformed", pol.OnMalformedJSON()).
+				Msg("ambiguous JSON body")
+			if pol.OnMalformedJSON() == policy.MalformedBlock {
+				writeInvalidJSON(w, requestID, strictErr)
+				return
+			}
+			w.Header().Set("X-Tamga-Scan-Mode", "raw")
+		}
+	}
 
 	scanCtx, scanSpan := telemetry.Tracer().Start(ctx, "scanner.scan_all",
 		trace.WithAttributes(
@@ -1381,6 +1400,47 @@ func writePolicyError(w http.ResponseWriter, requestID string, code int, typ, ms
 		"error": map[string]interface{}{
 			"message":    msg,
 			"type":       typ,
+			"request_id": requestID,
+		},
+	})
+}
+
+// isJSONBody reports whether the request claims to carry JSON. Uploads
+// (multipart audio, files) and bodiless requests are left to their own rules.
+// A missing Content-Type counts when the body opens like JSON, so leaving the
+// header off is not a way around the check.
+func isJSONBody(r *http.Request, body []byte) bool {
+	if len(body) == 0 {
+		return false
+	}
+	ct := strings.ToLower(strings.TrimSpace(r.Header.Get("Content-Type")))
+	if ct == "" {
+		for _, c := range body {
+			switch c {
+			case ' ', '\t', '\r', '\n':
+				continue
+			case '{', '[':
+				return true
+			}
+			return false
+		}
+		return false
+	}
+	return strings.HasPrefix(ct, "application/json") || strings.Contains(ct, "+json")
+}
+
+// writeInvalidJSON refuses an ambiguous body. The key name is reported; its
+// value is not, so the response never echoes request content.
+func writeInvalidJSON(w http.ResponseWriter, requestID string, e *extract.StrictError) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Tamga-Request-Id", requestID)
+	w.WriteHeader(http.StatusBadRequest)
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"error": map[string]interface{}{
+			"code":       "tamga_invalid_json",
+			"message":    "Request body is ambiguous JSON: " + e.Error(),
+			"type":       "invalid_request_error",
+			"reason":     e.Reason,
 			"request_id": requestID,
 		},
 	})

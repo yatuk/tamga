@@ -157,6 +157,18 @@ providers:
 #     max_buffer_bytes: 8192
 
 # ---------------------------------------------------------------------------
+# Scan stage
+# ---------------------------------------------------------------------------
+# on_malformed: what to do with a JSON body that two parsers can read
+# differently — a key repeated in one object, bytes that are not UTF-8, or
+# text that is not strict JSON (comments, trailing commas).
+#   block     answer 400 (code tamga_invalid_json). The default.
+#   raw_scan  scan the body as plain bytes and forward it, with
+#             X-Tamga-Scan-Mode: raw on the response.
+scan:
+  on_malformed: block
+
+# ---------------------------------------------------------------------------
 # RBAC exception framework (opt-in)
 # ---------------------------------------------------------------------------
 # Exceptions allow specific admin/security roles to bypass policy rules with

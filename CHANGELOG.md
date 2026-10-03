@@ -78,6 +78,18 @@
   - Model families are derived from the name for models the proxy does not
     know (`gpt-5-mini` → `gpt-5`, `qwen3:32b` → `qwen3`).
 
+### Request parsing
+- **Ambiguous JSON bodies are refused.** A request whose body repeats a key
+  inside one object, is not valid UTF-8, or is not strict JSON (comments,
+  trailing commas, `NaN`) now gets `400` with code `tamga_invalid_json`
+  instead of being forwarded. Parsers disagree on such bodies, so the proxy
+  could scan one value while the provider acts on another. Today's byte-level
+  scan reads every copy, so this was not a working bypass; it becomes one as
+  soon as scanning is message-aware, which is why the check lands first.
+  `scan.on_malformed: raw_scan` restores forwarding; `tamga_malformed_json_total`
+  counts by reason. Requests that do not claim JSON (uploads) are untouched,
+  and an unpaired surrogate inside a string value is still accepted.
+
 ### Detection
 - **Recall on the red-team corpus went from 0.495 to 0.896 with no false
   positives** (was 3). Read `docs/benchmarks/README.md` before quoting it:

@@ -134,6 +134,19 @@ func ValidateSemantics(p *Policy) []ValidationIssue {
 		})
 	}
 
+	if p.Scan != nil {
+		switch p.Scan.OnMalformed {
+		case "", MalformedBlock, MalformedRawScan:
+		default:
+			issues = append(issues, ValidationIssue{
+				Field:    "scan.on_malformed",
+				Rule:     "unknown_value",
+				Message:  "must be \"block\" or \"raw_scan\"",
+				Severity: "error",
+			})
+		}
+	}
+
 	if p.BodyLimits != nil {
 		if p.BodyLimits.Default.MaxBytes <= 0 {
 			issues = append(issues, ValidationIssue{

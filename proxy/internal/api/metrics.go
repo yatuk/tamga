@@ -6,6 +6,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/yatuk/tamga/internal/extract"
 	"github.com/yatuk/tamga/internal/scanner"
 )
 
@@ -92,6 +93,14 @@ func (cfg Config) handleMetrics(w http.ResponseWriter, _ *http.Request) {
 	_, _ = fmt.Fprintln(w, "# TYPE tamga_scan_degraded_total counter")
 	for reason, count := range scanner.ScanDegradedStats() {
 		_, _ = fmt.Fprintf(w, "tamga_scan_degraded_total{reason=\"%s\"} %d\n", reason, count)
+	}
+
+	// JSON bodies that parsers can read differently (duplicate keys, invalid
+	// UTF-8, not JSON). Blocked or raw-scanned according to scan.on_malformed.
+	_, _ = fmt.Fprintln(w, "# HELP tamga_malformed_json_total Request bodies that were ambiguous JSON, by reason.")
+	_, _ = fmt.Fprintln(w, "# TYPE tamga_malformed_json_total counter")
+	for reason, count := range extract.MalformedStats() {
+		_, _ = fmt.Fprintf(w, "tamga_malformed_json_total{reason=\"%s\"} %d\n", reason, count)
 	}
 
 	// Scanner worker pool metrics (only when pool is enabled).

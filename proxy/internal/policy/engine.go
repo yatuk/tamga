@@ -364,6 +364,33 @@ type Policy struct {
 	OperatorState  *OperatorStateConfig `yaml:"operator_state" json:"operator_state"`
 	Vault          *VaultConfig         `yaml:"vault" json:"vault"`
 	Canary         *CanaryConfig        `yaml:"canary" json:"canary"`
+	Scan           *ScanConfig          `yaml:"scan" json:"scan"`
+}
+
+// Values of scan.on_malformed.
+const (
+	// MalformedBlock answers 400 to a body that parsers can read differently.
+	MalformedBlock = "block"
+	// MalformedRawScan scans such a body as plain bytes and forwards it.
+	MalformedRawScan = "raw_scan"
+)
+
+// ScanConfig holds settings for the scan stage as a whole, as opposed to the
+// per-finding rules under "rules".
+type ScanConfig struct {
+	// OnMalformed decides what happens to a JSON body that is ambiguous:
+	// duplicate keys, invalid UTF-8, or not JSON at all. Empty means block.
+	OnMalformed string `yaml:"on_malformed" json:"on_malformed"`
+}
+
+// OnMalformedJSON returns the action for an ambiguous JSON body. It blocks
+// unless the policy asks for raw_scan: a body the proxy and the provider can
+// read differently is one the proxy cannot vouch for.
+func (p *Policy) OnMalformedJSON() string {
+	if p != nil && p.Scan != nil && p.Scan.OnMalformed == MalformedRawScan {
+		return MalformedRawScan
+	}
+	return MalformedBlock
 }
 
 // VaultConfig enables reversible PII tokenization. When enabled, PII that would

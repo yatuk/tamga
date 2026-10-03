@@ -36,6 +36,10 @@ deploy it where only trusted applications can reach it, and note:
 - The proxy fails open when a scanner errors, panics or is shed under load.
   Watch `tamga_scan_degraded_total` and the `X-Tamga-Scan-Degraded` response
   header.
+- A JSON body that parsers can read differently (a repeated key, invalid
+  UTF-8, non-standard JSON) is refused with 400 by default. Setting
+  `scan.on_malformed: raw_scan` forwards it instead; `tamga_malformed_json_total`
+  counts both cases.
 
 ## Fixed on `main` (unreleased)
 
