@@ -60,7 +60,7 @@ export function IntegrationsPresetGrid({ hooks, onConnect }: Props) {
       <h2 id="destinations-heading" className="font-mono text-[11px] font-medium tracking-[0.14em] text-fg-muted uppercase">
         Add a destination
       </h2>
-      <ul id="destination-list" className="grid gap-px border bg-border sm:grid-cols-2 xl:grid-cols-3">
+      <ul id="destination-list" className="flex flex-wrap gap-px border bg-border *:min-w-64 *:flex-1 *:basis-[calc(33.333%-1px)]">
         {presets.map((p) => (
           <PresetCard key={p.kind} preset={p} connected={connectedOf(p.kind)} onConnect={onConnect} />
         ))}

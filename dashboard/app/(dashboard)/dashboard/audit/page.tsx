@@ -10,7 +10,7 @@ import { PageHeader } from "@/components/app/page-header";
 import { Panel } from "@/components/app/panel";
 import { Stat, StatGrid } from "@/components/app/stat";
 import { AdminKeyRequired, EmptyState, ErrorState, SkeletonRows } from "@/components/app/states";
-import { StatusBadge } from "@/components/app/status-badge";
+import { StatusBadge, type Tone } from "@/components/app/status-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
@@ -76,6 +76,15 @@ export default function AuditPage() {
     });
   }, [items, q, kind, actor]);
 
+  // An empty log has nothing to verify; that is a neutral fact, not a pass.
+  const chainState: { label: string; tone: Tone } = !chain
+    ? { label: "Chain not verified", tone: "neutral" }
+    : !chain.chain_ok
+      ? { label: `Chain broken at entry ${chain.broken_at ?? "?"}`, tone: "critical" }
+      : chain.entries === 0
+        ? { label: "No entries to verify", tone: "neutral" }
+        : { label: `Chain intact · ${formatInt(chain.entries)} entries`, tone: "pass" };
+
   const filtering = Boolean(q || kind || actor);
   const clearFilters = () => {
     setQ("");
@@ -90,13 +99,7 @@ export default function AuditPage() {
       actions={
         adminKey ? (
           <>
-            {chain ? (
-              <StatusBadge tone={chain.chain_ok ? "pass" : "critical"}>
-                {chain.chain_ok ? `Chain intact · ${formatInt(chain.entries)} entries` : `Chain broken at entry ${chain.broken_at ?? "?"}`}
-              </StatusBadge>
-            ) : (
-              <StatusBadge>Chain not verified</StatusBadge>
-            )}
+            <StatusBadge tone={chainState.tone}>{chainState.label}</StatusBadge>
             <Button
               size="sm"
               variant="outline"
@@ -136,8 +139,9 @@ export default function AuditPage() {
         <Stat label="Kinds of action" value={kinds.length} />
         <Stat
           label="Chain"
-          value={!chain ? "—" : chain.chain_ok ? "Intact" : "Broken"}
-          tone={!chain ? "default" : chain.chain_ok ? "pass" : "critical"}
+          value={!chain || chain.entries === 0 ? "—" : chain.chain_ok ? "Intact" : "Broken"}
+          tone={!chain || chain.entries === 0 ? "default" : chain.chain_ok ? "pass" : "critical"}
+          hint={chain?.entries === 0 ? "Nothing to verify yet" : undefined}
           tooltip="Whether every entry still links to the one before it."
         />
       </StatGrid>
