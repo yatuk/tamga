@@ -19,7 +19,7 @@ export async function generateMetadata({
   const guide = GUIDES[kind as WebhookKind];
   if (!guide) return { title: "Integration not found" };
   return {
-    title: `${guide.name} setup · Integrations`,
+    title: { absolute: `${guide.name} setup · Tamga` },
     description: guide.overview,
   };
 }
