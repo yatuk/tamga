@@ -52,7 +52,12 @@ func cachedProxy(t *testing.T, assistantText string) *httptest.Server {
 func postChat(t *testing.T, srv *httptest.Server) (int, string, string) {
 	t.Helper()
 	body := []byte(`{"model":"gpt-4o-mini","messages":[{"role":"user","content":"anahtar neydi?"}]}`)
-	resp, err := http.Post(srv.URL+"/v1/chat/completions", "application/json", bytes.NewReader(body))
+	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/v1/chat/completions", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	// The cache serves only a caller it can name; this one is named by its
+	// provider credential (not a real key).
+	req.Header.Set("Authorization", "Bearer sk-test-cache-output-scan")
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -116,7 +116,9 @@ func TestCache_TTLExpiry(t *testing.T) {
 	}
 }
 
-func TestCache_ZeroTTLDoesNotExpire(t *testing.T) {
+// An entry stored without a TTL used to live for ever. It now lives for the
+// ceiling: present at once, and TestCache_EntryExpiresAtTheCeiling sees it go.
+func TestCache_ZeroTTLLivesForTheCeiling(t *testing.T) {
 	c := New(64)
 	e := &Entry{
 		Key:      "no-ttl-key",
@@ -124,9 +126,12 @@ func TestCache_ZeroTTLDoesNotExpire(t *testing.T) {
 		Model:    "gpt-4",
 		Body:     []byte("data"),
 		StoredAt: time.Now(),
-		TTL:      0, // never expires
+		TTL:      0, // no TTL of its own
 	}
 	c.Set(e)
+	if e.TTL != MaxTTL {
+		t.Fatalf("stored TTL = %v, want the ceiling %v", e.TTL, MaxTTL)
+	}
 	got, ok := c.Get("no-ttl-key")
 	if !ok {
 		t.Fatal("expected cache hit for zero TTL")
@@ -404,12 +409,12 @@ func TestCache_Set_DefaultTTLWhenRedis(t *testing.T) {
 		Model:    "gpt-4",
 		Body:     []byte("data"),
 		StoredAt: time.Now(),
-		TTL:      0, // zero -> should default to 30 minutes for Redis
+		TTL:      0, // zero -> kept for the ceiling, in Redis as locally
 	}
 	c.Set(e)
 
-	if setTTL != 30*time.Minute {
-		t.Fatalf("expected default TTL 30m for Redis, got %v", setTTL)
+	if setTTL != MaxTTL {
+		t.Fatalf("expected the ceiling %v for Redis, got %v", MaxTTL, setTTL)
 	}
 }
 

@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -913,6 +914,32 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 		upstreamHooks = cfg.UpstreamRegistry.Hooks()
 	}
 
+	// Phase 3C — the cache key, worked out once on the body that is about to
+	// be sent so the lookup and the store below agree on it. It names who the
+	// answer is for (see cache.Identity) and stays empty when the request may
+	// not use the cache: no provider credential and no verified key, or a
+	// vaulted request, whose placeholders mean something to this request only.
+	cacheEnabled := cfg.Cache != nil && pol != nil && pol.Cache != nil && pol.Cache.Enabled
+	cacheKey := ""
+	if cacheEnabled && r.Method == http.MethodPost && !vaultActive {
+		proxySigns := false
+		if provider == "bedrock" {
+			_, proxySigns = bedrockCredentials()
+		}
+		cacheKey = cache.Key(cache.KeyParts{
+			// For an anonymous request the organisation is only a claim;
+			// Verified keeps it away from every entry a key produced.
+			Org:      orgIDForRequest(r, cfg),
+			Verified: who.verified(),
+			Identity: cfg.Cache.Identity(r, who.KeyID, proxySigns),
+			Provider: provider,
+			Model:    extractModelFromBody(body),
+			Path:     r.URL.Path,
+			Query:    r.URL.RawQuery,
+			Body:     body,
+		})
+	}
+
 	upCtx, upSpan := telemetry.Tracer().Start(ctx, "upstream.request",
 		trace.WithSpanKind(trace.SpanKindClient),
 	)
@@ -936,6 +963,11 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 			req.Body = io.NopCloser(bytes.NewReader(body))
 			req.ContentLength = int64(len(body))
 			req.Header.Del("Transfer-Encoding")
+			// The answer has to be readable here: the output scan, the vault
+			// and the canary all look inside it. The caller's Accept-Encoding
+			// is not passed on, so the transport asks for gzip on its own
+			// account and hands the answer over decoded.
+			req.Header.Del("Accept-Encoding")
 			// X-Tamga-* request headers are instructions to the proxy
 			// (identity, operator state). They are not the provider's
 			// business, so none of them leave the network.
@@ -963,11 +995,6 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 			upstreams:     cfg.UpstreamURLs,
 			providers:     upstreamProviders,
 			maxRetries:    maxUpstreamRetries(cfg.Config),
-			// The answer has to be readable here: the output scan, the vault
-			// and the canary all look inside it. The caller's Accept-Encoding
-			// is not passed on, so the transport asks for gzip on its own
-			// account and hands the answer over decoded.
-			req.Header.Del("Accept-Encoding")
 			breaker:       cfg.Breaker,
 			providerPool:  providerPool,
 			upstreamHooks: upstreamHooks,
@@ -1003,6 +1030,14 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 				pol.OutputRules.Streaming != nil && pol.OutputRules.Streaming.Enabled
 			guardStream := containsCI(ct, "text/event-stream") && resp.StatusCode < 300 &&
 				(streamScan || vaultActive || canaryToken != "")
+			// An answer that arrives encoded anyway (the provider was not
+			// asked to) cannot be read. When something is set to read it,
+			// it is not forwarded unread.
+			if enc := strings.TrimSpace(resp.Header.Get("Content-Encoding")); enc != "" && !strings.EqualFold(enc, "identity") {
+				if (pol != nil && pol.OutputRules != nil && pol.OutputRules.Enabled) || vaultActive || canaryToken != "" {
+					return errUnreadableResponse
+				}
+			}
 			respBody, respBuffered, errWrap := wrapResponseForOutputScan(resp, pol, vaultActive && !guardStream)
 			if errWrap != nil {
 				return errWrap
@@ -1030,14 +1065,6 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 				}
 				if respBuffered && detectCanary(string(respBody), canaryToken) {
 					leak := scanner.Finding{
-			// An answer that arrives encoded anyway (the provider was not
-			// asked to) cannot be read. When something is set to read it,
-			// it is not forwarded unread.
-			if enc := strings.TrimSpace(resp.Header.Get("Content-Encoding")); enc != "" && !strings.EqualFold(enc, "identity") {
-				if (pol != nil && pol.OutputRules != nil && pol.OutputRules.Enabled) || vaultActive || canaryToken != "" {
-					return errUnreadableResponse
-				}
-			}
 						Type:           "system_prompt_leak",
 						Category:       "system_prompt_leak",
 						Severity:       "critical",
@@ -1203,20 +1230,27 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 			// without rescanning, so only a response that produced no output
 			// findings (and no canary leak) may be stored. Never cache while
 			// vaulting: respBody still holds placeholders, and caching them
-			// would serve tokenized bodies on later hits.
-			if respBuffered && outputClean && !vaultActive && cfg.Cache != nil && pol != nil && pol.Cache != nil && pol.Cache.Enabled &&
-				resp.StatusCode == http.StatusOK {
-				ttl := time.Duration(pol.Cache.TTLSeconds) * time.Second
-				if ttl <= 0 {
-					ttl = 5 * time.Minute
+			// would serve tokenized bodies on later hits. cacheKey is empty
+			// for a vaulted request and for one that names no caller. A
+			// compressed body is not stored either: a hit is served without
+			// the Content-Encoding that would let the client read it.
+			if respBuffered && outputClean && cacheKey != "" && resp.StatusCode == http.StatusOK &&
+				resp.Header.Get("Content-Encoding") == "" {
+				// The policy's TTL is held to the ceiling here, where the
+				// entry is written, whatever validation let through.
+				ttl, clamped := cache.EffectiveTTL(pol.Cache.TTLSeconds)
+				if clamped && cacheTTLWarned.Swap(int64(pol.Cache.TTLSeconds)) != int64(pol.Cache.TTLSeconds) {
+					log.Warn().Str("component", "proxy").
+						Int("ttl_seconds", pol.Cache.TTLSeconds).
+						Int("ceiling_seconds", int(cache.MaxTTL/time.Second)).
+						Msg("cache.ttl_seconds is above the ceiling; entries are kept for the ceiling")
 				}
 				cfg.Cache.Set(&cache.Entry{
-					Key:         cache.KeyForOrg(orgIDForRequest(r, cfg), provider, extractModelFromBody(body), body),
+					Key:         cacheKey,
 					Provider:    provider,
 					Model:       extractModelFromBody(body),
 					Body:        append([]byte(nil), respBody...),
 					ContentType: resp.Header.Get("Content-Type"),
-					StoredAt:    time.Now().UTC(),
 					TTL:         ttl,
 				})
 			}
@@ -1267,25 +1301,52 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 	}
 
 	// Phase 3C — exact-match cache. Only safe for non-streaming POSTs that
-	// actually produced a successful body on first sight. We key on
-	// provider+model+body so personalisation headers don't collapse.
-	cacheEnabled := cfg.Cache != nil && pol != nil && pol.Cache != nil && pol.Cache.Enabled
-	if cacheEnabled && r.Method == http.MethodPost {
-		if entry, ok := cfg.Cache.Get(cache.KeyForOrg(orgIDForRequest(r, cfg), provider, model, body)); ok {
-			w.Header().Set("X-Tamga-Request-Id", requestID)
-			w.Header().Set("X-Tamga-Cache", "hit")
-			w.Header().Set("X-Tamga-Scan-Ms", strconv.FormatInt(scanDuration.Milliseconds(), 10))
-			w.Header().Set("X-Tamga-Scan-Latency-Ms", strconv.FormatInt(scanDuration.Milliseconds(), 10))
-			if entry.ContentType != "" {
-				w.Header().Set("Content-Type", entry.ContentType)
+	// actually produced a successful body on first sight. The key is the one
+	// worked out above: who the answer is for, where it was asked and the body
+	// as forwarded.
+	cacheStatus := ""
+	if cacheEnabled {
+		// The event says when the cache was not consulted. The header keeps
+		// its two values: a caller is told "hit" or "miss" and nothing else.
+		cacheStatus = "bypass"
+		if cacheKey != "" {
+			cacheStatus = "miss"
+			if entry, ok := cfg.Cache.Get(cacheKey); ok {
+				w.Header().Set("X-Tamga-Request-Id", requestID)
+				w.Header().Set("X-Tamga-Cache", "hit")
+				w.Header().Set("X-Tamga-Scan-Ms", strconv.FormatInt(scanDuration.Milliseconds(), 10))
+				w.Header().Set("X-Tamga-Scan-Latency-Ms", strconv.FormatInt(scanDuration.Milliseconds(), 10))
+				w.Header().Set("X-Tamga-Scanner-Version", scanner.ScannerVersion)
+				// What the input scan decided is said on a hit as it is on
+				// a forwarded request.
+				setRiskHeaders(w.Header(), inputRisk, outputRisk)
+				setConfidenceHeaders(w.Header(), findings)
+				if (action == policy.ActionRedact || action == policy.ActionStrip) && redactedCount > 0 {
+					w.Header().Set("X-Tamga-Redacted-Count", strconv.Itoa(redactedCount))
+				}
+				if entry.ContentType != "" {
+					w.Header().Set("Content-Type", entry.ContentType)
+				}
+				w.Header().Set("Content-Length", strconv.Itoa(len(entry.Body)))
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write(entry.Body)
+				logger.Info().
+					Str("cache", "hit").
+					Int64("total_ms", time.Since(start).Milliseconds()).
+					Int("findings", len(findings)).
+					Str("action", string(action)).
+					Str("model", model).
+					Msg("served from cache")
+				// A hit is a request like any other to the request log, the
+				// dashboard and the alerts: same event, marked as a hit.
+				publishEvent(withCacheStatus(ctx, "hit"), cfg, r, requestID, provider, body, findings, action, "request_scanned",
+					float64(scanDuration.Milliseconds()), float64(time.Since(start).Milliseconds()), inputRisk, outputRisk)
+				return
 			}
-			w.Header().Set("Content-Length", strconv.Itoa(len(entry.Body)))
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write(entry.Body)
-			logger.Info().Str("cache", "hit").Msg("served from cache")
-			return
 		}
-		w.Header().Set("X-Tamga-Cache", "miss")
+		if r.Method == http.MethodPost {
+			w.Header().Set("X-Tamga-Cache", "miss")
+		}
 	}
 
 	rev.ServeHTTP(w, r.WithContext(upCtx))
@@ -1300,7 +1361,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 		Str("risk_level", inputRisk.Level).
 		Msg(requestLogMessage(action))
 
-	publishEvent(ctx, cfg, r, requestID, provider, body, findings, action, "request_scanned",
+	publishEvent(withCacheStatus(ctx, cacheStatus), cfg, r, requestID, provider, body, findings, action, "request_scanned",
 		float64(scanDuration.Milliseconds()), float64(time.Since(start).Milliseconds()), inputRisk, outputRisk)
 }
 
@@ -1948,6 +2009,10 @@ func notifyRuleWebhooks(cfg HandlerConfig, pol *policy.Policy, r *http.Request, 
 	cfg.Alerts.NotifyURLs(urls, a)
 }
 
+// errUnreadableResponse stops an encoded upstream answer from being forwarded
+// past a check that could not look inside it.
+var errUnreadableResponse = errors.New("upstream response is encoded and cannot be scanned")
+
 const maxEventBodyBytes = 65536
 
 func setRiskHeaders(h http.Header, in, out scanner.RiskScore) {
@@ -2009,10 +2074,6 @@ func setConfidenceHeaders(h http.Header, findings []scanner.Finding) {
 // Consumed by scanners implementing scanner.ContextualScanner.
 func buildRequestContext(r *http.Request, requestID string, pol *policy.Policy) *scanner.RequestContext {
 	reqCtx := &scanner.RequestContext{
-// errUnreadableResponse stops an encoded upstream answer from being forwarded
-// past a check that could not look inside it.
-var errUnreadableResponse = errors.New("upstream response is encoded and cannot be scanned")
-
 		RequestId:  requestID,
 		OperatorId: strings.TrimSpace(r.Header.Get("X-Tamga-Operator-Id")),
 	}
@@ -2076,7 +2137,30 @@ func publishEvent(ctx context.Context, cfg HandlerConfig, r *http.Request, reque
 		Timestamp:      time.Now().UTC(),
 		InputRisk:      inputRisk,
 		OutputRisk:     outputRisk,
+		CacheStatus:    cacheStatusFrom(ctx),
 	})
+}
+
+// cacheTTLWarned holds the last cache.ttl_seconds the proxy said was above
+// the ceiling, so a policy that asks for too much is reported once and not
+// on every response.
+var cacheTTLWarned atomic.Int64
+
+type cacheStatusKey struct{}
+
+// withCacheStatus marks what the response cache did for the request, for
+// the event published with this context: "hit", "miss", or "bypass" when the
+// cache is on and the request could not use it. Empty leaves ctx as it is.
+func withCacheStatus(ctx context.Context, status string) context.Context {
+	if status == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, cacheStatusKey{}, status)
+}
+
+func cacheStatusFrom(ctx context.Context) string {
+	s, _ := ctx.Value(cacheStatusKey{}).(string)
+	return s
 }
 
 func publishOutputScanHint(ctx context.Context, cfg HandlerConfig, requestID, provider, contentType string) {
