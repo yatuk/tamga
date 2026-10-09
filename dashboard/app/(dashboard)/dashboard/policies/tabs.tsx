@@ -28,6 +28,7 @@ import { api, type PolicyRevision, type PolicySimulateResult } from "@/lib/api";
 import { API_BASE, authHeaders } from "@/lib/api/fetch-core";
 import type { CustomEntity } from "@/lib/api/types-core";
 import { toast } from "@/lib/toast";
+import { explainRefusal, RefusalNotice, type Refusal } from "./refusal";
 
 const cap = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);
 const when = (iso?: string) => (iso ? `${dayLabel(iso)}, ${clockTime(iso)}` : "Not recorded");
@@ -206,8 +207,21 @@ function validRegex(pattern: string) {
 }
 
 /** Organisation-specific patterns with their own action: project names, internal IDs, customer codes. */
-export function Entities({ adminKey, readOnly = false }: { adminKey: string; readOnly?: boolean }) {
+export function Entities({
+  adminKey,
+  readOnly = false,
+  dualControl = false,
+}: {
+  adminKey: string;
+  readOnly?: boolean;
+  /** The proxy requires a second person: an entity is then changed in the document and proposed. */
+  dualControl?: boolean;
+}) {
   const qc = useQueryClient();
+  // The form and the list each say their own refusal, where the action was taken.
+  const [addRefusal, setAddRefusal] = useState<Refusal | null>(null);
+  const [deleteRefusal, setDeleteRefusal] = useState<Refusal | null>(null);
+  const locked = readOnly || dualControl;
   const [values, setValues] = useState<EntityValues>(EMPTY);
   const [submitted, setSubmitted] = useState(false);
   const set = <K extends keyof EntityValues>(key: K, value: EntityValues[K]) => setValues((v) => ({ ...v, [key]: value }));
@@ -232,18 +246,25 @@ export function Entities({ adminKey, readOnly = false }: { adminKey: string; rea
       setSubmitted(false);
       toast.success("Entity added", entity.name);
     },
-    onError: (e) => toast.error("Could not add the entity", e.message),
+    onError: (e) => setAddRefusal(explainRefusal(e, "entity-add")),
   });
   const remove = useMutation({
     mutationFn: (name: string) => api.deleteCustomEntity(adminKey, name),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["custom-entities", adminKey] }),
-    onError: (e) => toast.error("Could not delete the entity", e.message),
+    onError: (e) => setDeleteRefusal(explainRefusal(e, "entity-delete")),
   });
   const items = list.data?.items ?? [];
 
   return (
     <div className="t-hunt" style={{ gridTemplateColumns: "minmax(0, 1fr) 24rem", marginTop: 0 }}>
       <Section id="entities" title="Custom entities" note={items.length > 0 ? `${items.length} defined` : undefined}>
+        {dualControl ? (
+          <p className="t-note" style={{ marginTop: "1rem" }}>
+            This proxy requires a second person for every policy change, so entities are not added or deleted here. Change{" "}
+            <span className="t-data">custom_entities</span> in the document under Editor and propose it.
+          </p>
+        ) : null}
+        {deleteRefusal ? <RefusalNotice refusal={deleteRefusal} onClose={() => setDeleteRefusal(null)} /> : null}
         {list.isLoading ? (
           <DataTableSkeleton columnCount={4} rowCount={3} showHeader={false} showToolbar={false} />
         ) : items.length === 0 ? (
@@ -278,7 +299,14 @@ export function Entities({ adminKey, readOnly = false }: { adminKey: string; rea
                     </TableCell>
                     <TableCell>
                       <span className="t-rowactions">
-                        <Remove label={`Delete ${ce.name}`} onConfirm={() => remove.mutate(ce.name)} disabled={remove.isPending || readOnly} />
+                        <Remove
+                          label={`Delete ${ce.name}`}
+                          onConfirm={() => {
+                            setDeleteRefusal(null);
+                            remove.mutate(ce.name);
+                          }}
+                          disabled={remove.isPending || locked}
+                        />
                       </span>
                     </TableCell>
                   </TableRow>
@@ -296,6 +324,7 @@ export function Entities({ adminKey, readOnly = false }: { adminKey: string; rea
           onSubmit={(e) => {
             e.preventDefault();
             setSubmitted(true);
+            setAddRefusal(null);
             if (!nameError && !patternError) create.mutate({ ...values, confidence: 0.85 });
           }}
         >
@@ -343,11 +372,12 @@ export function Entities({ adminKey, readOnly = false }: { adminKey: string; rea
             onChange={(e) => set("description", e.target.value)}
           />
           <div className="t-buttons">
-            <Button type="submit" kind="primary" size="md" disabled={create.isPending || readOnly}>
+            <Button type="submit" kind="primary" size="md" disabled={create.isPending || locked}>
               {create.isPending ? "Adding" : "Add entity"}
             </Button>
           </div>
         </form>
+        {addRefusal ? <RefusalNotice refusal={addRefusal} onClose={() => setAddRefusal(null)} /> : null}
       </Section>
     </div>
   );

@@ -3,11 +3,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "@/lib/toast";
-import { api, type PolicySimulateResult, type TamgaPolicy } from "@/lib/api";
+import { api, type PolicyIssue, type PolicySimulateResult, type TamgaPolicy } from "@/lib/api";
 import { POLICY_DRAFT_STORAGE, POLICY_SAMPLE_STORAGE, POLICY_TAB_IDS } from "./_constants";
 import { useAdminKey } from "@/hooks/useAdminKey";
 import { useEnumParam } from "@/hooks/useUrlState";
 import { stringifyPolicy } from "./policyUtils";
+import { explainRefusal, type Refusal } from "./refusal";
+
+/** How the last save or reload ended, shown under the page head until the next one. */
+export type WriteOutcome =
+  | { kind: "refused"; refusal: Refusal }
+  | { kind: "saved" | "reloaded"; changed: string[]; warnings: PolicyIssue[] };
 
 export function usePoliciesPage() {
   const [adminKey] = useAdminKey();
@@ -15,6 +21,7 @@ export function usePoliciesPage() {
   const [originalYaml, setOriginalYaml] = useState("");
   const [sample, setSample] = useState('Hi, my credit card is 4242 4242 4242 4242');
   const [saving, setSaving] = useState(false);
+  const [outcome, setOutcome] = useState<WriteOutcome | null>(null);
   const [simulating, setSimulating] = useState(false);
   const [simResult, setSimResult] = useState<PolicySimulateResult | null>(null);
   const [tab, setTab] = useEnumParam("tab", POLICY_TAB_IDS, "editor");
@@ -57,12 +64,13 @@ export function usePoliciesPage() {
   }, [activePolicy, draft]);
 
   async function onReload() {
+    setOutcome(null);
     try {
       const res = await api.reloadPolicies(adminKey);
-      toast.success("Policy reloaded from disk", res.name || "default");
+      setOutcome({ kind: "reloaded", changed: res.changed ?? [], warnings: [] });
       await refetch();
     } catch (e) {
-      toast.error("Could not reload the policy", (e as Error).message);
+      setOutcome({ kind: "refused", refusal: explainRefusal(e, "reload") });
     }
   }
 
@@ -78,17 +86,17 @@ export function usePoliciesPage() {
       return;
     }
     setSaving(true);
+    setOutcome(null);
     try {
       const validation = await api.validatePolicy(adminKey, draft);
-      await api.putPolicy(adminKey, draft);
-      const subtitle =
-        validation.warnings?.length ? `Saved with ${validation.warnings.length} warnings.` : "The proxy is now enforcing it.";
-      toast.success("Policy saved", subtitle);
+      const res = await api.putPolicy(adminKey, draft);
+      setOutcome({ kind: "saved", changed: res.changed ?? [], warnings: validation.warnings ?? [] });
       // The proxy writes the document its own way, so take the draft from what it now runs.
       const saved = stringifyPolicy((await refetch()).data?.[0] ?? null);
       if (saved) setDraft(saved);
     } catch (e) {
-      toast.error("Could not save the policy", (e as Error).message);
+      // Said under the page head, where it stays to be read: which sections, which fields.
+      setOutcome({ kind: "refused", refusal: explainRefusal(e, "save") });
     } finally {
       setSaving(false);
     }
@@ -114,6 +122,9 @@ export function usePoliciesPage() {
     sample,
     setSample,
     saving,
+    outcome,
+    setOutcome,
+    refetch,
     simulating,
     simResult,
     tab,

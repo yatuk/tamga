@@ -8,6 +8,8 @@ import { DataNotice, PageHead, Remove, Section } from "@/components/console/page
 import { useHealthDetail } from "@/hooks/useHealth";
 import { POLICY_TABS } from "./_constants";
 import { appendCustomEntity, appendRateLimitTemplate, strengthenInjection } from "./snippets";
+import { Proposals } from "./proposals";
+import { ChangedNotice, RefusalNotice } from "./refusal";
 import { Changes, Competitors, Entities, History, TryIt } from "./tabs";
 import { usePoliciesPage } from "./usePoliciesPage";
 
@@ -24,6 +26,10 @@ export default function PoliciesPage() {
   // A proxy that cannot write its policy file says so; older ones say nothing and are assumed able.
   const readOnly = useHealthDetail().data?.policy_writable === false;
   const dirty = Boolean(m.originalYaml && m.draft && m.originalYaml !== m.draft);
+  // The running policy says whether a change needs a second person. Then nothing is
+  // written directly, and the way to change it is a proposal.
+  const governance = activePolicy?.governance as { require_dual_control?: boolean } | null | undefined;
+  const dualControl = governance?.require_dual_control === true;
   const version = typeof activePolicy?.version === "string" ? activePolicy.version : null;
   const updatedAt = typeof activePolicy?.updated_at === "string" ? activePolicy.updated_at : null;
   const index = Math.max(0, POLICY_TABS.findIndex((t) => t.id === m.tab));
@@ -53,9 +59,15 @@ export default function PoliciesPage() {
             <Button kind="tertiary" size="sm" renderIcon={Renew} onClick={() => void m.onReload()}>
               Reload from disk
             </Button>
-            <Button kind="primary" size="sm" renderIcon={Save} onClick={() => void m.onSave()} disabled={m.saving || !dirty || readOnly}>
-              {m.saving ? "Saving" : "Save and apply"}
-            </Button>
+            {dualControl ? (
+              <Button kind="primary" size="sm" onClick={() => m.setTab("proposals")} disabled={!dirty}>
+                Propose this change
+              </Button>
+            ) : (
+              <Button kind="primary" size="sm" renderIcon={Save} onClick={() => void m.onSave()} disabled={m.saving || !dirty || readOnly}>
+                {m.saving ? "Saving" : "Save and apply"}
+              </Button>
+            )}
           </>
         ) : null}
       </PageHead>
@@ -70,6 +82,33 @@ export default function PoliciesPage() {
           title="The policy file is read-only where the proxy runs."
           subtitle="You can read it here, try a draft against a prompt and see what it would change, but not save. Edit the file there and choose Reload from disk, or mount it writable."
           style={{ marginTop: "1.5rem", maxWidth: "none" }}
+        />
+      ) : null}
+
+      {dualControl ? (
+        <InlineNotification
+          kind="info"
+          lowContrast
+          hideCloseButton
+          title="This proxy requires a second person for every policy change."
+          subtitle="Nothing is saved directly. Propose the draft under Proposals, and someone else approves it with a key of their own."
+          style={{ marginTop: "1.5rem", maxWidth: "none" }}
+        />
+      ) : null}
+
+      {m.outcome?.kind === "refused" ? (
+        <RefusalNotice refusal={m.outcome.refusal} onPropose={() => m.setTab("proposals")} onClose={() => m.setOutcome(null)} />
+      ) : m.outcome ? (
+        <ChangedNotice
+          title={m.outcome.kind === "saved" ? "Policy saved. The proxy is now enforcing it." : "Policy reloaded from disk."}
+          paths={m.outcome.changed}
+          none={
+            m.outcome.kind === "saved"
+              ? "It matched the running policy, so nothing changed."
+              : "The file matched the running policy, so nothing changed."
+          }
+          warnings={m.outcome.warnings}
+          onClose={() => m.setOutcome(null)}
         />
       ) : null}
 
@@ -114,8 +153,23 @@ export default function PoliciesPage() {
                   <TryIt sample={m.sample} onSample={m.setSample} running={m.simulating} onRun={() => void m.onSimulate()} result={m.simResult} />
                 ) : null}
               </TabPanel>
+              <TabPanel>
+                {m.tab === "proposals" ? (
+                  <Proposals
+                    adminKey={m.adminKey}
+                    draft={m.draft}
+                    running={m.originalYaml}
+                    dirty={dirty}
+                    readOnly={readOnly}
+                    dualControl={dualControl}
+                    onApplied={() => void m.refetch()}
+                  />
+                ) : null}
+              </TabPanel>
               <TabPanel>{m.tab === "history" ? <History adminKey={m.adminKey} /> : null}</TabPanel>
-              <TabPanel>{m.tab === "entities" ? <Entities adminKey={m.adminKey} readOnly={readOnly} /> : null}</TabPanel>
+              <TabPanel>
+                {m.tab === "entities" ? <Entities adminKey={m.adminKey} readOnly={readOnly} dualControl={dualControl} /> : null}
+              </TabPanel>
               <TabPanel>{m.tab === "competitors" ? <Competitors adminKey={m.adminKey} /> : null}</TabPanel>
             </TabPanels>
           </Tabs>

@@ -265,7 +265,8 @@ test.describe("Policies", () => {
     await openEditor(page);
     await setEditor(page, text(relabelled(label)));
     await button(page, "Save and apply").click();
-    await expect(toast(page, "Policy saved")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Policy saved. The proxy is now enforcing it.")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("list", { name: "What changed" })).toContainText("version");
     await expect(page.getByText("Unsaved changes")).toBeHidden();
     expect((await readPolicy()).version).toBe(label);
 
@@ -279,7 +280,7 @@ test.describe("Policies", () => {
   test("Reload from disk reads the policy again and changes nothing", async ({ page }) => {
     await openEditor(page);
     await button(page, "Reload from disk").click();
-    await expect(toast(page, "Policy reloaded from disk")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Policy reloaded from disk.")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("Unsaved changes")).toBeHidden();
     expect(text(await readPolicy())).toBe(text(before.policy));
   });

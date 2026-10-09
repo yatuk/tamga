@@ -1201,6 +1201,68 @@ html {
   color: var(--tamga-altered);
   white-space: nowrap;
 }
+/* A notice that carries a list: the list and the action go under the sentence. */
+.tamga .t-refusal .cds--inline-notification__text-wrapper > :not(.cds--inline-notification__title):not(.cds--inline-notification__subtitle) {
+  flex: 0 0 100%;
+}
+.tamga .t-issues {
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+}
+.tamga .t-issues li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 0.75rem;
+  padding: 0.375rem 0;
+  border-top: 1px solid var(--tamga-rule);
+}
+.tamga .t-issues .t-data {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+/* What a write changed, by path. Ochre: it was changed. */
+.tamga .t-changed {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+}
+.tamga .t-changed li {
+  padding: 0.125rem 0.5rem;
+  background: var(--tamga-altered-tint);
+  box-shadow: inset 2px 0 0 var(--tamga-altered-fill);
+  color: var(--tamga-altered);
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+/* Proposals: one waiting change after another, each with its own decision. */
+.tamga .t-proposals > li {
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--tamga-rule);
+}
+.tamga .t-proposal {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.tamga .t-proposal p {
+  overflow-wrap: anywhere;
+}
+.tamga .t-proposals details {
+  margin-top: 0.75rem;
+}
+.tamga .t-proposals summary {
+  width: fit-content;
+  font-size: 0.875rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.tamga .t-proposals details > .t-diff {
+  margin-top: 0.75rem;
+}
 .tamga .t-editor {
   border: 1px solid var(--tamga-ink);
 }

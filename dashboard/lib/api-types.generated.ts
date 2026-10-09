@@ -1282,7 +1282,25 @@ export interface paths {
                 };
             };
         };
-        /** Overwrite the on-disk policy YAML and reload */
+        /**
+         * Overwrite the on-disk policy YAML and reload
+         * @description A direct write. It is refused with 409 `dual_control_required` while
+         *     `governance.require_dual_control` is on in the active policy: open a
+         *     proposal instead. That includes the write that would turn dual
+         *     control off.
+         *
+         *     The admin role may change every section. The analyst role (an API key
+         *     of scope `write`) may change `rules` (except a rule's `notify`),
+         *     `output_rules`, `custom_entities`, `competitors`, `name` and
+         *     `version`; anything else is refused with 403 `admin_role_required`
+         *     and the sections are named in `privileged_sections`. The submitted
+         *     policy is compared with the active one as decoded values, so the
+         *     order of keys, comments and quoting are not changes.
+         *
+         *     A successful write is appended to the policy history and to the audit
+         *     log (`policy.put`) with the caller's verified actor and the paths
+         *     that changed.
+         */
         put: {
             parameters: {
                 query?: never;
@@ -1308,17 +1326,46 @@ export interface paths {
                             ok?: true;
                             name?: string;
                             version?: string;
+                            changed?: components["schemas"]["PolicyChangedPaths"];
+                            /** @description The history revision written for this policy. Absent when no history is configured. */
+                            revision_id?: string;
                         };
                     };
                 };
-                /** @description Empty policy or parse error */
+                /** @description Empty body, or text that does not decode as a policy (YAML syntax, an unknown key, a second document). The body is an object with one string, `error`. */
                 400: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content?: never;
                 };
-                /** @description Semantic validation failed */
+                /** @description The change touches sections that need the admin role. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PolicyPrivilegeError"];
+                    };
+                };
+                /**
+                 * @description `dual_control_required`: the active policy requires dual control and the policy cannot be written directly.
+                 *     `policy_read_only`: the policy file is read-only where the proxy runs.
+                 */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PolicyWriteRefused"];
+                    };
+                };
+                /**
+                 * @description The policy decodes but is refused: a semantic error, a value outside
+                 *     its bounds (a pattern past the limits, a negative quota, a body limit
+                 *     out of range) or a pool endpoint the upstream rules do not allow. One
+                 *     issue per field.
+                 */
                 422: {
                     headers: {
                         [name: string]: unknown;
@@ -1345,7 +1392,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Reload the policy from disk without changing content */
+        /**
+         * Reload the policy from disk without changing content
+         * @description Brings in whatever the policy file on disk holds. It is not a direct
+         *     write and is not held back by dual control or the privilege split:
+         *     the file was changed by someone with access to the host. The audit
+         *     entry (`policy.reload`) carries the caller's verified actor and the
+         *     paths that changed; a reload that changed the policy also appends a
+         *     history revision.
+         */
         post: {
             parameters: {
                 query?: never;
@@ -1365,6 +1420,7 @@ export interface paths {
                             /** @enum {boolean} */
                             ok?: true;
                             name?: string;
+                            changed?: components["schemas"]["PolicyChangedPaths"];
                         };
                     };
                 };
@@ -1420,14 +1476,18 @@ export interface paths {
                         "application/json": components["schemas"]["PolicyValidateOK"];
                     };
                 };
-                /** @description Parse veya boş gövde hatası */
+                /** @description Empty body, or text that does not decode as a policy (YAML syntax, an unknown key, a second document). The body is an object with one string, `error`. */
                 400: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content?: never;
                 };
-                /** @description Semantik doğrulama başarısız */
+                /**
+                 * @description The policy decodes but is refused: a semantic error, a value outside
+                 *     its bounds or a pool endpoint the upstream rules do not allow. One
+                 *     issue per field, the same shape for all three.
+                 */
                 422: {
                     headers: {
                         [name: string]: unknown;
@@ -1705,12 +1765,18 @@ export interface paths {
                     };
                     content?: never;
                 };
-                /** @description Entity with this name already exists */
+                /**
+                 * @description Entity with this name already exists, or `dual_control_required`:
+                 *     adding an entity rewrites the policy, so under dual control it
+                 *     goes through a proposal. Audited as `policy.custom_entity.add`.
+                 */
                 409: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["PolicyWriteRefused"];
+                    };
                 };
             };
         };
@@ -1767,6 +1833,19 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content?: never;
+                };
+                /**
+                 * @description `dual_control_required`: removing an entity rewrites the policy, so
+                 *     under dual control it goes through a proposal. Audited as
+                 *     `policy.custom_entity.delete`.
+                 */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PolicyWriteRefused"];
+                    };
                 };
                 /** @description Policy store unavailable */
                 500: {
@@ -1872,7 +1951,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Roll back to a previous policy revision */
+        /**
+         * Roll back to a previous policy revision
+         * @description Admin role only. A rollback is a direct write: under dual control it
+         *     is refused with 409 `dual_control_required`, and the revision's text
+         *     goes into a proposal instead.
+         */
         post: {
             parameters: {
                 query?: never;
@@ -1911,6 +1995,22 @@ export interface paths {
                     };
                     content?: never;
                 };
+                /** @description `dual_control_required` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PolicyWriteRefused"];
+                    };
+                };
+                /** @description The revision no longer loads as a policy */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
             };
         };
         delete?: never;
@@ -1926,7 +2026,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List pending policy proposals */
+        /** List policy proposals (open, approved and rejected) */
         get: {
             parameters: {
                 query?: never;
@@ -1948,7 +2048,16 @@ export interface paths {
             };
         };
         put?: never;
-        /** Create a policy proposal (requires two-person approval) */
+        /**
+         * Create a policy proposal
+         * @description Open to the admin and analyst roles. The proposal is a whole policy
+         *     document. Its author is the caller's verified actor (see
+         *     `PolicyProposal.author`); no header or body field can set it.
+         *
+         *     The text is judged as a direct write would be: it must decode and
+         *     validate, and an analyst's proposal may not change sections that
+         *     need the admin role. It is judged again when it is approved.
+         */
         post: {
             parameters: {
                 query?: never;
@@ -1959,7 +2068,7 @@ export interface paths {
             requestBody: {
                 content: {
                     "application/json": {
-                        message: string;
+                        message?: string;
                         yaml: string;
                     };
                 };
@@ -1974,12 +2083,30 @@ export interface paths {
                         "application/json": components["schemas"]["PolicyProposal"];
                     };
                 };
-                /** @description History not configured or invalid JSON */
+                /** @description History not configured, invalid JSON, empty policy, or text that does not decode as a policy */
                 400: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content?: never;
+                };
+                /** @description The proposal touches sections that need the admin role. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PolicyPrivilegeError"];
+                    };
+                };
+                /** @description The policy decodes but is refused, one issue per field. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PolicyValidationError"];
+                    };
                 };
             };
         };
@@ -1998,7 +2125,28 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Approve a pending proposal */
+        /**
+         * Approve an open proposal and apply it
+         * @description Applies the stored text of the proposal; the request body is not
+         *     read. Everything is checked at the moment of approval, against the
+         *     policy then active:
+         *
+         *     - the proposal must still be open (409 `proposal_closed`);
+         *     - while `governance.require_dual_control` is on, the approver must
+         *       be a different verified actor than the author (403
+         *       `self_approval`). Every caller of the static admin key is the
+         *       actor `admin-key`, so dual control cannot be satisfied with that
+         *       key alone: each person needs their own API key or sign-in;
+         *     - the policy must not have changed since the proposal was written
+         *       (409 `proposal_stale`): a proposal replaces the whole policy, so
+         *       approving an old one would undo the newer change. Reject it and
+         *       open a new one;
+         *     - the text must still decode and validate (400 / 422);
+         *     - an analyst cannot approve a proposal that changes sections that
+         *       need the admin role (403 `admin_role_required`).
+         *
+         *     Without dual control an author may approve their own proposal.
+         */
         post: {
             parameters: {
                 query?: never;
@@ -2020,22 +2168,28 @@ export interface paths {
                             /** @enum {boolean} */
                             ok?: true;
                             revision_id?: string;
+                            changed?: components["schemas"]["PolicyChangedPaths"];
                         };
                     };
                 };
-                /** @description History not configured */
+                /** @description History not configured, or the stored text no longer decodes as a policy */
                 400: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content?: never;
                 };
-                /** @description Dual-control prevents self-approval */
+                /**
+                 * @description `self_approval` (body `PolicyWriteRefused`) or
+                 *     `admin_role_required` (body `PolicyPrivilegeError`).
+                 */
                 403: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["PolicyWriteRefused"] | components["schemas"]["PolicyPrivilegeError"];
+                    };
                 };
                 /** @description Proposal not found */
                 404: {
@@ -2043,6 +2197,27 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content?: never;
+                };
+                /**
+                 * @description `proposal_closed` (already approved or rejected; `status` says which),
+                 *     `proposal_stale`, or `policy_read_only`.
+                 */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PolicyWriteRefused"];
+                    };
+                };
+                /** @description The stored text decodes but is refused today, one issue per field. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PolicyValidationError"];
+                    };
                 };
             };
         };
@@ -2061,7 +2236,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Reject a pending proposal */
+        /**
+         * Reject an open proposal
+         * @description The author may always withdraw their own proposal. Anyone else needs
+         *     the role that could have approved it: an analyst cannot reject a
+         *     proposal that changes sections that need the admin role.
+         */
         post: {
             parameters: {
                 query?: never;
@@ -2089,12 +2269,30 @@ export interface paths {
                     };
                     content?: never;
                 };
+                /** @description `admin_role_required` */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PolicyPrivilegeError"];
+                    };
+                };
                 /** @description Proposal not found */
                 404: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content?: never;
+                };
+                /** @description `proposal_closed`: already approved or rejected. */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PolicyWriteRefused"];
+                    };
                 };
             };
         };
@@ -3757,9 +3955,24 @@ export interface components {
         AuditEntry: {
             /** Format: date-time */
             timestamp?: string;
-            actor?: string;
+            actor?: components["schemas"]["VerifiedActor"];
+            /**
+             * @description A change of the policy is one of `policy.put`, `policy.reload`,
+             *     `policy.rollback`, `policy.proposal.approve`,
+             *     `policy.custom_entity.add`, `policy.custom_entity.delete` or
+             *     `policy.file_change` (the file was changed on disk; no actor).
+             */
             kind?: string;
             target?: string;
+            /**
+             * @description For a change of the policy: `source` (`api_put`, `reload`,
+             *     `rollback`, `proposal_approve`, `custom_entity_add`,
+             *     `custom_entity_delete`, `file_watcher`), `changed`
+             *     (`PolicyChangedPaths`), `sections` (the top-level sections
+             *     touched), `rules` (the names of the rules touched), `version`
+             *     and `revision_id`. Paths and names only; no value of the policy
+             *     is written to the audit log.
+             */
             detail?: {
                 [key: string]: unknown;
             };
@@ -3880,19 +4093,75 @@ export interface components {
         };
         PolicyProposal: {
             id?: string;
-            author?: string;
+            /** Format: date-time */
+            timestamp?: string;
+            author?: components["schemas"]["VerifiedActor"];
             message?: string;
             yaml?: string;
             /** @enum {string} */
-            status?: "pending" | "approved" | "rejected";
-            /** Format: date-time */
-            created_at?: string;
-            approved_by?: string;
+            status?: "open" | "approved" | "rejected";
+            approved_by?: components["schemas"]["VerifiedActor"];
             /** Format: date-time */
             approved_at?: string;
-            rejected_by?: string;
+            rejected_by?: components["schemas"]["VerifiedActor"];
             /** Format: date-time */
             rejected_at?: string;
+        };
+        /**
+         * @description Who a management request was authenticated as. The server derives it
+         *     from the credential; headers such as `X-Tamga-Actor` or
+         *     `X-Tamga-User-Id` and body fields such as `author` are not read.
+         *
+         *     - `admin-key`: the static admin key. One shared secret, so every
+         *       holder is the same actor.
+         *     - `apikey:<id>`: a scoped API key, by the id of its record
+         *       (`GET /api/v1/apikeys`), never its secret or its label.
+         *     - `user:<subject>`: a signed-in user, by the subject of the verified
+         *       session token.
+         *     - `dev-mode`: dev mode, where no credential is asked for.
+         *     - `policy-file`: history revisions only, for a change of the policy
+         *       file on disk. Its audit entry has no actor.
+         * @example apikey:0198c1e2-7b1a-7d3e-9a55-3f0c2d1e4b6a
+         */
+        VerifiedActor: string;
+        /**
+         * @description What a write changed, by path and never by value: a key of a section
+         *     (`providers.allowed`), a key of a rule (`rules.pii_detection.action`),
+         *     an entry of a named list (`custom_entities.EMPLOYEE_ID`), or the
+         *     section itself. Empty when the decoded policy is the same.
+         * @example [
+         *       "rules.pii_detection.action",
+         *       "vault.enabled"
+         *     ]
+         */
+        PolicyChangedPaths: string[];
+        PolicyWriteRefused: {
+            /** @description A sentence for a person. */
+            error: string;
+            /** @enum {string} */
+            code: "dual_control_required" | "self_approval" | "proposal_closed" | "proposal_stale" | "policy_read_only";
+            /**
+             * @description With `proposal_closed`, what the proposal already is.
+             * @enum {string}
+             */
+            status?: "approved" | "rejected";
+        };
+        PolicyPrivilegeError: {
+            error: string;
+            /** @enum {string} */
+            code: "admin_role_required";
+            /**
+             * @description The sections the change touches that need the admin role: a
+             *     top-level section (`providers`, `exceptions`, `governance`,
+             *     `data`, `pricing`, `vault`, `cache`, `body_limits`, `rate_limit`,
+             *     `cost`, `scan`, `operator_state`, `canary`, and any section
+             *     added later) or `rules.<name>.notify`.
+             * @example [
+             *       "providers",
+             *       "rules.pii_detection.notify"
+             *     ]
+             */
+            privileged_sections: string[];
         };
         ApiKey: {
             id?: string;

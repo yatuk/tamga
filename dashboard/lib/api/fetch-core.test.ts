@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { authHeaders, fetchAPI } from "@/lib/api/fetch-core";
+import { ApiError, authHeaders, fetchAPI } from "@/lib/api/fetch-core";
 
 // ---------------------------------------------------------------------------
 // Helper: build a fresh fetch-like Response each call so the body stream
@@ -194,5 +194,59 @@ describe("fetchAPI", () => {
     );
 
     await expect(fetchAPI("/test", { retry: 0 })).rejects.toThrow("something broke");
+  });
+
+  // -- the structured error --------------------------------------------------
+
+  it("keeps the status, the code and the body of a refusal beside its message", async () => {
+    const body = {
+      error: "this change needs the admin role: it touches providers",
+      code: "admin_role_required",
+      privileged_sections: ["providers", "rules.pii_detection.notify"],
+    };
+    const mock = vi.fn().mockResolvedValue(res(403, body));
+    vi.stubGlobal("fetch", mock);
+
+    const error = await fetchAPI("/test", { retry: 2 }).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).toBeInstanceOf(Error);
+    const refused = error as ApiError;
+    expect(refused.message).toBe("this change needs the admin role: it touches providers");
+    expect(refused.status).toBe(403);
+    expect(refused.code).toBe("admin_role_required");
+    expect(refused.body.privileged_sections).toEqual(["providers", "rules.pii_detection.notify"]);
+    // Still a 4xx: asked once.
+    expect(mock).toHaveBeenCalledTimes(1);
+  });
+
+  it("reads the code of a 422 from inside the error object and keeps its details", async () => {
+    const details = [{ field: "rate_limit.requests_per_minute", rule: "min", message: "must not be negative", severity: "error" }];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(res(422, { error: { code: "validation_failed", message: "Policy validation failed", details } })),
+    );
+
+    const error = (await fetchAPI("/test", { retry: 0 }).catch((e: unknown) => e)) as ApiError;
+    expect(error.code).toBe("validation_failed");
+    expect(error.status).toBe(422);
+    expect((error.body.error as { details: unknown }).details).toEqual(details);
+    // The flattened sentence older callers show is unchanged.
+    expect(error.message).toBe("Policy validation failed: rate_limit.requests_per_minute: must not be negative");
+  });
+
+  it("carries the status of a 5xx too, with an empty code when the proxy sent none", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(res(500, { error: "srv" })));
+
+    const error = (await fetchAPI("/test", { retry: 0 }).catch((e: unknown) => e)) as ApiError;
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error.status).toBe(500);
+    expect(error.code).toBe("");
+  });
+
+  it("leaves a network failure a plain Error", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("ENOTFOUND")));
+
+    const error = await fetchAPI("/test", { retry: 0 }).catch((e: unknown) => e);
+    expect(error).not.toBeInstanceOf(ApiError);
   });
 });

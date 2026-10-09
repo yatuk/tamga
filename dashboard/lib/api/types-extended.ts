@@ -114,14 +114,44 @@ export interface PolicyRevision {
   created_at?: string;
 }
 
+/** One thing a policy check found, by the path of the field it is about. */
+export interface PolicyIssue {
+  field?: string;
+  rule?: string;
+  message?: string;
+  severity?: string;
+}
+
 export interface PolicyValidateResult {
   valid: boolean;
-  warnings: Array<{
-    field?: string;
-    rule?: string;
-    message?: string;
-    severity?: string;
-  }>;
+  warnings: PolicyIssue[];
+}
+
+/**
+ * A policy change waiting for, or settled by, a second person. `author`,
+ * `approved_by` and `rejected_by` are actors the proxy verified:
+ * `admin-key`, `apikey:<id>`, `user:<subject>` or `dev-mode`.
+ */
+export interface PolicyProposal {
+  id: string;
+  timestamp?: string;
+  author: string;
+  message: string;
+  yaml: string;
+  status: "open" | "approved" | "rejected";
+  approved_by?: string;
+  approved_at?: string;
+  rejected_by?: string;
+  rejected_at?: string;
+}
+
+/** What a write of the policy answers: the paths it changed, never the values. */
+export interface PolicyWriteResult {
+  ok: boolean;
+  name?: string;
+  version?: string;
+  changed?: string[];
+  revision_id?: string;
 }
 
 export interface PolicySimulateResult {

@@ -1,4 +1,5 @@
 import { http, HttpResponse } from "msw";
+import { policyHandlers, policyMock } from "./policy-handlers";
 
 const API = "/api/v1";
 
@@ -406,9 +407,15 @@ export const handlers = [
   ),
   http.get(`${API}/health/detail`, ({ request }) =>
     HttpResponse.json(
-      healthKeyAccepted(request) ? { ...MOCK_HEALTH_DETAIL, authenticated: true } : { proxy: "up", authenticated: false },
+      healthKeyAccepted(request)
+        ? { ...MOCK_HEALTH_DETAIL, policy_writable: !policyMock.readOnly, authenticated: true }
+        : { proxy: "up", authenticated: false },
     ),
   ),
+
+  // Policies, proposals and custom entities: see policy-handlers.ts for the
+  // keys that stand for an analyst and for a person's own admin key.
+  ...policyHandlers,
 
   // Budget
   http.get(`${API}/budget/stats`, () => HttpResponse.json(MOCK_BUDGET)),
