@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { server } from "@/__mocks__/server";
 import { HealthDetailNotice } from "@/components/console/health";
+import { DataNotice } from "@/components/console/page";
 import { useProxyHealth } from "@/components/console/use-proxy-health";
 import { ADMIN_KEY_STORAGE } from "@/hooks/useAdminKey";
 import { useHealth, useHealthDetail } from "./useHealth";
@@ -171,5 +172,52 @@ describe("HealthDetailNotice", () => {
     expect(container).toBeEmptyDOMElement();
     rerender(createElement(HealthDetailNotice, { state: "pending" }));
     expect(container).toBeEmptyDOMElement();
+  });
+});
+
+describe("useHealth when a part of the proxy is down", () => {
+  it("reads a 503 that carries the health body as the proxy answering", async () => {
+    server.use(
+      http.get("*/api/v1/health/detailed", () =>
+        HttpResponse.json(
+          { authenticated: false, proxy: "up", proxy_status: { up: true }, status: "degraded" },
+          { status: 503 },
+        ),
+      ),
+    );
+    const { result } = renderHook(() => ({ header: useProxyHealth(), health: useHealth() }), { wrapper: Wrapper });
+    await waitFor(() => expect(result.current.health.data?.status).toBe("degraded"));
+    expect(result.current.health.isError).toBe(false);
+    expect(result.current.header.up).toBe(true);
+  });
+
+  it("still reports a 503 with no health body as the proxy not answering", async () => {
+    server.use(http.get("*/api/v1/health/detailed", () => HttpResponse.json({ error: "bad gateway" }, { status: 503 })));
+    const { result } = renderHook(() => useHealth(), { wrapper: Wrapper });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.data).toBeUndefined();
+  });
+});
+
+describe("DataNotice", () => {
+  const show = (adminKey: string) => render(createElement(DataNotice, { adminKey, failed: true }), { wrapper: Wrapper });
+
+  it("says the key was refused when the proxy is up and did not accept it", async () => {
+    setKey("wrong-key");
+    show("wrong-key");
+    expect(await screen.findByText("The proxy did not accept the admin key.")).toBeTruthy();
+  });
+
+  it("says the proxy is up when the key is good and the page's data still failed", async () => {
+    setKey("good-key");
+    show("good-key");
+    expect(await screen.findByText("The proxy is up, but it did not return this page's data.")).toBeTruthy();
+  });
+
+  it("says the proxy did not answer when its health check fails too", async () => {
+    server.use(http.get("*/api/v1/health/detailed", () => HttpResponse.error()));
+    setKey("good-key");
+    show("good-key");
+    expect(await screen.findByText("The proxy did not answer.")).toBeTruthy();
   });
 });

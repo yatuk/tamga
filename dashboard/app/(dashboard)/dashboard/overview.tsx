@@ -2,7 +2,7 @@
 
 import NextLink from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { ContentSwitcher, InlineNotification, Link, SkeletonText, Switch } from "@carbon/react";
+import { ContentSwitcher, Link, SkeletonText, Switch } from "@carbon/react";
 import { api } from "@/lib/api";
 import { formatMs } from "@/lib/utils/format";
 import { useAdminKey } from "@/hooks/useAdminKey";
@@ -10,6 +10,7 @@ import { useHealth } from "@/hooks/useHealth";
 import { useRangeParam } from "@/hooks/useRangeParam";
 import { Columns } from "@/components/console/charts";
 import { NEEDS_KEY } from "@/components/console/health";
+import { DataNotice } from "@/components/console/page";
 import { Arrive, Arriving, Bar, Count } from "@/components/console/motion";
 import {
   bucketLabel,
@@ -88,25 +89,7 @@ export function Overview() {
         </ContentSwitcher>
       </div>
 
-      {!adminKey ? (
-        <InlineNotification
-          kind="info"
-          lowContrast
-          hideCloseButton
-          title="No admin key in this browser."
-          subtitle="Add one under Settings to read the proxy's data."
-          style={{ marginTop: "1.5rem", maxWidth: "none" }}
-        />
-      ) : stats.isError ? (
-        <InlineNotification
-          kind="error"
-          lowContrast
-          hideCloseButton
-          title="The proxy did not answer."
-          subtitle="Check that it is running and that the admin key is the right one."
-          style={{ marginTop: "1.5rem", maxWidth: "none" }}
-        />
-      ) : null}
+      <DataNotice adminKey={adminKey} failed={stats.isError} />
 
       <div className="t-statement">
         <div>
