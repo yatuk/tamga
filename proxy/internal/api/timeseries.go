@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"sort"
 	"strings"
@@ -43,34 +44,34 @@ func (cfg Config) handleTimeseries(w http.ResponseWriter, r *http.Request) {
 	nowMs := time.Now().UTC().UnixMilli()
 	threshold := nowMs - windowMs
 
-	// Day-bucketed series: prefer Postgres daily_stats, which retains full
-	// history, over the in-memory RecentBuffer (capped ~1000 events). This is
-	// what makes long-window ("this month") trends accurate.
+	// With a database the series is counted from request_logs, for every
+	// bucket size: it holds the whole window, where the recent buffer holds
+	// about the last thousand events since this process started. An empty
+	// answer from the database is an answer (no requests in the window).
 	dbServed := false
-	if bucket == "day" && cfg.DatabaseURL != "" && cfg.DefaultOrgID != "" && cfg.Store != nil {
-		ctx := r.Context()
-		if err := cfg.Store.Ping(ctx); err == nil {
-			from := time.UnixMilli(threshold).UTC()
-			to := time.Now().UTC()
-			if rows, err := cfg.Store.GetDailyTimeseries(ctx, cfg.DefaultOrgID, from, to); err == nil {
-				for _, row := range rows {
-					key := (row.Date.UTC().UnixMilli() / bucketMs) * bucketMs
-					points[key] = &tsPoint{
-						T:        time.UnixMilli(key).UTC(),
-						Total:    int(row.TotalRequests),
-						Blocked:  int(row.BlockedRequests),
-						Redacted: int(row.RedactedRequests),
-						Warned:   int(row.WarnedRequests),
-					}
+	if h := cfg.history(); h != nil {
+		ctx, cancel := context.WithTimeout(r.Context(), historyTimeout)
+		rows, err := h.RequestTimeseries(ctx, cfg.DefaultOrgID, time.UnixMilli(threshold).UTC(), time.UnixMilli(nowMs).UTC(), bucket)
+		cancel()
+		if err == nil {
+			for _, row := range rows {
+				key := (row.Start.UTC().UnixMilli() / bucketMs) * bucketMs
+				points[key] = &tsPoint{
+					T:        time.UnixMilli(key).UTC(),
+					Total:    int(row.Total),
+					Blocked:  int(row.Blocked),
+					Redacted: int(row.Redacted),
+					Warned:   int(row.Warned),
+					scanP95:  row.ScanP95Ms,
 				}
-				// Nothing fills daily_stats yet: an empty answer is no answer, and
-				// the recent buffer below is used instead of drawing an empty chart.
-				dbServed = len(rows) > 0
 			}
+			dbServed = true
+		} else {
+			historyUnavailable("timeseries", err)
 		}
 	}
 
-	// In-memory fallback (short windows, or no DB): recent events.
+	// Without a database (or with one that does not answer): recent events.
 	if !dbServed && cfg.Recent != nil {
 		evs := cfg.Recent.Latest(0)
 		for _, e := range evs {
@@ -122,17 +123,25 @@ func (cfg Config) handleTimeseries(w http.ResponseWriter, r *http.Request) {
 	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
 	for _, k := range keys {
 		p := points[k]
+		p95 := p.scanP95
+		if len(p.scanLatencies) > 0 {
+			p95 = percentile(p.scanLatencies, 0.95)
+		}
 		out = append(out, map[string]interface{}{
 			"t":        p.T,
 			"total":    p.Total,
 			"blocked":  p.Blocked,
 			"redacted": p.Redacted,
 			"warned":   p.Warned,
-			"scan_p95": percentile(p.scanLatencies, 0.95),
+			"scan_p95": p95,
 		})
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	source := sourceMemory
+	if dbServed {
+		source = sourceDatabase
+	}
+	writeSourced(w, source, map[string]interface{}{
 		"range":  rng,
 		"bucket": bucket,
 		"points": out,
@@ -145,6 +154,7 @@ type tsPoint struct {
 	Blocked       int
 	Redacted      int
 	Warned        int
+	scanP95       float64 // from the database; the buffer path fills scanLatencies
 	scanLatencies []float64
 }
 
@@ -195,7 +205,25 @@ func (cfg Config) handleBreakdown(w http.ResponseWriter, r *http.Request) {
 	if rng == "" {
 		rng = "7d"
 	}
-	threshold := time.Now().UTC().UnixMilli() - rangeMillis(rng)
+	now := time.Now().UTC()
+	threshold := now.UnixMilli() - rangeMillis(rng)
+	if h := cfg.history(); h != nil {
+		ctx, cancel := context.WithTimeout(r.Context(), historyTimeout)
+		rows, err := h.FindingCounts(ctx, cfg.DefaultOrgID, time.UnixMilli(threshold).UTC(), now)
+		cancel()
+		if err == nil {
+			byType, byCategory, bySeverity, typeByCategory := findingBreakdown(rows)
+			writeSourced(w, sourceDatabase, map[string]interface{}{
+				"range":            rng,
+				"by_type":          byType,
+				"by_category":      byCategory,
+				"by_severity":      bySeverity,
+				"type_by_category": typeByCategory,
+			})
+			return
+		}
+		historyUnavailable("findings breakdown", err)
+	}
 	byType := map[string]int64{}
 	byCategory := map[string]int64{}
 	bySeverity := map[string]int64{}
@@ -228,7 +256,7 @@ func (cfg Config) handleBreakdown(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeSourced(w, sourceMemory, map[string]interface{}{
 		"range":            rng,
 		"by_type":          byType,
 		"by_category":      byCategory,
@@ -237,17 +265,42 @@ func (cfg Config) handleBreakdown(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleModelStats returns per-model and per-family request counts from the
-// in-memory recent buffer, with an optional ?range=24h|7d|30d filter.
+// handleModelStats returns per-model and per-family request counts, with an
+// optional ?range=24h|7d|30d filter: from request_logs when there is a
+// database, from the in-memory recent buffer otherwise.
 func (cfg Config) handleModelStats(w http.ResponseWriter, r *http.Request) {
 	rng := strings.ToLower(r.URL.Query().Get("range"))
 	if rng == "" {
 		rng = "7d"
 	}
-	threshold := time.Now().UTC().UnixMilli() - rangeMillis(rng)
+	now := time.Now().UTC()
+	threshold := now.UnixMilli() - rangeMillis(rng)
 
 	byModel := map[string]int64{}
 	byFamily := map[string]int64{}
+
+	if h := cfg.history(); h != nil {
+		ctx, cancel := context.WithTimeout(r.Context(), historyTimeout)
+		rows, err := h.ModelCounts(ctx, cfg.DefaultOrgID, time.UnixMilli(threshold).UTC(), now)
+		cancel()
+		if err == nil {
+			for _, row := range rows {
+				if row.Model != "" {
+					byModel[row.Model] += row.Requests
+				}
+				if row.ModelFamily != "" {
+					byFamily[row.ModelFamily] += row.Requests
+				}
+			}
+			writeSourced(w, sourceDatabase, map[string]interface{}{
+				"range":     rng,
+				"by_model":  byModel,
+				"by_family": byFamily,
+			})
+			return
+		}
+		historyUnavailable("model stats", err)
+	}
 
 	if cfg.Recent != nil {
 		evs := cfg.Recent.Latest(0)
@@ -267,7 +320,7 @@ func (cfg Config) handleModelStats(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeSourced(w, sourceMemory, map[string]interface{}{
 		"range":     rng,
 		"by_model":  byModel,
 		"by_family": byFamily,

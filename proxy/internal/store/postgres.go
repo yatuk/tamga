@@ -13,7 +13,6 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
-	"github.com/yatuk/tamga/internal/events"
 )
 
 const (
@@ -165,6 +164,8 @@ func (s *PostgresStore) SaveRequestLog(ctx context.Context, logRow RequestLog) e
 }
 
 // GetStats aggregates daily_stats for an org in [from, to] (inclusive, date portion).
+// Nothing writes daily_stats, so this is always zero; the API counts from
+// request_logs instead (RequestCounts in history.go) and no longer calls it.
 func (s *PostgresStore) GetStats(ctx context.Context, orgID string, from, to time.Time) (*Stats, error) {
 	org, err := uuid.Parse(orgID)
 	if err != nil {
@@ -199,7 +200,9 @@ WHERE org_id = $1 AND stat_date >= $2::date AND stat_date <= $3::date`,
 }
 
 // GetDailyTimeseries returns per-day request/action counts from daily_stats
-// over [from, to] (inclusive, date portion), ascending by date.
+// over [from, to] (inclusive, date portion), ascending by date. Nothing writes
+// daily_stats, so this is always empty; the API uses RequestTimeseries
+// (history.go) and no longer calls it.
 func (s *PostgresStore) GetDailyTimeseries(ctx context.Context, orgID string, from, to time.Time) ([]DailyStatPoint, error) {
 	org, err := uuid.Parse(orgID)
 	if err != nil {
@@ -348,66 +351,11 @@ func (s *PostgresStore) SearchSecurityEvents(ctx context.Context, orgID string, 
 	}
 	offset := (page - 1) * limit
 
-	until := p.Until
-	if until.IsZero() {
-		until = time.Now().UTC()
-	}
-	since := p.Since
-	if since.IsZero() {
-		since = until.AddDate(0, 0, -7)
-	}
-
-	args := []interface{}{org, since, until}
-	var where strings.Builder
-	where.WriteString(`WHERE org_id = $1 AND created_at >= $2 AND created_at <= $3`)
-	next := func() int {
-		return len(args) + 1
-	}
-
-	if wanted := events.ActionSet(p.Action); len(wanted) > 0 {
-		i := next()
-		fmt.Fprintf(&where, " AND upper(action_taken) = ANY($%d)", i)
-		args = append(args, wanted)
-	}
-	prov := strings.ToLower(strings.TrimSpace(p.Provider))
-	if p.ShadowOnly || prov == "shadow" {
-		where.WriteString(` AND lower(provider) NOT IN ('openai','anthropic','google','azure','azure_openai','google_vertex')`)
-	} else if prov != "" && prov != "all" {
-		i := next()
-		fmt.Fprintf(&where, " AND lower(provider) = $%d", i)
-		args = append(args, prov)
-	}
-	if ft := strings.TrimSpace(p.FindingType); ft != "" {
-		i := next()
-		fmt.Fprintf(&where, ` AND EXISTS (SELECT 1 FROM jsonb_array_elements(findings) elem WHERE lower(elem->>'type') = lower($%d))`, i)
-		args = append(args, ft)
-	}
-	if sev := strings.TrimSpace(p.Severity); sev != "" {
-		i := next()
-		fmt.Fprintf(&where, ` AND EXISTS (SELECT 1 FROM jsonb_array_elements(findings) elem WHERE lower(elem->>'severity') = lower($%d))`, i)
-		args = append(args, sev)
-	}
-	if cat := strings.TrimSpace(p.Category); cat != "" {
-		i := next()
-		fmt.Fprintf(&where, ` AND EXISTS (SELECT 1 FROM jsonb_array_elements(findings) elem WHERE elem->>'category' ILIKE $%d)`, i)
-		args = append(args, "%"+cat+"%")
-	}
-	if tech := strings.TrimSpace(p.Technique); tech != "" {
-		i := next()
-		fmt.Fprintf(&where, " AND findings::text ILIKE $%d", i)
-		args = append(args, "%"+tech+"%")
-	}
-	if q := strings.TrimSpace(p.Q); q != "" {
-		pat := "%" + q + "%"
-		i := next()
-		fmt.Fprintf(&where, " AND (request_id ILIKE $%d OR findings::text ILIKE $%d)", i, i)
-		args = append(args, pat)
-	}
+	w, args := eventSearchWhere(org, p)
 
 	ctx2, cancel := context.WithTimeout(ctx, getStatsTimeout)
 	defer cancel()
 
-	w := where.String()
 	countSQL := "SELECT COUNT(*) FROM request_logs " + w
 	var total int
 	if err := s.pool.QueryRow(ctx2, countSQL, args...).Scan(&total); err != nil {

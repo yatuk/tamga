@@ -60,6 +60,7 @@ type EventSearchParams struct {
 	Category    string // substring match on finding category
 	Technique   string // substring match on findings JSON (OWASP codes, metadata)
 	Q           string // request_id ILIKE or findings text
+	RequestID   string // substring of the request id only (exports)
 	Since       time.Time
 	Until       time.Time
 }

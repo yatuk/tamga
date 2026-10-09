@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -46,29 +45,23 @@ func TestTimeseries_EmptyRecent(t *testing.T) {
 	}
 }
 
-// dailyTSStore returns fixed daily_stats rows for the DB timeseries path.
-type dailyTSStore struct {
-	*store.NoopStore
-	rows []store.DailyStatPoint
-}
-
-func (d *dailyTSStore) GetDailyTimeseries(_ context.Context, _ string, _, _ time.Time) ([]store.DailyStatPoint, error) {
-	return d.rows, nil
-}
-
 func TestTimeseries_DBBackedDayBucket(t *testing.T) {
 	today := time.Now().UTC().Truncate(24 * time.Hour)
-	st := &dailyTSStore{
-		NoopStore: &store.NoopStore{},
-		rows: []store.DailyStatPoint{
-			{Date: today.Add(-48 * time.Hour), TotalRequests: 100, BlockedRequests: 20, RedactedRequests: 10, WarnedRequests: 5},
-			{Date: today.Add(-24 * time.Hour), TotalRequests: 200, BlockedRequests: 40, RedactedRequests: 15, WarnedRequests: 8},
-		},
+	// request_logs rows of two earlier days (see fakeHistory in history_test.go).
+	st := newFakeHistory()
+	for day, n := range map[int][2]int{2: {100, 20}, 1: {200, 40}} {
+		for i := 0; i < n[0]; i++ {
+			action := "pass"
+			if i < n[1] {
+				action = "block"
+			}
+			st.add(histOrg, fmt.Sprintf("d%d-%d", day, i), "openai", "gpt", action, today.Add(-time.Duration(day)*24*time.Hour).Add(time.Duration(i)*time.Minute), 1)
+		}
 	}
 	cfg := Config{
 		AdminKey:     "test-key",
 		Recent:       events.NewRecentBuffer(10), // must be ignored in favour of DB
-		DefaultOrgID: "org-1",
+		DefaultOrgID: histOrg,
 		DatabaseURL:  "postgres://fake", // gates the DB branch
 		Store:        st,
 	}
@@ -97,7 +90,7 @@ func TestTimeseries_DBBackedDayBucket(t *testing.T) {
 		}
 	}
 	if !sawBlocked20 || !sawBlocked40 {
-		t.Fatalf("DB daily_stats rows not reflected in timeseries points: %+v", body.Points)
+		t.Fatalf("request_logs rows not reflected in timeseries points: %+v", body.Points)
 	}
 }
 

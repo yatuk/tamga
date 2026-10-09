@@ -63,6 +63,12 @@ func providerCatalog(recent *events.RecentBuffer, rows []store.ModelPricing) []m
 			seen[prov][e.Model]++
 		}
 	}
+	return providerCatalogOf(seen, rows)
+}
+
+// providerCatalogOf builds the catalog from request counts by canonical
+// provider and model.
+func providerCatalogOf(seen map[string]map[string]int64, rows []store.ModelPricing) []map[string]interface{} {
 
 	catalog := make([]map[string]interface{}, 0, len(providerRoutes))
 	for _, route := range providerRoutes {

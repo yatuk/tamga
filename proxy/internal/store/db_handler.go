@@ -60,6 +60,9 @@ func DBHandler(log zerolog.Logger, s Store, defaultOrgID string, getPolicy func(
 			TotalLatencyMs: e.TotalLatencyMs,
 			UserID:         e.UserID,
 			Endpoint:       e.Endpoint,
+			// The row is written up to a flush interval after the request;
+			// it is dated by the request, as on the NATS path.
+			At: e.Timestamp,
 		}
 		if err := s.SaveRequestLog(context.Background(), rl); err != nil {
 			log.Warn().Err(err).Str("component", "db_handler").Str("request_id", e.RequestID).Msg("save request log")

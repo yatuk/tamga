@@ -80,10 +80,12 @@ func TestHashFindingMatches(t *testing.T) {
 // spyStore captures the findings JSON written to SaveRequestLog for assertions.
 type spyStore struct {
 	lastFindings json.RawMessage
+	lastAt       time.Time
 }
 
 func (s *spyStore) SaveRequestLog(_ context.Context, rl RequestLog) error {
 	s.lastFindings = rl.Findings
+	s.lastAt = rl.At
 	return nil
 }
 func (s *spyStore) GetStats(_ context.Context, _ string, _, _ time.Time) (*Stats, error) {

@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -10,9 +11,13 @@ import (
 	"time"
 
 	"github.com/yatuk/tamga/internal/events"
+	"github.com/yatuk/tamga/internal/store"
 )
 
-// handleEventsExport returns filtered recent events as CSV or JSON.
+// handleEventsExport returns filtered events as CSV or JSON: from
+// request_logs when there is a database (newest first, at most
+// store.ExportMaxRows rows; X-Tamga-Export-Truncated says when more
+// matched), from the in-memory recent buffer otherwise.
 //
 // Query params (all optional):
 //
@@ -21,6 +26,7 @@ import (
 //	provider=openai|anthropic|...|shadow
 //	range=24h|7d|30d (default 7d)
 //	request_id=<substring>
+//	finding_type, severity, category, technique, q, since, until: as GET /events
 func (cfg Config) handleEventsExport(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	format := strings.ToLower(q.Get("format"))
@@ -35,12 +41,39 @@ func (cfg Config) handleEventsExport(w http.ResponseWriter, r *http.Request) {
 	}
 	ridSub := strings.ToLower(strings.TrimSpace(q.Get("request_id")))
 
-	threshold := time.Now().UTC().UnixMilli() - rangeMillis(rng)
+	// The filters and the window of the event list, so the file holds the
+	// rows the list shows. The range is read as before ("1h" is one hour).
+	p, _ := parseEventSearchQuery(r)
+	if strings.TrimSpace(q.Get("since")) == "" {
+		p.Since = time.Now().UTC().Add(-time.Duration(rangeMillis(rng)) * time.Millisecond)
+	}
+	p.RequestID = ridSub
+
 	rows := []events.EventJSON{}
-	if cfg.Recent != nil {
+	source := sourceMemory
+	truncated := false
+	if h := cfg.history(); h != nil {
+		ctx, cancel := context.WithTimeout(r.Context(), exportTimeout)
+		recs, more, err := h.ExportRequestRecords(ctx, cfg.DefaultOrgID, p, store.ExportMaxRows)
+		cancel()
+		if err == nil {
+			source = sourceDatabase
+			truncated = more
+			rows = make([]events.EventJSON, 0, len(recs))
+			for _, rec := range recs {
+				rows = append(rows, storedEventJSON(rec))
+			}
+		} else {
+			historyUnavailable("events export", err)
+		}
+	}
+	if source == sourceMemory && cfg.Recent != nil {
 		evs := cfg.Recent.Latest(0)
 		for _, e := range evs {
-			if e.Timestamp.IsZero() || e.Timestamp.UnixMilli() < threshold {
+			if e.Timestamp.IsZero() || e.Timestamp.Before(p.Since) || e.Timestamp.After(p.Until) {
+				continue
+			}
+			if !events.MatchEventSearch(e, "", "", false, p.FindingType, p.Severity, p.Category, p.Technique, p.Q, time.Time{}, time.Time{}) {
 				continue
 			}
 			if len(actions) > 0 && !events.ActionIn(actions, e.Action) {
@@ -61,6 +94,13 @@ func (cfg Config) handleEventsExport(w http.ResponseWriter, r *http.Request) {
 			}
 			rows = append(rows, events.EventToJSON(e))
 		}
+	}
+
+	w.Header().Set(dataSourceHeader, source)
+	if truncated {
+		// More rows matched than one export returns: the file is the newest
+		// store.ExportMaxRows of them, and says so.
+		w.Header().Set(exportTruncatedHeader, "true")
 	}
 
 	switch format {

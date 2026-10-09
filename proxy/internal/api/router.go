@@ -295,7 +295,8 @@ func corsMiddleware(cfg Config) func(http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Expose-Headers",
 				"X-Tamga-Input-Risk, X-Tamga-Risk-Level, X-Tamga-Confidence-Score, "+
 					"X-Tamga-Request-Id, X-Tamga-Org-Id, X-Tamga-Action-Reason, "+
-					"X-Tamga-Upstream-Provider, X-Tamga-Upstream-Fallback, X-Tamga-Scan-Ms, X-Tamga-Scan-Latency-Ms")
+					"X-Tamga-Upstream-Provider, X-Tamga-Upstream-Fallback, X-Tamga-Scan-Ms, X-Tamga-Scan-Latency-Ms, "+
+					dataSourceHeader+", "+exportTruncatedHeader)
 
 			if cfg.CORSMaxAge > 0 {
 				w.Header().Set("Access-Control-Max-Age", strconv.Itoa(cfg.CORSMaxAge))
@@ -445,19 +446,45 @@ func (cfg Config) handleStats(w http.ResponseWriter, r *http.Request) {
 	}
 	to := time.Now().UTC()
 	from := to.Add(time.Duration(-rangeMillis(rng)) * time.Millisecond)
-	if cfg.DatabaseURL != "" && cfg.DefaultOrgID != "" && cfg.Store != nil {
-		if err := cfg.Store.Ping(ctx); err == nil {
-			if st, err := cfg.Store.GetStats(ctx, cfg.DefaultOrgID, from, to); err == nil && st != nil {
-				totalRequests = st.TotalRequests
-				blockedRequests = st.BlockedRequests
-				redactedRequests = st.RedactedRequests
-				warnedRequests = st.WarnedRequests
+	uptime := time.Since(cfg.Started).Truncate(time.Second)
+
+	// With a database, every figure is for the asked window and comes from
+	// request_logs: the counts and what is said about them (providers,
+	// findings, latency, risk) describe the same requests.
+	if h := cfg.history(); h != nil {
+		hctx, cancel := context.WithTimeout(ctx, historyTimeout)
+		st, err := loadRequestStats(hctx, h, cfg.DefaultOrgID, from, to)
+		cancel()
+		if err == nil {
+			passed := st.total - st.blocked - st.redacted - st.warned
+			if passed < 0 {
+				passed = 0
 			}
+			body := map[string]interface{}{
+				"total_requests":         st.total,
+				"blocked_requests":       st.blocked,
+				"redacted_requests":      st.redacted,
+				"warned_requests":        st.warned,
+				"passed_requests":        passed,
+				"top_providers":          st.providers,
+				"top_finding_types":      st.findingTypes,
+				"top_categories":         st.categories,
+				"uptime":                 uptime.String(),
+				"scanner_latency_avg_ms": st.scanAvgMs,
+			}
+			if st.avgRiskPct != nil {
+				body["avg_input_risk_pct"] = *st.avgRiskPct
+			}
+			writeSourced(w, sourceDatabase, body)
+			return
 		}
+		historyUnavailable("stats", err)
 	}
 
-	if cfg.Metrics != nil && totalRequests == 0 {
-		// Fallback to process-local counters when DB is off/unreachable.
+	if cfg.Metrics != nil {
+		// Without a database (or with one that does not answer): the
+		// process-local counters, which count since this process started
+		// whatever the range.
 		totalRequests = cfg.Metrics.TotalRequests.Load()
 		blockedRequests = cfg.Metrics.Blocked.Load()
 		redactedRequests = cfg.Metrics.Redacted.Load()
@@ -471,9 +498,8 @@ func (cfg Config) handleStats(w http.ResponseWriter, r *http.Request) {
 
 	topProviders, topFindingTypes, topCategories, avgScanMs := statsEnrichment(cfg.Recent)
 	avgInputRisk := avgInputRiskPct(cfg.Recent)
-	uptime := time.Since(cfg.Started).Truncate(time.Second)
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeSourced(w, sourceMemory, map[string]interface{}{
 		"total_requests":         totalRequests,
 		"blocked_requests":       blockedRequests,
 		"redacted_requests":      redactedRequests,
@@ -531,12 +557,40 @@ func (cfg Config) handleEventDetail(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing request_id"})
 		return
 	}
-	if cfg.Recent == nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "event not found"})
-		return
+	// The recent buffer first: its event carries what the row does not (the
+	// risk scores as the proxy computed them). The buffer keeps one event per
+	// request id, and a later event of another kind (a response scan)
+	// replaces the request's own, so only a request event is taken from it
+	// while the database can still be asked.
+	var ev events.Event
+	inRing := false
+	searched := sourceMemory
+	if cfg.Recent != nil {
+		ev, inRing = cfg.Recent.GetByRequestID(id)
 	}
-	ev, ok := cfg.Recent.GetByRequestID(id)
-	if !ok {
+	if h := cfg.history(); h != nil {
+		// The database is read for one organisation; so is the buffer then.
+		if inRing && ev.OrgID != "" && ev.OrgID != cfg.DefaultOrgID {
+			inRing = false
+		}
+		if !inRing || !requestEvent(ev) {
+			hctx, cancel := context.WithTimeout(r.Context(), historyTimeout)
+			rec, err := h.GetRequestRecord(hctx, cfg.DefaultOrgID, id, time.Now().UTC().Add(-detailLookback))
+			cancel()
+			if err != nil {
+				historyUnavailable("event detail", err)
+			} else if rec != nil {
+				writeSourced(w, sourceDatabase, storedEventDetail(*rec))
+				return
+			} else {
+				searched = sourceDatabase
+			}
+		}
+	}
+	if !inRing {
+		// Says what was searched: "memory" on a 404 means the database
+		// could not be asked.
+		w.Header().Set(dataSourceHeader, searched)
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "event not found"})
 		return
 	}
@@ -565,7 +619,7 @@ func (cfg Config) handleEventDetail(w http.ResponseWriter, r *http.Request) {
 
 	inR := ev.InputRisk
 	outR := ev.OutputRisk
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeSourced(w, sourceMemory, map[string]interface{}{
 		"request_id":       ev.RequestID,
 		"timestamp":        ev.Timestamp.UTC(),
 		"provider":         ev.Provider,
