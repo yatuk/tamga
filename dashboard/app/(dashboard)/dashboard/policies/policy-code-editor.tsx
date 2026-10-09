@@ -38,7 +38,8 @@ const extensions = [json(), theme, highlight, EditorView.lineWrapping];
 /** CodeMirror with JSON mode. Loaded on demand; see policy-editor.tsx. */
 export default function PolicyCodeEditor({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   return (
-    <CodeMirror
+    <>
+      <CodeMirror
       value={value}
       height="460px"
       theme="none"
@@ -46,6 +47,9 @@ export default function PolicyCodeEditor({ value, onChange }: { value: string; o
       onChange={onChange}
       aria-label="Policy document"
       basicSetup={{ foldGutter: true, highlightActiveLine: true, autocompletion: false }}
-    />
+      />
+      {/* Tab indents here, so it cannot also be the way out. */}
+      <p className="t-editorhint">Tab indents. To leave the editor with the keyboard, press Esc and then Tab.</p>
+    </>
   );
 }
