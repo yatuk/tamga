@@ -10,7 +10,7 @@ import type { ScannerPoolPageData } from "./useScannerPoolPage";
 const SHED_WARN_PCT = 5;
 const SHED_CRITICAL_PCT = 15;
 
-const ms = (n: number) => `${n.toFixed(2)} ms`;
+const ms = (n: number) => `${Number(n.toFixed(2))} ms`;
 
 /** One measure against its capacity, as a bar that fills. */
 function Meter({ name, used, of }: { name: string; used: number; of: number }) {

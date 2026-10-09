@@ -21,34 +21,34 @@ describe("formatUptime", () => {
 
 describe("formatMs", () => {
   it("handles null", () => {
-    expect(formatMs(null)).toBe("—");
+    expect(formatMs(null)).toBe("Not measured");
   });
   it("handles undefined", () => {
-    expect(formatMs(undefined)).toBe("—");
+    expect(formatMs(undefined)).toBe("Not measured");
   });
   it("formats zero", () => {
-    expect(formatMs(0)).toBe("0ms");
+    expect(formatMs(0)).toBe("0 ms");
   });
   it("formats microseconds", () => {
-    expect(formatMs(0.5)).toBe("500µs");
+    expect(formatMs(0.5)).toBe("500 µs");
   });
   it("formats milliseconds", () => {
-    expect(formatMs(123.4)).toBe("123.4ms");
+    expect(formatMs(123.4)).toBe("123.4 ms");
   });
   it("formats seconds", () => {
-    expect(formatMs(1500)).toBe("1.5s");
+    expect(formatMs(1500)).toBe("1.5 s");
   });
   it("formats large milliseconds", () => {
-    expect(formatMs(5000)).toBe("5.0s");
+    expect(formatMs(5000)).toBe("5 s");
   });
 });
 
 describe("formatRate", () => {
   it("handles null", () => {
-    expect(formatRate(null)).toBe("—");
+    expect(formatRate(null)).toBe("Not measured");
   });
   it("handles undefined", () => {
-    expect(formatRate(undefined)).toBe("—");
+    expect(formatRate(undefined)).toBe("Not measured");
   });
   it("formats decimal as percent", () => {
     expect(formatRate(0.998)).toBe("99.8%");
@@ -63,13 +63,13 @@ describe("formatRate", () => {
 
 describe("formatSince", () => {
   it("handles null", () => {
-    expect(formatSince(null)).toBe("—");
+    expect(formatSince(null)).toBe("Not recorded");
   });
   it("handles undefined", () => {
-    expect(formatSince(undefined)).toBe("—");
+    expect(formatSince(undefined)).toBe("Not recorded");
   });
   it("handles empty string", () => {
-    expect(formatSince("")).toBe("—");
+    expect(formatSince("")).toBe("Not recorded");
   });
   it("handles 'just now'", () => {
     const now = new Date().toISOString();

@@ -79,7 +79,7 @@ function formatFetchErrorMessage(status: number, errBody: Record<string, unknown
       }
     }
     if (parts.length) {
-      return parts.join(" — ");
+      return parts.join(": ");
     }
   }
   if (typeof errBody.message === "string") {

@@ -4,6 +4,7 @@ import NextLink from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { ContentSwitcher, InlineNotification, Link, SkeletonText, Switch } from "@carbon/react";
 import { api } from "@/lib/api";
+import { formatMs } from "@/lib/utils/format";
 import { useAdminKey } from "@/hooks/useAdminKey";
 import { useHealth } from "@/hooks/useHealth";
 import { useRangeParam } from "@/hooks/useRangeParam";
@@ -143,10 +144,10 @@ export function Overview() {
         <dl className="t-facts">
           <div><dt>Proxy</dt><dd>{health ? (health.proxy === "up" ? "Up" : "Unreachable") : "Checking"}</dd></div>
           <div><dt>Uptime</dt><dd>{uptimeText(health?.uptime_seconds)}</dd></div>
-          <div><dt>Scan time, median</dt><dd>{health ? `${health.scan_latency_ms_p50} ms` : "–"}</dd></div>
-          <div><dt>Scan time, 95th percentile</dt><dd>{health ? `${health.scan_latency_ms_p95} ms` : "–"}</dd></div>
-          <div><dt>Scanners running</dt><dd>{health?.scanner_count ?? "–"}</dd></div>
-          <div><dt>Database</dt><dd>{health?.database === "connected" ? "Connected" : (health?.database ?? "–")}</dd></div>
+          <div><dt>Scan time, median</dt><dd>{formatMs(health?.scan_latency_ms_p50)}</dd></div>
+          <div><dt>Scan time, 95th percentile</dt><dd>{formatMs(health?.scan_latency_ms_p95)}</dd></div>
+          <div><dt>Scanners running</dt><dd>{health?.scanner_count ?? "Not known"}</dd></div>
+          <div><dt>Database</dt><dd>{health?.database === "connected" ? "Connected" : (health?.database ?? "Not known")}</dd></div>
         </dl>
       </div>
 

@@ -84,7 +84,7 @@ export function useProxyPage() {
       component: "Data Retention",
       status: detail?.retention_enabled ? "ok" : "disabled",
       detail: detail?.retention_enabled
-        ? `enabled · last run ${detail.retention_last_run ?? "—"}`
+        ? `enabled, last run ${detail.retention_last_run ?? "not recorded"}`
         : "not configured",
       dependsOn: "database, cron scheduler",
     });

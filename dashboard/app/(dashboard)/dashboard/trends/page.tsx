@@ -59,7 +59,7 @@ export default function TrendsPage() {
           ["Requests scanned", totals.attempted.toLocaleString("en")],
           ["Acted on", totals.caught.toLocaleString("en")],
           ["Passed untouched", totals.passed.toLocaleString("en")],
-          ["Kinds of finding seen", byType.length || "–"],
+          ["Kinds of finding seen", byType.length || "None"],
         ]}
       />
 

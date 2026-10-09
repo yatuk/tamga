@@ -12,7 +12,7 @@ import type { useReportsPage } from "./useReportsPage";
 type Props = ReturnType<typeof useReportsPage>;
 
 const n = (v: number) => v.toLocaleString("en");
-const signed = (v: number | null | undefined) => (v == null ? "–" : `${v > 0 ? "+" : ""}${v.toFixed(1)}%`);
+const signed = (v: number | null | undefined) => (v == null ? "Not enough data" : `${v > 0 ? "+" : ""}${v.toFixed(1)}%`);
 
 export function ReportsBody({
   adminKey,
@@ -82,8 +82,8 @@ export function ReportsBody({
         </div>
         <dl className="t-facts">
           <div><dt>Mean input risk, 0 to 100</dt><dd>{stats?.avg_input_risk_pct ?? 0}</dd></div>
-          <div><dt>Mean time to resolve</dt><dd>{resolved ? `${mttrData.overall_mttr_minutes.toFixed(1)} min` : "–"}</dd></div>
-          <div><dt>Resolved within 60 minutes</dt><dd>{resolved ? `${mttrData.sla_compliance.toFixed(1)}%` : "–"}</dd></div>
+          <div><dt>Mean time to resolve</dt><dd>{resolved ? `${mttrData.overall_mttr_minutes.toFixed(1)} min` : "Nothing resolved yet"}</dd></div>
+          <div><dt>Resolved within 60 minutes</dt><dd>{resolved ? `${mttrData.sla_compliance.toFixed(1)}%` : "Nothing resolved yet"}</dd></div>
           <div><dt>Requests, second half against first</dt><dd>{signed(comparisonDelta?.reqDelta)}</dd></div>
           <div><dt>Stopped, second half against first</dt><dd>{signed(comparisonDelta?.blockedDelta)}</dd></div>
         </dl>
@@ -170,7 +170,7 @@ export function ReportsBody({
                     <td className="t-num" style={{ width: "auto" }}>
                       {n(row.count)} <span className="t-note">{row.pct}%</span>
                     </td>
-                    <td className="t-data">{row.code === "—" ? "" : row.code}</td>
+                    <td className="t-data">{row.code}</td>
                     <td className="t-note">{row.note}</td>
                   </tr>
                 ))}

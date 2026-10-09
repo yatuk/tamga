@@ -59,11 +59,11 @@ export function ProxyBody({ adminKey, isLoading, hasError, isOnline, health, det
           ) : undefined
         }
         facts={[
-          ["Version", detail?.version || "–"],
-          ["Scanners on every request", health?.scanner_count ?? "–"],
+          ["Version", detail?.version || "Not known"],
+          ["Scanners on every request", health?.scanner_count ?? "Not known"],
           [
             "Database",
-            database === "connected" ? "Connected" : database === "not_configured" ? "None: events are kept in memory" : (database ?? "–"),
+            database === "connected" ? "Connected" : database === "not_configured" ? "None: events are kept in memory" : (database ?? "Not known"),
           ],
           ["TLS", detail?.tls_enabled ? "On" : "Off: terminate it in front of the proxy"],
           ["Events the bus dropped", dropped.toLocaleString("en")],

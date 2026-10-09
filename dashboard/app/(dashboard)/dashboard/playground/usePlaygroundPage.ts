@@ -51,7 +51,7 @@ export function usePlaygroundPage() {
           .map((f) => (f.match || "").trim())
           .filter(Boolean);
         const reconstructed = matches.length
-          ? `# Reconstructed from incident ${prefillRequestId.slice(0, 12)}\n# (raw prompt is redacted by policy — below are the flagged fragments)\n\n${matches.join("\n")}`
+          ? `# Reconstructed from incident ${prefillRequestId.slice(0, 12)}\n# The raw prompt is not kept. These are the fragments that were flagged.\n\n${matches.join("\n")}`
           : `# Incident ${prefillRequestId.slice(0, 12)}\n# No flagged fragments available.`;
         setPrompt(reconstructed);
         setPrefilled(true);

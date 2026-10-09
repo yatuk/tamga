@@ -152,7 +152,7 @@ export function CostsBody({
                     <TableCell className="t-right">{formatTokens(r.tokens)}</TableCell>
                     <TableCell className="t-right">{r.priced ? formatCost(r.cost) : "No price"}</TableCell>
                     <TableCell className="t-right">
-                      {!r.priced ? "–" : totalCostEstimate > 0 ? `${((r.cost / totalCostEstimate) * 100).toFixed(1)}%` : "0.0%"}
+                      {!r.priced ? "Not priced" : totalCostEstimate > 0 ? `${((r.cost / totalCostEstimate) * 100).toFixed(1)}%` : "0.0%"}
                     </TableCell>
                   </TableRow>
                 ))}

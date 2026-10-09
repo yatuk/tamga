@@ -53,11 +53,11 @@ export function TrafficBody({
           ) : undefined
         }
         facts={[
-          ["Average per hour", totalRequests > 0 ? (perHour >= 10 ? Math.round(perHour).toLocaleString("en") : perHour.toFixed(1)) : "–"],
-          [`Busiest ${unit}`, busiest && busiest.total > 0 ? busiest.total.toLocaleString("en") : "–"],
-          [`${hourly ? "Hours" : "Days"} with no traffic`, points.length > 0 ? `${quiet} of ${points.length}` : "–"],
-          ["Providers in use", topProviders.length || "–"],
-          ["Model families in use", modelUsage.length || "–"],
+          ["Average per hour", totalRequests > 0 ? (perHour >= 10 ? Math.round(perHour).toLocaleString("en") : perHour.toFixed(1)) : "None"],
+          [`Busiest ${unit}`, busiest && busiest.total > 0 ? busiest.total.toLocaleString("en") : "None"],
+          [`${hourly ? "Hours" : "Days"} with no traffic`, points.length > 0 ? `${quiet} of ${points.length}` : "Not known"],
+          ["Providers in use", topProviders.length || "None"],
+          ["Model families in use", modelUsage.length || "None"],
         ]}
       />
 
@@ -79,14 +79,14 @@ export function TrafficBody({
       </Section>
 
       <div className="t-columns" data-even="true">
-        <Section id="providers" title="Where it went" note="Requests by provider">
+        <Section id="providers" title="Requests by provider">
           <Shares
             head={["Provider", "Requests"]}
             rows={topProviders.map(([name, value]) => ({ label: providerName(name), value }))}
             empty="No request reached a provider in this window."
           />
         </Section>
-        <Section id="models" title="Which models" note="Requests by model family">
+        <Section id="models" title="Requests by model family">
           <Shares
             head={["Model family", "Share", "Requests"]}
             rows={modelUsage.map((m) => ({ label: m.name, note: `${m.pct}%`, value: m.value, data: true }))}

@@ -65,7 +65,7 @@ export function useReportsPage() {
       if (x.includes("inject") || x.includes("jailbreak")) return { code: "LLM01", note: "Prompt injection" };
       if (x.includes("pii") || x.includes("secret")) return { code: "LLM02", note: "Sensitive disclosure" };
       if (x.includes("training") || x.includes("exfil")) return { code: "LLM10", note: "Model theft / exfil" };
-      return { code: "—", note: "Map in SOC review" };
+      return { code: "", note: "Not mapped: decide in review" };
     };
     return entries
       .sort((a, b) => b[1] - a[1])

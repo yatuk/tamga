@@ -138,7 +138,7 @@ export default function IntegrationsPage() {
         </Section>
       ) : null}
 
-      <Section id="add" title="Add a destination" note="Each has a setup guide" style={{ marginTop: "2.5rem" }}>
+      <Section id="add" title="Add a destination" style={{ marginTop: "2.5rem" }}>
         <ul className="t-destinations">{PRIMARY_PRESETS.map(row)}</ul>
         {/* The rest opens in place, under the ones most used. */}
         <AnimatePresence initial={false}>

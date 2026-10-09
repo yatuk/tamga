@@ -236,9 +236,9 @@ function Providers({ m }: { m: Page }) {
                           state.word
                         )}
                       </TableCell>
-                      <TableCell className="t-right">{p.requests_in_window ?? "–"}</TableCell>
+                      <TableCell className="t-right">{p.requests_in_window ?? "None"}</TableCell>
                       <TableCell className="t-right">
-                        {typeof p.success_rate_observed === "number" ? `${(p.success_rate_observed * 100).toFixed(1)}%` : "–"}
+                        {typeof p.success_rate_observed === "number" ? `${(p.success_rate_observed * 100).toFixed(1)}%` : "Not measured"}
                       </TableCell>
                       <TableCell>
                         {p.last_failure ? formatSince(p.last_failure) : "None"}
@@ -289,13 +289,13 @@ function Runtime({ m }: { m: Page }) {
           ["Database", database === "connected" ? "Connected" : (database ?? "Not known").replace(/_/g, " ")],
         ])}
       </Section>
-      <Section id="build" title="Build and policy" note="From /api/v1/health/detail">
+      <Section id="build" title="Build and policy">
         {list([
-          ["Version", runtime?.version || "–"],
-          ["Policy", runtime?.policy_name || "–"],
-          ["Policy file", <span key="p" className="t-data">{runtime?.policy_path ?? health?.policy_path ?? "–"}</span>],
+          ["Version", runtime?.version || "Not known"],
+          ["Policy", runtime?.policy_name || "Not known"],
+          ["Policy file", <span key="p" className="t-data">{runtime?.policy_path ?? health?.policy_path ?? "Not known"}</span>],
           ["Scanners", runtime?.scanner_count ?? health?.scanner_count ?? 0],
-          ["Running for", typeof uptime === "number" ? uptimeText(uptime) : "–"],
+          ["Running for", typeof uptime === "number" ? uptimeText(uptime) : "Not known"],
         ])}
       </Section>
     </div>

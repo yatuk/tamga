@@ -55,7 +55,7 @@ export function LatencyBody({
       <Statement
         loading={isLoading}
         quiet={!slow}
-        figure={measured ? <Count value={p95} format={formatMs} /> : "–"}
+        figure={measured ? <Count value={p95} format={formatMs} /> : "No data"}
         sentence={
           measured
             ? "or less is what scanning adds to 95 of every 100 requests."
@@ -83,8 +83,8 @@ export function LatencyBody({
           ) : undefined
         }
         facts={[
-          ["Scanners on every request", scannerCount || "–"],
-          ["Measured since", uptimeSeconds > 0 ? `the proxy started, ${uptimeText(uptimeSeconds)} ago` : "–"],
+          ["Scanners on every request", scannerCount || "None"],
+          ["Measured since", uptimeSeconds > 0 ? `the proxy started, ${uptimeText(uptimeSeconds)} ago` : "Not known"],
           ["Target, 95th percentile", formatMs(TARGET_MS)],
           ["Upstream endpoints", providerPools.length || "None defined"],
         ]}
@@ -168,7 +168,7 @@ export function LatencyBody({
                       <TableCell>{state.action ? <span className="t-action" data-action={state.action}>{state.word}</span> : state.word}</TableCell>
                       <TableCell className="t-right">{formatMs(p.p95LatencyMs)}</TableCell>
                       <TableCell className="t-right">{formatRate(p.successRate)}</TableCell>
-                      <TableCell className="t-right">{p.requestsInWindow ?? "–"}</TableCell>
+                      <TableCell className="t-right">{p.requestsInWindow ?? "None"}</TableCell>
                       <TableCell>
                         {p.lastFailure ? formatSince(p.lastFailure) : "None"}
                         {p.failureReason ? `, ${p.failureReason}` : ""}
