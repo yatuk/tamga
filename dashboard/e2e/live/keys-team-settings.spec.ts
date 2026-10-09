@@ -225,7 +225,7 @@ test.describe("Team", () => {
     await page.goto("/dashboard/team");
     await expect(page.getByRole("heading", { name: "Team", exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { name: "What each role can do" })).toBeVisible();
-    await expect(page.getByText("The proxy did not answer.")).toHaveCount(0);
+    await expect(page.getByText(/The proxy did not (answer|accept the admin key)./)).toHaveCount(0);
 
     const warning = page.getByText("The identity provider is not connected.");
     if (clerk) await expect(warning).toHaveCount(0);
@@ -300,7 +300,7 @@ test.describe("Settings", () => {
 
       // The saved key is the one the console now sends: the proxy turns it away.
       await page.goto("/dashboard/keys");
-      await expect(page.getByText("The proxy did not answer.")).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText("The proxy did not accept the admin key.")).toBeVisible({ timeout: 15_000 });
 
       // Emptying the field removes the saved key, and the built-in one applies again.
       await page.goto("/dashboard/settings?tab=access");
@@ -319,7 +319,7 @@ test.describe("Settings", () => {
 
     await page.goto("/dashboard/keys");
     await expect(page.getByRole("button", { name: "New key" })).toBeEnabled();
-    await expect(page.getByText("The proxy did not answer.")).toHaveCount(0);
+    await expect(page.getByText(/The proxy did not (answer|accept the admin key)./)).toHaveCount(0);
   });
 
   test("retention: the number of days is saved and still there after a reload", async ({ page }) => {
