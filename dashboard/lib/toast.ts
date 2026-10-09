@@ -2,7 +2,7 @@ import { toast as sonnerToast } from "sonner";
 
 function formatDescription(detail?: string): string | undefined {
   if (!detail) return undefined;
-  return `// ${detail}`;
+  return detail;
 }
 
 export const toast = {
