@@ -963,6 +963,11 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 			upstreams:     cfg.UpstreamURLs,
 			providers:     upstreamProviders,
 			maxRetries:    maxUpstreamRetries(cfg.Config),
+			// The answer has to be readable here: the output scan, the vault
+			// and the canary all look inside it. The caller's Accept-Encoding
+			// is not passed on, so the transport asks for gzip on its own
+			// account and hands the answer over decoded.
+			req.Header.Del("Accept-Encoding")
 			breaker:       cfg.Breaker,
 			providerPool:  providerPool,
 			upstreamHooks: upstreamHooks,
@@ -1025,6 +1030,14 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 				}
 				if respBuffered && detectCanary(string(respBody), canaryToken) {
 					leak := scanner.Finding{
+			// An answer that arrives encoded anyway (the provider was not
+			// asked to) cannot be read. When something is set to read it,
+			// it is not forwarded unread.
+			if enc := strings.TrimSpace(resp.Header.Get("Content-Encoding")); enc != "" && !strings.EqualFold(enc, "identity") {
+				if (pol != nil && pol.OutputRules != nil && pol.OutputRules.Enabled) || vaultActive || canaryToken != "" {
+					return errUnreadableResponse
+				}
+			}
 						Type:           "system_prompt_leak",
 						Category:       "system_prompt_leak",
 						Severity:       "critical",
@@ -1996,6 +2009,10 @@ func setConfidenceHeaders(h http.Header, findings []scanner.Finding) {
 // Consumed by scanners implementing scanner.ContextualScanner.
 func buildRequestContext(r *http.Request, requestID string, pol *policy.Policy) *scanner.RequestContext {
 	reqCtx := &scanner.RequestContext{
+// errUnreadableResponse stops an encoded upstream answer from being forwarded
+// past a check that could not look inside it.
+var errUnreadableResponse = errors.New("upstream response is encoded and cannot be scanned")
+
 		RequestId:  requestID,
 		OperatorId: strings.TrimSpace(r.Header.Get("X-Tamga-Operator-Id")),
 	}
