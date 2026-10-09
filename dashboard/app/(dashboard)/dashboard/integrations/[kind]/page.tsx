@@ -17,7 +17,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { kind } = await params;
   const guide = GUIDES[kind as WebhookKind];
-  if (!guide) return { title: "Integration not found" };
+  if (!guide) return { title: { absolute: "Integration not found · Tamga" } };
   return {
     title: { absolute: `${guide.name} setup · Tamga` },
     description: guide.overview,

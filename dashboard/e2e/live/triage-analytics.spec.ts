@@ -148,16 +148,16 @@ test.describe("Incidents", () => {
     await expect(panel(page)).toBeVisible();
     await expect(panel(page)).toContainText(incidents[0].request_id);
     await expect(page).toHaveURL(new RegExp(`request_id=${incidents[0].request_id}`));
-    await expect(headers(page)).toHaveCount(4);
-    await expect(first).toHaveAttribute("aria-expanded", "true");
+    await expect(headers(page)).toHaveCount(3);
+    await expect(first).toHaveAttribute("aria-current", "true");
 
     // Another row swaps the content, the panel stays.
     await second.click();
     await expect(panel(page)).toContainText(incidents[1].request_id);
     await expect(panel(page)).not.toContainText(incidents[0].request_id);
     expect(requestId(page)).toBe(incidents[1].request_id);
-    await expect(first).toHaveAttribute("aria-expanded", "false");
-    await expect(second).toHaveAttribute("aria-expanded", "true");
+    await expect(first).not.toHaveAttribute("aria-current", "true");
+    await expect(second).toHaveAttribute("aria-current", "true");
 
     // The same row closes it.
     await second.click();
@@ -173,7 +173,7 @@ test.describe("Incidents", () => {
 
     await first.click();
     await expect(panel(page)).toBeVisible();
-    await panel(page).getByRole("button", { name: "Close (Esc)" }).click();
+    await panel(page).getByRole("button", { name: "Close", exact: true }).click();
     await expect(panel(page)).toHaveCount(0);
     await expect(page).not.toHaveURL(/request_id=/);
   });
@@ -206,8 +206,8 @@ test.describe("Incidents", () => {
     const listed = incidents[incidents.length - 1];
     await page.goto(`/dashboard/security?request_id=${listed.request_id}`);
     await expect(panel(page)).toContainText(listed.request_id);
-    await expect(headers(page)).toHaveCount(4);
-    await expect(page.locator('.t-work tbody tr[aria-expanded="true"]')).toHaveCount(1);
+    await expect(headers(page)).toHaveCount(3);
+    await expect(page.locator('.t-work tbody tr[aria-current="true"]')).toHaveCount(1);
 
     // A request that passed is not in the queue: it is fetched on its own.
     const { events } = await getEvents(page, "page=1&limit=1&action=PASS&range=30d");
@@ -222,7 +222,7 @@ test.describe("Incidents", () => {
     await expect(panel(page).getByRole("heading", { name: "Triage" })).toHaveCount(0);
     await expect(panel(page)).not.toContainText(BROKEN_TEXT);
     await expect(rows(page).first()).toBeVisible();
-    await expect(headers(page)).toHaveCount(4);
+    await expect(headers(page)).toHaveCount(3);
 
     await page.keyboard.press("Escape");
     await expect(panel(page)).toHaveCount(0);
@@ -436,7 +436,7 @@ test.describe("Event explorer", () => {
     await expect(panel(page).getByRole("heading", { name: "Triage" })).toHaveCount(0);
     await expect(panel(page).getByRole("heading", { name: /What was found/ })).toHaveCount(0);
     await expect(panel(page)).not.toContainText(BROKEN_TEXT);
-    await expect(headers(page)).toHaveCount(4);
+    await expect(headers(page)).toHaveCount(3);
     // The filters stay beside the open request.
     await expect(page).toHaveURL(/action=pass/);
 
@@ -633,18 +633,18 @@ test.describe("Threat hunting", () => {
     await expect(page.getByLabel("What was done")).toHaveValue("BLOCK");
 
     // The name field opens in place and Escape puts it away.
-    await saved.getByRole("button", { name: "Save this one" }).click();
+    await saved.getByRole("button", { name: "Save this search" }).click();
     await expect(nameField).toBeVisible();
     await expect(nameField).toBeFocused();
-    await expect(saved.getByRole("button", { name: "Save this one" })).toHaveCount(0);
-    await expect(saved.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+    await expect(saved.getByRole("button", { name: "Save this search" })).toHaveCount(0);
+    await expect(saved.getByRole("button", { name: "Save search", exact: true })).toBeDisabled();
     await page.keyboard.press("Escape");
     await expect(nameField).toHaveCount(0);
-    await expect(saved.getByRole("button", { name: "Save this one" })).toBeVisible();
+    await expect(saved.getByRole("button", { name: "Save this search" })).toBeVisible();
 
-    await saved.getByRole("button", { name: "Save this one" }).click();
+    await saved.getByRole("button", { name: "Save this search" }).click();
     await nameField.fill(name);
-    await saved.getByRole("button", { name: "Save", exact: true }).click();
+    await saved.getByRole("button", { name: "Save search", exact: true }).click();
     await expect(nameField).toHaveCount(0);
     const item = saved.locator("li", { hasText: name });
     await expect(item).toBeVisible();
@@ -674,7 +674,7 @@ test.describe("Threat hunting", () => {
 
     // Delete asks in place; "Keep" backs out.
     await item.getByRole("button", { name: `Delete ${name}` }).click();
-    await expect(item).toContainText(`Delete ${name}?`);
+    await expect(item.getByRole("button", { name: "Delete", exact: true })).toBeVisible();
     await item.getByRole("button", { name: "Keep" }).click();
     await expect(item.getByRole("button", { name: `Delete ${name}` })).toBeVisible();
 
@@ -797,6 +797,12 @@ test.describe("Analytics", () => {
 
     const readout = page.locator("section[aria-labelledby='share'] .t-readout");
     const trace = page.locator("section[aria-labelledby='share'] .t-trace");
+    // One measurement is said as a sentence; there is no line to point at.
+    if (/^One measurement so far/.test(await readout.innerText())) {
+      await expect(readout).toHaveText(/^One measurement so far, at \w{3} \d{1,2} \w{3,4}: \d+(\.\d)?%\. A line needs two\.$/);
+      await expect(trace).toHaveCount(0);
+      return;
+    }
     await expect(readout).toHaveText("Point at the line, or use the arrow keys, to read one day.");
     await trace.hover({ position: { x: 4, y: 40 } });
     await expect(readout).toHaveText(/^\w{3} \d{1,2} \w{3,4}: (nothing measured|\d+(\.\d)?%)$/);
@@ -834,10 +840,15 @@ test.describe("Analytics", () => {
     const trace = page.locator("section[aria-labelledby='over-time'] .t-trace");
     const scanned = ((await series(page, "30d")).points ?? []).some((p) => (p.scan_p95 ?? 0) > 0);
     test.skip(!scanned, "nothing was scanned in this window, so there is no line");
+    if (/^One measurement so far/.test(await readout.innerText())) {
+      await expect(readout).toHaveText(/^One measurement so far, at \w{3} \d{1,2} \w{3,4}: [\d.]+ (µs|ms|s)\. A line needs two\.$/);
+      await expect(trace).toHaveCount(0);
+      return;
+    }
     await expect(trace).toBeVisible();
     await expect(readout).toHaveText("Point at the line, or use the arrow keys, to read one day.");
     await trace.hover({ position: { x: 4, y: 40 } });
-    await expect(readout).toHaveText(/^\w{3} \d{1,2} \w{3,4}: (nothing measured|[\d.]+(µs|ms|s))$/);
+    await expect(readout).toHaveText(/^\w{3} \d{1,2} \w{3,4}: (nothing measured|[\d.]+ (µs|ms|s))$/);
     await page.locator("h1").hover();
     await expect(readout).toHaveText("Point at the line, or use the arrow keys, to read one day.");
   });

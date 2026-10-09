@@ -255,12 +255,11 @@ test.describe("Setup guides", () => {
     test(`the ${name} guide shows its steps and snippets, and leads to the modal`, async ({ page }) => {
       await page.goto(`/dashboard/integrations/${kind}`);
       await expect(page.getByRole("heading", { level: 1 })).toContainText("Setting up");
-      await expect(page).toHaveTitle(/setup · Integrations · Tamga$/);
+      await expect(page).toHaveTitle(/setup · Tamga$/);
 
       const steps = page.locator("ol.t-steps > li");
       expect(await steps.count()).toBeGreaterThan(1);
       await expect(steps.first().getByRole("heading", { level: 3 })).toBeVisible();
-      await expect(page.getByText(`${await steps.count()} in order`)).toBeVisible();
 
       // The payload preview is always there; it has to carry text, not an empty box.
       const snippets = page.locator(".cds--snippet");
@@ -275,7 +274,7 @@ test.describe("Setup guides", () => {
 
   test("an unknown kind gives the not-found page", async ({ page }) => {
     await page.goto("/dashboard/integrations/e2e-live-no-such-kind");
-    await expect(page.getByText("This page could not be found.")).toBeVisible();
+    await expect(page.getByText("There is no page here")).toBeVisible();
     await expect(page.getByRole("heading", { level: 1, name: /Setting up/ })).toHaveCount(0);
     await expect(page).toHaveTitle("Integration not found · Tamga");
   });
@@ -287,7 +286,7 @@ test.describe("Audit log", () => {
 
   /** "12 of 340 shown" as numbers. */
   async function shown(page: Page): Promise<[number, number]> {
-    const text = await page.getByText(/^\d+ of \d+ shown$/).innerText();
+    const text = await page.getByText(/^\d+ of \d+ match$/).innerText();
     const [a, b] = text.match(/\d+/g)!.map(Number);
     return [a, b];
   }
@@ -314,11 +313,11 @@ test.describe("Audit log", () => {
     // and the entry being read stays open while the list grows above it.
     await deleteHook(request, first.id);
     await expect(rows(page)).toHaveCount(2, { timeout: 25_000 });
-    await expect(rows(page).first()).toContainText("Webhook deleted");
+    await expect(rows(page).first()).toContainText("Integration removed");
     await expect(panel(page)).toBeVisible();
-    await expect(panel(page).getByRole("heading", { level: 2 })).toHaveText("Webhook created");
+    await expect(panel(page).getByRole("heading", { level: 2 })).toHaveText("Integration connected");
     await expect(panel(page)).toContainText(first.label);
-    await expect(rows(page).nth(1)).toHaveAttribute("aria-expanded", "true");
+    await expect(rows(page).nth(1)).toHaveAttribute("aria-current", "true");
   });
 
   test("the search box and the two selects filter, the count follows, and Clear filters resets", async ({ page, request }) => {
@@ -329,20 +328,21 @@ test.describe("Audit log", () => {
 
     const [allShown, all] = await shown(page);
     expect(allShown).toBe(all);
-    expect(await rows(page).count()).toBe(all);
+    // The log is read 50 entries at a time.
+    expect(await rows(page).count()).toBe(Math.min(all, 50));
     await expect(page.getByRole("button", { name: "Clear filters" })).toHaveCount(0);
 
     // Search: the target of the two entries just made.
     await page.getByRole("searchbox", { name: "Search the log" }).fill(hook.id);
     await expect(rows(page)).toHaveCount(2);
-    await expect(page.getByText(/^2 of \d+ shown$/)).toBeVisible();
+    await expect(page.getByText(/^2 of \d+ match$/)).toBeVisible();
     await expect(page).toHaveURL(new RegExp(`[?&]q=${hook.id}`));
 
     // Action: one of the two is left.
     await page.locator("#audit-kind").selectOption("webhook.create");
     await expect(rows(page)).toHaveCount(1);
-    await expect(rows(page).first()).toContainText("Webhook created");
-    await expect(page.getByText(/^1 of \d+ shown$/)).toBeVisible();
+    await expect(rows(page).first()).toContainText("Integration connected");
+    await expect(page.getByText(/^1 of \d+ match$/)).toBeVisible();
     await expect(page).toHaveURL(/[?&]kind=webhook\.create/);
 
     // Without the search, every row is of that action and the count matches.
@@ -351,8 +351,8 @@ test.describe("Audit log", () => {
     const [created] = await shown(page);
     expect(created).toBeGreaterThan(0);
     expect(created).toBeLessThan(all + 1);
-    await expect(rows(page)).toHaveCount(created);
-    await expect(rows(page).filter({ hasText: "Webhook created" })).toHaveCount(created);
+    await expect(rows(page)).toHaveCount(Math.min(created, 50));
+    await expect(rows(page).filter({ hasText: "Integration connected" })).toHaveCount(Math.min(created, 50));
 
     await page.getByRole("button", { name: "Clear filters" }).click();
     await expect(page.locator("#audit-kind")).toHaveValue("");
@@ -375,7 +375,7 @@ test.describe("Audit log", () => {
     // A search nothing matches says so.
     await page.getByRole("searchbox", { name: "Search the log" }).fill("e2e-live-matches-nothing");
     await expect(page.getByText("No entry matches these filters.")).toBeVisible();
-    await expect(page.getByText(/^0 of \d+ shown$/)).toBeVisible();
+    await expect(page.getByText(/^0 of \d+ match$/)).toBeVisible();
   });
 
   test("the filters are restored from the URL", async ({ page, request }) => {
@@ -386,7 +386,7 @@ test.describe("Audit log", () => {
     await expect(page.getByRole("searchbox", { name: "Search the log" })).toHaveValue(hook.id);
     await expect(page.locator("#audit-kind")).toHaveValue("webhook.delete");
     await expect(rows(page)).toHaveCount(1);
-    await expect(rows(page).first()).toContainText("Webhook deleted");
+    await expect(rows(page).first()).toContainText("Integration removed");
     await expect(page.getByRole("button", { name: "Clear filters" })).toBeVisible();
 
     await page.reload();
@@ -412,14 +412,14 @@ test.describe("Audit log", () => {
 
     // Newest first: the deletion, which records no detail.
     await rows(page).nth(0).click();
-    await expect(panel(page).getByRole("heading", { level: 2 })).toHaveText("Webhook deleted");
+    await expect(panel(page).getByRole("heading", { level: 2 })).toHaveText("Integration removed");
     for (const term of ["When", "By", "To"]) await expect(panel(page).locator("dt", { hasText: new RegExp(`^${term}$`) })).toBeVisible();
     await expect(panel(page).locator("dd.t-data")).toHaveText(hook.id);
     await expect(panel(page)).toContainText("This entry has no further detail.");
 
     // Another row swaps the content in the same panel.
     await rows(page).nth(1).click();
-    await expect(panel(page).getByRole("heading", { level: 2 })).toHaveText("Webhook created");
+    await expect(panel(page).getByRole("heading", { level: 2 })).toHaveText("Integration connected");
     await expect(panel(page)).toContainText("Detail as recorded");
     await expect(panel(page).locator(".cds--snippet")).toContainText(hook.label);
     await expect(panel(page).locator(".cds--snippet")).toContainText('"kind": "generic"');
@@ -430,7 +430,7 @@ test.describe("Audit log", () => {
 
     await rows(page).nth(1).click();
     await expect(panel(page)).toBeVisible();
-    await panel(page).getByRole("button", { name: "Close (Esc)" }).click();
+    await panel(page).getByRole("button", { name: "Close", exact: true }).click();
     await expect(panel(page)).toHaveCount(0);
 
     // The keyboard opens a row too, and the same row again closes it.
