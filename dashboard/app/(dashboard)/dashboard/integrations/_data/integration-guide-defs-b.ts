@@ -5,7 +5,7 @@ export const SENTINEL: IntegrationGuide = {
   kind: "sentinel",
   name: "Microsoft Sentinel",
   overview:
-    "Send Tamga events to Microsoft Sentinel. There are three paths — the Logs Ingestion API (modern, recommended), the legacy HTTP Data Collector API (deprecated 14 Sep 2026), and the CEF-over-Syslog AMA bridge.",
+    "Send Tamga events to Microsoft Sentinel. There are three ways in: the Logs Ingestion API, which is the current one and the one to use; the older HTTP Data Collector API, deprecated on 14 September 2026; and CEF over Syslog through the AMA bridge.",
   lastVerified: LAST_VERIFIED,
   urlHint:
     "https://<dce>.westeurope-1.ingest.monitor.azure.com/dataCollectionRules/<dcrId>/streams/Custom-Tamga_CL?api-version=2023-01-01",
@@ -34,15 +34,15 @@ export const SENTINEL: IntegrationGuide = {
       body: "Azure Portal → Monitor → Data Collection Endpoints → Create. Pick the region closest to Tamga’s proxy; write down the Logs ingestion URI.",
     },
     {
-      title: "Create a custom table + DCR",
-      body: "In your Log Analytics workspace → Tables → Create → New custom log (DCR-based). Call it Tamga_CL. Define schema (TimeGenerated, RequestID, Severity, FindingType, Endpoint…). Azure will generate a DCR — note its Immutable ID.",
+      title: "Create a custom table and its DCR",
+      body: "In your Log Analytics workspace → Tables → Create → New custom log (DCR-based). Call it Tamga_CL. Define schema (TimeGenerated, RequestID, Severity, FindingType, Endpoint…). Azure generates a DCR. Note its Immutable ID.",
     },
     {
       title: "Grant your Entra app the Monitoring Metrics Publisher role",
       body: "On the DCR → Access control (IAM) → Add role assignment → Monitoring Metrics Publisher → assign to your app registration.",
     },
     {
-      title: "Acquire an AAD bearer token",
+      title: "Get a bearer token from Entra ID",
       body: "POST to https://login.microsoftonline.com/<tenant>/oauth2/v2.0/token with client credentials (scope=https://monitor.azure.com/.default). Short-lived token; rotate via Tamga’s header field or external service.",
       code: {
         lang: "bash",
@@ -66,15 +66,15 @@ export const SENTINEL: IntegrationGuide = {
   ],
   gotchas: [
     {
-      title: "HTTP Data Collector API retires 14 Sep 2026",
+      title: "The HTTP Data Collector API retires on 14 September 2026",
       body: "The legacy <workspace>.ods.opinsights.azure.com/api/logs endpoint with HMAC-SHA256 auth will stop accepting data. Do not build new integrations against it.",
     },
     {
-      title: "DCR schema is strict",
+      title: "The DCR schema is strict",
       body: "Rows that don’t match your Tamga_CL columns are silently dropped. Match names and types exactly; add TimeGenerated as a DateTime.",
     },
     {
-      title: "Region suffix matters",
+      title: "The region suffix matters",
       body: "DCE URIs embed the region (westeurope-1, eastus-1, etc). Cross-region writes are rejected.",
     },
   ],
@@ -127,15 +127,15 @@ export const QRADAR: IntegrationGuide = {
   headers: [],
   gotchas: [
     {
-      title: "Port number is not fixed",
-      body: "There is no canonical HTTP Receiver port. Use whatever you configured on the log source — firewall and Tamga must agree.",
+      title: "The port number is not fixed",
+      body: "There is no canonical HTTP Receiver port. Use the port you set on the log source. The firewall and Tamga have to agree on it.",
     },
     {
       title: "LEEF delimiter is \\t",
       body: "LEEF 2.0 uses tabs as the key/value delimiter by default. Tamga emits tabs; if your QRadar is pinned to ^ or |, override the Delimiter on the log source.",
     },
     {
-      title: "No backpressure",
+      title: "QRadar does not push back",
       body: "HTTP Receiver drops events silently when the ingest pipeline is saturated. Monitor QRadar’s SIM Audit log for dropped events.",
     },
   ],

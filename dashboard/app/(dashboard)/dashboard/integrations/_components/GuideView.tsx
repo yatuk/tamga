@@ -1,7 +1,7 @@
 "use client";
 
 import NextLink from "next/link";
-import { Button, CodeSnippet, InlineNotification, Link } from "@carbon/react";
+import { Button, CodeSnippet, Link } from "@carbon/react";
 import { Add } from "@carbon/icons-react";
 import { PageHead, Section } from "@/components/console/page";
 import type { IntegrationGuide } from "../_data/guides";
@@ -34,7 +34,7 @@ export function GuideView({ guide }: { guide: IntegrationGuide }) {
             </Section>
           ) : null}
 
-          <Section id="steps" title="Steps" note={`${guide.steps.length} in order`} style={{ marginTop: "2.5rem" }}>
+          <Section id="steps" title="Steps" style={{ marginTop: "2.5rem" }}>
             <ol className="t-steps">
               {guide.steps.map((s, i) => (
                 <li key={`${i}-${s.title}`}>
@@ -49,9 +49,7 @@ export function GuideView({ guide }: { guide: IntegrationGuide }) {
                         {s.code.content}
                       </CodeSnippet>
                     ) : null}
-                    {s.note ? (
-                      <InlineNotification kind="warning" lowContrast hideCloseButton title="" subtitle={s.note} style={{ maxWidth: "none", marginTop: "0.75rem" }} />
-                    ) : null}
+                    {s.note ? <p className="t-stepnote">{s.note}</p> : null}
                   </div>
                 </li>
               ))}

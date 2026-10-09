@@ -5,7 +5,7 @@ export const GENERIC: IntegrationGuide = {
   kind: "generic",
   name: "Generic Webhook",
   overview:
-    "POST Tamga events to any HTTPS endpoint as raw JSON. Use this when no named preset fits — it forwards the Tamga event body unmodified.",
+    "POST Tamga events to any HTTPS endpoint as raw JSON. Use this when none of the named integrations fits. It forwards the Tamga event body unchanged.",
   lastVerified: LAST_VERIFIED,
   urlHint: "https://hooks.your-soc.example/ingest",
   docsLinks: [{ label: "Tamga docs", href: "https://tamgaproxy.com/docs" }],
@@ -16,14 +16,14 @@ export const GENERIC: IntegrationGuide = {
   steps: [
     {
       title: "Expose an HTTPS endpoint",
-      body: "Anything that accepts POST with Content-Type: application/json works — an AWS API Gateway, a serverless function, a custom receiver.",
+      body: "Anything that accepts POST with Content-Type: application/json works: an AWS API Gateway, a serverless function, a receiver of your own.",
     },
     {
       title: "Decide on the payload shape",
-      body: "If you want Tamga’s native event structure, leave the payload_template blank. To remap fields (Splunk HEC-alike, PagerDuty Events v2…), paste your JSON body into payload_template — it is forwarded verbatim.",
+      body: "If you want Tamga’s native event structure, leave the payload_template blank. To remap fields (Splunk HEC-alike, PagerDuty Events v2…), paste your JSON body into payload_template. It is forwarded as written.",
     },
     {
-      title: "Add auth (optional)",
+      title: "Add authentication, if the endpoint needs it",
       body: "Paste header pairs (one per line, `Key: Value`). Common: Authorization: Bearer <token>, X-Api-Key: <key>.",
     },
     {
@@ -37,11 +37,11 @@ export const GENERIC: IntegrationGuide = {
   },
   gotchas: [
     {
-      title: "TLS only",
-      body: "Plain http:// URLs are rejected — Tamga will not transmit alerts in cleartext.",
+      title: "HTTPS only",
+      body: "Plain http:// URLs are rejected. Tamga does not send alerts unencrypted.",
     },
     {
-      title: "Retry behaviour",
+      title: "What is retried",
       body: "Non-2xx responses are retried with exponential backoff up to 3 attempts; persistent failures are logged in Audit.",
     },
   ],
@@ -51,7 +51,7 @@ export const PAGERDUTY: IntegrationGuide = {
   kind: "pagerduty",
   name: "PagerDuty",
   overview:
-    "Trigger PagerDuty incidents via the Events API v2. The routing_key (integration key) lives in the JSON body, not the URL — Tamga stores it encrypted as the webhook's auth token and injects it at render time.",
+    "Trigger PagerDuty incidents via the Events API v2. The routing_key (integration key) is part of the JSON body and not of the URL. Tamga stores it encrypted as the webhook's auth token and puts it in when it builds the request.",
   lastVerified: LAST_VERIFIED,
   urlHint: "https://events.pagerduty.com/v2/enqueue",
   docsLinks: [
@@ -70,12 +70,12 @@ export const PAGERDUTY: IntegrationGuide = {
     },
     {
       title: "Copy the integration key",
-      body: "After saving, PagerDuty shows a 32-character Integration Key. This is the `routing_key` the Events API requires in every body. Keep it secret — it cannot be rotated from the API.",
+      body: "After saving, PagerDuty shows a 32-character Integration Key. This is the `routing_key` the Events API requires in every body. Keep it secret. It cannot be rotated through the API.",
       note: "Rotation = delete the integration and add a new one. Plan accordingly.",
     },
     {
-      title: "Connect in Tamga",
-      body: "Integrations → PagerDuty → Connect. URL is always https://events.pagerduty.com/v2/enqueue. Paste the routing_key into the `auth token` field. Hit Test — PagerDuty returns 202 on success and opens an incident titled 'Tamga · Test webhook' at P5/info severity.",
+      title: "Connect it in Tamga",
+      body: "Integrations → PagerDuty → Connect. URL is always https://events.pagerduty.com/v2/enqueue. Paste the routing_key into the `auth token` field. Choose Test. PagerDuty answers 202 on success and opens an incident titled 'Tamga · Test webhook' at P5/info severity.",
     },
   ],
   payloadPreview: {
@@ -84,11 +84,11 @@ export const PAGERDUTY: IntegrationGuide = {
   },
   gotchas: [
     {
-      title: "routing_key in body, not URL",
-      body: "Unlike most webhooks the key is not a URL path parameter. The Tamga test button will show `TAMGA_ROUTING_KEY_NOT_SET` in the body if you forget to paste it — PagerDuty then returns 400 with an 'Event object is invalid' message.",
+      title: "The routing key goes in the body, not the URL",
+      body: "Unlike most webhooks the key is not a URL path parameter. The Tamga test button will show `TAMGA_ROUTING_KEY_NOT_SET` in the body if you forget to paste it, and PagerDuty then answers 400 with an 'Event object is invalid' message.",
     },
     {
-      title: "Severity vocabulary is fixed",
+      title: "Severity takes only four values",
       body: "PagerDuty only accepts info|warning|error|critical. Tamga maps its own severity scale: low → info, medium → warning, high → error, critical → critical.",
     },
     {
@@ -102,7 +102,7 @@ export const OPSGENIE: IntegrationGuide = {
   kind: "opsgenie",
   name: "Opsgenie",
   overview:
-    "Create Opsgenie alerts via the v2 Alert API. Auth is an API key sent as `Authorization: GenieKey <token>` — Tamga injects it automatically when you paste the key into the auth-token field.",
+    "Create Opsgenie alerts via the v2 Alert API. Auth is an API key sent as `Authorization: GenieKey <token>`. Tamga adds that header once the key is in the auth-token field.",
   lastVerified: LAST_VERIFIED,
   urlHint: "https://api.opsgenie.com/v2/alerts  ·  EU region: api.eu.opsgenie.com",
   docsLinks: [
@@ -111,13 +111,13 @@ export const OPSGENIE: IntegrationGuide = {
   ],
   prerequisites: [
     "Opsgenie team + escalation policy set up",
-    "An 'API' integration (not 'Webhook') created on that team — gives you the 40-char API key",
+    "An 'API' integration (not 'Webhook') created on that team, which gives you the 40-character API key",
     "Region chosen correctly (US vs EU endpoints diverge)",
   ],
   steps: [
     {
       title: "Create an API integration",
-      body: "Opsgenie → Teams → (your team) → Integrations → Add Integration → API. Name it Tamga and Save — the integration page now shows the API key.",
+      body: "Opsgenie → Teams → (your team) → Integrations → Add Integration → API. Name it Tamga and save. The integration page then shows the API key.",
     },
     {
       title: "Pick the right endpoint",
@@ -125,8 +125,8 @@ export const OPSGENIE: IntegrationGuide = {
       note: "Your region is shown under Settings → Subscription.",
     },
     {
-      title: "Connect in Tamga",
-      body: "Integrations → Opsgenie → Connect. Paste the endpoint URL and put the API key in auth-token. Tamga injects Authorization: GenieKey <token> at send time. Hit Test — Opsgenie returns 202 and you see a P5 alert with alias 'tamga-test-probe'.",
+      title: "Connect it in Tamga",
+      body: "Integrations → Opsgenie → Connect. Paste the endpoint URL and put the API key in auth-token. Tamga injects Authorization: GenieKey <token> at send time. Choose Test. Opsgenie answers 202 and you see a P5 alert with alias 'tamga-test-probe'.",
     },
   ],
   payloadPreview: {
@@ -143,7 +143,7 @@ export const OPSGENIE: IntegrationGuide = {
       body: "Opsgenie uses `alias` to merge repeated alerts. Tamga uses the request_id at runtime; the test probe uses the fixed 'tamga-test-probe' so repeated Test clicks don't spam the team.",
     },
     {
-      title: "Priority scale P1..P5",
+      title: "Priority runs from P1 to P5",
       body: "Tamga maps critical → P1, high → P2, medium → P3, low → P4, info/test → P5. Escalation policies should be keyed off priority, not tags.",
     },
     {
@@ -157,7 +157,7 @@ export const SERVICENOW: IntegrationGuide = {
   kind: "servicenow",
   name: "ServiceNow",
   overview:
-    "Open incidents on ServiceNow's Incident table (/api/now/table/incident) via the inbound REST API. Auth is Basic or OAuth and varies by instance — add the header manually.",
+    "Open incidents on ServiceNow's Incident table (/api/now/table/incident) via the inbound REST API. Auth is Basic or OAuth and differs from one instance to the next, so you add the header yourself.",
   lastVerified: LAST_VERIFIED,
   urlHint: "https://<instance>.service-now.com/api/now/table/incident",
   docsLinks: [
@@ -175,12 +175,12 @@ export const SERVICENOW: IntegrationGuide = {
       body: "In ServiceNow: User Administration → Users → New. Set 'Web service access only' to true so the account can't browse the UI. Assign the `rest_api_explorer` and `itil` roles.",
     },
     {
-      title: "Pick auth flavour",
-      body: "Basic: base64(`username:password`) as `Authorization: Basic ...`. OAuth: set up a client in System OAuth → Application Registry, fetch an access_token with client_credentials, send `Authorization: Bearer ...`. OAuth is preferred — Basic passes the service account password on every request.",
+      title: "Choose Basic or OAuth",
+      body: "Basic: base64(`username:password`) as `Authorization: Basic ...`. OAuth: set up a client in System OAuth → Application Registry, fetch an access_token with client_credentials, send `Authorization: Bearer ...`. Prefer OAuth: Basic sends the service account's password with every request.",
     },
     {
-      title: "Connect in Tamga",
-      body: "Integrations → ServiceNow → Connect. URL: https://<instance>.service-now.com/api/now/table/incident. In Headers paste your Authorization line. Hit Test — ServiceNow returns 201 Created with the new incident's sys_id in the response body.",
+      title: "Connect it in Tamga",
+      body: "Integrations → ServiceNow → Connect. URL: https://<instance>.service-now.com/api/now/table/incident. In Headers paste your Authorization line. Choose Test. ServiceNow answers 201 Created with the new incident's sys_id in the response body.",
       note: "Some instances sit behind an MID server; the URL is then the MID endpoint, not the direct instance URL.",
     },
   ],
@@ -199,11 +199,11 @@ export const SERVICENOW: IntegrationGuide = {
       body: "ServiceNow calculates priority from urgency × impact via a matrix (default 3×3 = priority 5 Planning). Sending `priority` directly is ignored. Tune the urgency/impact mapping under System Policy → Priority Lookup.",
     },
     {
-      title: "Basic auth = password on the wire",
+      title: "Basic auth sends the password with every request",
       body: "Every request carries the service account password. Rotate quarterly at minimum, and set IP allowlists on the integration user. OAuth 2.0 is strictly better.",
     },
     {
-      title: "Response body contains sys_id — capture it",
+      title: "Keep the sys_id from the response",
       body: "The incident's sys_id lets you re-open/close the same incident from Tamga later. Use payload_template if you need to embed Tamga's request_id in a custom field so the linkage survives.",
     },
   ],

@@ -10,7 +10,7 @@ export const SLACK: IntegrationGuide = {
   urlHint: "https://hooks.slack.com/services/T.../B.../...",
   docsLinks: [
     { label: "Slack Incoming Webhooks", href: "https://api.slack.com/messaging/webhooks" },
-    { label: "Block Kit (opt.)", href: "https://api.slack.com/block-kit" },
+    { label: "Block Kit, optional", href: "https://api.slack.com/block-kit" },
   ],
   prerequisites: [
     "Slack workspace admin approval for app install",
@@ -28,11 +28,11 @@ export const SLACK: IntegrationGuide = {
     {
       title: "Add a webhook to a channel",
       body: "Click Add New Webhook to Workspace, select the destination channel, approve. Slack returns a URL shaped like https://hooks.slack.com/services/T.../B.../XXXX.",
-      note: "Treat this URL like a password — anyone with it can post to the channel.",
+      note: "Treat this URL like a password: anyone who has it can post to the channel.",
     },
     {
       title: "Connect it in Tamga",
-      body: "Paste the URL in Tamga → Integrations → Slack → Connect. Hit Test to verify, then Save.",
+      body: "Paste the URL in Tamga → Integrations → Slack → Connect. Choose Test to check it, then save.",
     },
   ],
   payloadPreview: {
@@ -41,15 +41,15 @@ export const SLACK: IntegrationGuide = {
   },
   gotchas: [
     {
-      title: "Rate limit: 1 msg/sec per webhook",
-      body: "Slack throttles Incoming Webhooks at ~1 message per second per URL. Tamga batches alerts when rule severity allows — tune blocks_per_minute to avoid drops.",
+      title: "One message a second per webhook",
+      body: "Slack throttles Incoming Webhooks at ~1 message per second per URL. Tamga batches alerts when the rule's severity allows it. Tune blocks_per_minute so none are dropped.",
     },
     {
-      title: "No threading / updates",
-      body: "Incoming Webhooks can post new messages but cannot edit them or reply in-thread. Use the Slack Web API bot tokens for that (out of scope).",
+      title: "No threads and no edits",
+      body: "Incoming Webhooks can post new messages but cannot edit them or reply in-thread. That needs a bot token and the Slack Web API, which this integration does not use.",
     },
     {
-      title: "URL rotation = re-install",
+      title: "A new URL means installing again",
       body: "There is no admin console to rotate the URL; deleting the integration in Slack invalidates it and you must repeat the flow.",
     },
   ],
@@ -59,7 +59,7 @@ export const TEAMS: IntegrationGuide = {
   kind: "teams",
   name: "Microsoft Teams",
   overview:
-    "Post Tamga alerts into a Microsoft Teams channel via a Power Automate Workflow. Microsoft retired the classic Office 365 Connector / Incoming Webhook channel in Q4 2024 — the old outlook.office.com URLs stop working at end of 2025. This is the supported replacement.",
+    "Post Tamga alerts into a Microsoft Teams channel via a Power Automate Workflow. Microsoft retired the classic Office 365 Connector / Incoming Webhook channel in Q4 2024, and the old outlook.office.com URLs stop working at the end of 2025. This is the supported replacement.",
   lastVerified: LAST_VERIFIED,
   urlHint:
     "https://prod-<region>.<region>.logic.azure.com:443/workflows/<id>/triggers/manual/paths/invoke?api-version=2016-06-01&sp=...&sig=...",
@@ -92,12 +92,12 @@ export const TEAMS: IntegrationGuide = {
     },
     {
       title: "Create the workflow",
-      body: "Click Add workflow. Teams creates the Flow and shows you an HTTP POST URL ending in /triggers/manual/paths/invoke?... — copy it.",
+      body: "Click Add workflow. Teams creates the Flow and shows you an HTTP POST URL ending in /triggers/manual/paths/invoke?... Copy it.",
       note: "This URL is sensitive. Rotate by deleting the workflow in Power Automate and recreating.",
     },
     {
       title: "Connect it in Tamga",
-      body: "Paste the URL in Tamga → Integrations → Teams → Connect. Hit Test: Teams should render an Adaptive Card titled “Tamga · Test webhook”.",
+      body: "Paste the URL in Tamga → Integrations → Teams → Connect. Choose Test: Teams should render an Adaptive Card titled “Tamga · Test webhook”.",
     },
   ],
   payloadPreview: {
@@ -110,7 +110,7 @@ export const TEAMS: IntegrationGuide = {
       body: "If you paste the classic @type:MessageCard schema into a Workflow URL, the request returns 200 but Teams silently drops it. Tamga now ships Adaptive Card v1.4 by default.",
     },
     {
-      title: "Old outlook.office.com URL = retired",
+      title: "The old outlook.office.com URLs are retired",
       body: "URLs like outlook.office.com/webhook/<guid>/... will stop accepting traffic at the end of 2025 per Microsoft’s retirement schedule. Migrate now.",
     },
     {
@@ -168,11 +168,11 @@ export const SPLUNK: IntegrationGuide = {
   ],
   gotchas: [
     {
-      title: "TLS cert must be valid",
+      title: "The TLS certificate has to be valid",
       body: "Tamga refuses to POST to HEC with a self-signed cert unless your trust store includes it. Use a real CA or load it into the proxy’s PKI bundle.",
     },
     {
-      title: "Index ACLs",
+      title: "The token needs access to the index",
       body: "The token must have write access to the target index. If you ship to a custom index, add it to the token’s Allowed indexes list or events are silently dropped.",
     },
     {
@@ -210,7 +210,7 @@ export const SPLUNK_HEC: IntegrationGuide = {
     },
     {
       title: "Pin sourcetype via URL query",
-      body: "Splunk’s /raw endpoint respects ?sourcetype=cef on the URL. That is the most deterministic setting — token default and indexer props.conf also work but the URL wins.",
+      body: "Splunk’s /raw endpoint respects ?sourcetype=cef on the URL. That is the most predictable setting. The token default and the indexer's props.conf also work, but the URL wins.",
     },
     {
       title: "Connect it in Tamga",
@@ -225,10 +225,10 @@ export const SPLUNK_HEC: IntegrationGuide = {
   gotchas: [
     {
       title: "/raw does not wrap in { event: ... }",
-      body: "Unlike the JSON endpoint, /raw ingests your bytes verbatim as the event body. Tamga emits a single CEF line per alert — do not add JSON around it.",
+      body: "Unlike the JSON endpoint, /raw ingests your bytes verbatim as the event body. Tamga sends one CEF line per alert. Do not wrap it in JSON.",
     },
     {
-      title: "Timestamp parsing",
+      title: "How the timestamp is read",
       body: "Splunk uses the rt= field (milliseconds since epoch is easiest, but Tamga emits the MMM dd yyyy HH:mm:ss CEF convention and the CEF add-on handles it).",
     },
   ],

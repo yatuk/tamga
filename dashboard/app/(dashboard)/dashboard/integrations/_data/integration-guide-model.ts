@@ -1,7 +1,7 @@
 import type { WebhookKind } from "@/lib/api";
 
 // IntegrationGuide is the data contract backing every per-provider
-// tutorial page under `/dashboard/integrations/[kind]`. Keep it UI-free —
+// tutorial page under `/dashboard/integrations/[kind]`. Keep it UI-free:
 // the rendering is done by `GuideView`. Each guide carries a
 // `lastVerified` stamp so stale instructions can be spotted quickly.
 export type IntegrationGuide = {

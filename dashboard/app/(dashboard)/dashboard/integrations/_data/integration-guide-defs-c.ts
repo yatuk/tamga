@@ -36,16 +36,16 @@ export const DATADOG: IntegrationGuide = {
   headers: [{ key: "DD-API-KEY", valueHint: "<API-KEY>" }],
   gotchas: [
     {
-      title: "alert_type enum is strict",
+      title: "alert_type takes only four values",
       body: "Only info, warning, error, success are accepted. Any other value → 400 Bad Request. Tamga maps severity automatically.",
     },
     {
-      title: "Rate limits",
+      title: "Datadog limits the rate",
       body: "Events API is throttled per-org (~50 events/sec). High-volume shops should route critical alerts here and bulk log to SIEM instead.",
     },
     {
-      title: "Tag cardinality",
-      body: "Datadog charges by custom metric cardinality. Do not bind tags like request_id:<uuid> — use service, env, severity only.",
+      title: "Keep the number of tag values small",
+      body: "Datadog charges by custom metric cardinality. Do not send tags like request_id:<uuid>. Keep to service, env and severity.",
     },
   ],
 };
@@ -54,7 +54,7 @@ export const JIRA: IntegrationGuide = {
   kind: "jira",
   name: "Jira Cloud",
   overview:
-    "Open Jira Cloud issues from Tamga events. Uses REST API v3 which requires an Atlassian Document Format (ADF) description — Tamga wraps this for you.",
+    "Open Jira Cloud issues from Tamga events. Uses REST API v3 which requires the description in Atlassian Document Format (ADF). Tamga writes it in that format for you.",
   lastVerified: LAST_VERIFIED,
   urlHint: "https://your-domain.atlassian.net/rest/api/3/issue",
   docsLinks: [
@@ -107,8 +107,8 @@ export const JIRA: IntegrationGuide = {
   ],
   gotchas: [
     {
-      title: "Missing project.key → 400",
-      body: "Jira Cloud v3 rejects the create call without a project key. Tamga’s form requires it — do not leave blank.",
+      title: "A missing project key is answered with 400",
+      body: "Jira Cloud v3 rejects the create call without a project key. Tamga’s form asks for it, and it cannot be left empty.",
     },
     {
       title: "description must be ADF in v3",
