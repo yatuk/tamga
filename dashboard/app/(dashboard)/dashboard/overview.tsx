@@ -9,6 +9,7 @@ import { useAdminKey } from "@/hooks/useAdminKey";
 import { useHealth } from "@/hooks/useHealth";
 import { useRangeParam } from "@/hooks/useRangeParam";
 import { Columns } from "@/components/console/charts";
+import { NEEDS_KEY } from "@/components/console/health";
 import { Arrive, Arriving, Bar, Count } from "@/components/console/motion";
 import {
   bucketLabel,
@@ -29,7 +30,10 @@ const RANGES = ["24h", "7d", "30d"] as const;
 export function Overview() {
   const [adminKey] = useAdminKey();
   const [range, setRange] = useRangeParam("7d");
-  const { data: health } = useHealth();
+  // `health` is what the proxy tells anyone. `detail` needs the admin key.
+  const { data: health, detail, detailState } = useHealth();
+  // Shown in place of a value the proxy keeps back; before it has answered, nothing is known.
+  const unknown = detailState === "no-key" || detailState === "rejected" ? NEEDS_KEY : "Not known";
 
   const stats = useQuery({
     queryKey: ["tamga-stats", adminKey, range],
@@ -143,11 +147,11 @@ export function Overview() {
 
         <dl className="t-facts">
           <div><dt>Proxy</dt><dd>{health ? (health.proxy === "up" ? "Up" : "Unreachable") : "Checking"}</dd></div>
-          <div><dt>Uptime</dt><dd>{uptimeText(health?.uptime_seconds)}</dd></div>
+          <div><dt>Uptime</dt><dd>{detail ? uptimeText(detail.uptime_seconds) : unknown}</dd></div>
           <div><dt>Scan time, median</dt><dd>{formatMs(health?.scan_latency_ms_p50)}</dd></div>
           <div><dt>Scan time, 95th percentile</dt><dd>{formatMs(health?.scan_latency_ms_p95)}</dd></div>
-          <div><dt>Scanners running</dt><dd>{health?.scanner_count ?? "Not known"}</dd></div>
-          <div><dt>Database</dt><dd>{health?.database === "connected" ? "Connected" : (health?.database ?? "Not known")}</dd></div>
+          <div><dt>Scanners running</dt><dd>{detail?.scanner_count ?? unknown}</dd></div>
+          <div><dt>Database</dt><dd>{detail?.database === "connected" ? "Connected" : (detail?.database ?? unknown)}</dd></div>
         </dl>
       </div>
 

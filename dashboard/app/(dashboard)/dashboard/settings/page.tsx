@@ -26,6 +26,7 @@ import {
   TextInput,
   Toggle,
 } from "@carbon/react";
+import { failureWords, HealthDetailNotice, NEEDS_KEY } from "@/components/console/health";
 import { uptimeText } from "@/components/console/names";
 import { PageHead, Section } from "@/components/console/page";
 import { ADMIN_KEY_STORAGE } from "@/hooks/useAdminKey";
@@ -188,6 +189,17 @@ function Providers({ m }: { m: Page }) {
     }
   }
 
+  if (!m.health) {
+    return m.detailState === "pending" ? (
+      <p className="t-empty">The proxy has not answered yet.</p>
+    ) : (
+      <>
+        <HealthDetailNotice state={m.detailState} />
+        <p className="t-empty">The provider pools are shown once the proxy accepts an admin key from this browser.</p>
+      </>
+    );
+  }
+
   if (pools.length === 0) {
     return (
       <p className="t-empty">
@@ -242,7 +254,7 @@ function Providers({ m }: { m: Page }) {
                       </TableCell>
                       <TableCell>
                         {p.last_failure ? formatSince(p.last_failure) : "None"}
-                        {p.failure_reason ? `, ${p.failure_reason}` : ""}
+                        {p.failure_reason ? `, ${failureWords(p.failure_reason)}` : ""}
                       </TableCell>
                       <TableCell className="t-right">
                         <Button kind="ghost" size="sm" disabled={busy || !m.saved} onClick={() => void reset(pl.pool, p.name)}>
@@ -263,10 +275,13 @@ function Providers({ m }: { m: Page }) {
 }
 
 function Runtime({ m }: { m: Page }) {
-  const { health, runtime } = m;
-  const proxy = runtime?.proxy ?? health?.proxy;
+  const { up, health, runtime } = m;
+  const proxy = up?.proxy;
   const database = runtime?.database ?? health?.database;
   const uptime = runtime?.uptime_seconds ?? health?.uptime_seconds;
+  // Shown in place of a value the proxy keeps back. Before it has answered at all, nothing is known.
+  const locked = m.detailState === "no-key" || m.detailState === "rejected";
+  const unknown = locked ? NEEDS_KEY : "Not known";
   const list = (rows: [string, React.ReactNode][]) => (
     <dl className="t-facts" style={{ borderTop: 0 }}>
       {rows.map(([label, value]) => (
@@ -279,26 +294,29 @@ function Runtime({ m }: { m: Page }) {
   );
 
   return (
-    <div className="t-columns" data-even="true" style={{ marginTop: 0 }}>
-      <Section id="transport" title="Transport and storage">
-        {list([
-          ["Proxy", proxy === "up" ? "Up" : (proxy ?? "Not known")],
-          ["TLS", runtime?.tls_enabled ? "On" : "Off, plain HTTP"],
-          ["Mutual TLS", runtime?.mtls_enabled ? "Required" : "Off"],
-          ["Rate limit state", runtime?.redis_enabled ? "In Redis, shared between nodes" : "In memory, this node only"],
-          ["Database", database === "connected" ? "Connected" : (database ?? "Not known").replace(/_/g, " ")],
-        ])}
-      </Section>
-      <Section id="build" title="Build and policy">
-        {list([
-          ["Version", runtime?.version || "Not known"],
-          ["Policy", runtime?.policy_name || "Not known"],
-          ["Policy file", <span key="p" className="t-data">{runtime?.policy_path ?? health?.policy_path ?? "Not known"}</span>],
-          ["Scanners", runtime?.scanner_count ?? health?.scanner_count ?? 0],
-          ["Running for", typeof uptime === "number" ? uptimeText(uptime) : "Not known"],
-        ])}
-      </Section>
-    </div>
+    <>
+      <HealthDetailNotice state={m.detailState} />
+      <div className="t-columns" data-even="true" style={{ marginTop: locked ? "1.5rem" : 0 }}>
+        <Section id="transport" title="Transport and storage">
+          {list([
+            ["Proxy", proxy === "up" ? "Up" : (proxy ?? "Not known")],
+            ["TLS", !runtime ? unknown : runtime.tls_enabled ? "On" : "Off, plain HTTP"],
+            ["Mutual TLS", !runtime ? unknown : runtime.mtls_enabled ? "Required" : "Off"],
+            ["Rate limit state", !runtime ? unknown : runtime.redis_enabled ? "In Redis, shared between nodes" : "In memory, this node only"],
+            ["Database", database === "connected" ? "Connected" : (database ?? unknown).replace(/_/g, " ")],
+          ])}
+        </Section>
+        <Section id="build" title="Build and policy">
+          {list([
+            ["Version", runtime?.version || unknown],
+            ["Policy", runtime?.policy_name || unknown],
+            ["Policy file", <span key="p" className="t-data">{runtime?.policy_path ?? health?.policy_path ?? unknown}</span>],
+            ["Scanners", runtime?.scanner_count ?? health?.scanner_count ?? unknown],
+            ["Running for", typeof uptime === "number" ? uptimeText(uptime) : unknown],
+          ])}
+        </Section>
+      </div>
+    </>
   );
 }
 

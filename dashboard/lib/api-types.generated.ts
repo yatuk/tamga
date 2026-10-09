@@ -49,9 +49,20 @@ export interface paths {
         };
         /**
          * Detailed health status with provider pool snapshots
-         * @description Returns proxy, database, Redis, analyzer status plus scanner
-         *     count, uptime, and any upstream provider pool health snapshots.
-         *     Returns 503 when any dependency (DB/Redis/analyzer) is unhealthy.
+         * @description Without a credential: whether the proxy is up, `status` (`ok` or
+         *     `degraded`) and the scan latency percentiles. Nothing else.
+         *
+         *     With the admin key or a scoped key of read, write or admin scope in
+         *     `X-Tamga-Admin-Key` (or a session token in `Authorization`): also
+         *     database, Redis and analyzer status, scanner count, uptime, the
+         *     policy file path and the upstream provider pool snapshots.
+         *     `authenticated` says which of the two bodies this is.
+         *
+         *     A proxy-scope key, a revoked key and a wrong key get the first
+         *     body, not an error. A key in the query string is not read.
+         *
+         *     Returns 503 when any dependency (DB/Redis/analyzer) is unhealthy,
+         *     to every caller.
          */
         get: {
             parameters: {
@@ -101,6 +112,11 @@ export interface paths {
          * Runtime operational profile
          * @description Exposes TLS, mTLS, Redis, Postgres status plus policy identity and
          *     tier information for the Settings / Runtime dashboard tab.
+         *
+         *     All of it needs the admin key or a scoped key of read, write or
+         *     admin scope in `X-Tamga-Admin-Key` (or a session token in
+         *     `Authorization`). Any other caller gets `proxy` and
+         *     `authenticated: false` only, with status 200.
          */
         get: {
             parameters: {
@@ -3523,7 +3539,11 @@ export interface components {
             p95_latency_ms?: number;
             requests_in_window?: number;
             last_failure?: string;
-            failure_reason?: string;
+            /**
+             * @description The class of the last failure. The error text itself is only in the proxy's log.
+             * @enum {string}
+             */
+            failure_reason?: "timeout" | "refused" | "dns" | "tls" | "upstream_5xx" | "not_allowed" | "other";
         };
         DashboardHealthProviderPool: {
             pool?: string;
@@ -3531,11 +3551,22 @@ export interface components {
             total_count?: number;
             providers?: components["schemas"]["DashboardHealthProviderEndpoint"][];
         };
+        /**
+         * @description Only proxy, proxy_status, status, authenticated and the scan latency
+         *     percentiles are sent to a caller without a management credential.
+         */
         DashboardHealthDetailed: {
             proxy?: string;
             proxy_status?: {
                 up?: boolean;
             };
+            /**
+             * @description degraded when a dependency is failing, as the 503 says.
+             * @enum {string}
+             */
+            status?: "ok" | "degraded";
+            /** @description True when the caller's credential was accepted and this is the full body. */
+            authenticated?: boolean;
             database?: string;
             redis?: string;
             analyzer?: string;
@@ -3551,8 +3582,10 @@ export interface components {
         DashboardHealthDetail: components["schemas"]["DashboardHealthDetailed"] & {
             version?: string;
             policy_name?: string;
+            policy_writable?: boolean;
             tls_enabled?: boolean;
             mtls_enabled?: boolean;
+            ip_allowlist?: string;
             redis_enabled?: boolean;
             /** Format: date-time */
             timestamp?: string;

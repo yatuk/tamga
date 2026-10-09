@@ -39,3 +39,24 @@ describe("useLatencyPage", function () {
     expect(result.current.providerPools[0]).toHaveProperty("state");
   });
 });
+
+describe("useLatencyPage without the health detail", function () {
+  it("keeps the public scan times and locks the rest without a key", async function () {
+    localStorage.removeItem("tamga_admin_key");
+    const { result } = renderHook(function () { return useLatencyPage(); }, { wrapper: Wrapper });
+    await waitFor(function () { return expect(result.current.detailState).toBe("no-key"); }, { timeout: 3000 });
+    expect(result.current.p95).toBeGreaterThan(0);
+    expect(result.current.detailLocked).toBe(true);
+    expect(result.current.providerPools).toEqual([]);
+  });
+
+  it("locks the detail when the proxy rejects the key", async function () {
+    localStorage.setItem("tamga_admin_key", "wrong-key");
+    const { result } = renderHook(function () { return useLatencyPage(); }, { wrapper: Wrapper });
+    await waitFor(function () { return expect(result.current.detailState).toBe("rejected"); }, { timeout: 3000 });
+    expect(result.current.hasError).toBe(false);
+    expect(result.current.p95).toBeGreaterThan(0);
+    expect(result.current.detailLocked).toBe(true);
+    expect(result.current.providerPools).toEqual([]);
+  });
+});

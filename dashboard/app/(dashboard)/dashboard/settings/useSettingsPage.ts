@@ -28,7 +28,8 @@ export function useSettingsPage() {
     setSaved(adminKey);
   }, [adminKey]);
 
-  const { data: health } = useHealth();
+  // `up` is what the proxy tells anyone; `health` and `runtime` need the admin key.
+  const { data: up, detail: health, detailState } = useHealth();
   const { data: runtime } = useHealthDetail(tab === "runtime");
 
   const {
@@ -69,7 +70,9 @@ export function useSettingsPage() {
     saved,
     retention,
     setRetention,
+    up,
     health,
+    detailState,
     runtime,
     ssoConfig,
     ssoLoading,

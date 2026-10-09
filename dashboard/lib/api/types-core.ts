@@ -10,13 +10,28 @@ export interface DashboardHealthProviderPool {
     p95_latency_ms?: number;
     requests_in_window?: number;
     last_failure?: string;
-    failure_reason?: string;
+    /** A fixed class, never the error text: see failureWords in components/console/health. */
+    failure_reason?: "timeout" | "refused" | "dns" | "tls" | "upstream_5xx" | "not_allowed" | "other" | string;
   }>;
 }
 
-export interface DashboardHealthDetailed {
+/**
+ * What the health endpoints tell anyone. Everything beyond this describes
+ * the deployment, and the proxy sends it only to a management key.
+ */
+export interface DashboardHealthPublic {
   proxy: "up" | string;
   proxy_status?: { up?: boolean };
+  /** "degraded" when something the proxy depends on is failing. */
+  status?: "ok" | "degraded" | string;
+  /** True when the proxy accepted the key and this is the full body. Absent on older proxies. */
+  authenticated?: boolean;
+  scan_latency_ms_p50?: number;
+  scan_latency_ms_p95?: number;
+  scan_latency_ms_p99?: number;
+}
+
+export interface DashboardHealthDetailed extends DashboardHealthPublic {
   database: "connected" | "disconnected" | "not_configured" | string;
   redis?: "connected" | "disconnected" | "not_configured" | string;
   analyzer?: "reachable" | "unreachable" | "not_configured" | string;
@@ -26,9 +41,6 @@ export interface DashboardHealthDetailed {
   uptime_seconds: number;
   policy_path: string;
   providers?: DashboardHealthProviderPool[];
-  scan_latency_ms_p50?: number;
-  scan_latency_ms_p95?: number;
-  scan_latency_ms_p99?: number;
 }
 
 export interface DashboardHealthDetail extends DashboardHealthDetailed {

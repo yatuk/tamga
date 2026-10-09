@@ -226,3 +226,27 @@ describe("useProxyPage — derived logic", () => {
     }
   });
 });
+
+// ── Without the health detail ───────────────────────────────────────────────
+
+describe("useProxyPage — without the health detail", () => {
+  it("is online with no rows when there is no key", async () => {
+    localStorage.removeItem(ADMIN_KEY_STORAGE);
+    const { result } = renderHook(() => useProxyPage(), { wrapper: Wrapper });
+    await waitFor(() => expect(result.current.detailState).toBe("no-key"), { timeout: 3000 });
+    expect(result.current.isOnline).toBe(true);
+    expect(result.current.hasError).toBe(false);
+    expect(result.current.health).toBeUndefined();
+    expect(result.current.detail).toBeUndefined();
+    expect(result.current.componentRows).toEqual([]);
+  });
+
+  it("is online with no rows when the proxy rejects the key", async () => {
+    localStorage.setItem(ADMIN_KEY_STORAGE, "wrong-key");
+    const { result } = renderHook(() => useProxyPage(), { wrapper: Wrapper });
+    await waitFor(() => expect(result.current.detailState).toBe("rejected"), { timeout: 3000 });
+    expect(result.current.isOnline).toBe(true);
+    expect(result.current.hasError).toBe(false);
+    expect(result.current.componentRows).toEqual([]);
+  });
+});

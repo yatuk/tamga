@@ -43,7 +43,8 @@ export function useScannerPoolPage(): ScannerPoolPageData {
   return {
     poolEnabled,
     pool,
-    scannerCount: health.data?.scanner_count ?? 0,
+    // Part of the health detail, which the proxy gives only to an admin key.
+    scannerCount: health.detail?.scanner_count ?? 0,
     pipelineMode: poolEnabled ? "workerpool" : "adaptive",
     loading: metrics.isLoading || health.isLoading,
     error: metrics.error?.message ?? health.error?.message ?? null,

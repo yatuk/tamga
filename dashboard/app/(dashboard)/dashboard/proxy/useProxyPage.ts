@@ -7,16 +7,21 @@ import { useHealth, useHealthDetail } from "@/hooks/useHealth";
 export function useProxyPage() {
   const [adminKey] = useAdminKey();
 
-  const { data: health, isLoading: healthLoading, error: healthError } = useHealth();
+  // `up` is what the proxy tells anyone. `health` and `detail` are there only
+  // when it accepted the admin key; `detailState` says why when they are not.
+  const { data: up, detail: health, detailState, isLoading: healthLoading, error: healthError } = useHealth();
   const { data: detail, isLoading: detailLoading } = useHealthDetail();
 
   const isLoading = healthLoading || detailLoading;
   const hasError = !!healthError;
 
-  const isOnline = health?.proxy === "up" || health?.proxy_status?.up === true;
+  const isOnline = up?.proxy === "up" || up?.proxy_status?.up === true;
 
   const componentRows = useMemo(() => {
     const rows: { component: string; status: "ok" | "warning" | "error" | "disabled"; detail: string; dependsOn?: string }[] = [];
+    // Without the detail nothing is known about the parts, and a row made
+    // of defaults would read as their state.
+    if (!health) return rows;
 
     // Proxy server
     rows.push({
@@ -97,6 +102,7 @@ export function useProxyPage() {
     isLoading,
     hasError,
     isOnline,
+    detailState,
     health,
     detail,
     componentRows,

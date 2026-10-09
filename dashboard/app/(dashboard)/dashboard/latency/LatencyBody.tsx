@@ -2,6 +2,7 @@
 
 import { Button, Table, TableBody, TableCell, TableContainer, TableHead, TableHeader, TableRow } from "@carbon/react";
 import { Scale, Trace } from "@/components/console/charts";
+import { failureWords, HealthDetailNotice, NEEDS_KEY } from "@/components/console/health";
 import { Count } from "@/components/console/motion";
 import { bucketName, RANGE_WORDS, uptimeText } from "@/components/console/names";
 import { DataNotice, PageHead, RangeSwitch, Section, Statement } from "@/components/console/page";
@@ -33,6 +34,8 @@ export function LatencyBody({
   points,
   hourly,
   scannerCount,
+  detailLocked,
+  detailState,
   providerPools,
   circuitReset,
   uptimeSeconds,
@@ -51,6 +54,8 @@ export function LatencyBody({
       </PageHead>
 
       <DataNotice adminKey={adminKey} failed={hasError} />
+      {/* Without a key the notice above has already said so. */}
+      {adminKey ? <HealthDetailNotice state={detailState} /> : null}
 
       <Statement
         loading={isLoading}
@@ -83,10 +88,10 @@ export function LatencyBody({
           ) : undefined
         }
         facts={[
-          ["Scanners on every request", scannerCount || "None"],
-          ["Measured since", uptimeSeconds > 0 ? `the proxy started, ${uptimeText(uptimeSeconds)} ago` : "Not known"],
+          ["Scanners on every request", detailLocked ? NEEDS_KEY : scannerCount || "None"],
+          ["Measured since", detailLocked ? NEEDS_KEY : uptimeSeconds > 0 ? `the proxy started, ${uptimeText(uptimeSeconds)} ago` : "Not known"],
           ["Target, 95th percentile", formatMs(TARGET_MS)],
-          ["Upstream endpoints", providerPools.length || "None defined"],
+          ["Upstream endpoints", detailLocked ? NEEDS_KEY : providerPools.length || "None defined"],
         ]}
       />
 
@@ -137,7 +142,9 @@ export function LatencyBody({
         note="An endpoint is cut off after repeated failures and tried again a little later."
         style={{ marginTop: "3rem" }}
       >
-        {providerPools.length === 0 ? (
+        {detailLocked ? (
+          <p className="t-empty">The upstream endpoints are shown once the proxy accepts an admin key from this browser.</p>
+        ) : providerPools.length === 0 ? (
           <p className="t-empty">
             No provider pool is defined. Add <code>providers.pools</code> to the policy to see each upstream here.
           </p>
@@ -171,7 +178,7 @@ export function LatencyBody({
                       <TableCell className="t-right">{p.requestsInWindow ?? "None"}</TableCell>
                       <TableCell>
                         {p.lastFailure ? formatSince(p.lastFailure) : "None"}
-                        {p.failureReason ? `, ${p.failureReason}` : ""}
+                        {p.failureReason ? `, ${failureWords(p.failureReason)}` : ""}
                       </TableCell>
                       <TableCell className="t-right">
                         <Button

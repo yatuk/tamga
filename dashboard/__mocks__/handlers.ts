@@ -297,6 +297,11 @@ const MOCK_HEALTH_DETAILED = {
   ],
 };
 
+function healthKeyAccepted(request: Request) {
+  const key = request.headers.get("X-Tamga-Admin-Key") ?? "";
+  return key !== "" && !key.startsWith("wrong");
+}
+
 const MOCK_HEALTH_DETAIL = {
   ...MOCK_HEALTH_DETAILED,
   version: "v1.1.0",
@@ -382,8 +387,28 @@ export const handlers = [
   http.get(`${API}/stats/models`, () => HttpResponse.json(MOCK_MODEL_STATS)),
 
   // Health
-  http.get(`${API}/health/detailed`, () => HttpResponse.json(MOCK_HEALTH_DETAILED)),
-  http.get(`${API}/health/detail`, () => HttpResponse.json(MOCK_HEALTH_DETAIL)),
+  // As the proxy answers: the full body to a key it accepts, the public
+  // fields to anyone else. A key starting with "wrong" is one it rejects.
+  http.get(`${API}/health/detailed`, ({ request }) =>
+    HttpResponse.json(
+      healthKeyAccepted(request)
+        ? { ...MOCK_HEALTH_DETAILED, status: "ok", authenticated: true }
+        : {
+            proxy: "up",
+            proxy_status: { up: true },
+            status: "ok",
+            authenticated: false,
+            scan_latency_ms_p50: MOCK_HEALTH_DETAILED.scan_latency_ms_p50,
+            scan_latency_ms_p95: MOCK_HEALTH_DETAILED.scan_latency_ms_p95,
+            scan_latency_ms_p99: MOCK_HEALTH_DETAILED.scan_latency_ms_p99,
+          },
+    ),
+  ),
+  http.get(`${API}/health/detail`, ({ request }) =>
+    HttpResponse.json(
+      healthKeyAccepted(request) ? { ...MOCK_HEALTH_DETAIL, authenticated: true } : { proxy: "up", authenticated: false },
+    ),
+  ),
 
   // Budget
   http.get(`${API}/budget/stats`, () => HttpResponse.json(MOCK_BUDGET)),

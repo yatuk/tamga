@@ -12,7 +12,9 @@ export function useLatencyPage() {
   const [adminKey] = useAdminKey();
   const [range, setRange] = useRangeParam("24h");
 
-  const { data: health, isLoading: healthLoading, error: healthError } = useHealth();
+  // The scan times are public. `detail` (scanners, uptime, upstreams) is
+  // there only when the proxy accepted the admin key.
+  const { data: health, detail, detailState, isLoading: healthLoading, error: healthError } = useHealth();
 
   const { data: ts, isLoading: tsLoading } = useQuery({
     queryKey: ["tamga-timeseries", adminKey, range],
@@ -29,14 +31,11 @@ export function useLatencyPage() {
   const p95 = health?.scan_latency_ms_p95 ?? 0;
   const p99 = health?.scan_latency_ms_p99 ?? 0;
 
-  const scannerCount = health?.scanner_count ?? 0;
-
-
-
+  const scannerCount = detail?.scanner_count ?? 0;
 
   /** Provider pool entries from health */
   const providerPools = useMemo(() => {
-    const pools = health?.providers || [];
+    const pools = detail?.providers || [];
     return pools.flatMap((pool) =>
       (pool.providers || []).map((p) => ({
         pool: pool.pool,
@@ -51,7 +50,7 @@ export function useLatencyPage() {
         totalCount: pool.total_count,
       })),
     );
-  }, [health]);
+  }, [detail]);
 
   const circuitReset = useMutation({
     mutationFn: ({ pool, endpoint }: { pool: string; endpoint: string }) =>
@@ -74,10 +73,13 @@ export function useLatencyPage() {
     p95,
     p99,
     scannerCount,
+    /** True when the proxy answered but kept the detail back: no key, or one it did not accept. */
+    detailLocked: detailState === "no-key" || detailState === "rejected",
+    detailState,
     points: ts?.points ?? [],
     hourly: ts?.bucket === "hour",
     providerPools,
     circuitReset,
-    uptimeSeconds: health?.uptime_seconds ?? 0,
+    uptimeSeconds: detail?.uptime_seconds ?? 0,
   };
 }
