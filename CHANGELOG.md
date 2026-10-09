@@ -3,6 +3,25 @@
 ## v0.9.0 (unreleased)
 
 ### Security
+- **A policy could send the proxy's secrets, and a route's traffic, to any
+  host.** `providers.pools` let the policy choose an upstream URL and name
+  any environment variable as its key; the proxy sent that variable's value
+  as a bearer token to that host, with the request and the caller's own
+  credentials. The policy can be changed through the API by the analyst role
+  and by write-scope keys. A pool endpoint must now be the route's own vendor
+  host, the route's `TAMGA_<PROVIDER>_URL`, or a host listed in
+  `TAMGA_UPSTREAM_ALLOW`, and `api_key_env` must be a `*_API_KEY` name, never
+  a `TAMGA_` one. The rules hold on every way a policy is installed and again
+  on every request. **If you run pools against a gateway, a private endpoint
+  or a self-hosted model, list the host in `TAMGA_UPSTREAM_ALLOW` before
+  upgrading, or the policy will not load and the proxy will not start.** A
+  `${NAME}` in a rule's `notify:` is limited the same way
+  (`*_WEBHOOK_URL`). Rollback and proposal approval now check a policy
+  before writing it; they used to write first and could leave a file the
+  proxy would not start with.
+- **Streamed responses through a provider pool were cut off** once the
+  response headers arrived. A pool endpoint's `timeout` now bounds the wait
+  for the answer to begin, not the whole answer.
 - **Alert destinations could point the proxy at internal addresses.** A saved
   destination or a policy rule's `notify:` URL was posted to wherever it
   pointed, redirects included, so whoever could save one could make the proxy

@@ -37,6 +37,9 @@ Essential environment variables:
 | `TAMGA_STRICT_MODE` | `false` | Ignore all policy exceptions |
 | `TAMGA_TRUST_ROLE_HEADER` | `false` | Honour `X-Tamga-Role` for policy exceptions. Enable only behind an authenticating gateway that sets the header itself |
 | `TAMGA_REQUIRE_KEY` | `false` | Answer 401 to any proxy request without a valid `X-Tamga-Key`. Leave off until every application has a key |
+| `TAMGA_UPSTREAM_ALLOW` | — | Hosts, addresses and CIDR ranges a policy's provider pool may point at beyond the vendors' own. See [Provider pools](#provider-pools) |
+| `TAMGA_UPSTREAM_KEY_ENVS` | — | Further environment variable names a pool's `api_key_env` may name |
+| `TAMGA_NOTIFY_URL_ENVS` | — | Further environment variable names a rule's `notify:` may refer to |
 | `TAMGA_ALERT_ALLOW_PRIVATE` | — | Internal receivers alerts may be sent to: comma-separated CIDR ranges, addresses and exact host names. Empty: internal addresses are refused. See [Alerts](#where-alerts-may-go) |
 | `TAMGA_TRUSTED_PROXIES` | — | Comma-separated IPs and CIDR ranges of the load balancers or reverse proxies in front of Tamga. Only a connection from one of them may supply the client address through `X-Forwarded-For`; the address used is the first one from the right that is not itself a trusted proxy. Empty: the header is ignored and the connecting address is used, so behind a load balancer every caller without a key shares one rate-limit bucket and `TAMGA_IP_ALLOWLIST` sees the load balancer. An invalid entry stops startup |
 | `TAMGA_OTLP_ENDPOINT` | — | OpenTelemetry collector endpoint |
@@ -377,6 +380,66 @@ figure describes the mechanism and is not a measured result.
 Without a database all of these live in memory and startup logs a warning for
 each.
 
+## Provider pools
+
+A route can be given a chain of upstreams in the policy, tried in order with
+a circuit breaker on each:
+
+```yaml
+providers:
+  pools:
+    anthropic:
+      strategy: fallback_chain
+      providers:
+        - name: anthropic-primary
+          base_url: "https://api.anthropic.com"
+          api_key_env: "ANTHROPIC_API_KEY"
+          priority: 1
+          timeout: 30s
+```
+
+A pool decides where a route's requests go, with the callers' own
+credentials in them, and which of the proxy's environment variables is sent
+along as the key. The policy can be edited through the API by an analyst, so
+both are restricted, and a policy that breaks a rule does not load: not at
+startup, not on reload, not through the API, not by rollback.
+
+**Where an endpoint may point.** One of:
+
+- the route's own vendor host over `https`, on the default port and with no
+  path: `api.openai.com`, `api.anthropic.com`,
+  `generativelanguage.googleapis.com`, `api.mistral.ai`,
+  `<resource>.openai.azure.com`, `bedrock-runtime.<region>.amazonaws.com`;
+- the host and port of that route's `TAMGA_<PROVIDER>_URL`, if you set one;
+- for the `local` route, `http://127.0.0.1:11434`;
+- a host you listed:
+
+```bash
+TAMGA_UPSTREAM_ALLOW=llm-gateway.internal,10.30.0.0/16,vllm.internal:8000
+```
+
+Entries are exact host names, addresses and CIDR ranges, each optionally with
+a port. A listed host may use plain `http` and may be an internal address.
+The list applies to every route. It is separate from the alerts list. The
+address is judged again when the connection is made, so a vendor name that
+resolves to an internal address is refused; a Bedrock VPC endpoint or an
+Azure private endpoint therefore has to be listed.
+
+**Which key it may name.** `api_key_env` must be an upper-case name ending in
+`_API_KEY`, or `_API_KEY_` and a suffix (`ANTHROPIC_API_KEY_EU`). A name
+starting with `TAMGA_` is never read. Other names can be allowed with
+`TAMGA_UPSTREAM_KEY_ENVS=NAME1,NAME2`. Names are matched exactly as written.
+
+The pool key must be a route name (`openai`, `anthropic`, `gemini`, `azure`,
+`bedrock`, `mistral`, `local`). An endpoint's `timeout` is how long the proxy
+waits for the answer to begin, not for a streamed answer to end. If every
+endpoint of a pool is refused the route answers 502; it does not fall back to
+the default upstream.
+
+Two things these rules do not stop, for whoever can edit the policy: sending
+a route to any host on your list, whatever route you listed it for, and
+naming one vendor's key on another vendor's pool.
+
 ## Alerts
 
 A decision against a request is posted to the alert destinations saved under
@@ -398,7 +461,9 @@ What is sent:
   rule, whatever its action, at most once a minute for the same kind of
   finding. The shipped policy names it as `${SLACK_WEBHOOK_URL}`; a value that
   is exactly one such reference is read from the proxy's environment, and
-  when the variable is unset nothing is sent.
+  when the variable is unset nothing is sent. Only a name ending in
+  `_WEBHOOK_URL` is read, never one starting with `TAMGA_`; others can be
+  allowed with `TAMGA_NOTIFY_URL_ENVS`.
 
 The message names the request, the time, the organisation, the provider and
 model, the action and each finding's type, category and severity. It carries

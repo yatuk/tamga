@@ -156,11 +156,17 @@ providers:
   #         api_key_env: "ANTHROPIC_API_KEY"
   #         priority: 1
   #         timeout: 30s
-  #       - name: anthropic-eu
-  #         base_url: "https://eu.api.anthropic.com"
+  #       - name: anthropic-gateway
+  #         base_url: "https://llm-gateway.internal"
   #         api_key_env: "ANTHROPIC_API_KEY_EU"
   #         priority: 2
   #         timeout: 30s
+  # An endpoint may point at the route's own vendor host, at the route's
+  # TAMGA_<PROVIDER>_URL, or at a host the operator listed in
+  # TAMGA_UPSTREAM_ALLOW (the second one above needs
+  # TAMGA_UPSTREAM_ALLOW=llm-gateway.internal). api_key_env must be an
+  # upper-case *_API_KEY or *_API_KEY_<SUFFIX> name, never a TAMGA_ one.
+  # A policy that breaks either rule does not load. See docs/operations.md.
 
 # Outbound scan: non-streaming responses use output_rules.buffer_bytes; for SSE/NDJSON
 # set streaming.enabled: true (FAZ1 Prompt 2 — fail-close on BLOCK).
