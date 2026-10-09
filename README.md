@@ -162,8 +162,8 @@ schema are in [docs/architecture](docs/architecture/README.md).
 | **System-prompt leaks** | Canary token injected into the system prompt and looked for in the response | Block (opt-in) |
 | **Decision governance** | Prompts that contradict a locked decision in a [jugeni](https://github.com/jugeni/jugeni-contracts) audit log | Per assertion (opt-in) |
 
-Also in the box: reversible PII tokenization (vault), per-key rate limits and
-token budgets, provider allowlists, a response cache, and a SOC dashboard with
+Also in the box: reversible PII tokenization (vault), per-key rate limits, a
+daily budget per organisation, provider allowlists, a response cache, and a SOC dashboard with
 an incident queue. See [docs/operations.md](docs/operations.md), and
 [docs/agents.md](docs/agents.md) for running Claude Code and other agents through it.
 
@@ -255,14 +255,17 @@ Method and per-category results: [docs/benchmarks](docs/benchmarks/README.md) ·
 
 | | Tamga | Hosted gateways | OSS gateways | Network DLP |
 |---|---|---|---|---|
-| Runs entirely on your infrastructure | Yes | No | Yes | Yes |
-| Turkish PII (TCKN, IBAN, phone) | Native | Partial | No | Partial |
-| KVKK / BDDK control mapping | Documented | No | No | Partial |
-| Inline redaction | Yes | Yes | Tier-gated | HTTPS only |
-| Reversible tokenization | Yes | Partial | No | Some |
-| Hash-chained audit log | Admin actions | No | Partial | Some |
-| Published bypasses | Yes | No | No | No |
-| Open source | AGPL-3.0 | No | Often MIT | Mostly no |
+| Runs entirely on your infrastructure | Yes | No | Yes | Usually |
+| Turkish PII (TCKN, IBAN, phone) | Native | Not checked | Not checked | Not checked |
+| KVKK / BDDK control mapping | Documented | Not checked | Not checked | Not checked |
+| Inline redaction | Yes | Varies | Varies | Only on traffic it can decrypt |
+| Reversible tokenization | Yes | Varies | Varies | Varies |
+| Hash-chained audit log | Admin actions | Not checked | Not checked | Not checked |
+| Published bypasses | Yes | Not checked | Not checked | Not checked |
+| Open source | AGPL-3.0 | Mostly no | Yes, licence varies | Mostly no |
+
+The three columns on the right describe a class of product, not a product. No
+product or version was tested for this table; "Not checked" means that.
 
 Tamga is a security layer, not a general LLM gateway. If you mainly need
 routing, load balancing and semantic caching across many providers, a
@@ -382,7 +385,8 @@ and expect rough edges.
 for the other side: inline PII, secret and injection scanning · YAML policy
 with hot reload · the OpenAI, Anthropic and Gemini routes · role-aware
 scanning of tool results, and `STRIP` · the optional inline classifier ·
-per-key rate limits and daily budgets · response cache · the Postgres request
+per-key rate limits · a daily token and cost cap per organisation · response
+cache · the Postgres request
 log · `POST /api/v1/scan` · Docker Compose.
 
 None of it has been run against a real provider or a real third-party service
