@@ -6,11 +6,11 @@ echo "Network: $NETWORK"
 echo "Disconnecting..."
 docker network disconnect $NETWORK deploy-postgres-1 2>&1
 sleep 2
-curl -s http://localhost:8443/api/v1/health/detailed -H "x-api-key: test-key" | python -c "import sys,json; d=json.load(sys.stdin); print(f'DB: {d[\"database\"]}, Proxy: {d[\"proxy\"]}')"
+curl -s http://localhost:8443/api/v1/health/detailed -H "X-Tamga-Admin-Key: ${TAMGA_ADMIN_KEY:?set TAMGA_ADMIN_KEY: the health detail needs it}" | python -c "import sys,json; d=json.load(sys.stdin); print(f'DB: {d[\"database\"]}, Proxy: {d[\"proxy\"]}')"
 echo "Waiting 30s..."
 sleep 30
 echo "Reconnecting..."
 docker network connect $NETWORK deploy-postgres-1 2>&1
 sleep 3
-curl -s http://localhost:8443/api/v1/health/detailed -H "x-api-key: test-key" | python -c "import sys,json; d=json.load(sys.stdin); print(f'DB: {d[\"database\"]}, Proxy: {d[\"proxy\"]}')"
+curl -s http://localhost:8443/api/v1/health/detailed -H "X-Tamga-Admin-Key: ${TAMGA_ADMIN_KEY:?set TAMGA_ADMIN_KEY: the health detail needs it}" | python -c "import sys,json; d=json.load(sys.stdin); print(f'DB: {d[\"database\"]}, Proxy: {d[\"proxy\"]}')"
 echo "Network partition chaos complete."

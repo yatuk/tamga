@@ -84,7 +84,7 @@ jobs:
       - name: Health check
         run: |
           curl -s http://localhost:8443/health | grep '"status":"ok"'
-          curl -s http://localhost:8443/api/v1/health/detailed | jq '{proxy,scanner_count,database,redis}'
+          curl -s -H "X-Tamga-Admin-Key: smoke-test-admin-key" http://localhost:8443/api/v1/health/detailed | jq '{proxy,scanner_count,database,redis}'
 
       - name: Clean request (PASS)
         run: |

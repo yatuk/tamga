@@ -131,7 +131,8 @@ fi
 echo ""
 echo "--- [2/6] Health endpoints ---"
 
-HEALTH=$(curl -s "$PROXY_URL/api/v1/health/detailed")
+# The detail (scanner count, database) needs the admin key; without it the body is only up or down.
+HEALTH=$(curl -s -H "X-Tamga-Admin-Key: $ADMIN_KEY" "$PROXY_URL/api/v1/health/detailed")
 assert_status "GET /api/v1/health/detailed → 200" 200 "$(echo "$HEALTH" | jq -r '.status // empty' | head -1 || echo 0)"
 
 # Verify key fields in health response

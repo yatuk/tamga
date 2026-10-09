@@ -139,7 +139,9 @@ function postChat(content) {
 }
 
 function getHealth() {
+  // The database field is in the detail, which needs the admin key.
   const res = http.get(`${URL}/api/v1/health/detailed`, {
+    headers: { "X-Tamga-Admin-Key": ADMIN },
     tags: { scenario: "health" },
   });
 
