@@ -247,6 +247,7 @@ export default function IntegrationsPage() {
               ) : null}
               <TextArea
                 id="integration-headers"
+                data-code=""
                 labelText="Extra headers"
                 helperText="One per line, as Name: value."
                 rows={3}

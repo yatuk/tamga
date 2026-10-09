@@ -101,10 +101,10 @@ export default function PatternsPage() {
                   {m.items.map((p) => (
                     <TableRow key={p.id} data-selected={p.id === draft.id}>
                       {/* Both are cut short, so that the switch and the row's buttons stay in view beside the form. */}
-                      <TableCell className="t-clip" title={p.name} style={{ maxWidth: "8rem" }}>
+                      <TableCell className="t-clip" title={p.name}>
                         {p.name}
                       </TableCell>
-                      <TableCell className="t-clip" title={p.pattern} style={{ maxWidth: "8rem" }}>
+                      <TableCell className="t-clip" title={p.pattern}>
                         <span className="t-data">{p.pattern}</span>
                         <span className="t-note t-under">{KINDS[p.kind] ?? p.kind}</span>
                       </TableCell>
@@ -164,7 +164,7 @@ export default function PatternsPage() {
               value={draft.name}
               onChange={(e) => setDraft({ ...draft, name: e.target.value })}
             />
-            <div className="t-pair">
+            <div className="t-pair" data-wide="first">
               <Select id="pattern-kind" labelText="Kind" value={draft.kind} onChange={(e) => m.setDraftKind(e.target.value as Draft["kind"])}>
                 <SelectItem value="regex" text={KINDS.regex} />
                 <SelectItem value="literal" text={KINDS.literal} />
@@ -182,6 +182,7 @@ export default function PatternsPage() {
             </div>
             <TextArea
               id="pattern-value"
+              data-code=""
               labelText={KINDS[draft.kind]}
               rows={3}
               spellCheck={false}

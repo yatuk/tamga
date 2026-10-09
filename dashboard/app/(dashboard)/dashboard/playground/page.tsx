@@ -108,6 +108,7 @@ export default function PlaygroundPage() {
             {p.policySource === "upload" ? (
               <TextArea
                 id="playground-policy"
+                data-code=""
                 labelText="Policy document"
                 hideLabel
                 rows={13}
