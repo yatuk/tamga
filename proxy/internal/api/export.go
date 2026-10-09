@@ -27,7 +27,7 @@ func (cfg Config) handleEventsExport(w http.ResponseWriter, r *http.Request) {
 	if format == "" {
 		format = "csv"
 	}
-	action := strings.ToUpper(strings.TrimSpace(q.Get("action")))
+	actions := events.ActionSet(strings.Join(q["action"], ","))
 	provider := strings.ToLower(strings.TrimSpace(q.Get("provider")))
 	rng := strings.ToLower(q.Get("range"))
 	if rng == "" {
@@ -43,7 +43,7 @@ func (cfg Config) handleEventsExport(w http.ResponseWriter, r *http.Request) {
 			if e.Timestamp.IsZero() || e.Timestamp.UnixMilli() < threshold {
 				continue
 			}
-			if action != "" && action != "ALL" && strings.ToUpper(e.Action) != action {
+			if len(actions) > 0 && !events.ActionIn(actions, e.Action) {
 				continue
 			}
 			if provider != "" && provider != "all" {

@@ -6,8 +6,6 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -134,23 +132,8 @@ func (cfg Config) handlePolicyPut(w http.ResponseWriter, r *http.Request) {
 		writePolicyValidationFailed(w, sem)
 		return
 	}
-	// Persist atomically: write to tmp then rename.
-	dir := filepath.Dir(cfg.PolicyPath)
-	tmp, err := os.CreateTemp(dir, ".tamga-policy-*.yaml")
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	if _, err := tmp.WriteString(yamlText); err != nil {
-		_ = tmp.Close()
-		_ = os.Remove(tmp.Name())
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	_ = tmp.Close()
-	if err := os.Rename(tmp.Name(), cfg.PolicyPath); err != nil {
-		_ = os.Remove(tmp.Name())
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	if err := writePolicyFile(cfg.PolicyPath, []byte(yamlText)); err != nil {
+		writePolicyWriteError(w, err)
 		return
 	}
 	if err := cfg.PolicyStore.Reload(cfg.PolicyPath); err != nil {
@@ -294,24 +277,9 @@ func policyActionSeverity(a policy.Action) int {
 	return 0
 }
 
-// atomicWriteFile writes data to path via a temp file + rename (crash-safe).
+// atomicWriteFile replaces the policy file; see writePolicyFile.
 func atomicWriteFile(path string, data []byte) error {
-	dir := filepath.Dir(path)
-	tmp, err := os.CreateTemp(dir, ".tamga-policy-*.yaml")
-	if err != nil {
-		return err
-	}
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		_ = os.Remove(tmp.Name())
-		return err
-	}
-	_ = tmp.Close()
-	if err := os.Rename(tmp.Name(), path); err != nil {
-		_ = os.Remove(tmp.Name())
-		return err
-	}
-	return nil
+	return writePolicyFile(path, data)
 }
 
 // handleCustomEntityList returns the custom_entities array from the active policy.
@@ -379,7 +347,7 @@ func (cfg Config) handleCustomEntityCreate(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if err := atomicWriteFile(cfg.PolicyPath, updated); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		writePolicyWriteError(w, err)
 		return
 	}
 	if err := cfg.PolicyStore.Reload(cfg.PolicyPath); err != nil {
@@ -431,7 +399,7 @@ func (cfg Config) handleCustomEntityDelete(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if err := atomicWriteFile(cfg.PolicyPath, updated); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		writePolicyWriteError(w, err)
 		return
 	}
 	if err := cfg.PolicyStore.Reload(cfg.PolicyPath); err != nil {

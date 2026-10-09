@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
+	"github.com/yatuk/tamga/internal/events"
 )
 
 const (
@@ -97,7 +98,7 @@ INSERT INTO request_logs (
   action_taken, scan_latency_ms, total_latency_ms, user_identifier
 ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
 			org, r.RequestID, r.Provider, nullIfEmpty(r.Model), nullIfEmpty(r.ModelFamily), nullIfEmpty(r.Endpoint),
-			r.InputTokens, r.OutputTokens, r.Findings, r.FindingsCount,
+			r.InputTokens, r.OutputTokens, findingsOrEmpty(r.Findings), r.FindingsCount,
 			r.ActionTaken, r.ScanLatencyMs, r.TotalLatencyMs, nullIfEmpty(r.UserID),
 		)
 		n++
@@ -113,6 +114,16 @@ INSERT INTO request_logs (
 		}
 	}
 	return nil
+}
+
+// findingsOrEmpty gives the findings column its value. A request with no
+// findings is stored as an empty array: the column is NOT NULL, and the
+// search queries unnest it, which a JSON null would break.
+func findingsOrEmpty(b []byte) []byte {
+	if t := strings.TrimSpace(string(b)); t == "" || t == "null" {
+		return []byte("[]")
+	}
+	return b
 }
 
 func nullIfEmpty(s string) interface{} {
@@ -345,10 +356,10 @@ func (s *PostgresStore) SearchSecurityEvents(ctx context.Context, orgID string, 
 		return len(args) + 1
 	}
 
-	if a := strings.TrimSpace(p.Action); a != "" {
+	if wanted := events.ActionSet(p.Action); len(wanted) > 0 {
 		i := next()
-		fmt.Fprintf(&where, " AND upper(action_taken) = upper($%d)", i)
-		args = append(args, a)
+		fmt.Fprintf(&where, " AND upper(action_taken) = ANY($%d)", i)
+		args = append(args, wanted)
 	}
 	prov := strings.ToLower(strings.TrimSpace(p.Provider))
 	if p.ShadowOnly || prov == "shadow" {
@@ -560,4 +571,13 @@ func (s *PostgresStore) Close() error {
 	}
 	s.pool.Close()
 	return nil
+}
+
+// DefaultOrgID returns the id of the organisation the first migration seeds
+// (slug "default"). A single-tenant install has no other, so the proxy uses
+// it when TAMGA_ORG_ID is not set.
+func (s *PostgresStore) DefaultOrgID(ctx context.Context) (string, error) {
+	var id string
+	err := s.pool.QueryRow(ctx, `SELECT id::text FROM organizations WHERE slug = 'default' LIMIT 1`).Scan(&id)
+	return id, err
 }

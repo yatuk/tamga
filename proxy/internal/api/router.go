@@ -205,11 +205,11 @@ func NewHandler(cfg Config) http.Handler {
 	protected.HandleFunc("GET /reports/incident/pdf", cfg.handleIncidentPdfReport)
 	protected.HandleFunc("GET /settings/sso", cfg.handleSSOGet)
 	protected.HandleFunc("PUT /settings/sso", cfg.handleSSOPut)
-		protected.HandleFunc("GET /scim/v2/Users", cfg.handleScimListUsers)
-		protected.HandleFunc("POST /scim/v2/Users", cfg.handleScimCreateUser)
-		protected.HandleFunc("GET /scim/v2/Users/{id}", cfg.handleScimGetUser)
-		protected.HandleFunc("PATCH /scim/v2/Users/{id}", cfg.handleScimPatchUser)
-		protected.HandleFunc("DELETE /scim/v2/Users/{id}", cfg.handleScimDeleteUser)
+	protected.HandleFunc("GET /scim/v2/Users", cfg.handleScimListUsers)
+	protected.HandleFunc("POST /scim/v2/Users", cfg.handleScimCreateUser)
+	protected.HandleFunc("GET /scim/v2/Users/{id}", cfg.handleScimGetUser)
+	protected.HandleFunc("PATCH /scim/v2/Users/{id}", cfg.handleScimPatchUser)
+	protected.HandleFunc("DELETE /scim/v2/Users/{id}", cfg.handleScimDeleteUser)
 
 	inner.Handle("/", adminAuth(cfg)(protected))
 
@@ -834,13 +834,15 @@ func (cfg Config) handleHealthDetail(w http.ResponseWriter, r *http.Request) {
 		"version":        cfg.Version,
 		"policy_name":    pol,
 		"policy_path":    cfg.PolicyPath,
-		"scanner_count":  cfg.ScannerCount,
-		"database":       dbStatus,
-		"tls_enabled":    cfg.TLSEnabled,
-		"mtls_enabled":   cfg.MTLSEnabled,
-		"ip_allowlist":   cfg.IPAllowlist,
-		"redis_enabled":  cfg.RedisEnabled,
-		"timestamp":      time.Now().UTC(),
+		// False on a read-only mount: the console then offers no save.
+		"policy_writable": policyWritable(cfg.PolicyPath),
+		"scanner_count":   cfg.ScannerCount,
+		"database":        dbStatus,
+		"tls_enabled":     cfg.TLSEnabled,
+		"mtls_enabled":    cfg.MTLSEnabled,
+		"ip_allowlist":    cfg.IPAllowlist,
+		"redis_enabled":   cfg.RedisEnabled,
+		"timestamp":       time.Now().UTC(),
 	}
 	if strings.TrimSpace(cfg.TraceUIURL) != "" {
 		payload["trace_ui_url"] = strings.TrimSpace(cfg.TraceUIURL)

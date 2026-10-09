@@ -832,3 +832,43 @@ func TestRecentBuffer_LatestIsNotCappedAtPageSize(t *testing.T) {
 		t.Fatal("nil buffer should return nil")
 	}
 }
+
+func TestActionSet(t *testing.T) {
+	cases := map[string][]string{
+		"":               nil,
+		"all":            nil,
+		"block,all":      nil,
+		"block":          {"BLOCK"},
+		"block,redact":   {"BLOCK", "REDACT"},
+		" Block , ,warn": {"BLOCK", "WARN"},
+	}
+	for in, want := range cases {
+		got := ActionSet(in)
+		if len(got) != len(want) {
+			t.Fatalf("ActionSet(%q) = %v, want %v", in, got, want)
+		}
+		for i := range want {
+			if got[i] != want[i] {
+				t.Fatalf("ActionSet(%q) = %v, want %v", in, got, want)
+			}
+		}
+	}
+}
+
+func TestMatchEventSearch_SeveralActions(t *testing.T) {
+	blocked := Event{Action: "BLOCK"}
+	redacted := Event{Action: "REDACT"}
+	passed := Event{Action: "PASS"}
+	match := func(e Event, action string) bool {
+		return MatchEventSearch(e, action, "", false, "", "", "", "", "", time.Time{}, time.Time{})
+	}
+	if !match(blocked, "block,redact") || !match(redacted, "block,redact") {
+		t.Fatal("a list of actions should match each action in it")
+	}
+	if match(passed, "block,redact") {
+		t.Fatal("a list of actions should not match an action outside it")
+	}
+	if !match(passed, "all") || !match(passed, "") {
+		t.Fatal(`"all" and an empty filter should match everything`)
+	}
+}

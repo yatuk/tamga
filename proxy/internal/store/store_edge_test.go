@@ -1197,3 +1197,14 @@ func TestNewSavedHuntStore_InterfaceReturn(t *testing.T) {
 	}
 	var _ SavedHuntStore = store
 }
+
+func TestFindingsOrEmpty(t *testing.T) {
+	for _, in := range [][]byte{nil, {}, []byte("null"), []byte(" null \n")} {
+		if got := string(findingsOrEmpty(in)); got != "[]" {
+			t.Fatalf("findingsOrEmpty(%q) = %q, want []", in, got)
+		}
+	}
+	if got := string(findingsOrEmpty([]byte(`[{"type":"pii"}]`))); got != `[{"type":"pii"}]` {
+		t.Fatalf("findings were changed to %q", got)
+	}
+}

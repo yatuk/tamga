@@ -63,7 +63,9 @@ func (cfg Config) handleTimeseries(w http.ResponseWriter, r *http.Request) {
 						Warned:   int(row.WarnedRequests),
 					}
 				}
-				dbServed = true
+				// Nothing fills daily_stats yet: an empty answer is no answer, and
+				// the recent buffer below is used instead of drawing an empty chart.
+				dbServed = len(rows) > 0
 			}
 		}
 	}

@@ -207,6 +207,18 @@ func main() {
 			pgStore = ps
 			requestStore = ps
 			log.Info().Msg("postgres request logging enabled")
+			// Without an organisation nothing is stored and the saved hunts
+			// API refuses every call. A single-tenant install has exactly one.
+			if cfg.DefaultOrgID == "" {
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				if id, err := ps.DefaultOrgID(ctx); err == nil && id != "" {
+					cfg.DefaultOrgID = id
+					log.Info().Str("org_id", id).Msg("TAMGA_ORG_ID not set; using the default organisation")
+				} else {
+					log.Warn().Err(err).Msg("TAMGA_ORG_ID not set and no default organisation found; requests will not be stored")
+				}
+				cancel()
+			}
 		}
 	} else {
 		requestStore = store.NewNoopStore(log.Logger)
@@ -404,11 +416,12 @@ func main() {
 			Handler  events.EventHandler
 		}{
 			"db-logger": {
-				Subjects: []string{"scan.>", "block.>"},
+				// Redacted requests are published as redact.applied; without it they were never stored.
+				Subjects: []string{"scan.>", "block.>", "redact.>"},
 				Handler: func(ev events.EventV2) {
 					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 					defer cancel()
-					storeEventFromNATS(ctx, requestStore, ev, log.Logger)
+					storeEventFromNATS(ctx, requestStore, ev, cfg.DefaultOrgID, log.Logger)
 				},
 			},
 		}, log.Logger)
@@ -843,7 +856,11 @@ func main() {
 
 // storeEventFromNATS persists a NATS EventV2 to PostgreSQL. This runs in the
 // NATS consumer goroutine, decoupled from the HTTP request path.
-func storeEventFromNATS(ctx context.Context, s store.Store, ev events.EventV2, log zerolog.Logger) {
+func storeEventFromNATS(ctx context.Context, s store.Store, ev events.EventV2, defaultOrgID string, log zerolog.Logger) {
+	// An event that names no organisation belongs to the install's own.
+	if strings.TrimSpace(ev.OrgID) == "" {
+		ev.OrgID = defaultOrgID
+	}
 	rl := store.RequestLog{
 		RequestID:    ev.RequestID,
 		OrgID:        ev.OrgID,

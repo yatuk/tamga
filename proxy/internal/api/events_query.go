@@ -28,9 +28,10 @@ func parseEventSearchQuery(r *http.Request) (store.EventSearchParams, error) {
 	}
 
 	p := store.EventSearchParams{
-		Page:        page,
-		Limit:       limit,
-		Action:      strings.TrimSpace(q.Get("action")),
+		Page:  page,
+		Limit: limit,
+		// One value, several separated by commas, or the parameter repeated.
+		Action:      strings.Join(q["action"], ","),
 		Provider:    strings.TrimSpace(q.Get("provider")),
 		FindingType: strings.TrimSpace(q.Get("finding_type")),
 		Severity:    strings.TrimSpace(q.Get("severity")),

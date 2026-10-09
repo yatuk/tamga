@@ -153,6 +153,34 @@ func (b *RecentBuffer) Search(page, limit int, match func(Event) bool) ([]Event,
 	return matched[offset:end], tn
 }
 
+// ActionSet reads an action filter: one action or several separated by
+// commas, in any case. Empty and "all" mean no filter and give nil.
+func ActionSet(filter string) []string {
+	var out []string
+	for _, part := range strings.Split(filter, ",") {
+		a := strings.ToUpper(strings.TrimSpace(part))
+		if a == "" {
+			continue
+		}
+		if a == "ALL" {
+			return nil
+		}
+		out = append(out, a)
+	}
+	return out
+}
+
+// ActionIn reports whether action is one of wanted, as ActionSet returns it.
+func ActionIn(wanted []string, action string) bool {
+	a := strings.ToUpper(strings.TrimSpace(action))
+	for _, w := range wanted {
+		if w == a {
+			return true
+		}
+	}
+	return false
+}
+
 // MatchEventSearch mirrors store.EventSearchParams semantics for RAM buffer.
 func MatchEventSearch(e Event, action, provider string, shadowOnly bool, findingType, severity, category, technique, q string, since, until time.Time) bool {
 	if !since.IsZero() && e.Timestamp.Before(since) {
@@ -161,7 +189,7 @@ func MatchEventSearch(e Event, action, provider string, shadowOnly bool, finding
 	if !until.IsZero() && e.Timestamp.After(until) {
 		return false
 	}
-	if a := strings.TrimSpace(strings.ToUpper(action)); a != "" && strings.ToUpper(strings.TrimSpace(e.Action)) != a {
+	if wanted := ActionSet(action); len(wanted) > 0 && !ActionIn(wanted, e.Action) {
 		return false
 	}
 	p := strings.ToLower(strings.TrimSpace(provider))

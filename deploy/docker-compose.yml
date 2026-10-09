@@ -63,7 +63,10 @@ services:
       analyzer:
         condition: service_started
     volumes:
-      - ../proxy/tamga-policy.yaml:/app/tamga-policy.yaml:ro
+      # Read-only by default: the console then shows the policy and cannot
+      # change it. TAMGA_POLICY_MOUNT=rw lets "Save and apply" rewrite this
+      # file on the host, comments included.
+      - ../proxy/tamga-policy.yaml:/app/tamga-policy.yaml:${TAMGA_POLICY_MOUNT:-ro}
     networks:
       - internal
     restart: unless-stopped
