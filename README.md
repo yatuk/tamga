@@ -337,6 +337,7 @@ unknown or misplaced key is a load error, not a silent no-op.
 | `TAMGA_TRUST_ROLE_HEADER` | `false` | Honour `X-Tamga-Role` for policy exceptions; only behind an authenticating gateway |
 | `TAMGA_REQUIRE_KEY` | `false` | Refuse proxy requests that carry no valid `X-Tamga-Key` |
 | `TAMGA_CLASSIFIER_ADDR` | — | gRPC address of the optional classifier service; the policy's `scan.classifier` turns it on |
+| `TAMGA_ALERT_ALLOW_PRIVATE` | — | Internal receivers alerts may be sent to (CIDR ranges, exact host names). Empty: internal addresses are refused |
 | `TAMGA_TRUSTED_PROXIES` | — | IPs / CIDR ranges of the load balancers allowed to set `X-Forwarded-For`. Empty: the header is ignored |
 | `TAMGA_SCANNER_SERVICE_ADDR` | — | Delegate stateless scanners to a scanner-service over gRPC |
 | `TAMGA_RETENTION_REQUEST_LOGS_DAYS` | `30` | How long request metadata is kept |

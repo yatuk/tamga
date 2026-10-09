@@ -37,6 +37,7 @@ Essential environment variables:
 | `TAMGA_STRICT_MODE` | `false` | Ignore all policy exceptions |
 | `TAMGA_TRUST_ROLE_HEADER` | `false` | Honour `X-Tamga-Role` for policy exceptions. Enable only behind an authenticating gateway that sets the header itself |
 | `TAMGA_REQUIRE_KEY` | `false` | Answer 401 to any proxy request without a valid `X-Tamga-Key`. Leave off until every application has a key |
+| `TAMGA_ALERT_ALLOW_PRIVATE` | — | Internal receivers alerts may be sent to: comma-separated CIDR ranges, addresses and exact host names. Empty: internal addresses are refused. See [Alerts](#where-alerts-may-go) |
 | `TAMGA_TRUSTED_PROXIES` | — | Comma-separated IPs and CIDR ranges of the load balancers or reverse proxies in front of Tamga. Only a connection from one of them may supply the client address through `X-Forwarded-For`; the address used is the first one from the right that is not itself a trusted proxy. Empty: the header is ignored and the connecting address is used, so behind a load balancer every caller without a key shares one rate-limit bucket and `TAMGA_IP_ALLOWLIST` sees the load balancer. An invalid entry stops startup |
 | `TAMGA_OTLP_ENDPOINT` | — | OpenTelemetry collector endpoint |
 | `ANTHROPIC_API_KEY` | — | Anthropic provider key |
@@ -407,7 +408,7 @@ Sending never holds up a request: alerts wait in a queue of 256 for four
 workers, each attempt has 5 seconds, and a network error or a 5xx is tried
 three times. When the queue is full the alert is dropped. The counters are in
 `/api/v1/metrics` as `tamga_alerts_total{kind,result}` with the results
-`sent`, `failed`, `dropped` and `suppressed`.
+`sent`, `failed`, `dropped`, `suppressed`, `blocked` and `skipped`.
 
 Limits to know:
 
@@ -416,13 +417,39 @@ Limits to know:
 - Splunk (`Authorization: Splunk <token>`), Datadog (`DD-API-KEY`),
   ServiceNow and Jira need their authentication set as a custom header on
   the destination. PagerDuty and Opsgenie take theirs from the auth token.
-- A destination's URL is not checked against internal addresses.
 - Each replica alerts on its own: thresholds and cooldowns are per process.
 - For a request that was forwarded (STRIP, WARN, REDACT) the alert goes out
   when the provider's response has ended. A response served from the cache
   sends none.
-- One destination that hangs can occupy the workers for up to about 17
-  seconds at a time and delay the others.
+
+### Where alerts may go
+
+A destination, and a rule's `notify:` URL, must be `https` and must not lead
+to an internal address: loopback, the private ranges, link-local (the cloud
+metadata address among them), carrier-grade NAT and the reserved ranges, in
+IPv4 and IPv6. The address is judged when the connection is made, on what the
+name resolved to, so a name that later resolves somewhere else is judged
+again, and a name that answers with both a public and an internal address is
+refused. A redirect is followed only on the same host, at most three times.
+Alerts connect directly and do not use `HTTP_PROXY`.
+
+To send to a receiver inside your network, list it:
+
+```bash
+TAMGA_ALERT_ALLOW_PRIVATE=10.20.0.0/16,splunk.internal
+```
+
+Entries are CIDR ranges, single addresses and exact host names, separated by
+commas. A listed name may also use plain `http`, and is trusted for whatever
+it resolves to. `0.0.0.0/0` and `::/0` are refused and the proxy does not
+start. A destination that is refused stays saved; its alerts are counted as
+`blocked`, and the Test button answers "destination address is not allowed",
+the same for an address that is refused and a name that does not resolve.
+
+A destination that fails three deliveries in a row is skipped for 30 seconds
+and then tried once; alerts skipped meanwhile are counted as `skipped`. One
+destination holds at most half of the workers, so one that hangs does not
+stop the others.
 
 ## Cost control and budget enforcement
 

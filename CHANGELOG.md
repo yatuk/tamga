@@ -3,6 +3,18 @@
 ## v0.9.0 (unreleased)
 
 ### Security
+- **Alert destinations could point the proxy at internal addresses.** A saved
+  destination or a policy rule's `notify:` URL was posted to wherever it
+  pointed, redirects included, so whoever could save one could make the proxy
+  send requests to loopback, the private ranges or the cloud metadata
+  address, and the Test button reported the answer. Every alert request now
+  goes through one guard that judges the address at connect time. **If you
+  alert to a receiver inside your network (Splunk, QRadar, a sibling
+  container), list it in `TAMGA_ALERT_ALLOW_PRIVATE`** or its alerts stop and
+  are counted as `blocked`. Plain `http` destinations are refused unless the
+  host is on that list. Alerts no longer use `HTTP_PROXY`. A redirect to
+  another host is not followed. The Test endpoint returns a fixed error class
+  in place of the transport's error text.
 - **Default policy did not enforce prompt injection.** On `main` since the
   vault/canary merge (2026-08-02), the `injection`, `code_leakage` and
   `operator_state` rules in `proxy/tamga-policy.yaml` were nested under
