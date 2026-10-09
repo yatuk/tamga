@@ -72,7 +72,7 @@ proxy/coverage_telemetry.html
 proxy/cov
 
 # Internal docs (belt-and-suspenders)
-audit/
+/audit/
 docs/sprint*/
 docs/audit*/
 docs/internal/
