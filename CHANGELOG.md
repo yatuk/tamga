@@ -3,6 +3,38 @@
 ## v0.9.0 (unreleased)
 
 ### Security
+- **A compressed response passed the output scan unread.** The caller's
+  `Accept-Encoding` was forwarded and the answer was not decoded, so
+  `output_rules` scanned gzip bytes and found nothing in them. Most HTTP
+  clients ask for gzip. The proxy now requests compression itself and reads
+  the answer decoded; callers receive it uncompressed.
+- **The response cache answered callers the provider had not checked.** The
+  key held the organisation, provider, model and body, not the caller: a
+  second caller with a wrong or revoked provider key, or none, got the first
+  one's answer. An answer is now served only to a caller with the same
+  provider credential, or the same Tamga key when no credential is sent.
+  Expect a lower hit rate where callers with different keys shared answers.
+  `cache.ttl_seconds` is capped at one hour.
+- **The health endpoints told anyone the layout of the deployment.**
+  `/api/v1/health/detailed` and `/health/detail` returned the policy path,
+  pool and endpoint names, raw dial errors with addresses, the IP allowlist
+  and the version to callers with no credential. Without a management key
+  they now say only whether the proxy is up, with scan latency. **Scripts
+  that read `database`, `redis`, `scanner_count` or `providers` must send
+  `X-Tamga-Admin-Key`.** Status codes are unchanged. `failure_reason` is a
+  fixed class, not the transport's error text.
+- **Patterns had no size, count or time limit**, and one pattern could hold a
+  request for over a minute. Custom, competitor and operator-state patterns
+  are now bounded in length, compiled size and number, may not match the
+  empty string, and their scans stop at the request's deadline. A policy
+  over a limit does not load; see "Limits on patterns and settings" in the
+  operations guide. **A custom entity name with a dash, a space or a
+  non-ASCII letter no longer loads.**
+- **A rule with `action: block` in lower case let everything through.** The
+  action is compared as written; an unknown one now fails the load instead
+  of acting as PASS. The same for `override_action`.
+- Competitor matches are masked in events, the request log and simulate,
+  as custom entity matches already were.
 - **A policy could send the proxy's secrets, and a route's traffic, to any
   host.** `providers.pools` let the policy choose an upstream URL and name
   any environment variable as its key; the proxy sent that variable's value

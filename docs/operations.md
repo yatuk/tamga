@@ -152,6 +152,14 @@ adding it does not make each request body unique: the response cache and the
 provider's prompt cache keep working. It is derived from `TAMGA_VAULT_KEY`
 when that is set (so replicas agree) and from a per-process secret otherwise.
 
+### Compressed responses
+
+The proxy does not pass the caller's `Accept-Encoding` to the provider. It
+asks for compression on its own account and reads the answer decoded, so the
+output scan, the vault and the canary see what the model said. The caller
+receives the answer uncompressed. If a provider encodes an answer it was not
+asked to, and something is set to read it, the request ends in a 502.
+
 ### Scanning streamed responses
 
 ```yaml
@@ -179,6 +187,39 @@ other formats are tested where their events are parsed
 unread. A stream in a shape Tamga does not know is forwarded unread too and
 counted in `tamga_scan_degraded_total{reason="stream_unrecognised"}`. If the
 scanner fails the stream ends, unless `output_rules.fail_open` is set.
+
+### Limits on patterns and settings
+
+Patterns in the policy and in the patterns API are written by whoever can
+edit them and run on every request, so they are bounded. A policy that goes
+over a limit does not load.
+
+| Limit | Value |
+|---|---|
+| Pattern length | 1024 bytes |
+| Compiled pattern size | 500 instructions (a pattern like `[A-Za-z0-9_-]{100,200}` is about 300) |
+| A pattern that can match the empty string | refused |
+| Custom entities, stored patterns | 100 each |
+| Competitors, patterns per competitor | 50, 10 |
+| Operator-state assertions, authorization rules | 50 each |
+| Custom entity name | `[A-Za-z0-9_]`, up to 64 bytes |
+
+A custom or competitor scan stops at the request's deadline, after 1000
+findings in one piece of text, or after its time budget, and reports the
+scan as incomplete. What happens then is `scan.on_error`: the shipped policy
+blocks.
+
+Also refused at load: a rule `action` or `override_action` that is not
+exactly `BLOCK`, `STRIP`, `REDACT`, `WARN`, `LOG` or `PASS` (a lower-case
+`block` used to load and let everything through); `minimum_confidence` over
+100; negative rate-limit or cost values; a body limit over 64 MiB; an
+enabled `output_rules.buffer_bytes` under 1024 or over 64 MiB; a pool
+`timeout` under 100 ms; classifier `timeout_ms` under 10 or `max_chars`
+under 16; a second YAML document in the file. `data.retention_days`,
+`data.residency` and `cache.semantic` have no effect, and validation says so.
+
+`POST /api/v1/policies/simulate` takes at most 512 KiB, of which 256 KiB of
+`sample_text`.
 
 ## Keys for applications
 
@@ -581,10 +622,34 @@ cost by day, provider and model from the request log, with a month-to-date
 total and a projection for the month. Models without a price are listed
 under `unpriced` and are in no USD total.
 
-The response cache matches a request exactly, by a SHA-256 of its content,
-and is off unless the policy sets `cache.enabled`. A response is stored
-only when its output scan found nothing and the vault is not in use.
-Similarity ("semantic") caching is not implemented.
+### Response cache
+
+The response cache matches a request exactly and is off unless the policy
+sets `cache.enabled`. Similarity ("semantic") caching is not implemented.
+
+A cached answer is served only to a caller the proxy can name: one that
+sends the same provider credential, or, when the request carries none, the
+same Tamga key. A hit must not let anyone skip the check the provider would
+have made. So:
+
+- callers with different provider keys do not share answers, and a request
+  with neither a provider credential nor a valid `X-Tamga-Key` is never
+  served from the cache and never fills it;
+- the organisation, provider, model, path, query and forwarded body are all
+  part of the key;
+- an answer is stored only for a 200 whose output scan found nothing, and
+  never for a request the vault tokenised, a stream, or a request signed by
+  the caller for Bedrock;
+- `cache.ttl_seconds` is capped at 3600, whatever the policy says. An answer
+  can outlive a credential revoked at the provider by at most that long;
+- answers keyed by a provider credential stay in the process that stored
+  them. Only answers keyed by a Tamga key are shared through Redis;
+- a hit is recorded like any other request, with `cache_status: hit`.
+
+Two limits: the cache stores only when the response is read, which happens
+with `output_rules` or the canary on; and a change of policy does not evict
+what was stored under the old one, so an answer can be served for up to the
+TTL without being scanned under the new rules.
 
 ## Management REST API
 
@@ -593,7 +658,7 @@ The proxy serves a management API on the same port (`:8443`).
 | Method | Path | Auth | Description |
 |---|---|---|---|
 | `GET` | `/health` | — | Liveness |
-| `GET` | `/api/v1/health/detailed` | — | Proxy, DB, scanner count, uptime |
+| `GET` | `/api/v1/health/detailed` | — for up or down; a management key for the rest | Without a key: `proxy`, `status`, scan latency. With one: database, Redis, scanner count, uptime, provider pools |
 | `GET` | `/api/v1/stats` | Admin | 7-day summary (DB or in-memory) |
 | `GET` | `/api/v1/events?page=&limit=` | Admin | Security event feed |
 | `GET` | `/api/v1/policies` | Admin | Active policy as JSON |
@@ -601,8 +666,13 @@ The proxy serves a management API on the same port (`:8443`).
 | `POST` | `/api/v1/scan` | Any Tamga key, or admin | Policy verdict for a text, nothing forwarded |
 
 ```bash
-# Health check: public
+# Health check. Without a key the answer says only whether the proxy is up.
 curl -s http://localhost:8443/api/v1/health/detailed | jq .
+
+# The detail (database, Redis, scanner count, provider pools) needs a key.
+# A wrong key gets the short answer with 200, not a 401: check "authenticated".
+curl -s -H "X-Tamga-Admin-Key: $TAMGA_ADMIN_KEY" \
+  http://localhost:8443/api/v1/health/detailed | jq .
 
 # Stats: requires admin key
 curl -s -H "X-Tamga-Admin-Key: $TAMGA_ADMIN_KEY" \

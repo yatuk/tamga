@@ -70,7 +70,7 @@ Aynı HTTP sunucusu üzerinde; geliştirme için CORS varsayılan `*` (`TAMGA_CO
 
 | Metot | Yol | Açıklama |
 |--------|-----|----------|
-| `GET` | `/api/v1/health/detailed` | Proxy, DB, tarayıcı sayısı, uptime (admin anahtarı gerekmez) |
+| `GET` | `/api/v1/health/detailed` | Anahtarsız: yalnızca proxy ayakta mı ve tarama süreleri. Yönetim anahtarıyla: DB, tarayıcı sayısı, uptime, sağlayıcı havuzları |
 | `GET` | `/api/v1/stats` | Son 7 gün özeti (DB veya bellek metrikleri) |
 | `GET` | `/api/v1/events?page=&limit=` | Güvenlik olayları (DB veya son ~100 bellek) |
 | `GET` | `/api/v1/policies` | Aktif politika JSON |
