@@ -22,6 +22,8 @@ type RequestLog struct {
 	TotalLatencyMs float64
 	UserID         string
 	Endpoint       string
+	// At is when the request happened. Zero means now, at the time of the insert.
+	At time.Time
 }
 
 // Stats aggregates daily_stats rows for a window.

@@ -95,11 +95,11 @@ func (s *PostgresStore) insertBatch(ctx context.Context, rows []RequestLog) erro
 INSERT INTO request_logs (
   org_id, request_id, provider, model, model_family, endpoint,
   input_tokens, output_tokens, findings, findings_count,
-  action_taken, scan_latency_ms, total_latency_ms, user_identifier
-) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+  action_taken, scan_latency_ms, total_latency_ms, user_identifier, created_at
+) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,COALESCE($15, now()))`,
 			org, r.RequestID, r.Provider, nullIfEmpty(r.Model), nullIfEmpty(r.ModelFamily), nullIfEmpty(r.Endpoint),
 			r.InputTokens, r.OutputTokens, findingsOrEmpty(r.Findings), r.FindingsCount,
-			r.ActionTaken, r.ScanLatencyMs, r.TotalLatencyMs, nullIfEmpty(r.UserID),
+			r.ActionTaken, r.ScanLatencyMs, r.TotalLatencyMs, nullIfEmpty(r.UserID), happenedAt(r.At),
 		)
 		n++
 	}
@@ -131,6 +131,14 @@ func nullIfEmpty(s string) interface{} {
 		return nil
 	}
 	return s
+}
+
+// happenedAt is the time to date a row by, or nil to let the database use now.
+func happenedAt(t time.Time) interface{} {
+	if t.IsZero() {
+		return nil
+	}
+	return t.UTC()
 }
 
 // SaveRequestLog enqueues a row; may flush when buffer reaches batchMaxRows.

@@ -870,6 +870,13 @@ func storeEventFromNATS(ctx context.Context, s store.Store, ev events.EventV2, d
 		OutputTokens: intField(ev.Payload, "output_tokens"),
 		ActionTaken:  stringField(ev.Payload, "action"),
 		UserID:       stringField(ev.Payload, "user_id"),
+		// The row is written some time after the request, in batches; it is
+		// dated by the request, as the event itself is.
+		At:             ev.Timestamp,
+		ModelFamily:    stringField(ev.Payload, "model_family"),
+		Endpoint:       stringField(ev.Payload, "endpoint"),
+		ScanLatencyMs:  floatField(ev.Payload, "scan_latency_ms"),
+		TotalLatencyMs: floatField(ev.Payload, "total_latency_ms"),
 	}
 	if raw, ok := ev.Payload["findings"]; ok {
 		var findings []scanner.Finding
@@ -890,6 +897,18 @@ func stringField(m map[string]any, key string) string {
 		return s
 	}
 	return ""
+}
+
+func floatField(m map[string]any, key string) float64 {
+	if v, ok := m[key]; ok {
+		switch n := v.(type) {
+		case float64:
+			return n
+		case int:
+			return float64(n)
+		}
+	}
+	return 0
 }
 
 func intField(m map[string]any, key string) int {
