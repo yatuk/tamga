@@ -40,7 +40,9 @@ const SCOPE_WORDS: Record<string, string> = {
 };
 
 const STALE_AFTER_MS = 30 * 24 * 60 * 60 * 1000;
-const stale = (lastUsed?: string | null) => !lastUsed || Date.now() - new Date(lastUsed).getTime() > STALE_AFTER_MS;
+const olderThanThat = (when?: string | null) => !!when && Date.now() - new Date(when).getTime() > STALE_AFTER_MS;
+/** Idle long enough to question: last used, or created and never used, over 30 days ago. */
+const idle = (key: { last_used?: string | null; created_at: string }) => olderThanThat(key.last_used ?? key.created_at);
 
 export function KeysBody({
   adminKey,
@@ -60,7 +62,8 @@ export function KeysBody({
 
   const admins = apiKeys.filter((k) => k.scope === "admin").length;
   const apps = apiKeys.filter((k) => k.scope === "proxy").length;
-  const unused = apiKeys.filter((k) => stale(k.last_used)).length;
+  const unused = apiKeys.filter(idle).length;
+  const never = apiKeys.filter((k) => !k.last_used && !idle(k)).length;
 
   const create = () => {
     if (!label.trim()) return;
@@ -85,7 +88,11 @@ export function KeysBody({
           apiKeys.length === 0
             ? "An application key identifies a caller on the proxy, sent as X-Tamga-Key. Read, write and admin keys open the management API."
             : `${counted(apiKeys.length, "key")}: ${apps} identify applications on the proxy, ${admins} can do everything. ${
-                unused > 0 ? `${unused} ${unused === 1 ? "has" : "have"} not been used for 30 days and could be revoked.` : "All were used in the last 30 days."
+                unused > 0
+                  ? `${unused} ${unused === 1 ? "has" : "have"} not been used for 30 days and could be revoked.`
+                  : never > 0
+                    ? `${never} ${never === 1 ? "has" : "have"} not been used yet.`
+                    : "All were used in the last 30 days."
               }`
         }
       >
@@ -129,11 +136,7 @@ export function KeysBody({
                   <TableCell title={key.created_at}>{dayLabel(key.created_at)}</TableCell>
                   <TableCell title={key.last_used ?? undefined}>
                     {key.last_used ? formatSince(key.last_used) : "Never"}
-                    {stale(key.last_used) ? (
-                      <span className="t-action" data-action="REDACT" style={{ marginLeft: "0.75rem" }}>
-                        Unused
-                      </span>
-                    ) : null}
+                    {idle(key) ? <span className="t-note"> Idle for over 30 days</span> : null}
                   </TableCell>
                   <TableCell>
                     <span className="t-rowactions">
