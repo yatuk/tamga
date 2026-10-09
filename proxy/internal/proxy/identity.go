@@ -16,6 +16,9 @@ type caller struct {
 	// says about itself.
 	KeyID string
 	Role  string
+	// Scope is the key's scope. The proxy path does not look at it; the scan
+	// API tells a proxy key less than it tells the others.
+	Scope string
 }
 
 func (c caller) verified() bool { return c.KeyID != "" }
@@ -68,5 +71,5 @@ func authenticate(r *http.Request, cfg HandlerConfig) (c caller, errType, errMsg
 	if k.UserID != "" {
 		r.Header.Set("X-Tamga-User-Id", k.UserID)
 	}
-	return caller{KeyID: k.ID, Role: k.Role}, "", ""
+	return caller{KeyID: k.ID, Role: k.Role, Scope: k.Scope}, "", ""
 }

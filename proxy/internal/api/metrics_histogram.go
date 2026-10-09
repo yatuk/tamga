@@ -47,10 +47,20 @@ var (
 		Name: "tamga_scanner_pool_utilization",
 		Help: "Worker pool saturation (active workers / total workers).",
 	})
+
+	// ScanAPIRequests counts calls to POST /api/v1/scan by how they ended:
+	// the verdict, or the reason there was none.
+	ScanAPIRequests = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "tamga_scan_api_requests_total",
+		Help: "Calls to the scan API, by outcome.",
+	}, []string{"outcome"})
 )
 
 // ObserveScan records scan latency on the hot-path histogram.
 func ObserveScan(ms float64) { ScanLatencyMs.Observe(ms) }
+
+// CountScanAPI records one call to the scan API.
+func CountScanAPI(outcome string) { ScanAPIRequests.WithLabelValues(outcome).Inc() }
 
 // ObserveTotal records total request latency on the hot-path histogram.
 func ObserveTotal(ms float64) { TotalLatencyMs.Observe(ms) }

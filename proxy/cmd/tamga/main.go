@@ -387,10 +387,14 @@ func main() {
 
 	// Inline classifier: on the decision path, unlike the analyzer above.
 	var classifierGuard *classifier.Guard
+	// The scan API asks the same classifier through a guard of its own, so
+	// that failed scans cannot open the breaker the proxy path relies on.
+	var scanClassifierGuard *classifier.Guard
 	if classifierClient, err := classifier.NewClient(cfg.ClassifierAddr); err != nil {
 		log.Warn().Err(err).Str("addr", cfg.ClassifierAddr).Msg("classifier client unavailable")
 	} else if classifierClient != nil {
 		classifierGuard = classifier.NewGuard(classifierClient)
+		scanClassifierGuard = classifier.NewGuard(classifierClient)
 		api.SetClassifierStats(classifierGuard.Stats)
 		go func() {
 			hctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -672,6 +676,33 @@ func main() {
 		log.Info().Msg("scanning in-process (TAMGA_SCANNER_SERVICE_ADDR not set)")
 	}
 
+	// Shared upstream transport — created once so TCP connections and
+	// TLS sessions are reused across all requests. The per-request
+	// approach of calling defaultStreamingTransport() was killing
+	// performance and exhausting sockets under load.
+	upstreamTransport := proxy.DefaultUpstreamTransport()
+
+	proxyCfg := proxy.HandlerConfig{
+		Registry:           registry,
+		Keys:               apiKeyStore,
+		Classifier:         classifierGuard,
+		OutputOnlyRegistry: outputRegistry,
+		GetPolicy:          getPolicy,
+		RateLimit:          rateLimiter,
+		Config:             cfg,
+		Bus:                eventBus,
+		Budget:             budgetStore,
+		Cache:              promptCache,
+		UpstreamRegistry:   upstreamReg,
+		UpstreamTransport:  upstreamTransport,
+		PricingResolver:    costCalculator,
+		TierEnforcer:       tierEnforcer, // nil-safe — falls back to hardcoded map
+		ScannerPool:        scannerPool,
+		ScannerClient:      scannerClient,
+		ProxyBoundRegistry: proxyBoundRegistry,
+		VaultStore:         vaultStore,
+	}
+
 	root := http.NewServeMux()
 	root.Handle("/api/v1/", api.NewHandler(api.Config{
 		AdminKey:               cfg.AdminKey,
@@ -726,33 +757,13 @@ func main() {
 		ClerkCallbackURL:       cfg.ClerkCallbackURL,
 		AnalyzerHTTPURL:        cfg.AnalyzerHTTPURL,
 		SSOSettings:            ssoStore,
+		Scan: proxy.NewScanHandler(proxyCfg, proxy.ScanOptions{
+			AdminKey:    cfg.AdminKey,
+			Classifier:  scanClassifierGuard,
+			CORSOrigins: cfg.CORSOrigins,
+		}),
 	}))
-	// Shared upstream transport — created once so TCP connections and
-	// TLS sessions are reused across all requests. The per-request
-	// approach of calling defaultStreamingTransport() was killing
-	// performance and exhausting sockets under load.
-	upstreamTransport := proxy.DefaultUpstreamTransport()
-
-	proxy.RegisterRoutes(root, proxy.HandlerConfig{
-		Registry:           registry,
-		Keys:               apiKeyStore,
-		Classifier:         classifierGuard,
-		OutputOnlyRegistry: outputRegistry,
-		GetPolicy:          getPolicy,
-		RateLimit:          rateLimiter,
-		Config:             cfg,
-		Bus:                eventBus,
-		Budget:             budgetStore,
-		Cache:              promptCache,
-		UpstreamRegistry:   upstreamReg,
-		UpstreamTransport:  upstreamTransport,
-		PricingResolver:    costCalculator,
-		TierEnforcer:       tierEnforcer, // nil-safe — falls back to hardcoded map
-		ScannerPool:        scannerPool,
-		ScannerClient:      scannerClient,
-		ProxyBoundRegistry: proxyBoundRegistry,
-		VaultStore:         vaultStore,
-	})
+	proxy.RegisterRoutes(root, proxyCfg)
 
 	// HTTP server
 	srv := &http.Server{

@@ -114,6 +114,11 @@ type Config struct {
 	// ClerkCallbackURL is the base URL for Clerk callback endpoints
 	// (e.g. https://proxy.example.com/auth/clerk).
 	ClerkCallbackURL string
+	// Scan serves POST /scan (the proxy package builds it, around the proxy
+	// path's own scanners and policy evaluation). It authenticates its own
+	// callers and is mounted outside the admin middleware, because a proxy
+	// key must open it and nothing else here. Nil leaves the route out.
+	Scan http.Handler
 	// clerkAPIBaseURL is the Clerk Backend API base URL. Defaults to
 	// https://api.clerk.com/v1. Tests can override via this unexported field.
 	clerkAPIBaseURL string
@@ -138,6 +143,11 @@ func NewHandler(cfg Config) http.Handler {
 	inner.HandleFunc("GET /auth/session", cfg.handleSession)
 	inner.HandleFunc("POST /auth/clerk/saml/callback", handleClerkSamlCallback(&cfg))
 	inner.HandleFunc("POST /auth/clerk/oidc/callback", handleClerkOidcCallback(&cfg))
+
+	// The one route a proxy-scope key opens. See Config.Scan.
+	if cfg.Scan != nil {
+		inner.Handle("POST /scan", cfg.Scan)
+	}
 
 	protected := http.NewServeMux()
 	protected.HandleFunc("GET /stats", cfg.handleStats)
