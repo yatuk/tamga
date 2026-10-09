@@ -39,7 +39,7 @@ export function diffLines(a: string, b: string): DiffLine[] {
   return out;
 }
 
-export function diffStats(lines: DiffLine[]) {
+function diffStats(lines: DiffLine[]) {
   let added = 0;
   let removed = 0;
   for (const line of lines) {

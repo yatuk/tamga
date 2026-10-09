@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 
 export const HEALTH_KEY = ["tamga-health"] as const;
-export const HEALTH_DETAIL_KEY = ["tamga-health-detail"] as const;
+const HEALTH_DETAIL_KEY = ["tamga-health-detail"] as const;
 
 const noop = () => () => {};
 

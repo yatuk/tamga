@@ -8,13 +8,6 @@ export interface AuditEntry {
   detail?: Record<string, unknown>;
 }
 
-export interface EventsFilter {
-  action?: string;
-  provider?: string;
-  range?: TimeRange;
-  request_id?: string;
-}
-
 export interface ApiKey {
   id: string;
   label: string;

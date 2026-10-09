@@ -58,8 +58,6 @@ export const navGroups: NavGroup[] = [
   },
 ];
 
-export const navItems: NavItem[] = navGroups.flatMap((g) => g.items);
-
 /** The nav entry a pathname belongs to; the longest matching href wins. */
 export function findNavItem(pathname: string): { group?: string; item: NavItem } | undefined {
   let best: { group?: string; item: NavItem } | undefined;

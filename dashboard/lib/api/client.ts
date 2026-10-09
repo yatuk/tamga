@@ -26,9 +26,4 @@ export const api = {
 
 // Re-export types for backward-compatible direct imports from @/lib/api/client
 export type { SSOSettings } from "./types-extended";
-export type {
-  ModelPricing,
-  CostBreakdownRow,
-  DailyCostRow,
-  CostsBreakdownResponse,
-} from "./types-billing";
+export type { CostBreakdownRow, DailyCostRow } from "./types-billing";

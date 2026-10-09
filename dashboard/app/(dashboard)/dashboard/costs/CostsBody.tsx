@@ -11,7 +11,7 @@ import { formatInt } from "@/lib/utils/format";
 import type { useCostsPage } from "./useCostsPage";
 
 /** US dollars, with more decimals the smaller the amount. */
-export function formatCost(usd: number): string {
+function formatCost(usd: number): string {
   if (usd === 0) return "$0";
   if (usd < 0.01) return `$${usd.toFixed(4)}`;
   if (usd < 1) return `$${usd.toFixed(3)}`;
@@ -19,7 +19,7 @@ export function formatCost(usd: number): string {
   return `$${formatInt(Math.round(usd))}`;
 }
 
-export function formatTokens(n: number): string {
+function formatTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return String(Math.round(n));
