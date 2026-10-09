@@ -252,15 +252,18 @@ test.describe("Team", () => {
     try {
       await page.goto("/dashboard/team");
       const select = page.locator(`[id="role-${member.user_id}"]`);
+      const saveRole = page.getByRole("button", { name: /^Save/ });
       await expect(select).toHaveValue(member.role);
 
       await select.selectOption(other);
+      await saveRole.click();
       await expect(toastWith(page, "Role updated")).toBeVisible();
       await expect(select).toHaveValue(other);
       expect((await team(request)).items?.find((m) => m.user_id === member.user_id)?.role).toBe(other);
 
       await expect(select).toBeEnabled();
       await select.selectOption(member.role);
+      await saveRole.click();
       await expect(select).toHaveValue(member.role);
     } finally {
       await request.put(`${API}/api/v1/team/${encodeURIComponent(member.user_id)}/role`, {

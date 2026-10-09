@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Button,
@@ -28,6 +28,53 @@ const ROLES: { role: TeamRole; name: string; can: string }[] = [
   { role: "analyst", name: "Analyst", can: "Triage incidents and edit policies and patterns." },
   { role: "viewer", name: "Viewer", can: "Read the overview, incidents and reports." },
 ];
+
+/**
+ * The role is picked first and saved second. A select that saved on change
+ * would save every role the arrow keys pass through on the way to the one meant.
+ */
+function RoleCell({
+  member,
+  lastAdmin,
+  pending,
+  onSave,
+}: {
+  member: TeamMember;
+  lastAdmin: boolean;
+  pending: boolean;
+  onSave: (role: TeamRole) => void;
+}) {
+  const [draft, setDraft] = useState<TeamRole>(member.role);
+  const changed = draft !== member.role;
+  return (
+    <span className="t-rolecell">
+      <Select
+        id={`role-${member.user_id}`}
+        size="sm"
+        inline
+        hideLabel
+        labelText={`Role of ${member.name || member.user_id}`}
+        value={draft}
+        disabled={pending}
+        onChange={(e) => setDraft(e.target.value as TeamRole)}
+      >
+        {ROLES.map((r) => (
+          <SelectItem key={r.role} value={r.role} text={r.name} />
+        ))}
+      </Select>
+      {changed ? (
+        <>
+          <Button kind="primary" size="sm" disabled={pending} onClick={() => onSave(draft)}>
+            {lastAdmin ? "Save, leaving no admin" : "Save role"}
+          </Button>
+          <Button kind="ghost" size="sm" disabled={pending} onClick={() => setDraft(member.role)}>
+            Cancel
+          </Button>
+        </>
+      ) : null}
+    </span>
+  );
+}
 
 export default function TeamPage() {
   const qc = useQueryClient();
@@ -119,20 +166,14 @@ export default function TeamPage() {
                       </TableCell>
                       <TableCell>{m.email || <span className="t-note">Not known</span>}</TableCell>
                       <TableCell>
-                        <Select
-                          id={`role-${m.user_id}`}
-                          size="sm"
-                          inline
-                          hideLabel
-                          labelText={`Role of ${m.name || m.user_id}`}
-                          value={m.role}
-                          disabled={setRole.isPending}
-                          onChange={(e) => setRole.mutate({ id: m.user_id, role: e.target.value as TeamRole })}
-                        >
-                          {ROLES.map((r) => (
-                            <SelectItem key={r.role} value={r.role} text={r.name} />
-                          ))}
-                        </Select>
+                        <RoleCell
+                          // A saved role is a new starting point for the draft.
+                          key={`${m.user_id}|${m.role}`}
+                          member={m}
+                          lastAdmin={m.role === "admin" && admins === 1}
+                          pending={setRole.isPending}
+                          onSave={(role) => setRole.mutate({ id: m.user_id, role })}
+                        />
                       </TableCell>
                       <TableCell>{m.updated_at ? dayLabel(m.updated_at) : ""}</TableCell>
                     </TableRow>
