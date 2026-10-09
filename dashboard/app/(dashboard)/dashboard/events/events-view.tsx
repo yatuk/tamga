@@ -30,7 +30,7 @@ export function EventsView() {
   const { filters, events, total, windowTotals } = p;
   const filtered = filters.actions.length > 0 || filters.provider !== "";
   const fresh = useFresh(events, !p.isLoading);
-  const { openId, open, toggle, close } = useOpenEvent(events, p.adminKey);
+  const { openId, open, missing, toggle, close } = useOpenEvent(events, p.adminKey);
   const left = total - events.length;
 
   return (
@@ -80,7 +80,7 @@ export function EventsView() {
           </Button>
         ) : null}
 
-        <span className="t-note" style={{ marginLeft: "auto", paddingBottom: "0.6rem" }}>
+        <span className="t-note t-count">
           {events.length.toLocaleString("en")} of {total.toLocaleString("en")} loaded
         </span>
         {/* The feed counts what has arrived since the list was read; the rows come in when asked for. */}
@@ -113,6 +113,7 @@ export function EventsView() {
           fresh={fresh}
           openId={openId}
           open={open}
+          missing={missing}
           onToggle={toggle}
           onClose={close}
           adminKey={p.adminKey}

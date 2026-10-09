@@ -20,6 +20,7 @@ import { api } from "@/lib/api";
 import type { IncidentStatus, SecurityEvent, SecurityEventDetail } from "@/lib/api/types-core";
 import { useStringParam } from "@/hooks/useUrlState";
 import { EXPRESSIVE, PRODUCTIVE } from "./motion";
+import { useEscape, usePanelFocus, useRows } from "./rows";
 import { ACTION_WORDS, clockTime, dayLabel, kindName, leadFinding, providerName, roleName, typeName } from "./names";
 
 /** A request the proxy only looked at: nothing to triage. */
@@ -46,19 +47,13 @@ export function useOpenEvent(events: SecurityEvent[], adminKey: string) {
     retry: false,
   });
 
-  // Escape closes the panel, as it would a dialog.
-  useEffect(() => {
-    if (!openId) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpenId("");
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-    // The setter is stable for the key.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openId]);
+  useEscape(!!openId, () => setOpenId(""));
 
   return {
     openId,
     open: listed ?? (openId ? fetched.data : undefined),
+    /** The URL names a request the proxy no longer has. */
+    missing: !!openId && !listed && fetched.isError,
     toggle: (id: string) => setOpenId(openId === id ? "" : id),
     close: () => setOpenId(""),
   };
@@ -100,8 +95,8 @@ export function ActionMark({ action }: { action?: string }) {
 
 /**
  * Requests as rows, with the open one shown beside them. The panel's track
- * widens in CSS and the panel slides into it; the table drops its last two
- * columns to make room.
+ * widens in CSS and the panel slides into it; the table drops the columns the
+ * panel repeats, to make room.
  */
 export function EventTable({
   events,
@@ -110,6 +105,7 @@ export function EventTable({
   fresh,
   openId,
   open,
+  missing,
   onToggle,
   onClose,
   adminKey,
@@ -123,6 +119,8 @@ export function EventTable({
   fresh?: Set<string>;
   openId: string;
   open?: SecurityEvent;
+  /** The request named in the URL could not be read. */
+  missing?: boolean;
   onToggle: (id: string) => void;
   onClose: () => void;
   adminKey: string;
@@ -130,18 +128,25 @@ export function EventTable({
   /** Under the table: paging. */
   after?: ReactNode;
 }) {
+  const shown = !!open || !!missing;
+  const row = useRows(
+    events.map((e) => e.request_id),
+    openId,
+  );
+  const panel = usePanelFocus<HTMLElement>(openId, shown);
+
   return (
-    <div className="t-work" data-open={!!open}>
+    <div className="t-work" data-open={shown}>
       <TableContainer>
-        <Table size="sm" aria-label={label}>
+        <Table size="sm" aria-label={`${label}. Arrow keys move between requests, Enter opens one.`}>
           <TableHead>
             <TableRow>
               <TableHeader>Time</TableHeader>
               <TableHeader>Action</TableHeader>
               <TableHeader>Finding</TableHeader>
-              <TableHeader>Found in</TableHeader>
-              {open ? null : <TableHeader>Provider and model</TableHeader>}
-              {open ? null : <TableHeader>Request</TableHeader>}
+              {shown ? null : <TableHeader>Found in</TableHeader>}
+              {shown ? null : <TableHeader>Provider and model</TableHeader>}
+              {shown ? null : <TableHeader>Request</TableHeader>}
             </TableRow>
           </TableHead>
           <TableBody key={swapKey} data-swap="">
@@ -153,15 +158,8 @@ export function EventTable({
                   key={e.request_id}
                   data-selected={selected}
                   data-new={fresh?.has(e.request_id)}
-                  onClick={() => onToggle(e.request_id)}
-                  tabIndex={0}
-                  aria-expanded={selected}
-                  onKeyDown={(ev) => {
-                    if (ev.key === "Enter" || ev.key === " ") {
-                      ev.preventDefault();
-                      onToggle(e.request_id);
-                    }
-                  }}
+                  aria-current={selected ? "true" : undefined}
+                  {...row(e.request_id, () => onToggle(e.request_id))}
                 >
                   <TableCell style={{ fontVariantNumeric: "tabular-nums" }}>
                     {clockTime(e.timestamp)} <span className="t-note">{dayLabel(e.timestamp)}</span>
@@ -173,14 +171,14 @@ export function EventTable({
                     {f ? kindName(f.category) : <span className="t-note">Nothing found</span>}
                     {e.findings_count > 1 ? <span className="t-note"> and {e.findings_count - 1} more</span> : null}
                   </TableCell>
-                  <TableCell>{f ? roleName(f.role) : ""}</TableCell>
-                  {open ? null : (
+                  {shown ? null : <TableCell>{f ? roleName(f.role) : ""}</TableCell>}
+                  {shown ? null : (
                     <TableCell>
                       {providerName(e.provider)}
                       {e.model ? <span className="t-note">, {e.model}</span> : null}
                     </TableCell>
                   )}
-                  {open ? null : (
+                  {shown ? null : (
                     <TableCell>
                       <span className="t-data">{e.request_id.slice(0, 13)}</span>
                     </TableCell>
@@ -195,17 +193,34 @@ export function EventTable({
       </TableContainer>
 
       <AnimatePresence initial={false}>
-        {open ? (
+        {shown ? (
           <motion.aside
             key="detail"
+            ref={panel}
+            tabIndex={-1}
             className="t-detail"
             aria-label="Request detail"
             initial={{ x: 40, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
-            exit={{ x: 40, opacity: 0 }}
+            exit={{ x: 40, opacity: 0, transition: { duration: 0.16, ease: PRODUCTIVE } }}
             transition={{ duration: 0.28, ease: EXPRESSIVE }}
           >
-            <EventDetail event={open} adminKey={adminKey} onClose={onClose} />
+            {open ? (
+              <EventDetail event={open} adminKey={adminKey} onClose={onClose} />
+            ) : (
+              <header>
+                <div>
+                  <h2>This request is no longer stored</h2>
+                  <p className="t-note" style={{ marginTop: "0.25rem" }}>
+                    The link names request <span className="t-data">{openId}</span>, which the proxy does not have. It may be older than the
+                    retention window.
+                  </p>
+                </div>
+                <IconButton kind="ghost" size="sm" label="Close" align="left" onClick={onClose}>
+                  <Close />
+                </IconButton>
+              </header>
+            )}
           </motion.aside>
         ) : null}
       </AnimatePresence>
@@ -242,7 +257,7 @@ function EventDetail({ event, adminKey, onClose }: { event: SecurityEvent; admin
             {event.model ? `, ${event.model}` : ""}.
           </p>
         </div>
-        <IconButton kind="ghost" size="sm" label="Close (Esc)" align="left" onClick={onClose}>
+        <IconButton kind="ghost" size="sm" label="Close" align="left" onClick={onClose}>
           <Close />
         </IconButton>
       </header>
@@ -368,8 +383,8 @@ function Triage({ requestId, adminKey }: { requestId: string; adminKey: string }
         </motion.div>
       </AnimatePresence>
       {triage.isError ? (
-        <p className="t-note" style={{ marginTop: "0.5rem", color: "var(--tamga-stamp)" }}>
-          That did not save. The proxy refused the change.
+        <p className="t-failed" role="alert">
+          That did not save. The proxy refused the change. Try again.
         </p>
       ) : null}
     </section>

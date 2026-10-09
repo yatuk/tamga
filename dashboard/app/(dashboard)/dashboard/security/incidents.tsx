@@ -46,7 +46,7 @@ export function Incidents() {
   });
 
   const stopped = incidents.filter((e) => e.action === "BLOCK").length;
-  const { openId, open, toggle, close } = useOpenEvent(incidents, adminKey);
+  const { openId, open, missing, toggle, close } = useOpenEvent(incidents, adminKey);
 
   return (
     <>
@@ -87,7 +87,7 @@ export function Incidents() {
         </ContentSwitcher>
         <Dropdown
           id="provider"
-          titleText=""
+          titleText="Provider"
           hideLabel
           label="Provider"
           size="md"
@@ -104,7 +104,7 @@ export function Incidents() {
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-        <span className="t-note" style={{ marginLeft: "auto", paddingBottom: "0.6rem" }}>
+        <span className="t-note t-count">
           {rows.length} of {incidents.length} shown
         </span>
       </div>
@@ -122,6 +122,7 @@ export function Incidents() {
           fresh={fresh}
           openId={openId}
           open={open}
+          missing={missing}
           onToggle={toggle}
           onClose={close}
           adminKey={adminKey}

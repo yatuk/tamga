@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "motion/react";
 import {
@@ -22,7 +22,9 @@ import {
 import { Close, Renew } from "@carbon/icons-react";
 import { EXPRESSIVE, PRODUCTIVE } from "@/components/console/motion";
 import { clockTime, counted, dayLabel } from "@/components/console/names";
+import { Pager } from "@/components/console/events";
 import { DataNotice, PageHead, Section, Shares } from "@/components/console/page";
+import { useEscape, usePanelFocus, useRows } from "@/components/console/rows";
 import { useAdminKey } from "@/hooks/useAdminKey";
 import { useStringParam } from "@/hooks/useUrlState";
 import { api, type AuditEntry } from "@/lib/api";
@@ -33,13 +35,15 @@ import { humanizeAuditKind } from "@/lib/humanize";
  * the list is newest first, so every entry moves down when one is added.
  */
 const idOf = (it: AuditEntry & { hash?: string }, i: number, count: number) => it.hash || `${it.timestamp}|${it.kind}|${count - i}`;
+const PAGE_SIZE = 50;
 
 export default function AuditPage() {
   const [adminKey] = useAdminKey();
   const [q, setQ] = useStringParam("q");
   const [kind, setKind] = useStringParam("kind");
   const [actor, setActor] = useStringParam("actor");
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openId, setOpenId] = useStringParam("entry");
+  const [paged, setPaged] = useState({ of: "", page: 1 });
   const queryClient = useQueryClient();
 
   const log = useQuery({
@@ -79,13 +83,20 @@ export default function AuditPage() {
     });
   }, [items, q, kind, actor]);
 
+  // A page belongs to the filters it was turned under; other filters start at the first.
+  const filters = `${q}|${kind}|${actor}`;
+  const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const page = Math.min(paged.of === filters ? paged.page : 1, pages);
+  const shown = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
   const open = items.find((r) => r.id === openId)?.it;
-  useEffect(() => {
-    if (!openId) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpenId(null);
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [openId]);
+  const toggle = (id: string) => setOpenId(openId === id ? "" : id);
+  useEscape(!!openId, () => setOpenId(""));
+  const row = useRows(
+    shown.map((r) => r.id),
+    openId,
+  );
+  const panel = usePanelFocus<HTMLElement>(open ? openId : "", !!open);
 
   const total = log.data?.total ?? 0;
   const c = chain.data;
@@ -134,6 +145,12 @@ export default function AuditPage() {
 
       <DataNotice adminKey={adminKey} failed={log.isError} />
 
+      {byKind.length > 0 ? (
+        <Section id="frequent" title="Most frequent actions" style={{ marginTop: "2rem", maxWidth: "44rem" }}>
+          <Shares head={["Action", "Entries"]} rows={byKind.map(([k, value]) => ({ label: humanizeAuditKind(k), value }))} empty="" />
+        </Section>
+      ) : null}
+
       <div className="t-filters">
         <div style={{ flex: "1 0 18rem", maxWidth: "28rem" }}>
           <Search size="md" labelText="Search the log" placeholder="Actor, target or action" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -163,8 +180,8 @@ export default function AuditPage() {
             Clear filters
           </Button>
         ) : null}
-        <span className="t-note" style={{ marginLeft: "auto", paddingBottom: "0.6rem" }}>
-          {rows.length} of {items.length} shown
+        <span className="t-note t-count">
+          {rows.length} of {items.length} match
         </span>
       </div>
 
@@ -173,7 +190,7 @@ export default function AuditPage() {
           <DataTableSkeleton columnCount={4} rowCount={10} showHeader={false} showToolbar={false} />
         ) : (
           <TableContainer>
-            <Table size="sm" aria-label="Audit entries">
+            <Table size="sm" aria-label="Audit entries. Arrow keys move between entries, Enter opens one.">
               <TableHead>
                 <TableRow>
                   <TableHeader>Time</TableHeader>
@@ -182,21 +199,9 @@ export default function AuditPage() {
                   {open ? null : <TableHeader>To</TableHeader>}
                 </TableRow>
               </TableHead>
-              <TableBody key={`${kind}|${actor}`} data-swap="">
-                {rows.map(({ it, id }) => (
-                  <TableRow
-                    key={id}
-                    data-selected={id === openId}
-                    tabIndex={0}
-                    aria-expanded={id === openId}
-                    onClick={() => setOpenId((cur) => (cur === id ? null : id))}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        setOpenId((cur) => (cur === id ? null : id));
-                      }
-                    }}
-                  >
+              <TableBody key={`${kind}|${actor}|${page}`} data-swap="">
+                {shown.map(({ it, id }) => (
+                  <TableRow key={id} data-selected={id === openId} aria-current={id === openId ? "true" : undefined} {...row(id, () => toggle(id))}>
                     <TableCell style={{ fontVariantNumeric: "tabular-nums" }}>
                       {clockTime(it.timestamp)} <span className="t-note">{dayLabel(it.timestamp)}</span>
                     </TableCell>
@@ -212,6 +217,7 @@ export default function AuditPage() {
               </TableBody>
             </Table>
             {rows.length === 0 ? <p className="t-empty">{filtering ? "No entry matches these filters." : "The log is empty."}</p> : null}
+            <Pager page={page} pages={pages} onPage={(next) => setPaged({ of: filters, page: next })} />
           </TableContainer>
         )}
 
@@ -219,11 +225,13 @@ export default function AuditPage() {
           {open ? (
             <motion.aside
               key="detail"
+              ref={panel}
+              tabIndex={-1}
               className="t-detail"
               aria-label="Audit entry"
               initial={{ x: 40, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
-              exit={{ x: 40, opacity: 0 }}
+              exit={{ x: 40, opacity: 0, transition: { duration: 0.16, ease: PRODUCTIVE } }}
               transition={{ duration: 0.28, ease: EXPRESSIVE }}
             >
               <motion.div key={openId} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, ease: PRODUCTIVE }}>
@@ -234,7 +242,7 @@ export default function AuditPage() {
                       {open.kind}
                     </p>
                   </div>
-                  <IconButton kind="ghost" size="sm" label="Close (Esc)" align="left" onClick={() => setOpenId(null)}>
+                  <IconButton kind="ghost" size="sm" label="Close" align="left" onClick={() => setOpenId("")}>
                     <Close />
                   </IconButton>
                 </header>
@@ -267,12 +275,6 @@ export default function AuditPage() {
           ) : null}
         </AnimatePresence>
       </div>
-
-      {byKind.length > 0 ? (
-        <Section id="frequent" title="What is done most" note="Among the entries shown" style={{ marginTop: "3rem", maxWidth: "44rem" }}>
-          <Shares head={["Action", "Entries"]} rows={byKind.map(([k, value]) => ({ label: humanizeAuditKind(k), value }))} empty="" />
-        </Section>
-      ) : null}
     </>
   );
 }
