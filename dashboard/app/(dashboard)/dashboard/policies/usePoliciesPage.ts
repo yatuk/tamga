@@ -84,7 +84,9 @@ export function usePoliciesPage() {
       const subtitle =
         validation.warnings?.length ? `Saved with ${validation.warnings.length} warnings.` : "The proxy is now enforcing it.";
       toast.success("Policy saved", subtitle);
-      await refetch();
+      // The proxy writes the document its own way, so take the draft from what it now runs.
+      const saved = stringifyPolicy((await refetch()).data?.[0] ?? null);
+      if (saved) setDraft(saved);
     } catch (e) {
       toast.error("Could not save the policy", (e as Error).message);
     } finally {

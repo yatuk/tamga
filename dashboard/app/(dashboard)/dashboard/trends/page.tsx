@@ -1,95 +1,94 @@
 "use client";
 
-import { BarList } from "@/components/app/bar-list";
-import { TimeSeriesChart, type ChartSeries } from "@/components/app/charts";
-import { PageHeader } from "@/components/app/page-header";
-import { Panel } from "@/components/app/panel";
-import { Stat, StatGrid } from "@/components/app/stat";
-import { AdminKeyRequired, EmptyState, ErrorState, SkeletonRows } from "@/components/app/states";
-import { TimeRangeToggle } from "@/components/app/time-range";
-import { humanizeFindingType } from "@/lib/humanize";
-import { formatInt } from "@/lib/utils/format";
+import { Trace } from "@/components/console/charts";
+import { Count } from "@/components/console/motion";
+import { bucketName, RANGE_WORDS, typeName } from "@/components/console/names";
+import { DataNotice, PageHead, RangeSwitch, Section, Shares, Statement } from "@/components/console/page";
 import { useTrendsPage } from "./useTrendsPage";
 
-const SERIES: ChartSeries[] = [
-  { key: "attempted", label: "Scanned", color: "var(--chart-1)" },
-  { key: "caught", label: "Enforced", color: "var(--status-critical)" },
-];
+type Point = { total: number; blocked: number; redacted?: number; warned?: number };
+
+const percent = (n: number) => `${n.toFixed(n < 10 ? 1 : 0)}%`;
+const acted = (p: Point) => p.blocked + (p.redacted || 0) + (p.warned || 0);
+
+/** The acted-on share of each half of the window, when both halves saw traffic. */
+function halves(points: Point[]) {
+  const mid = Math.floor(points.length / 2);
+  const share = (part: Point[]) => {
+    const total = part.reduce((sum, p) => sum + p.total, 0);
+    return total > 0 ? (part.reduce((sum, p) => sum + acted(p), 0) / total) * 100 : null;
+  };
+  const first = share(points.slice(0, mid));
+  const second = share(points.slice(mid));
+  return first === null || second === null ? null : { first, second };
+}
 
 export default function TrendsPage() {
-  const { adminKey, error, refetch, range, setRange, isLoading, totals, chartData, byType } = useTrendsPage();
-  const rate = totals.attempted > 0 ? ((totals.caught / totals.attempted) * 100).toFixed(1) : null;
-
-  const header = (
-    <PageHeader
-      title="Detection trends"
-      description="How much traffic was scanned and how much of it a policy acted on."
-      actions={<TimeRangeToggle value={range} onChange={setRange} />}
-    />
-  );
-
-  if (!adminKey) {
-    return (
-      <div className="space-y-6">
-        {header}
-        <Panel>
-          <AdminKeyRequired />
-        </Panel>
-      </div>
-    );
-  }
+  const { adminKey, error, range, setRange, isLoading, totals, points, hourly, byType } = useTrendsPage();
+  const rate = totals.attempted > 0 ? (totals.caught / totals.attempted) * 100 : 0;
+  const split = halves(points);
+  const unit = hourly ? "hour" : "day";
 
   return (
-    <div className="space-y-6">
-      {header}
+    <>
+      <PageHead
+        title="Detection trends"
+        lede={`How much of the traffic a policy acted on in ${RANGE_WORDS[range]}, and whether that share is moving.`}
+      >
+        <RangeSwitch value={range} onChange={setRange} />
+      </PageHead>
 
-      <StatGrid>
-        <Stat label="Requests scanned" value={formatInt(totals.attempted)} />
-        <Stat
-          label="Enforced"
-          value={formatInt(totals.caught)}
-          tone={totals.caught > 0 ? "critical" : "default"}
-          tooltip="Requests that were blocked, redacted or warned."
-        />
-        <Stat label="Passed" value={formatInt(totals.passed)} tooltip="Requests forwarded unchanged." />
-        <Stat
-          label="Enforcement rate"
-          value={rate === null ? "—" : `${rate}%`}
-          hint={rate === null ? "No traffic in this window" : undefined}
-          tooltip="Enforced requests as a share of everything scanned."
-        />
-      </StatGrid>
+      <DataNotice adminKey={adminKey} failed={!!error} />
 
-      <div className="grid gap-6 xl:grid-cols-3">
-        <Panel title={`Scanned and enforced · ${range}`} className="xl:col-span-2">
-          {error ? (
-            <ErrorState error={error} onRetry={() => void refetch()} />
-          ) : isLoading ? (
-            <SkeletonRows rows={6} />
-          ) : totals.attempted === 0 ? (
-            <EmptyState icon="chart" title="No traffic in this window" suggestion="Pick a longer range." />
+      <Statement
+        loading={isLoading}
+        figure={<Count value={rate} format={percent} />}
+        sentence={
+          totals.attempted === 0
+            ? `of nothing: no request went through in ${RANGE_WORDS[range]}.`
+            : "of requests were stopped, redacted or warned about."
+        }
+        rest={
+          split ? (
+            <>
+              It was <b>{percent(split.first)}</b> in the first half of the window and <b>{percent(split.second)}</b> in the second.
+            </>
+          ) : undefined
+        }
+        facts={[
+          ["Requests scanned", totals.attempted.toLocaleString("en")],
+          ["Acted on", totals.caught.toLocaleString("en")],
+          ["Passed untouched", totals.passed.toLocaleString("en")],
+          ["Kinds of finding seen", byType.length || "–"],
+        ]}
+      />
+
+      <div className="t-columns">
+        <Section id="share" title={`Share acted on, by ${unit}`} note="A break in the line is a stretch with no traffic.">
+          {totals.attempted === 0 ? (
+            <p className="t-empty">No traffic in this window.</p>
           ) : (
-            <div className="p-4">
-              <TimeSeriesChart
-                data={chartData}
-                xKey="time"
-                series={SERIES}
-                label={`Requests scanned and enforced over the last ${range}`}
-              />
-            </div>
+            <Trace
+              label={`Share of requests acted on, by ${unit}`}
+              idle={`Point at the line to read one ${unit}.`}
+              format={percent}
+              points={points.map((p) => ({
+                key: p.t,
+                name: bucketName(p.t, hourly),
+                value: p.total > 0 ? (acted(p) / p.total) * 100 : null,
+              }))}
+            />
           )}
-        </Panel>
+        </Section>
 
-        <Panel title="Findings by type" description="Detections, not requests">
-          {isLoading ? (
-            <SkeletonRows rows={4} />
-          ) : byType.length === 0 ? (
-            <EmptyState icon="shield" title="No findings" description="Nothing was detected in this window." />
-          ) : (
-            <BarList items={byType.map(([type, value]) => ({ label: humanizeFindingType(type), value }))} />
-          )}
-        </Panel>
+        <Section id="types" title="What was found" note="Findings, not requests">
+          <Shares
+            head={["Kind", "Findings"]}
+            rows={byType.map(([type, value]) => ({ label: typeName(type), value }))}
+            empty="Nothing was found in this window."
+          />
+        </Section>
       </div>
-    </div>
+    </>
   );
 }

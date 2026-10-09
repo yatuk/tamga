@@ -1,40 +1,50 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { RefreshCw, Search } from "lucide-react";
-import { BarList } from "@/components/app/bar-list";
-import { DetailList } from "@/components/app/detail-list";
-import { FormField } from "@/components/app/form-field";
-import { PageHeader } from "@/components/app/page-header";
-import { Panel } from "@/components/app/panel";
-import { Stat, StatGrid } from "@/components/app/stat";
-import { AdminKeyRequired, EmptyState, ErrorState, SkeletonRows } from "@/components/app/states";
-import { StatusBadge, type Tone } from "@/components/app/status-badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { AnimatePresence, motion } from "motion/react";
+import {
+  Button,
+  CodeSnippet,
+  DataTableSkeleton,
+  IconButton,
+  Search,
+  Select,
+  SelectItem,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@carbon/react";
+import { Close, Renew } from "@carbon/icons-react";
+import { EXPRESSIVE, PRODUCTIVE } from "@/components/console/motion";
+import { clockTime, counted, dayLabel } from "@/components/console/names";
+import { DataNotice, PageHead, Section, Shares } from "@/components/console/page";
 import { useAdminKey } from "@/hooks/useAdminKey";
 import { useStringParam } from "@/hooks/useUrlState";
 import { api, type AuditEntry } from "@/lib/api";
 import { humanizeAuditKind } from "@/lib/humanize";
-import { toLowerEn } from "@/lib/utils/case";
-import { formatInt } from "@/lib/utils/format";
 
-/** The area of the product an entry belongs to: "policy.reload" is "policy". */
+/** The part of the product an entry is about: "policy.reload" is "policy". */
 const areaOf = (kind: string) => kind.split(".")[0] || kind;
+/**
+ * An entry is known by its hash in the chain. Its place in the list is no use:
+ * the list is newest first, so every entry moves down when one is added.
+ */
+const idOf = (it: AuditEntry & { hash?: string }, i: number, count: number) => it.hash || `${it.timestamp}|${it.kind}|${count - i}`;
 
 export default function AuditPage() {
   const [adminKey] = useAdminKey();
   const [q, setQ] = useStringParam("q");
   const [kind, setKind] = useStringParam("kind");
   const [actor, setActor] = useStringParam("actor");
-  const [selected, setSelected] = useState<AuditEntry | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
-  const { data, isLoading, error, refetch } = useQuery({
+  const log = useQuery({
     queryKey: ["tamga-audit", adminKey],
     queryFn: () => api.getAuditLog(adminKey, 500),
     enabled: !!adminKey,
@@ -44,11 +54,7 @@ export default function AuditPage() {
 
   // The log is a hash chain: every entry carries the hash of the one before
   // it. The verify endpoint walks the chain and reports the first broken link.
-  const {
-    data: chain,
-    isFetching: chainLoading,
-    refetch: refetchChain,
-  } = useQuery({
+  const chain = useQuery({
     queryKey: ["tamga-audit-chain", adminKey],
     queryFn: () => api.verifyAuditChain(adminKey),
     enabled: !!adminKey,
@@ -56,235 +62,221 @@ export default function AuditPage() {
     retry: 1,
   });
 
-  const items = useMemo(() => data?.items ?? [], [data]);
-  const kinds = useMemo(() => [...new Set(items.map((it) => it.kind))].sort(), [items]);
-  const actors = useMemo(() => [...new Set(items.map((it) => it.actor).filter(Boolean) as string[])].sort(), [items]);
-
+  const items = useMemo(() => (log.data?.items ?? []).map((it, i, all) => ({ it, id: idOf(it, i, all.length) })), [log.data]);
+  const kinds = useMemo(() => [...new Set(items.map(({ it }) => it.kind))].sort(), [items]);
+  const actors = useMemo(() => [...new Set(items.map(({ it }) => it.actor).filter(Boolean) as string[])].sort(), [items]);
   const byKind = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const it of items) counts.set(it.kind, (counts.get(it.kind) ?? 0) + 1);
+    for (const { it } of items) counts.set(it.kind, (counts.get(it.kind) ?? 0) + 1);
     return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
   }, [items]);
 
-  const filtered = useMemo(() => {
-    const query = toLowerEn(q.trim());
-    return items.filter((it) => {
+  const rows = useMemo(() => {
+    const query = q.trim().toLowerCase();
+    return items.filter(({ it }) => {
       if (kind && it.kind !== kind) return false;
       if (actor && (it.actor || "") !== actor) return false;
       if (!query) return true;
-      return [it.kind, it.actor || "", it.target || ""].some((field) => toLowerEn(field).includes(query));
+      return [it.kind, it.actor || "", it.target || ""].some((field) => field.toLowerCase().includes(query));
     });
   }, [items, q, kind, actor]);
 
-  // An empty log has nothing to verify; that is a neutral fact, not a pass.
-  const chainState: { label: string; tone: Tone } = !chain
-    ? { label: "Chain not verified", tone: "neutral" }
-    : !chain.chain_ok
-      ? { label: `Chain broken at entry ${chain.broken_at ?? "?"}`, tone: "critical" }
-      : chain.entries === 0
-        ? { label: "No entries to verify", tone: "neutral" }
-        : { label: `Chain intact · ${formatInt(chain.entries)} entries`, tone: "pass" };
+  const open = items.find((r) => r.id === openId)?.it;
+  useEffect(() => {
+    if (!openId) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpenId(null);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [openId]);
 
+  const total = log.data?.total ?? 0;
+  const c = chain.data;
+  const broken = c && !c.chain_ok;
   const filtering = Boolean(q || kind || actor);
-  const clearFilters = () => {
-    setQ("");
-    setKind("");
-    setActor("");
-  };
 
-  const header = (
-    <PageHeader
-      title="Audit log"
-      description="Who changed what in this console. Entries are hash-chained, so tampering is detectable."
-      actions={
-        adminKey ? (
+  return (
+    <>
+      <PageHead
+        title="Audit log"
+        lede={
+          total === 0
+            ? "Who changed what in this console. Nothing has been recorded yet: changes to policies, keys and integrations will appear here."
+            : `Who changed what in this console: ${counted(total, "entry", "entries")}${actors.length > 0 ? ` by ${counted(actors.length, "actor")}` : ""}${
+                items.length < total ? `, the latest ${items.length} shown` : ""
+              }. Each entry carries the hash of the one before it, so a change to the record shows.`
+        }
+      >
+        {adminKey ? (
           <>
-            <StatusBadge tone={chainState.tone}>{chainState.label}</StatusBadge>
+            {/* An empty log has nothing to verify; that is a plain fact, not a pass. */}
+            {broken ? (
+              <span className="t-action" data-action="BLOCK">
+                Chain broken at entry {c.broken_at ?? "?"}
+              </span>
+            ) : (
+              <span className="t-note">
+                {!c ? "Chain not checked yet" : c.entries === 0 ? "Nothing to verify yet" : `Chain intact over ${counted(c.entries, "entry", "entries")}`}
+              </span>
+            )}
             <Button
+              kind="tertiary"
               size="sm"
-              variant="outline"
-              disabled={chainLoading}
+              renderIcon={Renew}
+              disabled={chain.isFetching}
               onClick={() => {
-                void refetchChain();
+                void chain.refetch();
                 void queryClient.invalidateQueries({ queryKey: ["tamga-audit", adminKey] });
               }}
             >
-              <RefreshCw className={chainLoading ? "motion-safe:animate-spin" : undefined} />
-              {chainLoading ? "Verifying…" : "Verify Chain"}
+              {chain.isFetching ? "Verifying" : "Verify the chain"}
             </Button>
           </>
-        ) : null
-      }
-    />
-  );
+        ) : null}
+      </PageHead>
 
-  if (!adminKey) {
-    return (
-      <div className="space-y-6">
-        {header}
-        <Panel>
-          <AdminKeyRequired />
-        </Panel>
+      <DataNotice adminKey={adminKey} failed={log.isError} />
+
+      <div className="t-filters">
+        <div style={{ flex: "1 0 18rem", maxWidth: "28rem" }}>
+          <Search size="md" labelText="Search the log" placeholder="Actor, target or action" value={q} onChange={(e) => setQ(e.target.value)} />
+        </div>
+        <Select id="audit-kind" labelText="Action" hideLabel value={kind} onChange={(e) => setKind(e.target.value)}>
+          <SelectItem value="" text="Any action" />
+          {kinds.map((k) => (
+            <SelectItem key={k} value={k} text={humanizeAuditKind(k)} />
+          ))}
+        </Select>
+        <Select id="audit-actor" labelText="Actor" hideLabel value={actor} onChange={(e) => setActor(e.target.value)}>
+          <SelectItem value="" text="Anyone" />
+          {actors.map((a) => (
+            <SelectItem key={a} value={a} text={a} />
+          ))}
+        </Select>
+        {filtering ? (
+          <Button
+            kind="ghost"
+            size="md"
+            onClick={() => {
+              setQ("");
+              setKind("");
+              setActor("");
+            }}
+          >
+            Clear filters
+          </Button>
+        ) : null}
+        <span className="t-note" style={{ marginLeft: "auto", paddingBottom: "0.6rem" }}>
+          {rows.length} of {items.length} shown
+        </span>
       </div>
-    );
-  }
 
-  return (
-    <div className="space-y-6">
-      {header}
-
-      <StatGrid>
-        <Stat label="Entries" value={formatInt(data?.total ?? 0)} hint={items.length < (data?.total ?? 0) ? `Showing the latest ${items.length}` : undefined} />
-        <Stat label="Actors" value={actors.length} />
-        <Stat label="Kinds of action" value={kinds.length} />
-        <Stat
-          label="Chain"
-          value={!chain || chain.entries === 0 ? "—" : chain.chain_ok ? "Intact" : "Broken"}
-          tone={!chain || chain.entries === 0 ? "default" : chain.chain_ok ? "pass" : "critical"}
-          hint={chain?.entries === 0 ? "Nothing to verify yet" : undefined}
-          tooltip="Whether every entry still links to the one before it."
-        />
-      </StatGrid>
-
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
-        <Panel
-          title="Entries"
-          aside={
-            <span className="font-mono tabular-nums">
-              {filtering ? `${formatInt(filtered.length)} of ${formatInt(items.length)}` : formatInt(items.length)}
-            </span>
-          }
-        >
-          <div className="grid gap-3 border-b p-4 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
-            <FormField label="Search" htmlFor="audit-q">
-              <div className="relative">
-                <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-                <Input
-                  id="audit-q"
-                  name="q"
-                  type="search"
-                  autoComplete="off"
-                  spellCheck={false}
-                  className="pl-9"
-                  placeholder="Actor, target or kind…"
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                />
-              </div>
-            </FormField>
-            <FormField label="Kind" htmlFor="audit-kind">
-              <NativeSelect id="audit-kind" name="kind" value={kind} onChange={(e) => setKind(e.target.value)}>
-                <NativeSelectOption value="">All kinds</NativeSelectOption>
-                {kinds.map((k) => (
-                  <NativeSelectOption key={k} value={k}>
-                    {humanizeAuditKind(k)}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
-            </FormField>
-            <FormField label="Actor" htmlFor="audit-actor">
-              <NativeSelect id="audit-actor" name="actor" value={actor} onChange={(e) => setActor(e.target.value)}>
-                <NativeSelectOption value="">All actors</NativeSelectOption>
-                {actors.map((a) => (
-                  <NativeSelectOption key={a} value={a}>
-                    {a}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
-            </FormField>
-          </div>
-
-          {isLoading ? (
-            <SkeletonRows rows={8} />
-          ) : error ? (
-            <ErrorState title="Could not load the audit log" error={error} onRetry={() => void refetch()} />
-          ) : filtered.length === 0 ? (
-            <EmptyState
-              icon="search"
-              title={filtering ? "No entries match" : "No audit entries yet"}
-              description={
-                filtering ? "Nothing fits the current search and filters." : "Changes to policies, keys and integrations are recorded here."
-              }
-              action={filtering ? { label: "Clear Filters", onClick: clearFilters } : undefined}
-            />
-          ) : (
-            <Table>
-              <TableHeader>
+      <div className="t-work" data-open={!!open}>
+        {log.isLoading ? (
+          <DataTableSkeleton columnCount={4} rowCount={10} showHeader={false} showToolbar={false} />
+        ) : (
+          <TableContainer>
+            <Table size="sm" aria-label="Audit entries">
+              <TableHead>
                 <TableRow>
-                  <TableHead>Time</TableHead>
-                  <TableHead>Action</TableHead>
-                  <TableHead>Actor</TableHead>
-                  <TableHead>Target</TableHead>
+                  <TableHeader>Time</TableHeader>
+                  <TableHeader>What was done</TableHeader>
+                  <TableHeader>By</TableHeader>
+                  {open ? null : <TableHeader>To</TableHeader>}
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((it, idx) => (
-                  <TableRow key={`${it.timestamp}-${idx}`} data-state={selected === it ? "selected" : undefined}>
-                    <TableCell>
-                      <Button
-                        variant="link"
-                        className="h-auto p-0 font-mono text-xs text-foreground underline decoration-border-strong underline-offset-4 hover:decoration-foreground"
-                        onClick={() => setSelected(it)}
-                        aria-label={`Open audit entry from ${new Date(it.timestamp).toLocaleString("en-GB")}`}
-                      >
-                        {new Date(it.timestamp).toLocaleString("en-GB")}
-                      </Button>
+              </TableHead>
+              <TableBody key={`${kind}|${actor}`} data-swap="">
+                {rows.map(({ it, id }) => (
+                  <TableRow
+                    key={id}
+                    data-selected={id === openId}
+                    tabIndex={0}
+                    aria-expanded={id === openId}
+                    onClick={() => setOpenId((cur) => (cur === id ? null : id))}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setOpenId((cur) => (cur === id ? null : id));
+                      }
+                    }}
+                  >
+                    <TableCell style={{ fontVariantNumeric: "tabular-nums" }}>
+                      {clockTime(it.timestamp)} <span className="t-note">{dayLabel(it.timestamp)}</span>
                     </TableCell>
                     <TableCell>
-                      <span className="inline-flex items-center gap-2">
-                        <StatusBadge>{areaOf(it.kind)}</StatusBadge>
-                        {humanizeAuditKind(it.kind)}
-                      </span>
+                      {humanizeAuditKind(it.kind)} <span className="t-note">{areaOf(it.kind)}</span>
                     </TableCell>
-                    <TableCell className="text-muted-foreground">{it.actor || "—"}</TableCell>
-                    <TableCell className="max-w-64 truncate font-mono text-xs text-muted-foreground" title={it.target}>
-                      {it.target || "—"}
-                    </TableCell>
+                    <TableCell>{it.actor || <span className="t-note">Not recorded</span>}</TableCell>
+                    {open ? null : (
+                      <TableCell className="t-clip" title={it.target}>
+                        <span className="t-data">{it.target || ""}</span>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
-          )}
-        </Panel>
+            {rows.length === 0 ? <p className="t-empty">{filtering ? "No entry matches these filters." : "The log is empty."}</p> : null}
+          </TableContainer>
+        )}
 
-        <Panel title="Most frequent actions" description="In the loaded entries">
-          {byKind.length === 0 ? (
-            <EmptyState icon="chart" title="No entries" />
-          ) : (
-            <BarList items={byKind.map(([k, value]) => ({ id: k, label: humanizeAuditKind(k), value }))} />
-          )}
-        </Panel>
+        <AnimatePresence initial={false}>
+          {open ? (
+            <motion.aside
+              key="detail"
+              className="t-detail"
+              aria-label="Audit entry"
+              initial={{ x: 40, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: 40, opacity: 0 }}
+              transition={{ duration: 0.28, ease: EXPRESSIVE }}
+            >
+              <motion.div key={openId} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, ease: PRODUCTIVE }}>
+                <header>
+                  <div>
+                    <h2>{humanizeAuditKind(open.kind)}</h2>
+                    <p className="t-note t-data" style={{ marginTop: "0.25rem" }}>
+                      {open.kind}
+                    </p>
+                  </div>
+                  <IconButton kind="ghost" size="sm" label="Close (Esc)" align="left" onClick={() => setOpenId(null)}>
+                    <Close />
+                  </IconButton>
+                </header>
+                <section>
+                  <div className="t-finding">
+                    <dl>
+                      <dt>When</dt>
+                      <dd>
+                        {dayLabel(open.timestamp)}, {clockTime(open.timestamp)}
+                      </dd>
+                      <dt>By</dt>
+                      <dd>{open.actor || "Not recorded"}</dd>
+                      <dt>To</dt>
+                      <dd className="t-data">{open.target || "Not recorded"}</dd>
+                    </dl>
+                  </div>
+                </section>
+                <section style={{ borderBottom: 0 }}>
+                  <h3>Detail as recorded</h3>
+                  {open.detail ? (
+                    <CodeSnippet type="multi" feedback="Copied" maxCollapsedNumberOfRows={14} wrapText>
+                      {JSON.stringify(open.detail, null, 2)}
+                    </CodeSnippet>
+                  ) : (
+                    <p>This entry has no further detail.</p>
+                  )}
+                </section>
+              </motion.div>
+            </motion.aside>
+          ) : null}
+        </AnimatePresence>
       </div>
 
-      <Sheet open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
-        <SheetContent className="w-full gap-0 overflow-y-auto overscroll-contain sm:max-w-lg">
-          <SheetHeader className="border-b">
-            <SheetTitle>{selected ? humanizeAuditKind(selected.kind) : "Audit entry"}</SheetTitle>
-            <SheetDescription className="font-mono text-xs">{selected?.kind}</SheetDescription>
-          </SheetHeader>
-          {selected ? (
-            <>
-              <DetailList
-                items={[
-                  { label: "Time", value: new Date(selected.timestamp).toLocaleString("en-GB"), mono: true },
-                  { label: "Actor", value: selected.actor || "—" },
-                  { label: "Target", value: selected.target || "—", mono: true },
-                ]}
-              />
-              <div className="border-t p-4">
-                <p className="mb-2 text-xs text-muted-foreground">Recorded detail</p>
-                {selected.detail ? (
-                  <pre className="max-h-96 overflow-auto border bg-background p-3 font-mono text-xs leading-5" tabIndex={0} translate="no">
-                    {JSON.stringify(selected.detail, null, 2)}
-                  </pre>
-                ) : (
-                  <p className="text-sm text-muted-foreground">This entry has no further detail.</p>
-                )}
-              </div>
-            </>
-          ) : null}
-        </SheetContent>
-      </Sheet>
-    </div>
+      {byKind.length > 0 ? (
+        <Section id="frequent" title="What is done most" note="Among the entries shown" style={{ marginTop: "3rem", maxWidth: "44rem" }}>
+          <Shares head={["Action", "Entries"]} rows={byKind.map(([k, value]) => ({ label: humanizeAuditKind(k), value }))} empty="" />
+        </Section>
+      ) : null}
+    </>
   );
 }

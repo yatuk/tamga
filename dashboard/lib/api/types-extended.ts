@@ -116,7 +116,9 @@ export interface PolicyRevision {
   author: string;
   message: string;
   yaml: string;
-  created_at: string;
+  /** The proxy names the time of a revision `timestamp`. */
+  timestamp?: string;
+  created_at?: string;
 }
 
 export interface PolicyValidateResult {

@@ -47,9 +47,10 @@ export function usePatternsPage() {
         severity: d.severity,
         enabled: d.enabled,
       }),
-    onSuccess: () => {
+    onSuccess: (_data, { id }) => {
       toast.success("Pattern updated");
-      setDraft(EMPTY_DRAFT);
+      // Switching a row on or off must not empty a form that holds another pattern.
+      setDraft((d) => (d.id === id ? EMPTY_DRAFT : d));
       qc.invalidateQueries({ queryKey: ["tamga-patterns", adminKey] });
     },
     onError: (e: Error) => toast.error("Could not update the pattern", e.message),
@@ -57,8 +58,9 @@ export function usePatternsPage() {
 
   const deleteMut = useMutation({
     mutationFn: (id: string) => api.deletePattern(adminKey, id),
-    onSuccess: () => {
+    onSuccess: (_data, id) => {
       toast.success("Pattern deleted");
+      setDraft((d) => (d.id === id ? EMPTY_DRAFT : d));
       qc.invalidateQueries({ queryKey: ["tamga-patterns", adminKey] });
     },
     onError: (e: Error) => toast.error("Could not delete the pattern", e.message),
@@ -68,8 +70,11 @@ export function usePatternsPage() {
 
   const compiledRegex = useMemo(() => {
     if (draft.kind !== "regex" || !draft.pattern) return null;
+    // The proxy compiles the pattern with Go, which is case-sensitive and takes
+    // its flags in front, "(?i)". The browser takes them as an argument.
+    const flags = /^\(\?([ims]+)\)/.exec(draft.pattern);
     try {
-      return new RegExp(draft.pattern, "gi");
+      return new RegExp(flags ? draft.pattern.slice(flags[0].length) : draft.pattern, `g${flags ? flags[1] : ""}`);
     } catch {
       return "invalid" as const;
     }

@@ -1,142 +1,121 @@
 "use client";
 
-import { GlossaryButton } from "@/components/app/glossary";
-import { PageHeader } from "@/components/app/page-header";
-import { Panel } from "@/components/app/panel";
-import { Stat, StatGrid } from "@/components/app/stat";
-import { ErrorState, SkeletonRows } from "@/components/app/states";
-import { StatusBadge, type Tone } from "@/components/app/status-badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { formatUptime } from "@/lib/utils/format";
+import { Link, Table, TableBody, TableCell, TableContainer, TableHead, TableHeader, TableRow } from "@carbon/react";
+import { counted, uptimeText } from "@/components/console/names";
+import { DataNotice, PageHead, Section, Statement } from "@/components/console/page";
 import type { useProxyPage } from "./useProxyPage";
 
 type Props = ReturnType<typeof useProxyPage>;
-type ComponentStatus = Props["componentRows"][number]["status"];
+type PartStatus = Props["componentRows"][number]["status"];
 
-const STATUS: Record<ComponentStatus, { label: string; tone: Tone }> = {
-  ok: { label: "Healthy", tone: "pass" },
-  warning: { label: "Degraded", tone: "medium" },
-  error: { label: "Failing", tone: "critical" },
-  // Not configured is a deployment choice, not a fault.
-  disabled: { label: "Not configured", tone: "neutral" },
+/** Not configured is a deployment choice, not a fault: it gets no mark. */
+const STATES: Record<PartStatus, { word: string; action?: "BLOCK" | "REDACT" }> = {
+  ok: { word: "Working" },
+  warning: { word: "Degraded", action: "REDACT" },
+  error: { word: "Failing", action: "BLOCK" },
+  disabled: { word: "Not set up" },
 };
 
-export function ProxyBody({ isLoading, hasError, isOnline, health, detail, componentRows }: Props) {
-  const failing = componentRows.filter((r) => r.status === "error").length;
-  const degraded = componentRows.filter((r) => r.status === "warning").length;
-  const database = health?.database;
+const NAMES: Record<string, string> = {
+  "HTTP Server": "HTTP server",
+  "Policy Engine": "Policy engine",
+  "Scanner Pool": "Scanners",
+  "Redis Cache": "Redis",
+  "Event Bus": "Event bus",
+  "Data Retention": "Data retention",
+};
 
-  const overall: { label: string; tone: Tone } = isLoading
-    ? { label: "Checking…", tone: "neutral" }
-    : !isOnline
-      ? { label: "Offline", tone: "critical" }
-      : failing > 0
-        ? { label: `${failing} failing`, tone: "critical" }
-        : degraded > 0
-          ? { label: `${degraded} degraded`, tone: "medium" }
-          : { label: "All healthy", tone: "pass" };
+export function ProxyBody({ adminKey, isLoading, hasError, isOnline, health, detail, componentRows }: Props) {
+  const failing = componentRows.filter((r) => r.status === "error");
+  const degraded = componentRows.filter((r) => r.status === "warning");
+  const inUse = componentRows.filter((r) => r.status !== "disabled").length;
+  const database = health?.database;
+  const dropped = health?.events_dropped ?? 0;
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Proxy status"
-        description="Health of the proxy and the services it depends on. Refreshes every 15 seconds."
-        actions={
-          <>
-            <StatusBadge tone={overall.tone}>{overall.label}</StatusBadge>
-            <GlossaryButton />
-          </>
+    <>
+      <PageHead title="Proxy status" lede="Whether the proxy is up, and the state of each thing it depends on. Checked every 15 seconds." />
+
+      <DataNotice adminKey={adminKey || "none"} failed={hasError} />
+
+      <Statement
+        loading={isLoading}
+        quiet={isOnline}
+        figure={isOnline ? "Up" : "Down"}
+        sentence={
+          !isOnline
+            ? "The proxy is not answering its health check."
+            : failing.length > 0
+              ? `but ${counted(failing.length, "part")} of it ${failing.length === 1 ? "is" : "are"} failing: ${failing.map((r) => NAMES[r.component] ?? r.component).join(", ")}.`
+              : degraded.length > 0
+                ? `with ${counted(degraded.length, "part")} degraded: ${degraded.map((r) => NAMES[r.component] ?? r.component).join(", ")}.`
+                : `and all ${inUse} parts in use are working.`
         }
+        rest={
+          health?.uptime_seconds ? (
+            <>
+              It has been running for <b>{uptimeText(health.uptime_seconds)}</b>.
+            </>
+          ) : undefined
+        }
+        facts={[
+          ["Version", detail?.version || "–"],
+          ["Scanners on every request", health?.scanner_count ?? "–"],
+          [
+            "Database",
+            database === "connected" ? "Connected" : database === "not_configured" ? "None: events are kept in memory" : (database ?? "–"),
+          ],
+          ["TLS", detail?.tls_enabled ? "On" : "Off: terminate it in front of the proxy"],
+          ["Events the bus dropped", dropped.toLocaleString("en")],
+        ]}
       />
 
-      {hasError ? (
-        <Panel>
-          <ErrorState
-            title="Could not reach the proxy"
-            error="The health endpoint did not answer. Check that the proxy is running and that this origin is allowed by its CORS settings."
-          />
-        </Panel>
-      ) : (
-        <>
-          <StatGrid>
-            <Stat
-              label="Proxy"
-              value={isLoading ? "…" : isOnline ? "Online" : "Offline"}
-              tone={isLoading ? "default" : isOnline ? "pass" : "critical"}
-              hint={health?.uptime_seconds ? `Up ${formatUptime(health.uptime_seconds)}` : undefined}
-            />
-            <Stat label="Version" value={isLoading ? "…" : detail?.version || "—"} />
-            <Stat
-              label="Scanners"
-              value={isLoading ? "…" : (health?.scanner_count ?? "—")}
-              tooltip="Detectors that run on every request."
-            />
-            <Stat
-              label="Database"
-              value={isLoading ? "…" : database === "connected" ? "Connected" : database === "not_configured" ? "Not configured" : (database ?? "—")}
-              tone={database === "connected" || database === "not_configured" || !database ? "default" : "critical"}
-              hint={database === "not_configured" ? "Events are kept in memory" : undefined}
-            />
-            <Stat
-              label="TLS"
-              value={isLoading ? "…" : detail?.tls_enabled ? "Enabled" : "Plain HTTP"}
-              tone={isLoading || detail?.tls_enabled ? "default" : "warn"}
-              hint={!isLoading && !detail?.tls_enabled ? "Terminate TLS in front of the proxy" : undefined}
-            />
-            <Stat
-              label="Events dropped"
-              value={isLoading ? "…" : (health?.events_dropped ?? 0)}
-              tone={(health?.events_dropped ?? 0) > 0 ? "warn" : "default"}
-              tooltip="Events the bus could not deliver since the proxy started."
-            />
-          </StatGrid>
-
-          <Panel title="Components" aside={`${componentRows.length} components`}>
-            {isLoading ? (
-              <SkeletonRows rows={5} />
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Component</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Details</TableHead>
-                    <TableHead>Depends on</TableHead>
+      <Section id="parts" title="Parts" note={`${inUse} in use, ${componentRows.length - inUse} not set up`}>
+        <TableContainer className="t-table">
+          <Table size="md" aria-label="Parts of the proxy">
+            <TableHead>
+              <TableRow>
+                <TableHeader>Part</TableHeader>
+                <TableHeader>State</TableHeader>
+                <TableHeader>Detail</TableHeader>
+                <TableHeader>Depends on</TableHeader>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {componentRows.map((r) => {
+                const state = STATES[r.status];
+                return (
+                  <TableRow key={r.component}>
+                    <TableCell>{NAMES[r.component] ?? r.component}</TableCell>
+                    <TableCell>
+                      {state.action ? (
+                        <span className="t-action" data-action={state.action}>
+                          {state.word}
+                        </span>
+                      ) : r.status === "disabled" ? (
+                        <span className="t-note">{state.word}</span>
+                      ) : (
+                        state.word
+                      )}
+                    </TableCell>
+                    <TableCell className="t-data">{r.status === "disabled" ? "" : r.detail.replace(/ · /g, ", ")}</TableCell>
+                    <TableCell className="t-note">{r.dependsOn}</TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {componentRows.map((r) => (
-                    <TableRow key={r.component}>
-                      <TableCell className="font-medium">{r.component}</TableCell>
-                      <TableCell>
-                        <StatusBadge tone={STATUS[r.status].tone}>{STATUS[r.status].label}</StatusBadge>
-                      </TableCell>
-                      <TableCell className="font-mono text-xs text-muted-foreground">{r.detail}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{r.dependsOn || "—"}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </Panel>
-
-          {detail?.trace_ui_url ? (
-            <p className="text-sm text-muted-foreground">
-              Request traces are available in{" "}
-              <a
-                href={detail.trace_ui_url}
-                target="_blank"
-                rel="noreferrer"
-                className="text-foreground underline decoration-border-strong underline-offset-4 hover:decoration-foreground"
-              >
-                the trace viewer
-                <span className="sr-only"> (opens in a new tab)</span>
-              </a>
-              .
-            </p>
-          ) : null}
-        </>
-      )}
-    </div>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </TableContainer>
+        {detail?.trace_ui_url ? (
+          <p className="t-footnote">
+            Request traces are in{" "}
+            <Link href={detail.trace_ui_url} target="_blank" rel="noreferrer">
+              the trace viewer
+            </Link>
+            , which opens in a new tab.
+          </p>
+        ) : null}
+      </Section>
+    </>
   );
 }

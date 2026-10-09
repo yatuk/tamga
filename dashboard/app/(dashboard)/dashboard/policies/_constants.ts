@@ -7,7 +7,7 @@ export type PolicyTabKey = (typeof POLICY_TAB_IDS)[number];
 export const POLICY_TABS: { id: PolicyTabKey; label: string }[] = [
   { id: "editor", label: "Editor" },
   { id: "diff", label: "Changes" },
-  { id: "simulate", label: "Simulate" },
+  { id: "simulate", label: "Try a prompt" },
   { id: "history", label: "History" },
   { id: "entities", label: "Custom entities" },
   { id: "competitors", label: "Competitors" },

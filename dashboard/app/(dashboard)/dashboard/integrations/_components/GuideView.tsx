@@ -1,181 +1,139 @@
 "use client";
 
-import Link from "next/link";
-import { ArrowLeft, ExternalLink, Plus, TriangleAlert } from "lucide-react";
-import { CopyButton } from "@/components/app/copy-button";
-import { DetailList } from "@/components/app/detail-list";
-import { PageHeader } from "@/components/app/page-header";
-import { Panel } from "@/components/app/panel";
-import { StatusBadge } from "@/components/app/status-badge";
-import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import NextLink from "next/link";
+import { Button, CodeSnippet, InlineNotification, Link } from "@carbon/react";
+import { Add } from "@carbon/icons-react";
+import { Arrive } from "@/components/console/motion";
+import { PageHead, Section } from "@/components/console/page";
 import type { IntegrationGuide } from "../_data/guides";
 
-function CodeBlock({ lang, content }: { lang: string; content: string }) {
-  return (
-    <div className="mt-3 border bg-background">
-      <div className="flex items-center justify-between border-b py-1 pr-1 pl-3">
-        <span className="font-mono text-[11px] tracking-[0.1em] text-muted-foreground uppercase">{lang}</span>
-        <CopyButton value={content} label={`${lang} snippet`} size="xs">
-          Copy
-        </CopyButton>
-      </div>
-      <pre className="overflow-x-auto p-3 font-mono text-xs leading-5" tabIndex={0} translate="no">
-        {content}
-      </pre>
-    </div>
-  );
-}
-
-function Note({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="mt-3 flex items-start gap-2 border border-status-medium/40 bg-status-medium-bg p-3 text-sm text-status-medium">
-      <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
-      <span>{children}</span>
-    </p>
-  );
-}
-
+/** A setup guide for one destination: what you need, the steps in order, and what goes wrong. */
 export function GuideView({ guide }: { guide: IntegrationGuide }) {
-  const connectHref = `/dashboard/integrations?connect=${guide.kind}`;
-
   return (
-    <div className="space-y-6">
-      <Link
-        href="/dashboard/integrations"
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="size-4" aria-hidden />
-        All integrations
-      </Link>
+    <>
+      <p style={{ marginBottom: "1rem" }}>
+        <Link as={NextLink} href="/dashboard/integrations">
+          All integrations
+        </Link>
+      </p>
 
-      <PageHeader
-        title={`${guide.name} setup`}
-        description={guide.overview}
-        actions={
-          <Button asChild size="sm">
-            <Link href={connectHref}>
-              <Plus />
-              Connect {guide.name}
-            </Link>
-          </Button>
-        }
-      />
+      <PageHead title={`Setting up ${guide.name}`} lede={guide.overview}>
+        <Button as={NextLink} kind="primary" size="sm" renderIcon={Add} href={`/dashboard/integrations?connect=${guide.kind}`}>
+          Connect {guide.name}
+        </Button>
+      </PageHead>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <div className="min-w-0 space-y-6">
+      <div className="t-hunt">
+        <div>
           {guide.prerequisites.length > 0 ? (
-            <Panel title="Before you start">
-              <ul className="list-disc space-y-1.5 py-4 pr-4 pl-8 text-sm text-fg-muted marker:text-fg-faint">
+            <Section id="before" title="Before you start">
+              <ul className="t-plainlist">
                 {guide.prerequisites.map((p) => (
                   <li key={p}>{p}</li>
                 ))}
               </ul>
-            </Panel>
+            </Section>
           ) : null}
 
-          <Panel title="Steps" aside={`${guide.steps.length} steps`}>
-            <ol className="divide-y">
+          <Section id="steps" title="Steps" note={`${guide.steps.length} in order`} style={{ marginTop: "2.5rem" }}>
+            <ol className="t-steps">
               {guide.steps.map((s, i) => (
-                <li key={`${i}-${s.title}`} className="flex gap-4 p-4">
-                  <span className="font-mono text-sm text-fg-faint tabular-nums" aria-hidden>
-                    {String(i + 1).padStart(2, "0")}
+                <Arrive key={`${i}-${s.title}`} index={i}>
+                  <span className="t-stepnumber" aria-hidden="true">
+                    {i + 1}
                   </span>
-                  <div className="min-w-0 flex-1">
-                    <h3 className="text-sm font-medium">{s.title}</h3>
-                    <p className="mt-1 text-sm leading-relaxed text-fg-muted">{s.body}</p>
-                    {s.code ? <CodeBlock lang={s.code.lang} content={s.code.content} /> : null}
-                    {s.note ? <Note>{s.note}</Note> : null}
+                  <div>
+                    <h3>{s.title}</h3>
+                    <p>{s.body}</p>
+                    {s.code ? (
+                      <CodeSnippet type="multi" feedback="Copied" wrapText>
+                        {s.code.content}
+                      </CodeSnippet>
+                    ) : null}
+                    {s.note ? (
+                      <InlineNotification kind="warning" lowContrast hideCloseButton title="" subtitle={s.note} style={{ maxWidth: "none", marginTop: "0.75rem" }} />
+                    ) : null}
                   </div>
-                </li>
+                </Arrive>
               ))}
             </ol>
-          </Panel>
+          </Section>
 
           {guide.headers && guide.headers.length > 0 ? (
-            <Panel title="Required headers">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Header</TableHead>
-                    <TableHead>Value</TableHead>
-                    <TableHead>Note</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+            <Section id="headers" title="Headers it needs" style={{ marginTop: "2.5rem" }}>
+              <table className="t-kinds">
+                <thead>
+                  <tr>
+                    <th>Header</th>
+                    <th>Value</th>
+                    <th>Note</th>
+                  </tr>
+                </thead>
+                <tbody>
                   {guide.headers.map((h) => (
-                    <TableRow key={h.key}>
-                      <TableCell className="font-mono text-xs">{h.key}</TableCell>
-                      <TableCell className="font-mono text-xs text-muted-foreground">{h.valueHint}</TableCell>
-                      <TableCell className="whitespace-normal text-muted-foreground">{h.note ?? "—"}</TableCell>
-                    </TableRow>
+                    <tr key={h.key}>
+                      <td className="t-data">{h.key}</td>
+                      <td className="t-data">{h.valueHint}</td>
+                      <td className="t-note" style={{ whiteSpace: "normal" }}>{h.note ?? ""}</td>
+                    </tr>
                   ))}
-                </TableBody>
-              </Table>
-            </Panel>
+                </tbody>
+              </table>
+            </Section>
           ) : null}
 
-          <Panel
-            title="What Tamga sends"
-            aside={<CopyButton value={guide.payloadPreview.content} label="example payload" size="xs">Copy</CopyButton>}
-          >
-            <pre className="overflow-x-auto p-4 font-mono text-xs leading-5" tabIndex={0} translate="no">
-              {guide.payloadPreview.content}
-            </pre>
-          </Panel>
+          <Section id="payload" title="What Tamga sends" style={{ marginTop: "2.5rem" }}>
+            <div style={{ marginTop: "1rem" }}>
+              <CodeSnippet type="multi" feedback="Copied" maxCollapsedNumberOfRows={18} wrapText>
+                {guide.payloadPreview.content}
+              </CodeSnippet>
+            </div>
+          </Section>
 
           {guide.gotchas.length > 0 ? (
-            <Panel title="Things that go wrong">
-              <ul className="divide-y">
+            <Section id="gotchas" title="What tends to go wrong" style={{ marginTop: "2.5rem" }}>
+              <dl className="t-roles">
                 {guide.gotchas.map((g) => (
-                  <li key={g.title} className="p-4">
-                    <h3 className="text-sm font-medium">{g.title}</h3>
-                    <p className="mt-1 text-sm leading-relaxed text-fg-muted">{g.body}</p>
-                  </li>
+                  <div key={g.title}>
+                    <dt>{g.title}</dt>
+                    <dd>{g.body}</dd>
+                  </div>
                 ))}
-              </ul>
-            </Panel>
+              </dl>
+            </Section>
           ) : null}
         </div>
 
-        <aside className="space-y-6">
-          <Panel title="At a glance">
-            <DetailList
-              items={[
-                { label: "Kind", value: <StatusBadge>{guide.kind}</StatusBadge> },
-                { label: "Instructions checked", value: guide.lastVerified, mono: true },
-              ]}
-            />
-            <div className="border-t px-4 py-3">
-              <p className="text-xs text-muted-foreground">URL pattern</p>
-              <p className="mt-1 font-mono text-xs break-all text-fg-muted" translate="no">
-                {guide.urlHint}
-              </p>
-            </div>
-          </Panel>
+        <aside>
+          <Section id="glance" title="At a glance">
+            <dl className="t-roles">
+              <div>
+                <dt>URL looks like</dt>
+                <dd className="t-data" style={{ overflowWrap: "anywhere" }}>{guide.urlHint}</dd>
+              </div>
+              <div>
+                <dt>These steps were last checked</dt>
+                <dd>{guide.lastVerified}</dd>
+              </div>
+            </dl>
+          </Section>
 
           {guide.docsLinks.length > 0 ? (
-            <Panel title="Vendor documentation">
-              <ul className="divide-y text-sm">
+            <Section id="vendor" title="The vendor's own documentation" style={{ marginTop: "2.5rem" }}>
+              <ul className="t-plainlist" style={{ listStyle: "none", paddingLeft: 0 }}>
                 {guide.docsLinks.map((d) => (
                   <li key={d.href}>
-                    <a
-                      href={d.href}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-accent"
-                    >
-                      <span>{d.label}</span>
-                      <ExternalLink className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-                      <span className="sr-only">(opens in a new tab)</span>
-                    </a>
+                    <Link href={d.href} target="_blank" rel="noreferrer">
+                      {d.label}
+                    </Link>{" "}
+                    <span className="t-note">opens in a new tab</span>
                   </li>
                 ))}
               </ul>
-            </Panel>
+            </Section>
           ) : null}
         </aside>
       </div>
-    </div>
+    </>
   );
 }

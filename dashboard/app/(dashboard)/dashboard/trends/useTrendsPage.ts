@@ -73,6 +73,8 @@ export function useTrendsPage() {
     isLoading: tsLoading || bLoading,
     totals,
     chartData,
+    points,
+    hourly: bucket === "hour",
     byType,
   };
 }

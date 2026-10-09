@@ -1,83 +1,383 @@
 "use client";
 
-import { PageHeader } from "@/components/app/page-header";
-import { StatusBadge } from "@/components/app/status-badge";
-import { PageTabsList, PageTabsTrigger } from "@/components/app/page-tabs";
-import { Tabs, TabsContent } from "@/components/ui/tabs";
-import { API_BASE, SETTINGS_TABS, type SettingsTabKey } from "./_constants";
-import { SettingsAccessSection } from "./SettingsAccessSection";
-import { SettingsProvidersSection } from "./SettingsProvidersSection";
-import { SettingsRetentionSection } from "./SettingsRetentionSection";
-import { SettingsRuntimeSection } from "./SettingsRuntimeSection";
-import { SettingsSSOSection } from "./SettingsSSOSection";
+import { useEffect, useState } from "react";
+import NextLink from "next/link";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  Button,
+  Link,
+  NumberInput,
+  PasswordInput,
+  Select,
+  SelectItem,
+  SkeletonText,
+  Tab,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableHeader,
+  TableRow,
+  TabList,
+  TabPanel,
+  TabPanels,
+  Tabs,
+  TextInput,
+  Toggle,
+} from "@carbon/react";
+import { uptimeText } from "@/components/console/names";
+import { PageHead, Section } from "@/components/console/page";
+import { ADMIN_KEY_STORAGE } from "@/hooks/useAdminKey";
+import { HEALTH_KEY } from "@/hooks/useHealth";
+import { api } from "@/lib/api";
+import type { SSOSettings } from "@/lib/api/client";
+import { toast } from "@/lib/toast";
+import { formatSince } from "@/lib/utils/format";
+import { API_BASE, SETTINGS_TABS } from "./_constants";
 import { useSettingsPage } from "./useSettingsPage";
+
+type Page = ReturnType<typeof useSettingsPage>;
 
 export default function SettingsPage() {
   const m = useSettingsPage();
-  const { health } = m;
-  const dbStatus = health?.database || "unknown";
-  const scanners = health?.scanner_count ?? 0;
+  const index = Math.max(0, SETTINGS_TABS.findIndex((t) => t.id === m.tab));
 
   return (
-    <div className="space-y-6">
-      <PageHeader
+    <>
+      <PageHead
         title="Settings"
-        description={
+        lede={
           <>
-            Access, alert delivery and runtime of the proxy at <span className="font-mono text-xs">{API_BASE}</span>.
-          </>
-        }
-        actions={
-          <>
-            <StatusBadge tone={health?.proxy === "up" ? "pass" : health ? "critical" : "neutral"}>
-              Proxy {health?.proxy || "unknown"}
-            </StatusBadge>
-            <StatusBadge
-              tone={dbStatus === "connected" ? "pass" : dbStatus === "not_configured" || !health ? "neutral" : "critical"}
-            >
-              Database {dbStatus.replace(/_/g, " ")}
-            </StatusBadge>
-            <StatusBadge tone={scanners > 0 ? "pass" : health ? "critical" : "neutral"}>{scanners} scanners</StatusBadge>
+            How this console reaches the proxy at <code>{API_BASE}</code>, and how that proxy is running.
           </>
         }
       />
 
-      <Tabs value={m.tab} onValueChange={(v) => m.setTab(v as SettingsTabKey)} className="gap-6">
-        <PageTabsList>
-          {SETTINGS_TABS.map((t) => (
-            <PageTabsTrigger key={t.id} value={t.id}>
-              {t.label}
-            </PageTabsTrigger>
-          ))}
-        </PageTabsList>
+      <div className="t-tabs">
+        <Tabs selectedIndex={index} onChange={({ selectedIndex }) => m.setTab(SETTINGS_TABS[selectedIndex].id)}>
+          <TabList aria-label="Settings">
+            {SETTINGS_TABS.map((t) => (
+              <Tab key={t.id}>{t.label}</Tab>
+            ))}
+          </TabList>
+          <TabPanels>
+            <TabPanel>{m.tab === "access" ? <Access m={m} /> : null}</TabPanel>
+            <TabPanel>{m.tab === "retention" ? <Window m={m} /> : null}</TabPanel>
+            <TabPanel>{m.tab === "providers" ? <Providers m={m} /> : null}</TabPanel>
+            <TabPanel>{m.tab === "runtime" ? <Runtime m={m} /> : null}</TabPanel>
+            <TabPanel>{m.tab === "sso" ? <SSO m={m} /> : null}</TabPanel>
+          </TabPanels>
+        </Tabs>
+      </div>
+    </>
+  );
+}
 
-        <TabsContent value="access" className="space-y-6">
-          <SettingsAccessSection
-            draft={m.draft}
-            setDraft={m.setDraft}
-            saved={m.saved}
-            saveAdminKey={m.saveAdminKey}
-          />
-        </TabsContent>
-        <TabsContent value="retention">
-          <SettingsRetentionSection retention={m.retention} setRetention={m.setRetention} saveRetention={m.saveRetention} />
-        </TabsContent>
-        <TabsContent value="providers">
-          <SettingsProvidersSection health={health} adminKey={m.saved} />
-        </TabsContent>
-        <TabsContent value="runtime">
-          <SettingsRuntimeSection health={health} runtime={m.runtime} />
-        </TabsContent>
-        <TabsContent value="sso">
-          <SettingsSSOSection
-            adminKey={m.saved}
-            config={m.ssoConfig}
-            loading={m.ssoLoading}
-            error={m.ssoError}
-            onSave={m.saveSSO}
-          />
-        </TabsContent>
-      </Tabs>
+function Access({ m }: { m: Page }) {
+  // The key in use may come from the build, with nothing stored here.
+  const [inBrowser, setInBrowser] = useState(false);
+  useEffect(() => {
+    try {
+      setInBrowser(!!window.localStorage.getItem(ADMIN_KEY_STORAGE));
+    } catch {
+      setInBrowser(false);
+    }
+  }, [m.saved]);
+  return (
+    <Section id="admin-key" title="Admin key" note={inBrowser ? "One is stored in this browser" : m.saved ? "Using the one built into this console" : "None stored in this browser"} style={{ maxWidth: "44rem" }}>
+      <form
+        className="t-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          m.saveAdminKey();
+        }}
+      >
+        <PasswordInput
+          id="admin-key-input"
+          labelText="Admin key"
+          helperText="Sent as X-Tamga-Admin-Key with every call to the management API. It is kept only in this browser."
+          autoComplete="off"
+          spellCheck={false}
+          value={m.draft}
+          onChange={(e) => m.setDraft(e.target.value)}
+        />
+        <div className="t-buttons">
+          <Button type="submit" kind="primary" size="md" disabled={m.draft === m.saved}>
+            Save the key
+          </Button>
+        </div>
+      </form>
+      <p className="t-footnote">
+        Applications use their own keys, not this one: see{" "}
+        <Link as={NextLink} href="/dashboard/keys">
+          API keys
+        </Link>
+        . Webhooks and other places alerts are sent are under{" "}
+        <Link as={NextLink} href="/dashboard/integrations">
+          Integrations
+        </Link>
+        .
+      </p>
+    </Section>
+  );
+}
+
+function Window({ m }: { m: Page }) {
+  // The field keeps what was typed, an empty field included, so it can be cleared and retyped.
+  const days = Number(m.retention);
+  const valid = m.retention !== "" && Number.isInteger(days) && days >= 1 && days <= 365;
+
+  return (
+    <Section id="window" title="How far back this browser looks" style={{ maxWidth: "44rem" }}>
+      <form
+        className="t-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (valid) m.saveRetention();
+        }}
+      >
+        <NumberInput
+          id="retention-days-input"
+          label="Days"
+          min={1}
+          max={365}
+          allowEmpty
+          invalid={!valid}
+          invalidText="Enter a whole number of days from 1 to 365."
+          value={m.retention === "" ? "" : days}
+          onChange={(_, { value }) => m.setRetention(String(value))}
+          style={{ maxWidth: "12rem" }}
+        />
+        <div className="t-buttons">
+          <Button type="submit" kind="primary" size="md" disabled={!valid}>
+            Save
+          </Button>
+        </div>
+      </form>
+      <p className="t-footnote">
+        This only limits what the filters of this console show in this browser. How long the proxy keeps events is set in the proxy&apos;s own
+        configuration, not here.
+      </p>
+    </Section>
+  );
+}
+
+const CIRCUIT: Record<string, { word: string; action?: "BLOCK" | "REDACT" }> = {
+  closed: { word: "Taking traffic" },
+  open: { word: "Cut off", action: "BLOCK" },
+  "half-open": { word: "Being tried again", action: "REDACT" },
+  half_open: { word: "Being tried again", action: "REDACT" },
+};
+
+function Providers({ m }: { m: Page }) {
+  const pools = m.health?.providers ?? [];
+  const [pending, setPending] = useState<string | null>(null);
+  const qc = useQueryClient();
+
+  async function reset(pool: string, endpoint: string) {
+    setPending(`${pool}:${endpoint}`);
+    try {
+      await api.resetUpstreamCircuit(m.saved, pool, endpoint);
+      toast.success("Sending traffic again", `${pool}, ${endpoint}`);
+      await qc.invalidateQueries({ queryKey: HEALTH_KEY });
+    } catch (e) {
+      toast.error("Could not reset the endpoint", (e as Error).message);
+    } finally {
+      setPending(null);
+    }
+  }
+
+  if (pools.length === 0) {
+    return (
+      <p className="t-empty">
+        No provider pool is defined. Add <code>providers.pools</code> to the policy and reload the proxy to see each upstream here.
+      </p>
+    );
+  }
+
+  return (
+    <>
+      {pools.map((pl, i) => (
+        <Section
+          key={pl.pool}
+          id={`pool-${pl.pool}`}
+          title={`${pl.pool} pool`}
+          note={`${pl.healthy_count} of ${pl.total_count} taking traffic`}
+          style={i > 0 ? { marginTop: "2.5rem" } : undefined}
+        >
+          <TableContainer className="t-table">
+            <Table size="md" aria-label={`${pl.pool} pool`}>
+              <TableHead>
+                <TableRow>
+                  <TableHeader>Endpoint</TableHeader>
+                  <TableHeader>State</TableHeader>
+                  <TableHeader className="t-right">Requests</TableHeader>
+                  <TableHeader className="t-right">Succeeded</TableHeader>
+                  <TableHeader>Last failure</TableHeader>
+                  <TableHeader>
+                    <span className="cds--visually-hidden">Reset</span>
+                  </TableHeader>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {pl.providers.map((p) => {
+                  const state = CIRCUIT[(p.state || "").toLowerCase()] ?? { word: p.state || "Not known" };
+                  const busy = pending === `${pl.pool}:${p.name}`;
+                  return (
+                    <TableRow key={p.name}>
+                      <TableCell className="t-data">{p.name}</TableCell>
+                      <TableCell>
+                        {state.action ? (
+                          <span className="t-action" data-action={state.action}>
+                            {state.word}
+                          </span>
+                        ) : (
+                          state.word
+                        )}
+                      </TableCell>
+                      <TableCell className="t-right">{p.requests_in_window ?? "–"}</TableCell>
+                      <TableCell className="t-right">
+                        {typeof p.success_rate_observed === "number" ? `${(p.success_rate_observed * 100).toFixed(1)}%` : "–"}
+                      </TableCell>
+                      <TableCell>
+                        {p.last_failure ? formatSince(p.last_failure) : "None"}
+                        {p.failure_reason ? `, ${p.failure_reason}` : ""}
+                      </TableCell>
+                      <TableCell className="t-right">
+                        <Button kind="ghost" size="sm" disabled={busy || !m.saved} onClick={() => void reset(pl.pool, p.name)}>
+                          {busy ? "Resetting" : "Send traffic again"}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Section>
+      ))}
+      <p className="t-footnote">An endpoint that is cut off receives no traffic. Reset it once the upstream is healthy again.</p>
+    </>
+  );
+}
+
+function Runtime({ m }: { m: Page }) {
+  const { health, runtime } = m;
+  const proxy = runtime?.proxy ?? health?.proxy;
+  const database = runtime?.database ?? health?.database;
+  const uptime = runtime?.uptime_seconds ?? health?.uptime_seconds;
+  const list = (rows: [string, React.ReactNode][]) => (
+    <dl className="t-facts" style={{ borderTop: 0 }}>
+      {rows.map(([label, value]) => (
+        <div key={label}>
+          <dt>{label}</dt>
+          <dd>{value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+
+  return (
+    <div className="t-columns" data-even="true" style={{ marginTop: 0 }}>
+      <Section id="transport" title="Transport and storage">
+        {list([
+          ["Proxy", proxy === "up" ? "Up" : (proxy ?? "Not known")],
+          ["TLS", runtime?.tls_enabled ? "On" : "Off, plain HTTP"],
+          ["Mutual TLS", runtime?.mtls_enabled ? "Required" : "Off"],
+          ["Rate limit state", runtime?.redis_enabled ? "In Redis, shared between nodes" : "In memory, this node only"],
+          ["Database", database === "connected" ? "Connected" : (database ?? "Not known").replace(/_/g, " ")],
+        ])}
+      </Section>
+      <Section id="build" title="Build and policy" note="From /api/v1/health/detail">
+        {list([
+          ["Version", runtime?.version || "–"],
+          ["Policy", runtime?.policy_name || "–"],
+          ["Policy file", <span key="p" className="t-data">{runtime?.policy_path ?? health?.policy_path ?? "–"}</span>],
+          ["Scanners", runtime?.scanner_count ?? health?.scanner_count ?? 0],
+          ["Running for", typeof uptime === "number" ? uptimeText(uptime) : "–"],
+        ])}
+      </Section>
     </div>
+  );
+}
+
+function SSO({ m }: { m: Page }) {
+  if (!m.saved) return <p className="t-empty">Add an admin key under Access to read the sign-in configuration.</p>;
+  if (m.ssoLoading) return <SkeletonText paragraph lineCount={4} />;
+  if (m.ssoError) return <p className="t-empty">The sign-in configuration could not be read.</p>;
+  // The form starts from the loaded configuration, so it mounts only once that has arrived.
+  return <SSOForm config={m.ssoConfig} onSave={m.saveSSO} />;
+}
+
+function SSOForm({ config, onSave }: { config: SSOSettings | undefined; onSave: (cfg: Partial<SSOSettings>) => Promise<void> }) {
+  const [providerType, setProviderType] = useState(config?.provider_type ?? "");
+  const [metadataUrl, setMetadataUrl] = useState(config?.metadata_url ?? "");
+  const [domain, setDomain] = useState(config?.domain ?? "");
+  const [enabled, setEnabled] = useState(config?.enabled ?? false);
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    try {
+      setSaving(true);
+      // The proxy replaces the whole configuration, so the attribute mapping this form does not show goes back with it.
+      await onSave({ provider_type: providerType, metadata_url: metadataUrl, domain, enabled, attribute_mapping: config?.attribute_mapping });
+      toast.success("Sign-in configuration saved");
+    } catch (e) {
+      toast.error("Could not save the sign-in configuration", e instanceof Error ? e.message : "Unknown error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Section
+      id="sso"
+      title="Single sign-on"
+      note={enabled && providerType ? `Required, over ${providerType === "saml" ? "SAML 2.0" : "OpenID Connect"}` : "Not in use"}
+      style={{ maxWidth: "44rem" }}
+    >
+      <form
+        className="t-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void save();
+        }}
+      >
+        <Select id="sso-provider-type" labelText="Protocol" value={providerType} onChange={(e) => setProviderType(e.target.value)}>
+          <SelectItem value="" text="None" />
+          <SelectItem value="saml" text="SAML 2.0" />
+          <SelectItem value="oidc" text="OpenID Connect" />
+        </Select>
+        <TextInput
+          id="sso-metadata-url"
+          labelText="Identity provider metadata URL"
+          helperText="The SAML metadata document or the OIDC discovery URL of your identity provider."
+          type="url"
+          placeholder="https://idp.example.com/metadata"
+          autoComplete="off"
+          spellCheck={false}
+          value={metadataUrl}
+          onChange={(e) => setMetadataUrl(e.target.value)}
+        />
+        <TextInput
+          id="sso-domain"
+          labelText="Email domain"
+          helperText="People with an address on this domain sign in through the identity provider."
+          placeholder="example.com"
+          autoComplete="off"
+          spellCheck={false}
+          value={domain}
+          onChange={(e) => setDomain(e.target.value)}
+        />
+        <Toggle id="sso-enabled" size="sm" labelText="Require it for this domain" labelA="No" labelB="Yes" toggled={enabled} onToggle={setEnabled} />
+        <div className="t-buttons">
+          <Button type="submit" kind="primary" size="md" disabled={saving}>
+            {saving ? "Saving" : "Save"}
+          </Button>
+        </div>
+      </form>
+      <p className="t-footnote">Single sign-on needs a plan with your identity provider that includes it.</p>
+    </Section>
   );
 }

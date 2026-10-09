@@ -139,16 +139,26 @@ export function useHuntingPage() {
   const saveHunt = async (name: string) => {
     const trimmed = name.trim();
     if (!trimmed) return;
-    const created = await apiSaveHunt(adminKey, trimmed, buildQuery(filters));
-    if (created) {
-      setSavedHunts((prev) => [created, ...prev].slice(0, 16));
-      toast.success("Hunt saved", trimmed);
+    try {
+      const created = await apiSaveHunt(adminKey, trimmed, buildQuery(filters));
+      if (created) {
+        setSavedHunts((prev) => [created, ...prev].slice(0, 16));
+        toast.success("Hunt saved", trimmed);
+      }
+    } catch (e) {
+      toast.error("Could not save the hunt", (e as Error).message);
+      // The caller keeps the name field open when the save did not happen.
+      throw e;
     }
   };
 
   const deleteHunt = async (id: string) => {
-    await apiDeleteHunt(adminKey, id);
-    setSavedHunts((prev) => prev.filter((x) => x.id !== id));
+    try {
+      await apiDeleteHunt(adminKey, id);
+      setSavedHunts((prev) => prev.filter((x) => x.id !== id));
+    } catch (e) {
+      toast.error("Could not delete the hunt", (e as Error).message);
+    }
   };
 
   return {

@@ -17,7 +17,8 @@ export const webhooks = {
   testWebhook: (adminKey: string, id: string) =>
     fetchAPI<{ ok: boolean; status_code?: number }>(
       `/api/v1/webhooks/${encodeURIComponent(id)}/test`,
-      { method: "POST", headers: authHeaders(adminKey) },
+      // A test that failed must not be sent to the destination a second time.
+      { method: "POST", headers: authHeaders(adminKey), retry: 0 },
     ),
 
   deleteWebhook: (adminKey: string, id: string) =>

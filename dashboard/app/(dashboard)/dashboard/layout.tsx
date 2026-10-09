@@ -1,5 +1,10 @@
-import { AppShell } from "@/components/shell/app-shell";
+import "../../tamga.css";
+import { TamgaShell } from "@/components/console/shell";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  return <AppShell>{children}</AppShell>;
+  return (
+    <div className="tamga">
+      <TamgaShell>{children}</TamgaShell>
+    </div>
+  );
 }

@@ -6,30 +6,30 @@ import { EditorView } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
 import CodeMirror from "@uiw/react-codemirror";
 
-// Colors come from the theme tokens, so the editor follows light and dark.
+// Ink on paper, as the rest of the console: keys in black, strings in grey, values in ochre.
 const theme = EditorView.theme({
-  "&": { backgroundColor: "var(--surface-card)", color: "var(--fg)", fontSize: "13px" },
-  ".cm-content": { fontFamily: "var(--font-mono)", caretColor: "var(--fg)" },
+  "&": { backgroundColor: "var(--cds-layer)", color: "var(--cds-text-primary)", fontSize: "13px" },
+  ".cm-content": { fontFamily: "var(--tamga-font-data)", caretColor: "var(--cds-text-primary)" },
   ".cm-gutters": {
-    backgroundColor: "var(--surface-card)",
-    color: "var(--fg-faint)",
+    backgroundColor: "var(--cds-layer)",
+    color: "var(--cds-text-helper)",
     border: "none",
-    borderRight: "1px solid var(--border)",
+    borderRight: "1px solid var(--tamga-rule)",
   },
-  ".cm-activeLine, .cm-activeLineGutter": { backgroundColor: "var(--surface-elevated)" },
+  ".cm-activeLine, .cm-activeLineGutter": { backgroundColor: "#e8e8e8" },
   "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection": {
-    backgroundColor: "color-mix(in oklch, var(--brand) 35%, transparent)",
+    backgroundColor: "#c6c6c6",
   },
-  "&.cm-focused": { outline: "2px solid var(--ring)", outlineOffset: "-2px" },
-  ".cm-cursor": { borderLeftColor: "var(--fg)" },
+  "&.cm-focused": { outline: "2px solid #161616", outlineOffset: "-2px" },
+  ".cm-cursor": { borderLeftColor: "var(--cds-text-primary)" },
 });
 
 const highlight = syntaxHighlighting(
   HighlightStyle.define([
-    { tag: tags.propertyName, color: "var(--status-low)" },
-    { tag: tags.string, color: "var(--status-pass)" },
-    { tag: [tags.number, tags.bool, tags.null], color: "var(--status-high)" },
-    { tag: tags.punctuation, color: "var(--fg-subtle)" },
+    { tag: tags.propertyName, color: "#161616" },
+    { tag: tags.string, color: "#525252" },
+    { tag: [tags.number, tags.bool, tags.null], color: "#8a5a00" },
+    { tag: tags.punctuation, color: "var(--cds-text-secondary)" },
   ]),
 );
 

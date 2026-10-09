@@ -2,18 +2,14 @@ import { api, type SavedHunt } from "@/lib/api";
 import { SAVED_HUNTS_KEY } from "./_constants";
 
 /**
- * Load saved hunts from the server API. Falls back to localStorage when the
- * API key is unavailable or the server returns an error.
+ * Saved hunts live on the proxy. Without an admin key there is no proxy to
+ * ask, and they are kept in this browser instead. A proxy that refuses is an
+ * error the caller reports: a hunt must never look saved when it is not.
  */
 export async function loadHunts(adminKey: string): Promise<SavedHunt[]> {
-  // API-backed (primary path).
   if (adminKey) {
-    try {
-      const resp = await api.getSavedHunts(adminKey);
-      return resp.items || [];
-    } catch {
-      // Fall through to localStorage fallback.
-    }
+    const resp = await api.getSavedHunts(adminKey);
+    return resp.items || [];
   }
   return loadHuntsFromLocalStorage();
 }
@@ -26,27 +22,15 @@ function loadHuntsFromLocalStorage(): SavedHunt[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw) as SavedHunt[];
     if (!Array.isArray(parsed)) return [];
-    console.warn("Using localStorage fallback for saved hunts");
     return parsed;
   } catch {
     return [];
   }
 }
 
-/**
- * Save a hunt to the server API. On failure, saves to localStorage as
- * a best-effort fallback.
- */
+/** Saves a hunt on the proxy, or in this browser when there is no admin key. */
 export async function saveHunt(adminKey: string, name: string, query: object): Promise<SavedHunt | null> {
-  if (adminKey) {
-    try {
-      return await api.createSavedHunt(adminKey, name, query);
-    } catch {
-      // Fall through to localStorage fallback.
-    }
-  }
-  // localStorage fallback
-  console.warn("Using localStorage fallback for saved hunts");
+  if (adminKey) return api.createSavedHunt(adminKey, name, query);
   const existing = loadHuntsFromLocalStorage();
   const h: SavedHunt = {
     id: `${Date.now()}`,
@@ -63,20 +47,12 @@ export async function saveHunt(adminKey: string, name: string, query: object): P
   return h;
 }
 
-/**
- * Delete a saved hunt via the server API. Falls back to localStorage removal.
- */
+/** Deletes a saved hunt from the proxy, or from this browser when there is no admin key. */
 export async function deleteHunt(adminKey: string, id: string): Promise<void> {
   if (adminKey) {
-    try {
-      await api.deleteSavedHunt(adminKey, id);
-      return;
-    } catch {
-      // Fall through to localStorage fallback.
-    }
+    await api.deleteSavedHunt(adminKey, id);
+    return;
   }
-  // localStorage fallback
-  console.warn("Using localStorage fallback for saved hunts");
   const existing = loadHuntsFromLocalStorage();
   const next = existing.filter((x) => x.id !== id);
   if (typeof window !== "undefined") {

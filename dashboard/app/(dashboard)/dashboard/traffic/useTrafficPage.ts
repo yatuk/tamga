@@ -100,7 +100,8 @@ export function useTrafficPage() {
 
   const exportCsv = () => {
     const headers = ["time", "total", "blocked", "passed"];
-    const rows = chartData.map((d) => [d.time, String(d.total), String(d.blocked), String(d.passed)]);
+    // The time as the proxy sent it: a worded date carries a comma, which splits the field.
+    const rows = (ts?.points ?? []).map((p, i) => [p.t, String(p.total), String(p.blocked), String(chartData[i].passed)]);
     doExport(`tamga-traffic-${range}.csv`, headers, rows);
   };
 
@@ -139,6 +140,8 @@ export function useTrafficPage() {
     warnedRequests,
     passRate,
     chartData,
+    points: ts?.points ?? [],
+    hourly: ts?.bucket === "hour",
     topProviders,
     topProvidersTotal,
     topFindingTypes,

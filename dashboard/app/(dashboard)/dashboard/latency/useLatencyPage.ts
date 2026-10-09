@@ -122,6 +122,8 @@ export function useLatencyPage() {
     slowestEndpoints,
     scannerCount,
     chartData,
+    points: ts?.points ?? [],
+    hourly: ts?.bucket === "hour",
     providerPools,
     circuitReset,
     uptimeSeconds: health?.uptime_seconds ?? 0,

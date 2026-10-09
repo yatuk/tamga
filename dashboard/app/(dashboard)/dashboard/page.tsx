@@ -1,5 +1,5 @@
-import { OverviewView } from "./overview-view";
+import { Overview } from "./overview";
 
 export default function DashboardPage() {
-  return <OverviewView />;
+  return <Overview />;
 }

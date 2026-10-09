@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { api } from "@/lib/api";
@@ -35,10 +35,18 @@ export function useEventsPage() {
     range: ((raw) => (VALID_TIMERANGES as readonly string[]).includes(raw ?? "") ? (raw as TimeRange) : "24h")(searchParams.get("range")),
   }), [searchParams]);
 
+  // The URL follows a change a moment later. A second change made before it
+  // has, builds on the first instead of on the filters still in the URL.
+  const pending = useRef<Filters | null>(null);
+  useEffect(() => {
+    pending.current = null;
+  }, [searchParams]);
+
   const updateFilters = useCallback(
     (next: Partial<Filters>) => {
       const params = new URLSearchParams(searchParams);
-      const merged = { ...filters, ...next };
+      const merged = { ...(pending.current ?? filters), ...next };
+      pending.current = merged;
 
       params.delete("action");
       merged.actions.forEach((a) => params.append("action", a));
@@ -57,9 +65,8 @@ export function useEventsPage() {
   );
 
   const toggleAction = (action: ActionFilter) => {
-    const next = filters.actions.includes(action)
-      ? filters.actions.filter((a) => a !== action)
-      : [...filters.actions, action];
+    const { actions } = pending.current ?? filters;
+    const next = actions.includes(action) ? actions.filter((a) => a !== action) : [...actions, action];
     updateFilters({ actions: next });
   };
 

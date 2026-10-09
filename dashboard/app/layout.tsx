@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Barlow, Barlow_Condensed, JetBrains_Mono } from "next/font/google";
+import { Archivo, Atkinson_Hyperlegible_Mono, Atkinson_Hyperlegible_Next } from "next/font/google";
 import { cookies } from "next/headers";
 import "./globals.css";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
@@ -9,29 +9,28 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { toLowerEn } from "@/lib/utils/case";
 
-// Same families as tamgaproxy.com, limited to the weights the interface uses
-// (five font files instead of ten). display: "swap" keeps fallback text
-// painted while the fonts download.
-const barlow = Barlow({
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
-  variable: "--font-barlow",
+// Atkinson Hyperlegible for text: it was drawn to keep 0/O and 1/l/I apart,
+// and this console is read for request IDs, keys and card numbers. Archivo,
+// set narrow, for headings and figures. The mono cut only where text is data.
+// All three are variable fonts: one file each.
+const atkinson = Atkinson_Hyperlegible_Next({
+  subsets: ["latin", "latin-ext"],
+  variable: "--font-atkinson",
   display: "swap",
-  fallback: ["system-ui", "Segoe UI", "Arial", "sans-serif"],
+  fallback: ["Segoe UI", "Arial", "sans-serif"],
 });
-const barlowCondensed = Barlow_Condensed({
-  subsets: ["latin"],
-  weight: ["800"],
-  variable: "--font-barlow-condensed",
+const archivo = Archivo({
+  subsets: ["latin", "latin-ext"],
+  axes: ["wdth"],
+  variable: "--font-archivo",
   display: "swap",
   fallback: ["Arial Narrow", "Arial", "sans-serif"],
 });
-// A variable font: one file covers every weight.
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ["latin"],
-  variable: "--font-jetbrains-mono",
+const atkinsonMono = Atkinson_Hyperlegible_Mono({
+  subsets: ["latin", "latin-ext"],
+  variable: "--font-atkinson-mono",
   display: "swap",
-  fallback: ["ui-monospace", "SFMono-Regular", "Menlo", "Consolas", "monospace"],
+  fallback: ["Consolas", "Menlo", "monospace"],
 });
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://tamga.dev";
@@ -99,7 +98,7 @@ export default async function RootLayout({
 
   // Colors and font families come from the tokens in globals.css; the body
   // only carries the font variables.
-  const bodyClass = `${barlow.variable} ${barlowCondensed.variable} ${jetbrainsMono.variable} bg-background font-sans text-foreground antialiased`;
+  const bodyClass = `${atkinson.variable} ${archivo.variable} ${atkinsonMono.variable} bg-background font-sans text-foreground antialiased`;
 
   const tree = (
     <ThemeProvider attribute="class" defaultTheme={defaultTheme} enableSystem={true}>

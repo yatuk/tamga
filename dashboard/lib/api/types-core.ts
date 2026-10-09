@@ -35,6 +35,8 @@ export interface DashboardHealthDetail extends DashboardHealthDetailed {
   version?: string;
   policy_name?: string;
   tls_enabled: boolean;
+  /** False when the proxy cannot write its policy file (a read-only mount). Absent on older proxies. */
+  policy_writable?: boolean;
   mtls_enabled: boolean;
   redis_enabled: boolean;
   timestamp?: string;

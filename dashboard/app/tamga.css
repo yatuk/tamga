@@ -1,0 +1,1209 @@
+@import "@carbon/styles/css/styles.css" layer(carbon);
+
+/*
+ * Carbon, re-skinned for Tamga.
+ *
+ * Carbon out of the box is IBM: Plex and blue. Three decisions make it ours.
+ *
+ *   Type    Atkinson Hyperlegible for text, because an analyst reads request
+ *           IDs, keys and card numbers all day and that face was drawn to
+ *           keep 0/O and 1/l/I apart. Archivo, set narrow, for headings and
+ *           figures. Mono only where the text is data.
+ *   Ink     Controls are black, not blue. Nothing on the page is coloured
+ *           for being clickable.
+ *   Stamp   One colour, the red of the mark, and it means one thing: this
+ *           request was stopped. Ochre means it was changed. A request that
+ *           passed gets no colour at all.
+ */
+
+.tamga {
+  --tamga-stamp: #c8321f; /* blocked: text and marks */
+  --tamga-stamp-fill: #e04a35;
+  --tamga-altered: #8a5a00; /* redacted or stripped: text */
+  --tamga-altered-fill: #d99e1c;
+  --tamga-rule: #c6c6c6;
+
+  --tamga-font-text: var(--font-atkinson), "Segoe UI", sans-serif;
+  --tamga-font-head: var(--font-archivo), "Arial Narrow", sans-serif;
+  --tamga-font-data: var(--font-atkinson-mono), Consolas, monospace;
+
+  min-height: 100vh;
+  background: var(--cds-background);
+  color: var(--cds-text-primary);
+  font-family: var(--tamga-font-text);
+}
+
+/* Ink in place of IBM blue. */
+.tamga,
+.tamga .cds--g10,
+.tamga .cds--white {
+  --cds-interactive: #161616;
+  --cds-button-primary: #161616;
+  --cds-button-primary-hover: #393939;
+  --cds-button-primary-active: #525252;
+  --cds-button-tertiary: #161616;
+  --cds-button-tertiary-hover: #393939;
+  --cds-button-tertiary-active: #525252;
+  --cds-link-primary: #161616;
+  --cds-link-primary-hover: #000000;
+  --cds-link-visited: #161616;
+  --cds-focus: #161616;
+  --cds-border-interactive: #161616;
+  --cds-background-brand: #161616;
+  --cds-highlight: #e8e8e8;
+}
+.tamga .cds--g100 {
+  --cds-interactive: #ffffff;
+  --cds-focus: #ffffff;
+  --cds-border-interactive: var(--tamga-stamp-fill);
+  --cds-link-primary: #ffffff;
+}
+
+/* Our faces everywhere Carbon would put Plex. */
+.tamga,
+.tamga [class*="cds--"] {
+  font-family: var(--tamga-font-text);
+}
+.tamga code,
+.tamga pre,
+.tamga .cds--snippet,
+.tamga .cds--snippet *,
+.tamga .t-data {
+  font-family: var(--tamga-font-data);
+}
+.tamga .cds--link {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/*
+ * Pages that have not been rebuilt on Carbon yet still draw with the old
+ * Tailwind tokens. Until each is redone, those tokens are pointed at the new
+ * paper-and-ink values so nothing in the console looks like the old theme.
+ * Dialogs and menus render outside .tamga, so this goes on the root.
+ */
+:root {
+  --surface-base: #f4f4f4;
+  --surface-subtle: #e8e8e8;
+  --surface-card: #ffffff;
+  --surface-elevated: #ffffff;
+  --fg: #161616;
+  --fg-muted: #393939;
+  --fg-subtle: #525252;
+  --fg-faint: #6f6f6f;
+  --border: #c6c6c6;
+  --border-strong: #8d8d8d;
+  --border-subtle: #e0e0e0;
+  --ring: #161616;
+  --inner-highlight: none;
+  --brand: #161616;
+  --brand-hover: #393939;
+  --brand-foreground: #ffffff;
+  --status-critical: #c8321f;
+  --status-high: #8a5a00;
+  --status-medium: #8a5a00;
+  --status-low: #525252;
+  --status-pass: #198038;
+  --chart-1: #161616;
+  --chart-2: #e04a35;
+  --chart-3: #d99e1c;
+  --chart-4: #8d8d8d;
+  --chart-5: #525252;
+  --chart-6: #c6c6c6;
+}
+.tamga .t-main h1 {
+  text-transform: none;
+}
+
+/* ── Shell ─────────────────────────────────────────────────────────── */
+.tamga .t-brand {
+  font-family: var(--tamga-font-head);
+  font-stretch: 80%;
+  font-weight: 700;
+  font-size: 1.125rem;
+  letter-spacing: 0.06em;
+}
+.tamga .t-brand i {
+  font-style: normal;
+  color: var(--tamga-stamp-fill);
+}
+.tamga .t-main {
+  margin-left: 16rem;
+  padding: 5rem 2rem 4rem;
+  max-width: 106rem;
+}
+.tamga .t-shellstate {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 1rem;
+  font-size: 0.8125rem;
+  color: #c6c6c6;
+  white-space: nowrap;
+}
+.tamga .t-dot {
+  position: relative;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: #8d8d8d;
+}
+.tamga .t-dot[data-state="up"] {
+  background: #42be65;
+}
+.tamga .t-dot[data-state="down"] {
+  background: var(--tamga-stamp-fill);
+}
+/* A slow ring while the proxy is up: the console is listening. */
+.tamga .t-dot[data-state="up"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid #42be65;
+  animation: t-listen 3.2s cubic-bezier(0.2, 0, 0.38, 0.9) infinite;
+}
+@keyframes t-listen {
+  0% { transform: scale(1); opacity: 0.9; }
+  60%, 100% { transform: scale(3.2); opacity: 0; }
+}
+.tamga .t-user {
+  display: flex;
+  align-items: center;
+  padding: 0 0.75rem 0 0.25rem;
+}
+
+/* Sections. Carbon's side nav frame, our own items: one red mark that
+   travels to the page you open. */
+.tamga .cds--side-nav__items {
+  padding: 1rem 0 2rem;
+}
+.tamga .t-navgroup {
+  list-style: none;
+  padding-bottom: 0.75rem;
+}
+.tamga .t-navgroup ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.tamga .t-navlabel {
+  display: block;
+  padding: 0.75rem 1rem 0.375rem;
+  font-size: 0.75rem;
+  color: var(--cds-text-helper);
+}
+.tamga .t-navitem {
+  position: relative;
+}
+.tamga .t-navmark {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--tamga-stamp-fill);
+}
+.tamga .t-navlink {
+  display: block;
+  padding: 0.4375rem 1rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: var(--cds-text-secondary);
+  text-decoration: none;
+  transition: background-color 110ms cubic-bezier(0.2, 0, 0.38, 0.9), color 110ms cubic-bezier(0.2, 0, 0.38, 0.9);
+}
+.tamga .t-navlink:hover {
+  background: var(--cds-background-hover);
+  color: var(--cds-text-primary);
+}
+.tamga .t-navlink:focus-visible {
+  outline: 2px solid var(--cds-focus);
+  outline-offset: -2px;
+}
+.tamga .t-navlink[aria-current="page"] {
+  background: var(--cds-background-selected);
+  color: var(--cds-text-primary);
+  font-weight: 600;
+}
+
+/* ── Type ──────────────────────────────────────────────────────────── */
+.tamga h1,
+.tamga h2,
+.tamga .t-figure {
+  font-family: var(--tamga-font-head);
+}
+.tamga h1 {
+  font-stretch: 85%;
+  font-weight: 600;
+  font-size: 2rem;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+.tamga h2 {
+  font-stretch: 88%;
+  font-weight: 600;
+  font-size: 1.125rem;
+  line-height: 1.3;
+}
+.tamga .t-lede {
+  margin-top: 0.5rem;
+  max-width: 44rem;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--cds-text-secondary);
+}
+.tamga .t-pagehead {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 2rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--cds-text-primary);
+}
+.tamga .t-sectionhead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--tamga-rule);
+}
+.tamga .t-note {
+  font-size: 0.8125rem;
+  color: var(--cds-text-secondary);
+}
+
+/* ── Overview: the statement ───────────────────────────────────────── */
+.tamga .t-statement {
+  display: grid;
+  grid-template-columns: minmax(0, 11fr) minmax(0, 5fr);
+  gap: 4rem;
+  padding: 2.5rem 0 2rem;
+}
+.tamga .t-figure {
+  font-stretch: 75%;
+  font-weight: 700;
+  font-size: 7.5rem;
+  line-height: 0.9;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--tamga-stamp);
+}
+.tamga .t-figure[data-quiet="true"] {
+  color: var(--cds-text-primary);
+}
+.tamga .t-figureline {
+  display: flex;
+  align-items: flex-end;
+  gap: 1.25rem;
+}
+.tamga .t-figureline p {
+  padding-bottom: 0.6rem;
+  font-size: 1.375rem;
+  line-height: 1.3;
+  max-width: 22rem;
+}
+.tamga .t-rest {
+  margin-top: 1.25rem;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--cds-text-secondary);
+}
+.tamga .t-rest b {
+  font-weight: 600;
+  color: var(--cds-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* One bar for the whole window: how much was stopped, changed, let through. */
+.tamga .t-split {
+  display: flex;
+  height: 0.75rem;
+  margin-top: 1.75rem;
+  background: #e0e0e0;
+}
+.tamga .t-split span[data-kind="blocked"] {
+  background: var(--tamga-stamp-fill);
+}
+.tamga .t-split span[data-kind="altered"] {
+  background: var(--tamga-altered-fill);
+}
+.tamga .t-splitkey {
+  display: flex;
+  gap: 2rem;
+  margin-top: 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--cds-text-secondary);
+}
+.tamga .t-splitkey span::before {
+  content: "";
+  display: inline-block;
+  width: 0.625rem;
+  height: 0.625rem;
+  margin-right: 0.4rem;
+  background: #e0e0e0;
+}
+.tamga .t-splitkey span[data-kind="blocked"]::before {
+  background: var(--tamga-stamp-fill);
+}
+.tamga .t-splitkey span[data-kind="altered"]::before {
+  background: var(--tamga-altered-fill);
+}
+
+/* Proxy facts: a plain list, not a row of tiles. */
+.tamga .t-facts {
+  border-top: 1px solid var(--cds-text-primary);
+}
+.tamga .t-facts div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.625rem 0;
+  border-bottom: 1px solid var(--tamga-rule);
+  font-size: 0.875rem;
+}
+.tamga .t-facts dt {
+  color: var(--cds-text-secondary);
+}
+.tamga .t-facts dd {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.tamga .t-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 9fr) minmax(0, 7fr);
+  gap: 4rem;
+  margin-top: 2.5rem;
+}
+
+/* Finding types with a share bar drawn in the row itself. */
+.tamga .t-kinds {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+.tamga .t-kinds th {
+  padding: 0.625rem 0.5rem 0.5rem 0;
+  text-align: left;
+  font-weight: 400;
+  font-size: 0.75rem;
+  color: var(--cds-text-secondary);
+}
+.tamga .t-kinds td {
+  padding: 0.5rem 0.5rem 0.5rem 0;
+  border-top: 1px solid var(--tamga-rule);
+  vertical-align: middle;
+}
+.tamga .t-kinds td:nth-child(2) {
+  white-space: nowrap;
+}
+.tamga .t-kinds .t-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  width: 3.5rem;
+}
+.tamga .t-kinds .t-bar {
+  width: 40%;
+}
+.tamga .t-kinds .t-bar span {
+  display: block;
+  height: 0.5rem;
+  background: #161616;
+}
+
+/* The queue preview. */
+.tamga .t-queue {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.tamga .t-queue li {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: baseline;
+  padding: 0.625rem 0;
+  border-bottom: 1px solid var(--tamga-rule);
+  font-size: 0.875rem;
+}
+.tamga .t-queue time,
+.tamga .t-queue .t-where {
+  color: var(--cds-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Days as bars. */
+.tamga .t-days {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 0.5rem;
+  align-items: end;
+  height: 11rem;
+  margin-top: 1.25rem;
+  border-bottom: 1px solid var(--cds-text-primary);
+}
+.tamga .t-day {
+  display: flex;
+  flex-direction: column-reverse;
+  height: 100%;
+}
+.tamga .t-day span {
+  display: block;
+  background: #c6c6c6;
+}
+.tamga .t-day span[data-kind="blocked"] {
+  background: var(--tamga-stamp-fill);
+}
+.tamga .t-day span[data-kind="altered"] {
+  background: var(--tamga-altered-fill);
+}
+.tamga .t-daylabels {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+  font-size: 0.75rem;
+  color: var(--cds-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.tamga .t-daylabels b {
+  display: block;
+  font-weight: 600;
+  color: var(--cds-text-primary);
+}
+
+/* ── Actions as marks, not pills ───────────────────────────────────── */
+.tamga .t-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.tamga .t-action::before {
+  content: "";
+  width: 0.625rem;
+  height: 0.625rem;
+  background: currentColor;
+}
+.tamga .t-action[data-action="BLOCK"] {
+  color: var(--tamga-stamp);
+}
+.tamga .t-action[data-action="REDACT"],
+.tamga .t-action[data-action="STRIP"] {
+  color: var(--tamga-altered);
+}
+.tamga .t-action[data-action="WARN"] {
+  color: var(--cds-text-primary);
+}
+.tamga .t-action[data-action="WARN"]::before {
+  background: none;
+  box-shadow: inset 0 0 0 2px currentColor;
+}
+
+/* ── Incidents ─────────────────────────────────────────────────────── */
+.tamga .t-work {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 0rem;
+  gap: 0;
+  margin-top: 1.5rem;
+  align-items: start;
+  transition: grid-template-columns 280ms cubic-bezier(0.4, 0.14, 0.3, 1);
+}
+.tamga .t-work[data-open="true"] {
+  grid-template-columns: minmax(0, 1fr) 31rem;
+}
+/* A row that arrived while you were looking shows itself once, then settles. */
+.tamga .t-work tbody tr[data-new="true"] td {
+  animation: t-arrived 2.4s cubic-bezier(0.2, 0, 0.38, 0.9) 1;
+}
+@keyframes t-arrived {
+  0% { background-color: #ffd7d0; }
+  100% { background-color: var(--cds-layer); }
+}
+.tamga .t-work tbody[data-swap] tr {
+  animation: t-rows 200ms cubic-bezier(0.2, 0, 0.38, 0.9) 1 both;
+}
+@keyframes t-rows {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tamga .t-work { transition: none; }
+  .tamga .t-work tbody tr[data-new="true"] td,
+  .tamga .t-work tbody[data-swap] tr,
+  .tamga .t-dot[data-state="up"]::after { animation: none; }
+}
+.tamga .t-work .cds--data-table-container {
+  padding-top: 0;
+  min-width: 0;
+}
+.tamga .t-work tbody tr {
+  cursor: pointer;
+}
+.tamga .t-work td,
+.tamga .t-work th {
+  white-space: nowrap;
+}
+.tamga .t-work td.t-clip {
+  max-width: 18rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tamga .t-work .cds--data-table-content {
+  overflow-x: auto;
+}
+.tamga .t-work tbody tr[data-selected="true"] td {
+  background: var(--cds-layer-selected);
+  box-shadow: inset 0 1px 0 #161616, inset 0 -1px 0 #161616;
+}
+.tamga .t-work td .t-data {
+  font-size: 0.8125rem;
+  color: var(--cds-text-secondary);
+}
+.tamga .t-filters {
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+.tamga .t-filters .cds--content-switcher {
+  width: auto;
+}
+.tamga .t-filters .cds--dropdown__wrapper {
+  width: 12rem;
+}
+.tamga .t-detail {
+  width: 31rem;
+  position: sticky;
+  top: 4rem;
+  max-height: calc(100vh - 5rem);
+  overflow: auto;
+  border: 1px solid #161616;
+  border-left-width: 1px;
+  background: var(--cds-layer);
+}
+.tamga .t-detail header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1rem 1rem 0.75rem;
+  border-bottom: 1px solid var(--tamga-rule);
+}
+.tamga .t-detail section {
+  padding: 1rem;
+  border-bottom: 1px solid var(--tamga-rule);
+}
+.tamga .t-detail h3 {
+  margin-bottom: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--cds-text-secondary);
+}
+.tamga .t-finding {
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--tamga-rule);
+}
+.tamga .t-finding:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+.tamga .t-finding strong {
+  font-weight: 600;
+}
+.tamga .t-finding dl {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(0, 1fr);
+  gap: 0.25rem 0.75rem;
+  margin-top: 0.4rem;
+  font-size: 0.8125rem;
+}
+.tamga .t-finding dt {
+  color: var(--cds-text-secondary);
+}
+.tamga .t-finding dd {
+  overflow-wrap: anywhere;
+}
+.tamga .t-detail .t-buttons {
+  display: flex;
+  gap: 1px;
+}
+.tamga .t-status {
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+.tamga .t-empty {
+  padding: 3rem 1rem;
+  border-bottom: 1px solid var(--tamga-rule);
+  color: var(--cds-text-secondary);
+}
+
+/* ── Shared page parts ─────────────────────────────────────────────── */
+.tamga .t-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-shrink: 0;
+}
+.tamga .t-columns[data-even="true"] {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+.tamga .t-split span[data-kind="ink"],
+.tamga .t-splitkey span[data-kind="ink"]::before {
+  background: #161616;
+}
+.tamga .t-right {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.tamga .t-right .cds--table-header-label {
+  text-align: right;
+}
+.tamga .t-table {
+  padding-top: 0;
+  min-width: 0;
+}
+.tamga .t-table td,
+.tamga .t-table th {
+  white-space: nowrap;
+}
+.tamga .t-footnote {
+  margin-top: 0.75rem;
+  max-width: 52rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--cds-text-secondary);
+}
+.tamga .t-footnote b {
+  font-weight: 600;
+  color: var(--cds-text-primary);
+}
+
+/* ── Charts ────────────────────────────────────────────────────────── */
+/* The line above a chart that reads out whatever is pointed at. */
+.tamga .t-readout {
+  min-height: 1.25rem;
+  margin-top: 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--cds-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.tamga .t-chart .t-days {
+  margin-top: 0.5rem;
+  gap: 2px;
+}
+.tamga .t-chart .t-day span {
+  background: #161616;
+}
+.tamga .t-chart .t-day span[data-kind="blocked"] {
+  background: var(--tamga-stamp-fill);
+}
+.tamga .t-chart .t-day span[data-kind="altered"] {
+  background: var(--tamga-altered-fill);
+}
+.tamga .t-chart .t-day[data-at="true"] {
+  background: #e0e0e0;
+}
+.tamga .t-chart .t-daylabels {
+  gap: 2px;
+}
+.tamga .t-chart .t-daylabels span {
+  white-space: nowrap;
+  overflow: visible;
+}
+
+.tamga .t-trace {
+  position: relative;
+  height: 11rem;
+  margin-top: 0.5rem;
+  border-bottom: 1px solid var(--cds-text-primary);
+  cursor: crosshair;
+}
+.tamga .t-trace svg {
+  display: block;
+  overflow: visible;
+}
+.tamga .t-trace .t-grid {
+  stroke: var(--tamga-rule);
+  stroke-width: 1;
+}
+.tamga .t-trace .t-limit {
+  stroke: var(--tamga-stamp);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+}
+.tamga .t-trace .t-line {
+  fill: none;
+  stroke: #161616;
+  stroke-width: 1.75;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.tamga .t-trace .t-spot {
+  fill: #161616;
+}
+.tamga .t-trace .t-cursor {
+  stroke: #161616;
+  stroke-width: 1;
+}
+.tamga .t-trace .t-scale {
+  position: absolute;
+  right: 0;
+  padding: 0.125rem 0 0 0.25rem;
+  font-size: 0.75rem;
+  color: var(--cds-text-secondary);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.tamga .t-trace .t-scale[data-limit="true"] {
+  right: auto;
+  left: 0;
+  color: var(--tamga-stamp);
+}
+.tamga .t-tracelabels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.4rem;
+  font-size: 0.75rem;
+  color: var(--cds-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A few values of one measure, as marks on one line. */
+.tamga .t-scaleline {
+  position: relative;
+  height: 5.5rem;
+  margin-top: 1.75rem;
+  background: linear-gradient(#161616, #161616) 0 50% / 100% 1px no-repeat;
+}
+.tamga .t-mark {
+  position: absolute;
+  top: 0;
+  bottom: 50%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  padding-left: 0.375rem;
+  border-left: 2px solid #161616;
+  font-size: 0.75rem;
+  line-height: 1.2;
+  color: var(--cds-text-secondary);
+  white-space: nowrap;
+}
+.tamga .t-mark b {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--cds-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+/* Every other mark writes below the line, so two close values do not collide. */
+.tamga .t-mark:nth-child(even) {
+  top: 50%;
+  bottom: 0;
+  justify-content: flex-end;
+}
+
+/* The console is a desk tool, but a narrow window should still read. */
+@media (max-width: 72rem) {
+  .tamga .t-statement,
+  .tamga .t-columns,
+  .tamga .t-columns[data-even="true"] {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2.5rem;
+  }
+  .tamga .t-pagehead {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  .tamga .t-figure {
+    font-size: 5rem;
+  }
+}
+
+/* A request that passed gets no mark and no weight. */
+.tamga .t-action[data-action="PASS"],
+.tamga .t-action[data-action="LOG"] {
+  font-weight: 400;
+  color: var(--cds-text-secondary);
+}
+.tamga .t-action[data-action="PASS"]::before,
+.tamga .t-action[data-action="LOG"]::before {
+  display: none;
+}
+.tamga .t-pager {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.5rem;
+  padding-top: 0.5rem;
+}
+.tamga .t-pager .t-note {
+  margin-right: 0.5rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Event explorer ────────────────────────────────────────────────── */
+.tamga .t-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--cds-text-secondary);
+  white-space: nowrap;
+}
+.tamga .t-live .t-dot[data-state="up"] {
+  background: #198038;
+}
+.tamga .t-live .t-dot[data-state="up"]::after {
+  border-color: #198038;
+}
+.tamga .t-filters .cds--checkbox-group {
+  flex-shrink: 0;
+}
+.tamga .t-filters fieldset.cds--checkbox-group--horizontal .cds--checkbox-wrapper {
+  margin-right: 1rem;
+}
+
+/* ── Threat hunting ────────────────────────────────────────────────── */
+.tamga .t-hunt {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 20rem;
+  gap: 4rem;
+  margin-top: 2rem;
+}
+.tamga .t-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+.tamga .t-formrow {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+.tamga .t-savehunt {
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  overflow: hidden;
+}
+.tamga .t-hunts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.tamga .t-hunts li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-height: 3rem;
+  border-bottom: 1px solid var(--tamga-rule);
+  font-size: 0.875rem;
+}
+.tamga .t-hunts button.t-huntname {
+  flex: 1;
+  min-width: 0;
+  padding: 0.5rem 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.tamga .t-hunts button.t-huntname:hover b {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.tamga .t-hunts button.t-huntname:focus-visible {
+  outline: 2px solid var(--cds-focus);
+}
+.tamga .t-hunts b {
+  display: block;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width: 72rem) {
+  .tamga .t-hunt {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2.5rem;
+  }
+  .tamga .t-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.tamga .t-confirm {
+  display: inline-flex;
+  gap: 1px;
+}
+.tamga .t-rowactions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.25rem;
+}
+.tamga .t-table tbody tr[data-selected="true"] td {
+  background: var(--cds-layer-selected);
+  box-shadow: inset 0 1px 0 #161616, inset 0 -1px 0 #161616;
+}
+.tamga .t-table td.t-clip {
+  max-width: 20rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Forms beside a list ───────────────────────────────────────────── */
+.tamga .t-form {
+  display: grid;
+  gap: 1rem;
+  padding-top: 1rem;
+}
+.tamga .t-form .t-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+.tamga .t-form .t-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1px;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--tamga-rule);
+}
+.tamga .t-form textarea {
+  font-family: var(--tamga-font-data);
+  font-size: 0.8125rem;
+}
+/* What a pattern caught in the sample, marked where it was caught. */
+.tamga .t-sample {
+  min-height: 1.5rem;
+  padding: 0.5rem 0.75rem;
+  border-left: 2px solid #161616;
+  background: var(--cds-layer);
+  font-family: var(--tamga-font-data);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.tamga .t-sample mark {
+  background: #ffd7d0;
+  color: inherit;
+  box-shadow: inset 0 -2px 0 var(--tamga-stamp-fill);
+}
+
+/* ── Playground ────────────────────────────────────────────────────── */
+.tamga .t-examples {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 0.25rem;
+}
+.tamga .t-verdict {
+  font-size: 4.5rem;
+  color: var(--cds-text-primary);
+}
+.tamga .t-verdict[data-action="BLOCK"] {
+  color: var(--tamga-stamp);
+}
+.tamga .t-verdict[data-action="REDACT"],
+.tamga .t-verdict[data-action="STRIP"] {
+  color: var(--tamga-altered);
+}
+.tamga .t-sample mark[data-action="REDACT"],
+.tamga .t-sample mark[data-action="STRIP"] {
+  background: #fbe9b8;
+  box-shadow: inset 0 -2px 0 var(--tamga-altered-fill);
+}
+.tamga .t-table[data-swap] tr,
+.tamga .t-table tbody[data-swap] tr {
+  animation: t-rows 200ms cubic-bezier(0.2, 0, 0.38, 0.9) 1 both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tamga .t-table tbody[data-swap] tr { animation: none; }
+}
+
+.tamga .t-footnote .cds--link,
+.tamga .t-rest .cds--link,
+.tamga .t-lede .cds--link {
+  display: inline;
+}
+
+/* ── Policies ──────────────────────────────────────────────────────── */
+.tamga .t-tabs {
+  margin-top: 1.5rem;
+}
+.tamga .t-tabs .cds--tab-content {
+  padding: 1.5rem 0 0;
+}
+.tamga .t-tabs .cds--tabs__nav-item--selected {
+  border-bottom-color: var(--tamga-stamp-fill);
+}
+.tamga .t-unsaved {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--tamga-altered);
+  white-space: nowrap;
+}
+.tamga .t-editor {
+  border: 1px solid #161616;
+}
+.tamga .t-diff {
+  max-height: 34rem;
+  overflow: auto;
+  border: 1px solid var(--tamga-rule);
+  background: var(--cds-layer);
+  font-family: var(--tamga-font-data);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+.tamga .t-diff > div {
+  display: flex;
+  min-width: max-content;
+  color: var(--cds-text-secondary);
+}
+.tamga .t-diff > div > span {
+  flex: 0 0 2rem;
+  text-align: center;
+  user-select: none;
+  font-weight: 700;
+}
+.tamga .t-diff pre {
+  padding-right: 1rem;
+  white-space: pre;
+  font: inherit;
+}
+.tamga .t-diff > div[data-type="+"] {
+  background: #dff1e2;
+  color: #0e4a20;
+}
+.tamga .t-diff > div[data-type="-"] {
+  background: #ffe3de;
+  color: #8f1d0f;
+}
+
+.tamga .t-table .cds--data-table-content {
+  overflow-x: auto;
+}
+.tamga .t-table .t-under {
+  display: block;
+  white-space: normal;
+}
+
+/* A modal that must be answered: no close cross. */
+.tamga .t-reveal .cds--modal-close-button {
+  display: none;
+}
+.tamga .cds--modal .cds--radio-button-wrapper {
+  align-items: flex-start;
+}
+.tamga .cds--modal .cds--radio-button__label {
+  align-items: flex-start;
+  white-space: normal;
+}
+
+/* Terms and what they mean, one under the other. */
+.tamga .t-roles div {
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--tamga-rule);
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+.tamga .t-roles dt {
+  font-weight: 600;
+}
+.tamga .t-roles dd {
+  color: var(--cds-text-secondary);
+}
+.tamga .t-filters .cds--select {
+  width: auto;
+}
+
+/* ── Integrations ──────────────────────────────────────────────────── */
+.tamga .t-destinations {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.tamga .t-destinations li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 7rem auto auto;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--tamga-rule);
+  font-size: 0.875rem;
+}
+.tamga .t-destinations b {
+  display: block;
+  font-weight: 600;
+}
+
+/* ── Guides ────────────────────────────────────────────────────────── */
+.tamga .t-plainlist {
+  margin: 1rem 0 0;
+  padding-left: 1.25rem;
+  list-style: disc;
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+.tamga .t-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.tamga .t-steps li {
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1fr);
+  gap: 0.5rem;
+  padding: 1.25rem 0;
+  border-bottom: 1px solid var(--tamga-rule);
+}
+.tamga .t-stepnumber {
+  font-family: var(--tamga-font-head);
+  font-stretch: 75%;
+  font-weight: 700;
+  font-size: 1.75rem;
+  line-height: 1;
+}
+.tamga .t-steps h3 {
+  font-size: 1rem;
+  font-weight: 600;
+}
+.tamga .t-steps p {
+  margin: 0.25rem 0 0.75rem;
+  max-width: 44rem;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--cds-text-secondary);
+}
+
+/* ── Reports ───────────────────────────────────────────────────────── */
+.tamga .t-prose p {
+  max-width: 38rem;
+  font-size: 1.25rem;
+  line-height: 1.45;
+}
+.tamga .t-prose p + p {
+  margin-top: 0.9rem;
+}
+.tamga .t-prose b {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.tamga .t-destinations.t-evidence li {
+  grid-template-columns: minmax(0, 1fr) auto;
+}

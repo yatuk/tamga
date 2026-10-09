@@ -1,8 +1,4 @@
-"use client";
-
-import { Plus } from "lucide-react";
 import { toast } from "@/lib/toast";
-import { Button } from "@/components/ui/button";
 
 type PolicyDoc = Record<string, unknown>;
 
@@ -83,24 +79,4 @@ export function appendRateLimitTemplate(draft: string): string {
   };
   toast.success("rate_limit template added");
   return stringifyPolicy(o);
-}
-
-/** One-click edits that insert a common block into the draft. */
-export function PolicySnippetsBar({ draft, onApply }: { draft: string; onApply: (next: string) => void }) {
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="mr-1 text-xs text-muted-foreground">Insert into draft</span>
-      <Button type="button" variant="outline" size="sm" onClick={() => onApply(appendCustomEntity(draft))}>
-        <Plus />
-        Custom Entity
-      </Button>
-      <Button type="button" variant="outline" size="sm" onClick={() => onApply(appendRateLimitTemplate(draft))}>
-        <Plus />
-        Rate Limit
-      </Button>
-      <Button type="button" variant="outline" size="sm" onClick={() => onApply(strengthenInjection(draft))}>
-        Set Injection to BLOCK
-      </Button>
-    </div>
-  );
 }

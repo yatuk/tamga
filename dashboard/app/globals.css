@@ -1,3 +1,6 @@
+/* Carbon sits above the reset and below the utilities, so a utility class on
+   a page that has not been rebuilt yet still wins over Carbon's own reset. */
+@layer theme, base, carbon, components, utilities;
 @import "tailwindcss";
 @import "tw-animate-css";
 
@@ -111,9 +114,9 @@ html.dark {
 }
 
 @theme inline {
-  --font-sans: var(--font-barlow), system-ui, "Segoe UI", Arial, sans-serif;
-  --font-display: var(--font-barlow-condensed), var(--font-barlow), system-ui, sans-serif;
-  --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-sans: var(--font-atkinson), "Segoe UI", Arial, sans-serif;
+  --font-display: var(--font-archivo), "Arial Narrow", Arial, sans-serif;
+  --font-mono: var(--font-atkinson-mono), Consolas, Menlo, monospace;
 
   /* Square corners everywhere; rounded-full stays for dots and avatars. */
   --radius-xs: 0;

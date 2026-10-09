@@ -1,23 +1,12 @@
 "use client";
 
-import { Download } from "lucide-react";
-import { BarList } from "@/components/app/bar-list";
-import { TimeSeriesChart, type ChartSeries } from "@/components/app/charts";
-import { PageHeader } from "@/components/app/page-header";
-import { Panel } from "@/components/app/panel";
-import { Stat, StatGrid } from "@/components/app/stat";
-import { AdminKeyRequired, EmptyState, ErrorState, SkeletonRows } from "@/components/app/states";
-import { TimeRangeToggle } from "@/components/app/time-range";
-import { Button } from "@/components/ui/button";
-import { humanizeFindingType, humanizeProvider } from "@/lib/humanize";
-import { formatInt } from "@/lib/utils/format";
+import { Button } from "@carbon/react";
+import { Download } from "@carbon/icons-react";
+import { Columns } from "@/components/console/charts";
+import { Count } from "@/components/console/motion";
+import { bucketLabel, bucketName, counted, providerName, RANGE_WORDS } from "@/components/console/names";
+import { DataNotice, PageHead, RangeSwitch, Section, Shares, Statement } from "@/components/console/page";
 import type { useTrafficPage } from "./useTrafficPage";
-
-const SERIES: ChartSeries[] = [
-  { key: "total", label: "Requests", color: "var(--chart-1)" },
-  { key: "passed", label: "Passed", color: "var(--status-pass)" },
-  { key: "blocked", label: "Blocked", color: "var(--status-critical)" },
-];
 
 type Props = ReturnType<typeof useTrafficPage>;
 
@@ -28,139 +17,93 @@ export function TrafficBody({
   isLoading,
   hasError,
   totalRequests,
-  blockedRequests,
-  passedRequests,
-  warnedRequests,
-  passRate,
-  chartData,
+  points,
+  hourly,
   topProviders,
-  topFindingTypes,
   modelUsage,
   requestsPerSecond,
-  peakHour,
   topEndpoints,
   exportCsv,
 }: Props) {
-  const header = (
-    <PageHeader
-      title="Traffic"
-      description="Request volume through the proxy, by provider, model and finding type."
-      actions={
-        <>
-          <TimeRangeToggle value={range} onChange={setRange} />
-          <Button variant="outline" size="sm" onClick={exportCsv} disabled={chartData.length === 0}>
-            <Download />
-            Export CSV
-          </Button>
-        </>
-      }
-    />
-  );
-
-  if (!adminKey || hasError) {
-    return (
-      <div className="space-y-6">
-        {header}
-        <Panel>
-          {!adminKey ? (
-            <AdminKeyRequired />
-          ) : (
-            <ErrorState title="Could not load traffic data" error="Check the admin key and that the proxy is reachable." />
-          )}
-        </Panel>
-      </div>
-    );
-  }
-
+  const unit = hourly ? "hour" : "day";
   const perHour = requestsPerSecond * 3600;
-  const breakdown = (items: { label: string; value: number }[], empty: string, mono = false) =>
-    isLoading ? (
-      <SkeletonRows rows={3} />
-    ) : items.length === 0 ? (
-      <EmptyState icon="chart" title={empty} />
-    ) : (
-      <BarList items={items} mono={mono} />
-    );
+  const busiest = points.reduce<(typeof points)[number] | undefined>((top, p) => (!top || p.total > top.total ? p : top), undefined);
+  const quiet = points.filter((p) => p.total === 0).length;
 
   return (
-    <div className="space-y-6">
-      {header}
+    <>
+      <PageHead title="Traffic" lede={`How much went through the proxy in ${RANGE_WORDS[range]}, and where it was headed.`}>
+        <RangeSwitch value={range} onChange={setRange} />
+        <Button kind="tertiary" size="sm" renderIcon={Download} onClick={exportCsv} disabled={points.length === 0}>
+          Export CSV
+        </Button>
+      </PageHead>
 
-      <StatGrid>
-        <Stat label="Requests" value={isLoading ? "…" : formatInt(totalRequests)} />
-        <Stat
-          label="Passed"
-          value={isLoading ? "…" : formatInt(passedRequests)}
-          hint={totalRequests > 0 ? `${passRate}% of requests` : undefined}
-          tooltip="Requests forwarded to the provider unchanged."
-        />
-        <Stat
-          label="Blocked"
-          value={isLoading ? "…" : formatInt(blockedRequests)}
-          tone={blockedRequests > 0 ? "critical" : "default"}
-        />
-        <Stat
-          label="Warned"
-          value={isLoading ? "…" : formatInt(warnedRequests)}
-          tone={warnedRequests > 0 ? "warn" : "default"}
-        />
-        <Stat
-          label="Average per hour"
-          value={isLoading ? "…" : perHour >= 10 ? formatInt(Math.round(perHour)) : perHour.toFixed(1)}
-          tooltip="Requests in this window divided by its length."
-        />
-        <Stat
-          label="Busiest bucket"
-          value={isLoading ? "…" : peakHour ? formatInt(peakHour.count) : "—"}
-          hint={peakHour && peakHour.count > 0 ? peakHour.time : undefined}
-          tooltip="The single hour (24h) or day (7d, 30d) with the most requests."
-        />
-      </StatGrid>
+      <DataNotice adminKey={adminKey} failed={hasError} />
 
-      <Panel title={`Requests · ${range}`}>
-        {isLoading ? (
-          <SkeletonRows rows={6} />
-        ) : totalRequests === 0 || chartData.length === 0 ? (
-          <EmptyState icon="chart" title="No traffic in this window" suggestion="Pick a longer range." />
+      <Statement
+        loading={isLoading}
+        figure={<Count value={totalRequests} />}
+        sentence={`${totalRequests === 1 ? "request" : "requests"} went through the proxy in ${RANGE_WORDS[range]}.`}
+        rest={
+          totalRequests > 0 && busiest ? (
+            <>
+              The busiest {unit} was <b>{bucketName(busiest.t, hourly)}</b>, with <b>{busiest.total.toLocaleString("en")}</b>.
+            </>
+          ) : undefined
+        }
+        facts={[
+          ["Average per hour", totalRequests > 0 ? (perHour >= 10 ? Math.round(perHour).toLocaleString("en") : perHour.toFixed(1)) : "–"],
+          [`Busiest ${unit}`, busiest && busiest.total > 0 ? busiest.total.toLocaleString("en") : "–"],
+          [`${hourly ? "Hours" : "Days"} with no traffic`, points.length > 0 ? `${quiet} of ${points.length}` : "–"],
+          ["Providers in use", topProviders.length || "–"],
+          ["Model families in use", modelUsage.length || "–"],
+        ]}
+      />
+
+      <Section id="volume" title={`Requests by ${unit}`}>
+        {points.length === 0 || totalRequests === 0 ? (
+          <p className="t-empty">No traffic in this window.</p>
         ) : (
-          <div className="p-4">
-            <TimeSeriesChart
-              data={chartData}
-              xKey="time"
-              series={SERIES}
-              label={`Requests, passed and blocked over the last ${range}`}
-            />
-          </div>
+          <Columns
+            label={`Requests by ${unit}`}
+            idle={`Point at a column to read that ${unit}.`}
+            columns={points.map((p) => ({
+              key: p.t,
+              label: bucketLabel(p.t, hourly),
+              says: `${bucketName(p.t, hourly)}: ${counted(p.total, "request")}`,
+              parts: [{ value: p.total }],
+            }))}
+          />
         )}
-      </Panel>
+      </Section>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <Panel title="Providers" description="Share of requests">
-          {breakdown(
-            topProviders.map(([name, value]) => ({ label: humanizeProvider(name), value })),
-            "No provider traffic",
-          )}
-        </Panel>
-        <Panel title="Model families" description="Share of requests">
-          {breakdown(
-            modelUsage.map((m) => ({ label: m.name, value: m.value })),
-            "No model traffic",
-            true,
-          )}
-        </Panel>
-        <Panel title="Finding types" description="Share of detections">
-          {breakdown(
-            topFindingTypes.map(([name, value]) => ({ label: humanizeFindingType(name), value })),
-            "No findings",
-          )}
-        </Panel>
+      <div className="t-columns" data-even="true">
+        <Section id="providers" title="Where it went" note="Requests by provider">
+          <Shares
+            head={["Provider", "Requests"]}
+            rows={topProviders.map(([name, value]) => ({ label: providerName(name), value }))}
+            empty="No request reached a provider in this window."
+          />
+        </Section>
+        <Section id="models" title="Which models" note="Requests by model family">
+          <Shares
+            head={["Model family", "Share", "Requests"]}
+            rows={modelUsage.map((m) => ({ label: m.name, note: `${m.pct}%`, value: m.value, data: true }))}
+            empty="No model was called in this window."
+          />
+        </Section>
       </div>
 
-      {topEndpoints.length > 0 && !isLoading ? (
-        <Panel title="Endpoints" description="Most called paths">
-          <BarList items={topEndpoints.map(([label, value]) => ({ label, value }))} mono />
-        </Panel>
+      {topEndpoints.length > 0 ? (
+        <Section id="endpoints" title="Most called paths" style={{ marginTop: "3rem" }}>
+          <Shares
+            head={["Path", "Requests"]}
+            rows={topEndpoints.map(([label, value]) => ({ label, value, data: true }))}
+            empty="No path recorded."
+          />
+        </Section>
       ) : null}
-    </div>
+    </>
   );
 }

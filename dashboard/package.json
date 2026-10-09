@@ -17,6 +17,7 @@
     "check:api-types": "npm run gen:api-types && git diff --exit-code lib/api-types.generated.ts"
   },
   "dependencies": {
+    "@carbon/react": "^1.118.0",
     "@clerk/nextjs": "^6.0.0",
     "@codemirror/lang-json": "^6.0.2",
     "@codemirror/language": "^6.12.4",
@@ -29,6 +30,7 @@
     "cmdk": "^1.1.1",
     "cn": "^0.4.0",
     "lucide-react": "^0.460.0",
+    "motion": "^14.0.0",
     "next": "^15.0.0",
     "next-themes": "^0.4.6",
     "nuqs": "^2.10.1",

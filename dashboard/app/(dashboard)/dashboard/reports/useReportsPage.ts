@@ -227,6 +227,8 @@ export function useReportsPage() {
     setRange,
     stats,
     chartData,
+    points: ts?.points ?? [],
+    hourly: ts?.bucket === "hour",
     recentBlocked,
     topFindingEntries,
     topFindingsTotal,

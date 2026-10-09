@@ -21,6 +21,8 @@ export function ThemeProvider({
       attribute={attribute}
       defaultTheme={defaultTheme}
       enableSystem={enableSystem}
+      // The console has one theme for now: paper under an ink header.
+      forcedTheme="light"
       disableTransitionOnChange
     >
       {children}

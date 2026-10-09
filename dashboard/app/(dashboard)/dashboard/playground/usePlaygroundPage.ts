@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { api, type PolicySimulateResult } from "@/lib/api";
+import { API_BASE } from "@/lib/api/fetch-core";
 import { toast } from "@/lib/toast";
 import { stringifyPolicy } from "../policies/policyUtils";
 import { POLICY_DRAFT_STORAGE, type PolicySource } from "./_constants";
@@ -92,22 +93,27 @@ export function usePlaygroundPage() {
     }
   }
 
+  async function copy(text: string, done: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(done);
+    } catch {
+      toast.error("Could not copy", "The browser did not allow the clipboard to be written.");
+    }
+  }
+
   function copyCurl() {
-    const base =
-      (typeof process !== "undefined" && process.env.NEXT_PUBLIC_TAMGA_API_URL) || "http://localhost:8080";
-    const payload = JSON.stringify({ policy_yaml: effectiveYaml, sample_text: prompt });
-    const cmd = `curl -X POST ${base}/api/v1/policies/simulate \\
+    const payload = JSON.stringify({ yaml: effectiveYaml, sample_text: prompt });
+    const cmd = `curl -X POST ${API_BASE}/api/v1/policies/simulate \\
   -H "X-Tamga-Admin-Key: $TAMGA_ADMIN_KEY" \\
   -H "Content-Type: application/json" \\
-  -d '${payload.replaceAll("'", "\\'")}'`;
-    navigator.clipboard.writeText(cmd);
-    toast.success("cURL command copied");
+  -d '${payload.replaceAll("'", "'\\''")}'`;
+    void copy(cmd, "cURL command copied");
   }
 
   function copyJson() {
-    const payload = JSON.stringify({ policy_yaml: effectiveYaml, sample_text: prompt }, null, 2);
-    navigator.clipboard.writeText(payload);
-    toast.success("Result copied");
+    const payload = JSON.stringify({ yaml: effectiveYaml, sample_text: prompt }, null, 2);
+    void copy(payload, "Request body copied");
   }
 
   function loadBundledSamples() {

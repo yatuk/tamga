@@ -53,13 +53,13 @@ export const policies = {
 
   getPolicyRevision: (adminKey: string, id: string) =>
     fetchAPI<PolicyRevision>(
-      `/api/v1/policies/history/${encodeURIComponent(id)}`,
+      `/api/v1/policies/revisions/${encodeURIComponent(id)}`,
       { headers: authHeaders(adminKey) },
     ),
 
   rollbackPolicyRevision: (adminKey: string, id: string) =>
     fetchAPI<{ ok: boolean; revision: string }>(
-      `/api/v1/policies/history/${encodeURIComponent(id)}/rollback`,
+      `/api/v1/policies/rollback/${encodeURIComponent(id)}`,
       { method: "POST", headers: authHeaders(adminKey) },
     ),
 

@@ -44,7 +44,7 @@ export function useScannerPoolPage(): ScannerPoolPageData {
     poolEnabled,
     pool,
     scannerCount: health.data?.scanner_count ?? 0,
-    pipelineMode: poolEnabled ? "workerpool" : "adaptive (default)",
+    pipelineMode: poolEnabled ? "workerpool" : "adaptive",
     loading: metrics.isLoading || health.isLoading,
     error: metrics.error?.message ?? health.error?.message ?? null,
   };
