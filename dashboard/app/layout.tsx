@@ -1,13 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import { Archivo, Atkinson_Hyperlegible_Mono, Atkinson_Hyperlegible_Next } from "next/font/google";
-import { cookies } from "next/headers";
-import "./globals.css";
+import "./tamga.css";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { QueryProvider } from "@/lib/query-provider";
 import { ClerkBoundary } from "@/components/clerk-boundary";
-import { ThemeProvider } from "@/components/theme-provider";
-import { Toaster } from "@/components/ui/sonner";
-import { toLowerEn } from "@/lib/utils/case";
+import { Toaster } from "@/components/console/toaster";
 
 // Atkinson Hyperlegible for text: it was drawn to keep 0/O and 1/l/I apart,
 // and this console is read for request IDs, keys and card numbers. Archivo,
@@ -16,6 +13,8 @@ import { toLowerEn } from "@/lib/utils/case";
 const atkinson = Atkinson_Hyperlegible_Next({
   subsets: ["latin", "latin-ext"],
   variable: "--font-atkinson",
+  // Next has no fallback metrics for this face; the fallbacks below are close enough.
+  adjustFontFallback: false,
   display: "swap",
   fallback: ["Segoe UI", "Arial", "sans-serif"],
 });
@@ -29,6 +28,8 @@ const archivo = Archivo({
 const atkinsonMono = Atkinson_Hyperlegible_Mono({
   subsets: ["latin", "latin-ext"],
   variable: "--font-atkinson-mono",
+  // Next has no fallback metrics for this face; the fallbacks below are close enough.
+  adjustFontFallback: false,
   display: "swap",
   fallback: ["Consolas", "Menlo", "monospace"],
 });
@@ -74,47 +75,31 @@ export const metadata: Metadata = {
   },
 };
 
-// Tints the browser chrome to match the page background in each theme.
+// Tints the browser chrome to match the paper.
 /* eslint-disable tamga/no-hardcoded-color -- a meta tag cannot read CSS variables */
-export const viewport: Viewport = {
-  themeColor: [
-    { media: "(prefers-color-scheme: dark)", color: "#10120f" },
-    { media: "(prefers-color-scheme: light)", color: "#e7e8e2" },
-  ],
-};
+export const viewport: Viewport = { themeColor: "#f4f4f4" };
 /* eslint-enable tamga/no-hardcoded-color */
 
-export default async function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const cookieStore = await cookies();
-  const themeCookie = cookieStore.get("tamga-theme")?.value;
-  const defaultTheme = themeCookie === "light" ? "light" : "dark";
-  const htmlClassName = defaultTheme === "dark" ? "dark" : undefined;
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   const pk = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || "";
-  const clerkEnabled = pk && !toLowerEn(pk).includes("placeholder");
-
-  // Colors and font families come from the tokens in globals.css; the body
-  // only carries the font variables.
-  const bodyClass = `${atkinson.variable} ${archivo.variable} ${atkinsonMono.variable} bg-background font-sans text-foreground antialiased`;
+  const clerkEnabled = pk && !pk.toLowerCase().includes("placeholder");
 
   const tree = (
-    <ThemeProvider attribute="class" defaultTheme={defaultTheme} enableSystem={true}>
+    <>
       <NuqsAdapter>
         <QueryProvider>{children}</QueryProvider>
       </NuqsAdapter>
-      <Toaster richColors position="bottom-right" />
-    </ThemeProvider>
+      <Toaster />
+    </>
   );
 
   // Clerk is only loaded when a real publishable key is configured.
   const body = clerkEnabled ? <ClerkBoundary>{tree}</ClerkBoundary> : tree;
 
   return (
-    <html lang="en" className={htmlClassName} suppressHydrationWarning>
-      <body className={bodyClass}>{body}</body>
+    <html lang="en">
+      {/* The body only carries the font variables; colours and faces are set in tamga.css. */}
+      <body className={`${atkinson.variable} ${archivo.variable} ${atkinsonMono.variable}`}>{body}</body>
     </html>
   );
 }

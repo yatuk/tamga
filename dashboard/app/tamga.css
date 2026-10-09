@@ -1,4 +1,4 @@
-@import "@carbon/styles/css/styles.css" layer(carbon);
+@import "@carbon/styles/css/styles.css";
 
 /*
  * Carbon, re-skinned for Tamga.
@@ -76,43 +76,10 @@
   text-underline-offset: 3px;
 }
 
-/*
- * Pages that have not been rebuilt on Carbon yet still draw with the old
- * Tailwind tokens. Until each is redone, those tokens are pointed at the new
- * paper-and-ink values so nothing in the console looks like the old theme.
- * Dialogs and menus render outside .tamga, so this goes on the root.
- */
-:root {
-  --surface-base: #f4f4f4;
-  --surface-subtle: #e8e8e8;
-  --surface-card: #ffffff;
-  --surface-elevated: #ffffff;
-  --fg: #161616;
-  --fg-muted: #393939;
-  --fg-subtle: #525252;
-  --fg-faint: #6f6f6f;
-  --border: #c6c6c6;
-  --border-strong: #8d8d8d;
-  --border-subtle: #e0e0e0;
-  --ring: #161616;
-  --inner-highlight: none;
-  --brand: #161616;
-  --brand-hover: #393939;
-  --brand-foreground: #ffffff;
-  --status-critical: #c8321f;
-  --status-high: #8a5a00;
-  --status-medium: #8a5a00;
-  --status-low: #525252;
-  --status-pass: #198038;
-  --chart-1: #161616;
-  --chart-2: #e04a35;
-  --chart-3: #d99e1c;
-  --chart-4: #8d8d8d;
-  --chart-5: #525252;
-  --chart-6: #c6c6c6;
-}
-.tamga .t-main h1 {
-  text-transform: none;
+html,
+body {
+  margin: 0;
+  background: #f4f4f4;
 }
 
 /* ── Shell ─────────────────────────────────────────────────────────── */
@@ -1206,4 +1173,61 @@
 }
 .tamga .t-destinations.t-evidence li {
   grid-template-columns: minmax(0, 1fr) auto;
+}
+
+/* ── Toasts ────────────────────────────────────────────────────────── */
+/* Rendered at the root, outside .tamga: the tokens are spelled out here. */
+.t-toasts [data-sonner-toast][data-styled="true"] {
+  border: 1px solid #161616;
+  border-left-width: 3px;
+  border-radius: 0;
+  background: #ffffff;
+  color: #161616;
+  box-shadow: none;
+  font-family: var(--font-atkinson), "Segoe UI", sans-serif;
+  font-size: 0.875rem;
+}
+.t-toasts [data-sonner-toast][data-styled="true"][data-type="error"] {
+  border-left-color: #e04a35;
+}
+.t-toasts [data-sonner-toast][data-styled="true"] [data-description] {
+  color: #525252;
+}
+
+/* ── Command palette ───────────────────────────────────────────────── */
+.tamga .t-palette .cds--modal-container {
+  align-self: flex-start;
+  margin-top: 12vh;
+}
+.tamga .t-palette ul {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  max-height: 22rem;
+  overflow: auto;
+}
+.tamga .t-palette li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--tamga-rule);
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+.tamga .t-palette li[aria-selected="true"] {
+  background: var(--cds-layer-selected);
+  box-shadow: inset 3px 0 0 var(--tamga-stamp-fill);
+}
+
+/* ── Sign-in ───────────────────────────────────────────────────────── */
+.tamga .t-auth {
+  max-width: 30rem;
+  margin: 0 auto;
+  padding: 18vh 1.5rem 4rem;
+}
+.tamga .t-authbrand {
+  margin-bottom: 3rem;
+  font-size: 1.25rem;
+  color: var(--cds-text-primary);
 }

@@ -18,14 +18,13 @@ import {
   Theme,
 } from "@carbon/react";
 import { Search } from "@carbon/icons-react";
-import { findNavItem, navGroups } from "@/components/shell/nav";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { useProxyHealth } from "@/components/shell/use-proxy-health";
-import { UserMenu } from "@/components/shell/user-menu";
 import { EXPRESSIVE, Motion } from "./motion";
+import { findNavItem, navGroups } from "./nav";
+import { useProxyHealth } from "./use-proxy-health";
+import { UserMenu } from "./user-menu";
 
-// cmdk and its dialog are only needed once the palette is opened.
-const CommandPalette = dynamic(() => import("@/components/shell/command-palette").then((m) => m.CommandPalette), { ssr: false });
+// The palette is only needed once it is opened.
+const CommandPalette = dynamic(() => import("./palette").then((m) => m.CommandPalette), { ssr: false });
 
 /** The console frame: an ink header, the section list, and the page. */
 export function TamgaShell({ children }: { children: ReactNode }) {
@@ -129,8 +128,7 @@ export function TamgaShell({ children }: { children: ReactNode }) {
           ) : null}
           {/* Pages read filters from the URL, which suspends during prerender. */}
           <Suspense fallback={<SkeletonText paragraph lineCount={6} />}>
-            {/* For the pages still built on the old kit; goes when the last one is rebuilt. */}
-            <TooltipProvider delayDuration={200}>{children}</TooltipProvider>
+            {children}
           </Suspense>
         </main>
 

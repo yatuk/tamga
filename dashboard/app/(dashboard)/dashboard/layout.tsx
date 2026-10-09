@@ -1,4 +1,3 @@
-import "../../tamga.css";
 import { TamgaShell } from "@/components/console/shell";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
