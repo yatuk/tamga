@@ -156,6 +156,12 @@ type HandlerConfig struct {
 	Budget *budget.Budget
 	// Cache is the optional prompt→response cache (Phase 3C).
 	Cache *cache.Cache
+	// ScanState names what the scanners work from that is neither in the
+	// policy nor fixed by the build: the patterns stored through the API
+	// (optional). It goes into the cache key, so it must depend on content
+	// only and be the same on every replica that scans with the same
+	// patterns. It is called once per cacheable request.
+	ScanState func() string
 	// UpstreamRegistry holds policy-defined provider pools (FAZ2 fallback + circuit breaker).
 	UpstreamRegistry *upstream.Registry
 	// PricingResolver provides DB-backed USD-per-1M rates (5-min cache).
@@ -926,18 +932,28 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 		if provider == "bedrock" {
 			_, proxySigns = bedrockCredentials()
 		}
-		cacheKey = cache.Key(cache.KeyParts{
-			// For an anonymous request the organisation is only a claim;
-			// Verified keeps it away from every entry a key produced.
-			Org:      orgIDForRequest(r, cfg),
-			Verified: who.verified(),
-			Identity: cfg.Cache.Identity(r, who.KeyID, proxySigns),
-			Provider: provider,
-			Model:    extractModelFromBody(body),
-			Path:     r.URL.Path,
-			Query:    r.URL.RawQuery,
-			Body:     body,
-		})
+		// The key also names the rules the answer is scanned under (see
+		// cache_generation.go): pol is the policy this request was decided
+		// with and its answer will be scanned with. A policy that cannot be
+		// named leaves the key empty.
+		identity := cfg.Cache.Identity(r, who.KeyID, proxySigns)
+		if generation := policyDigest(pol); generation != "" && identity.OK() {
+			cacheScan = cacheScanState(cfg)
+			cacheKey = cache.Key(cache.KeyParts{
+				// For an anonymous request the organisation is only a claim;
+				// Verified keeps it away from every entry a key produced.
+				Org:      orgIDForRequest(r, cfg),
+				Verified: who.verified(),
+				Identity: identity,
+				Provider: provider,
+				Model:    extractModelFromBody(body),
+				Path:     r.URL.Path,
+				Query:    r.URL.RawQuery,
+				Body:     body,
+				Policy:   generation,
+				Scan:     cacheScan,
+			})
+		}
 	}
 
 	upCtx, upSpan := telemetry.Tracer().Start(ctx, "upstream.request",
@@ -953,6 +969,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 
 			p := req.URL.Path
 			if stripPrefix != "" {
+	cacheScan := ""
 				p = strings.TrimPrefix(p, stripPrefix)
 				if !strings.HasPrefix(p, "/") {
 					p = "/" + p
@@ -1233,9 +1250,12 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 			// would serve tokenized bodies on later hits. cacheKey is empty
 			// for a vaulted request and for one that names no caller. A
 			// compressed body is not stored either: a hit is served without
-			// the Content-Encoding that would let the client read it.
+			// the Content-Encoding that would let the client read it. And
+			// nothing is stored when the rules changed while the provider
+			// was answering: the scan above may not have been the one the
+			// key names.
 			if respBuffered && outputClean && cacheKey != "" && resp.StatusCode == http.StatusOK &&
-				resp.Header.Get("Content-Encoding") == "" {
+				resp.Header.Get("Content-Encoding") == "" && cacheRulesUnchanged(cfg, pol, cacheScan) {
 				// The policy's TTL is held to the ceiling here, where the
 				// entry is written, whatever validation let through.
 				ttl, clamped := cache.EffectiveTTL(pol.Cache.TTLSeconds)

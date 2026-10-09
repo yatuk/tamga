@@ -116,6 +116,14 @@ func (s *CustomScanner) Refresh() {
 	s.mu.Unlock()
 }
 
+// Fingerprint names the patterns the scanner has compiled and is scanning
+// with, which for a moment after a change are not yet the ones in the policy.
+func (s *CustomScanner) Fingerprint() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.fp
+}
+
 // Scan searches content for every custom pattern. It stops when the context
 // ends, when the time budget is spent or at MaxFindingsPerScan findings, and
 // then returns what it found together with an ErrScanDegraded error: the

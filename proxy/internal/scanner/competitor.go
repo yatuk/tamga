@@ -2,6 +2,8 @@ package scanner
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"sort"
 	"strings"
 	"sync"
@@ -128,6 +130,19 @@ func (s *CompetitorScanner) Refresh() {
 	s.mu.Lock()
 	s.refreshLocked()
 	s.mu.Unlock()
+}
+
+// Fingerprint names the competitor list the scanner has compiled and is
+// scanning with, by digest: the list itself is not for a cache key.
+func (s *CompetitorScanner) Fingerprint() string {
+	s.mu.RLock()
+	fp := s.fp
+	s.mu.RUnlock()
+	if fp == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(fp))
+	return hex.EncodeToString(sum[:])
 }
 
 // Scan checks content for competitor mentions and returns findings. The

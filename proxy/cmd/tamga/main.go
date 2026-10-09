@@ -369,7 +369,14 @@ func main() {
 	webhookStore.UseGuard(alertGuard)
 	patternStore := patterns.NewMemoryStore()
 	userStore := users.NewMemoryStore()
-	persistSettings(cfg, pgStore, patternStore, userStore, webhookStore)
+	// A pattern that arrives from another replica has to be compiled here
+	// too. Without this the store would name it (and the cache key with it)
+	// while the scanner went on without it.
+	persistSettings(cfg, pgStore, patternStore, userStore, webhookStore, func() {
+		if customScanner != nil {
+			customScanner.Refresh()
+		}
+	})
 	ssoStore := store.NewMemorySSOSettingsStore()
 	clerkClient := users.NewClerkClient(cfg.ClerkSecretKey)
 	var policyHistory policyhistory.Store
@@ -760,6 +767,22 @@ func main() {
 	root.Handle("/api/v1/", api.NewHandler(api.Config{
 		AdminKey:               cfg.AdminKey,
 		CORSOrigin:             cfg.CORSOrigin,
+		// The cache key names the patterns the custom scanner is given, so a
+		// pattern added or removed through the API is a miss, not a stale hit.
+		// What the scanners have compiled, not what the policy and the
+		// pattern store now say: between a change and the refresh that
+		// follows it the two differ, and an answer scanned in that gap must
+		// not be found under the key of the new rules.
+		ScanState: func() string {
+			state := ""
+			if customScanner != nil {
+				state = customScanner.Fingerprint()
+			}
+			if competitorScanner != nil {
+				state += "/" + competitorScanner.Fingerprint()
+			}
+			return state
+		},
 		CORSOrigins:            cfg.CORSOrigins,
 		CORSAllowedMethods:     cfg.CORSAllowedMethods,
 		CORSCredentials:        cfg.CORSCredentials,
@@ -1001,7 +1024,10 @@ const settingsReloadInterval = 30 * time.Second
 // persistSettings puts the database behind the pattern, team-role and
 // webhook stores, so they survive a restart and agree across replicas.
 // Without a database they stay in memory, as before.
-func persistSettings(cfg *config.Config, pg *store.PostgresStore, pats *patterns.MemoryStore, team *users.MemoryStore, hooks *webhooks.MemoryStore) {
+//
+// afterReload runs after each periodic reload, for whoever keeps something
+// compiled from these stores.
+func persistSettings(cfg *config.Config, pg *store.PostgresStore, pats *patterns.MemoryStore, team *users.MemoryStore, hooks *webhooks.MemoryStore, afterReload func()) {
 	if pg == nil {
 		log.Warn().Msg("settings: no database configured, custom patterns, team roles and webhooks are kept in memory and lost on restart")
 		return
@@ -1053,3 +1079,6 @@ func persistSettings(cfg *config.Config, pg *store.PostgresStore, pats *patterns
 		}
 	}()
 }
+			if afterReload != nil {
+				afterReload()
+			}

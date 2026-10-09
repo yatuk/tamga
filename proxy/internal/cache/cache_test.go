@@ -504,163 +504,102 @@ func TestCache_Get_RedisCorruptData(t *testing.T) {
 	}
 }
 
-// ── InvalidateByOrg tests ───────────────────────────────────────
+// ── Flush tests ─────────────────────────────────────────────────
 
-func TestCache_InvalidateByOrg_MatchesLocal(t *testing.T) {
+func TestCache_Flush_EmptiesLocalTier(t *testing.T) {
 	c := New(64)
-	prefix := "tamga:cache:" + "acme"
-
-	c.Set(&Entry{
-		Key:      prefix + "-hash1",
-		Provider: "p", Model: "m", Body: []byte("d1"), StoredAt: time.Now(),
-	})
-	c.Set(&Entry{
-		Key:      prefix + "-hash2",
-		Provider: "p", Model: "m", Body: []byte("d2"), StoredAt: time.Now(),
-	})
-	c.Set(&Entry{
-		Key:      prefix + "-hash3",
-		Provider: "p", Model: "m", Body: []byte("d3"), StoredAt: time.Now(),
-	})
-
-	count := c.InvalidateByOrg("acme")
-	if count != 3 {
-		t.Fatalf("expected 3 evicted, got %d", count)
+	for _, k := range []string{"k1", "k2", "k3"} {
+		c.Set(&Entry{Key: k, Provider: "p", Model: "m", Body: []byte("d")})
 	}
 
-	if _, ok := c.Get(prefix + "-hash1"); ok {
-		t.Fatal("entry hash1 should have been evicted")
+	if n := c.Flush(); n != 3 {
+		t.Fatalf("expected 3 flushed, got %d", n)
 	}
-	if _, ok := c.Get(prefix + "-hash2"); ok {
-		t.Fatal("entry hash2 should have been evicted")
+	if _, _, size := c.Stats(); size != 0 {
+		t.Fatalf("expected size 0 after flush, got %d", size)
 	}
-	if _, ok := c.Get(prefix + "-hash3"); ok {
-		t.Fatal("entry hash3 should have been evicted")
+	for _, k := range []string{"k1", "k2", "k3"} {
+		if _, ok := c.Get(k); ok {
+			t.Fatalf("entry %s survived the flush", k)
+		}
+	}
+
+	// The cache is usable afterwards.
+	c.Set(&Entry{Key: "k4", Provider: "p", Model: "m", Body: []byte("d")})
+	if _, ok := c.Get("k4"); !ok {
+		t.Fatal("entry stored after the flush was not found")
+	}
+	if n := c.Flush(); n != 1 {
+		t.Fatalf("expected 1 flushed, got %d", n)
 	}
 }
 
-func TestCache_InvalidateByOrg_NoMatches(t *testing.T) {
+// What Redis still holds from before the flush is not served by the process
+// that was flushed; what another replica writes afterwards is.
+func TestCache_Flush_RefusesOlderRedisEntries(t *testing.T) {
+	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 	c := New(64)
-	c.Set(&Entry{
-		Key:      "other-key-1",
-		Provider: "p", Model: "m", Body: []byte("d1"), StoredAt: time.Now(),
-	})
-	c.Set(&Entry{
-		Key:      "other-key-2",
-		Provider: "p", Model: "m", Body: []byte("d2"), StoredAt: time.Now(),
+	c.SetClock(func() time.Time { return now })
+
+	stored := map[string][]byte{}
+	c.SetRedis(&mockRedisClient{
+		enabled: true,
+		getFunc: func(_ context.Context, key string) ([]byte, bool, error) {
+			raw, ok := stored[key]
+			return raw, ok, nil
+		},
+		setFunc: func(_ context.Context, key string, val []byte, _ time.Duration) error {
+			stored[key] = val
+			return nil
+		},
 	})
 
-	count := c.InvalidateByOrg("acme")
-	if count != 0 {
-		t.Fatalf("expected 0 evicted, got %d", count)
+	c.Set(&Entry{Key: "shared", Provider: "p", Model: "m", Body: []byte("old"), TTL: time.Hour})
+	if len(stored) != 1 {
+		t.Fatalf("expected the entry in Redis, got %d keys", len(stored))
 	}
 
-	if _, ok := c.Get("other-key-1"); !ok {
-		t.Fatal("non-matching entry other-key-1 should survive")
+	now = now.Add(time.Minute)
+	c.Flush()
+	if _, ok := c.Get("shared"); ok {
+		t.Fatal("an entry from before the flush was served from Redis")
 	}
-	if _, ok := c.Get("other-key-2"); !ok {
-		t.Fatal("non-matching entry other-key-2 should survive")
+
+	now = now.Add(time.Minute)
+	fresh, _ := json.Marshal(&Entry{Key: "shared", Provider: "p", Model: "m", Body: []byte("new"), StoredAt: now, TTL: time.Hour})
+	stored[c.redisKey("shared")] = fresh
+	e, ok := c.Get("shared")
+	if !ok || string(e.Body) != "new" {
+		t.Fatalf("an entry written after the flush was not served: ok=%v", ok)
 	}
 }
 
-func TestCache_InvalidateByOrg_MixedMatches(t *testing.T) {
-	c := New(64)
-	prefix := "tamga:cache:" + "acme"
+// ── Policy and scan generation in the key ───────────────────────
 
-	c.Set(&Entry{
-		Key:      prefix + "-a",
-		Provider: "p", Model: "m", Body: []byte("a"), StoredAt: time.Now(),
-	})
-	c.Set(&Entry{
-		Key:      prefix + "-b",
-		Provider: "p", Model: "m", Body: []byte("b"), StoredAt: time.Now(),
-	})
-	c.Set(&Entry{
-		Key:      "unrelated-key",
-		Provider: "p", Model: "m", Body: []byte("c"), StoredAt: time.Now(),
-	})
-
-	count := c.InvalidateByOrg("acme")
-	if count != 2 {
-		t.Fatalf("expected 2 evicted, got %d", count)
+func TestKey_PolicyAndScanSeparateEntries(t *testing.T) {
+	base := KeyParts{
+		Org: "acme", Verified: true, Identity: Identity{value: "key:k1"},
+		Provider: "openai", Model: "gpt-4o-mini", Path: "/v1/chat/completions",
+		Body: []byte(`{"q":1}`), Policy: "policy-a", Scan: "scan-1",
 	}
-
-	if _, ok := c.Get("unrelated-key"); !ok {
-		t.Fatal("unrelated entry should survive")
+	same := base
+	if Key(base) != Key(same) {
+		t.Fatal("the same parts gave two keys")
 	}
-	if _, ok := c.Get(prefix + "-a"); ok {
-		t.Fatal("matching entry -a should be evicted")
+	otherPolicy := base
+	otherPolicy.Policy = "policy-b"
+	if Key(base) == Key(otherPolicy) {
+		t.Fatal("two policies share a key")
 	}
-	if _, ok := c.Get(prefix + "-b"); ok {
-		t.Fatal("matching entry -b should be evicted")
+	otherScan := base
+	otherScan.Scan = "scan-2"
+	if Key(base) == Key(otherScan) {
+		t.Fatal("two scan states share a key")
 	}
-}
-
-func TestCache_InvalidateByOrg_EmptyOrgID(t *testing.T) {
-	c := New(64)
-	prefix := "tamga:cache:"
-
-	c.Set(&Entry{
-		Key:      prefix + "hash1",
-		Provider: "p", Model: "m", Body: []byte("d1"), StoredAt: time.Now(),
-	})
-	c.Set(&Entry{
-		Key:      prefix + "hash2",
-		Provider: "p", Model: "m", Body: []byte("d2"), StoredAt: time.Now(),
-	})
-	c.Set(&Entry{
-		Key:      "no-prefix-key",
-		Provider: "p", Model: "m", Body: []byte("d3"), StoredAt: time.Now(),
-	})
-
-	count := c.InvalidateByOrg("")
-	if count != 2 {
-		t.Fatalf("expected 2 evicted (prefix-matched), got %d", count)
-	}
-
-	if _, ok := c.Get("no-prefix-key"); !ok {
-		t.Fatal("non-prefixed entry should survive")
-	}
-}
-
-func TestCache_InvalidateByOrg_PartialPrefixMatch(t *testing.T) {
-	c := New(64)
-	// "ac" is a prefix of "acme-corp" so InvalidateByOrg("ac") matches
-	// entries whose key starts with "tamga:cache:ac".
-	shortPrefix := "tamga:cache:" + "acm"
-
-	c.Set(&Entry{
-		Key:      shortPrefix + "e-hash",
-		Provider: "p", Model: "m", Body: []byte("d"), StoredAt: time.Now(),
-	})
-	c.Set(&Entry{
-		Key:      "unrelated",
-		Provider: "p", Model: "m", Body: []byte("d"), StoredAt: time.Now(),
-	})
-
-	count := c.InvalidateByOrg("ac")
-	// "tamga:cache:ac" matches "tamga:cache:acme-hash" via prefix check.
-	if count != 1 {
-		t.Fatalf("expected 1 evicted (shorter prefix match), got %d", count)
-	}
-}
-
-func TestCache_InvalidateByOrg_StatsUpdate(t *testing.T) {
-	c := New(64)
-	prefix := "tamga:cache:" + "org"
-
-	c.Set(&Entry{Key: prefix + "-1", Provider: "p", Model: "m", Body: []byte("d"), StoredAt: time.Now()})
-	c.Set(&Entry{Key: prefix + "-2", Provider: "p", Model: "m", Body: []byte("d"), StoredAt: time.Now()})
-
-	_, _, sizeBefore := c.Stats()
-	if sizeBefore != 2 {
-		t.Fatalf("expected size 2 before eviction, got %d", sizeBefore)
-	}
-
-	c.InvalidateByOrg("org")
-
-	_, _, sizeAfter := c.Stats()
-	if sizeAfter != 0 {
-		t.Fatalf("expected size 0 after eviction, got %d", sizeAfter)
+	// The two fields cannot be traded against each other.
+	shifted := base
+	shifted.Policy, shifted.Scan = "policy-", "ascan-1"
+	if Key(base) == Key(shifted) {
+		t.Fatal("policy and scan run into each other in the key")
 	}
 }

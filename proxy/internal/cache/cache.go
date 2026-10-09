@@ -87,6 +87,9 @@ type Cache struct {
 	// another replica or after a restart.
 	secret []byte
 	now    func() time.Time
+	// flushedAt is when Flush last ran. An entry Redis hands back from
+	// before then is not served.
+	flushedAt time.Time
 }
 
 // New creates an LRU exact-match prompt cache with the given capacity.
@@ -273,6 +276,16 @@ type KeyParts struct {
 	Query string
 	// Body is the body as sent to the provider, after any redaction.
 	Body []byte
+	// Policy names the policy the answer is scanned under: a digest of its
+	// content, the same on every replica that runs the same policy. An entry
+	// is only ever found again under the policy that let it be stored, so a
+	// change of policy needs no eviction: the next request asks under another
+	// key, and what the old policy stored ages out.
+	Policy string
+	// Scan names whatever else the scanners work from that can differ between
+	// two moments or two replicas: the scanner build and the patterns stored
+	// at runtime.
+	Scan string
 }
 
 // localKeyPrefix marks a key built on a credential digest. Such an entry is
@@ -286,7 +299,7 @@ func Key(p KeyParts) string {
 		return ""
 	}
 	h := sha256.New()
-	writeField(h, "tamga-cache-v2")
+	writeField(h, "tamga-cache-v3")
 	if p.Verified {
 		writeField(h, "verified")
 	} else {
@@ -298,6 +311,8 @@ func Key(p KeyParts) string {
 	writeField(h, p.Model)
 	writeField(h, p.Path)
 	writeField(h, queryWithoutCredential(p.Query))
+	writeField(h, p.Policy)
+	writeField(h, p.Scan)
 	h.Write(p.Body)
 	key := hex.EncodeToString(h.Sum(nil))
 	if p.Identity.local {
@@ -376,6 +391,7 @@ func (c *Cache) Get(key string) (*Entry, bool) {
 		c.mu.Unlock()
 		return e, true
 	}
+	flushedAt := c.flushedAt
 	c.mu.Unlock()
 
 	// Fall back to Redis (if attached) for a cross-replica cache hit.
@@ -387,7 +403,7 @@ func (c *Cache) Get(key string) (*Entry, bool) {
 			// The entry must be the one asked for: it is indexed under its
 			// own key, and one that names another would be served there.
 			if err := json.Unmarshal(raw, &e); err == nil && e.Key == key {
-				if now.Sub(e.StoredAt) <= ttlOf(&e) {
+				if now.Sub(e.StoredAt) <= ttlOf(&e) && e.StoredAt.After(flushedAt) {
 					c.mu.Lock()
 					c.insertLocked(&e)
 					c.hits++
@@ -446,26 +462,23 @@ func (c *Cache) Set(e *Entry) {
 	}
 }
 
-// InvalidateByOrg removes all cache entries whose key starts with the
-// given orgID prefix. Used with NATS policy.change events to evict
-// stale cached responses when a tenant's policy is updated.
-func (c *Cache) InvalidateByOrg(orgID string) int {
+// Flush empties this process's cache and returns how many entries it held.
+//
+// A change of policy does not need it: the policy is part of the key (see
+// KeyParts.Policy). It is for an operator who wants what is stored gone now.
+//
+// Entries in Redis are not deleted, since they cannot be listed by what they
+// belong to. This process stops serving the ones written before the flush;
+// another replica keeps serving them until they expire or it is flushed too.
+// "Before" is judged by the clock of the replica that wrote the entry.
+func (c *Cache) Flush() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	prefix := "tamga:cache:" + orgID
-	count := 0
-	for key, elem := range c.index {
-		if len(key) >= len(prefix) && key[:len(prefix)] == prefix {
-			c.ll.Remove(elem)
-			delete(c.index, key)
-			count++
-		}
-	}
-	// Also invalidate Redis entries for this org (best-effort).
-	// Redis entries can't be scanned by key pattern, but the local
-	// eviction is the primary mechanism — Redis entries have a TTL
-	// and will expire naturally.
-	return count
+	n := c.ll.Len()
+	c.ll.Init()
+	c.index = map[string]*list.Element{}
+	c.flushedAt = c.now()
+	return n
 }
 
 // Stats returns hit/miss counters.
