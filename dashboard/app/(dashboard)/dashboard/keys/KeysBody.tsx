@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   Button,
   CodeSnippet,
@@ -59,6 +59,7 @@ export function KeysBody({
   const [label, setLabel] = useState("");
   const [scope, setScope] = useState<KeyScope>("proxy");
   const [orgId, setOrgId] = useState("");
+  const newKey = useRef<HTMLButtonElement>(null);
 
   const admins = apiKeys.filter((k) => k.scope === "admin").length;
   const apps = apiKeys.filter((k) => k.scope === "proxy").length;
@@ -96,7 +97,7 @@ export function KeysBody({
               }`
         }
       >
-        <Button kind="primary" size="sm" renderIcon={Add} onClick={() => setCreateOpen(true)} disabled={!adminKey}>
+        <Button ref={newKey} kind="primary" size="sm" renderIcon={Add} onClick={() => setCreateOpen(true)} disabled={!adminKey}>
           New key
         </Button>
       </PageHead>
@@ -160,6 +161,7 @@ export function KeysBody({
         open={createOpen}
         size="sm"
         modalHeading="New API key"
+        launcherButtonRef={newKey}
         primaryButtonText={createMutation.isPending ? "Creating" : "Create key"}
         primaryButtonDisabled={!label.trim() || createMutation.isPending}
         secondaryButtonText="Cancel"
@@ -170,7 +172,7 @@ export function KeysBody({
         <div className="t-form" style={{ paddingTop: 0 }}>
           <TextInput
             id="new-key-name"
-            labelText="Name"
+            labelText="Name (required)"
             helperText="Name it after the application that will use it."
             placeholder="billing-service"
             autoComplete="off"
@@ -194,7 +196,7 @@ export function KeysBody({
               id="new-key-org"
               labelText="Organisation (optional)"
               helperText="Requests made with this key are counted under it, whatever the request says."
-              placeholder="acme"
+              placeholder="finance"
               autoComplete="off"
               value={orgId}
               onChange={(e) => setOrgId(e.target.value)}
