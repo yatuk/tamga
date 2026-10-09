@@ -9,8 +9,8 @@ The bank is concerned about KVKK fines and BDDK audit findings.
 agents that call a model API and are pointed at the proxy. With the shipped
 policy a request carrying a TC Kimlik or a card number is blocked, and an
 IBAN is redacted before the request is forwarded. Each decision is written
-to the request log in the bank's own Postgres. Tamga can post alerts to a
-webhook or to one of the alert destinations listed in the README.
+to the request log in the bank's own Postgres. A blocked request is posted
+to the alert destinations the bank has connected ([alerts](operations.md#alerts)).
 
 **What it does not cover:** text typed or pasted into chatgpt.com in a
 browser never reaches the proxy. Tamga does not see or stop it; see

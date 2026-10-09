@@ -145,8 +145,9 @@ flowchart LR
    scanned on the way back when the policy's `output_rules` are on; they are
    off in the shipped policy.
 4. **Record.** Every decision becomes an event in the Postgres request log
-   and the dashboard. A rule whose action is `WARN` can also post to a
-   webhook. Alerts for blocked and redacted requests are not sent yet.
+   and the dashboard. A blocked, stripped or warned request is also posted to
+   the [alert destinations](docs/operations.md#alerts) you have connected,
+   and to the `notify:` URL of the rule that matched.
 
 Diagrams for the request lifecycle, scanner pipeline, policy flow and database
 schema are in [docs/architecture](docs/architecture/README.md).
@@ -398,9 +399,10 @@ exercises the whole path, so treat these as experimental:
 - The `/azure`, `/bedrock`, `/mistral` and `/local` routes. No test forwards a
   request through them; the Bedrock signature is checked only for its headers.
 - Alert destinations (Slack, Teams, Splunk, Sentinel, QRadar, Datadog, Jira,
-  PagerDuty, Opsgenie, ServiceNow). A destination can be saved and sent a
-  test message, and the payload of each is unit tested. Live events are not
-  delivered to them, and none has been tried against the real service.
+  PagerDuty, Opsgenie, ServiceNow). Decisions are delivered to them, each in
+  its own format, and that is tested against local stand-ins. None has been
+  tried against the real service, and several need their authentication
+  header added by hand ([alerts](docs/operations.md#alerts)).
 - Streamed-response scanning outside OpenAI chat completions. The Anthropic,
   Gemini and OpenAI Responses stream formats are tested at parsing level only.
 - The Helm chart and the Terraform module (never linted, rendered or applied).

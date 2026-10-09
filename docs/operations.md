@@ -376,6 +376,54 @@ figure describes the mechanism and is not a measured result.
 Without a database all of these live in memory and startup logs a warning for
 each.
 
+## Alerts
+
+A decision against a request is posted to the alert destinations saved under
+Integrations in the dashboard (or `POST /api/v1/webhooks`), each in its own
+format: Slack text, a Teams card, CEF for Splunk HEC and Sentinel, LEEF for
+QRadar, a PagerDuty event, an Opsgenie alert, a ServiceNow incident, a Jira
+issue, a Datadog event, or plain JSON for a generic webhook.
+
+What is sent:
+
+- **BLOCK, STRIP and WARN** go to every enabled destination, for requests and
+  for responses when `output_rules` are on.
+- **REDACT** goes only to a destination with a cooldown, or a threshold above
+  1. An address redacted in every request would otherwise be a message for
+  every request.
+- A destination's threshold, window and cooldown are honoured, as are
+  `rule.severity_at_least` and `rule.blocks_per_minute`.
+- A rule's `notify:` URL in the policy is told about every decision of that
+  rule, whatever its action, at most once a minute for the same kind of
+  finding. The shipped policy names it as `${SLACK_WEBHOOK_URL}`; a value that
+  is exactly one such reference is read from the proxy's environment, and
+  when the variable is unset nothing is sent.
+
+The message names the request, the time, the organisation, the provider and
+model, the action and each finding's type, category and severity. It carries
+no text from the request or the response and no matched value.
+
+Sending never holds up a request: alerts wait in a queue of 256 for four
+workers, each attempt has 5 seconds, and a network error or a 5xx is tried
+three times. When the queue is full the alert is dropped. The counters are in
+`/api/v1/metrics` as `tamga_alerts_total{kind,result}` with the results
+`sent`, `failed`, `dropped` and `suppressed`.
+
+Limits to know:
+
+- No destination has been tried against the real service. The formats are
+  the ones the Test button sends.
+- Splunk (`Authorization: Splunk <token>`), Datadog (`DD-API-KEY`),
+  ServiceNow and Jira need their authentication set as a custom header on
+  the destination. PagerDuty and Opsgenie take theirs from the auth token.
+- A destination's URL is not checked against internal addresses.
+- Each replica alerts on its own: thresholds and cooldowns are per process.
+- For a request that was forwarded (STRIP, WARN, REDACT) the alert goes out
+  when the provider's response has ended. A response served from the cache
+  sends none.
+- One destination that hangs can occupy the workers for up to about 17
+  seconds at a time and delay the others.
+
 ## Cost control and budget enforcement
 
 There are two budget caps. Both are daily, both are per organisation, and

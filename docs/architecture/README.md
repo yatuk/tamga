@@ -242,7 +242,7 @@ flowchart TD
 
     RuleAction -->|block| Block403b([BLOCK 403<br/>Policy violation])
     RuleAction -->|redact| Mask[Mask findings in payload<br/>e.g. 4532 -> masked]
-    RuleAction -->|warn| Webhook[Fire webhook<br/>continue request]
+    RuleAction -->|warn| Webhook[Queue alert<br/>continue request]
     RuleAction -->|pass| PassRule([PASS])
 
     Mask --> CheckBudget{Daily budget<br/>OK?}
@@ -270,7 +270,7 @@ Decision order (first match wins):
 2. Policy rules matched? No rule: default action
 3. Rule action block (critical PII, secrets): BLOCK 403
 4. Rule action redact: mask and continue
-5. Rule action warn: fire webhook, pass
+5. Rule action warn: pass. Block, strip and warn each queue an alert
 6. Daily budget exceeded: BLOCK 429
 7. Rate limit exceeded: BLOCK 429
 8. Default: PASS
