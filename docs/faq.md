@@ -23,7 +23,8 @@ applications pointed at it get no answer. When the proxy is up and the scan
 fails (a scanner errors or times out, or is shed under load),
 `scan.on_error` decides. A policy without that key forwards the request on
 the findings of the scanners that did run, with
-`X-Tamga-Scan-Degraded: true`. The shipped `proxy/tamga-policy.yaml` sets
+`X-Tamga-Scan-Degraded: true`, unless those findings call for masking: text
+is not sent masked in part, and that request gets a 503. The shipped `proxy/tamga-policy.yaml` sets
 `on_error: block`, which answers 503. A circuit breaker and retries handle
 failures of the upstream provider.
 

@@ -3,6 +3,52 @@
 ## v0.9.0 (unreleased)
 
 ### Security
+- **Who changed the policy was whatever the caller said.** `X-Tamga-Actor`
+  and `X-Tamga-User-Id` set the author of a proposal, its approver and the
+  actor in the audit log, so the author of a proposal could approve it under
+  another name. The actor now comes from the credential: `admin-key`,
+  `apikey:<id>` or `user:<id>`. Older records keep the names they had.
+- **`require_dual_control` could be walked around with `PUT /policies`.**
+  With it on, a direct write, a custom-entity change and a rollback now
+  answer 409 and the change has to be approved by someone other than its
+  author. A proposal cannot be approved twice or after the policy moved on.
+  **A deployment with only the admin key cannot approve anything under dual
+  control:** give each person a key. See "Who may change the policy" in the
+  operations guide for what dual control does not cover.
+- **A `write`-scope key could change any part of the policy.** Providers,
+  exceptions, governance, the vault, the cache, limits, cost, the scan
+  settings, the canary and where a rule sends its alerts now need the admin
+  role; a write that touches them with an analyst key is refused with 403
+  and the sections named. **A CI job that pushes the whole policy with a
+  `write` key needs an admin key, or to leave those sections as they are.**
+  Analysts can open, approve and reject proposals within their sections.
+- Every policy change through the API, a reload or the file is in the audit
+  log with the actor and the paths that changed, and in the policy history.
+- **Text could be sent masked in part.** With `scan.on_error: pass`, a
+  request with more than 1000 matches in one piece of text, or whose scan ran
+  out of time, was forwarded with the rest unmasked. A request or response
+  that was to be masked on an unfinished scan is now refused with 503
+  `tamga_redaction_incomplete`, whatever `on_error` says. This includes a
+  scanner that fails outright: a deployment on `on_error: pass` with a
+  scanner that always fails gets 503 for every request that needed masking.
+- **A response whose scan did not finish was sent anyway.** It is now
+  withheld with 503 unless `output_rules.fail_open` is set, as a stream
+  already was.
+- **A cached answer outlived the rules it was scanned under.** The cache key
+  now carries the policy's content, the compiled patterns and the scanner
+  version: after a change every request misses once. All entries miss once
+  on upgrade.
+- The built-in scanners stop at the request's deadline instead of running to
+  the end (1 MiB took over four seconds whatever the deadline). **With
+  `on_error: block`, a large request that used to finish late now gets a 503
+  at the deadline; the same for a response against
+  `output_rules.scan_window_ms`.**
+- The scanner service answered an unfinished scan with an empty result,
+  which the proxy read as clean. It now returns an error.
+- A stored pattern created on one replica was not compiled on the others
+  until a restart or a policy reload. It is now picked up within 30 seconds.
+- `PUT /policies` and `POST /policies/validate` answer a policy over a limit
+  with 422 and one entry per field, not a single-message 400.
 - **A compressed response passed the output scan unread.** The caller's
   `Accept-Encoding` was forwarded and the answer was not decoded, so
   `output_rules` scanned gzip bytes and found nothing in them. Most HTTP

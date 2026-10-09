@@ -186,7 +186,9 @@ other formats are tested where their events are parsed
 (`stream_guard_test.go`). Tool-call arguments and thinking are forwarded
 unread. A stream in a shape Tamga does not know is forwarded unread too and
 counted in `tamga_scan_degraded_total{reason="stream_unrecognised"}`. If the
-scanner fails the stream ends, unless `output_rules.fail_open` is set.
+scanner fails the stream ends, unless `output_rules.fail_open` is set. With
+`fail_open` set the stream still ends when a value was to be masked and the
+scan behind the masking did not finish.
 
 ### Limits on patterns and settings
 
@@ -204,10 +206,23 @@ over a limit does not load.
 | Operator-state assertions, authorization rules | 50 each |
 | Custom entity name | `[A-Za-z0-9_]`, up to 64 bytes |
 
-A custom or competitor scan stops at the request's deadline, after 1000
-findings in one piece of text, or after its time budget, and reports the
-scan as incomplete. What happens then is `scan.on_error`: the shipped policy
-blocks.
+Every scanner stops at the request's deadline. A custom or competitor scan
+also stops after 1000 findings in one piece of text or after its time
+budget. The scan is then reported as incomplete, and what happens is
+`scan.on_error`: the shipped policy blocks.
+
+One case does not follow `scan.on_error`. When the policy would mask or
+strip what was found and the scan did not reach the end of the text, the
+request is refused with 503 `tamga_redaction_incomplete`, also under
+`on_error: pass`: text is never sent masked in part. The body's `reason` is
+`findings_cap`, `time_budget`, `deadline`, `cancelled` or `scanner_failed`.
+The same holds for a response that was to be masked.
+
+For a response, `output_rules.fail_open` decides what an unfinished scan
+means when nothing was found: unset, the response is replaced by a 503
+`tamga_scan_unavailable`; set, it is sent with `X-Tamga-Scan-Degraded: true`.
+`output_rules.scan_window_ms` (200 by default) is the time the scan of a
+response has, and the scanners now keep to it.
 
 Also refused at load: a rule `action` or `override_action` that is not
 exactly `BLOCK`, `STRIP`, `REDACT`, `WARN`, `LOG` or `PASS` (a lower-case
@@ -220,6 +235,57 @@ under 16; a second YAML document in the file. `data.retention_days`,
 
 `POST /api/v1/policies/simulate` takes at most 512 KiB, of which 256 KiB of
 `sample_text`.
+
+## Who may change the policy
+
+The policy file on disk belongs to whoever can write it; the rules below are
+for changes made through the API and the console.
+
+| Role | May change |
+|---|---|
+| admin (the admin key, a user with the admin role) | everything |
+| analyst (an API key of scope `write`) | `rules` except a rule's `notify`, `output_rules`, `custom_entities`, `competitors`, `name`, `version` |
+
+Everything else needs the admin role: `providers`, `exceptions`,
+`governance`, `data`, `pricing`, `vault`, `cache`, `body_limits`,
+`rate_limit`, `cost`, `scan`, `operator_state`, `canary`, and where a rule
+sends its alerts. A write that touches one of these with an analyst key is
+refused whole with 403, and the body lists the sections under
+`privileged_sections`. The comparison is of the decoded policy against the
+one in force, so comments and key order do not count.
+
+Who made a change is taken from the credential, never from a header or the
+request body: `admin-key`, `apikey:<key id>` or `user:<id>`. `X-Tamga-Actor`
+is ignored.
+
+Every change is written to the audit log with that actor, where it came from
+(`api_put`, `reload`, `rollback`, `proposal_approve`, `custom_entity_add`,
+`custom_entity_delete`, `file_watcher`) and the paths that changed, such as
+`rules.pii_detection.action`. Values are not written: a policy holds webhook
+URLs and pattern text. A change made on disk has no actor. Each change is
+also a revision in the policy history.
+
+### Two people for a change
+
+With `governance.require_dual_control: true`, a direct write (`PUT
+/api/v1/policies`, adding or deleting a custom entity, a rollback) is
+refused with 409 `dual_control_required`. The change is opened as a
+proposal (`POST /api/v1/policies/proposals`) and applied when someone other
+than its author approves it. A proposal is checked again at approval, cannot
+be approved once the policy has changed since it was written (409
+`proposal_stale`), and cannot be approved or rejected twice (409
+`proposal_closed`).
+
+What this does not do:
+
+- The admin key is one actor whoever holds it. With only that key nothing
+  can be approved; give each person an API key or a login.
+- An admin can create a second key and approve with it. Dual control stops a
+  mistake and a single stolen key, not an administrator who wants around it.
+- Editing the file on disk is outside it. The audit log records that the
+  file changed, not who changed it.
+- With more than one replica, two approvals of the same proposal sent to
+  different replicas at the same moment are not serialised.
 
 ## Keys for applications
 
@@ -637,6 +703,11 @@ have made. So:
   served from the cache and never fills it;
 - the organisation, provider, model, path, query and forwarded body are all
   part of the key;
+- so are the rules the answer was scanned under: the content of the policy,
+  the patterns the scanners have compiled (stored patterns included) and the
+  scanner version. After any change to the policy or to a stored pattern,
+  every request misses once and is scanned under the new rules. Reformatting
+  the file or reordering its keys is not a change; reordering a list is;
 - an answer is stored only for a 200 whose output scan found nothing, and
   never for a request the vault tokenised, a stream, or a request signed by
   the caller for Bedrock;
@@ -646,10 +717,13 @@ have made. So:
   them. Only answers keyed by a Tamga key are shared through Redis;
 - a hit is recorded like any other request, with `cache_status: hit`.
 
+Replicas that share Redis share answers only while they run the same policy,
+patterns and scanner version; during a rolling change they do not.
+
 Two limits: the cache stores only when the response is read, which happens
-with `output_rules` or the canary on; and a change of policy does not evict
-what was stored under the old one, so an answer can be served for up to the
-TTL without being scanned under the new rules.
+with `output_rules` or the canary on; and the operator-state scanner reads
+decisions from the audit log, which are not part of the key, so an answer
+that names a decision can outlive a change to that decision by up to the TTL.
 
 ## Management REST API
 
