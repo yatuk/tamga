@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Button, ContentSwitcher, IconButton, InlineNotification, SkeletonText, Switch } from "@carbon/react";
 import { TrashCan } from "@carbon/icons-react";
 import type { TimeRange } from "@/lib/types";
@@ -188,7 +188,8 @@ export function Shares({
 
 /**
  * Delete, asked twice in place: the bin turns into the question. No dialog
- * to read for something this small.
+ * to read for something this small. The question opens with the focus on the
+ * way out, so a second Enter keeps the thing; Escape does the same.
  */
 export function Remove({
   label,
@@ -205,26 +206,37 @@ export function Remove({
   disabled?: boolean;
 }) {
   const [asking, setAsking] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const asked = useRef(false);
+  // Once the question is answered the focus goes back to where it was asked.
+  useEffect(() => {
+    if (asking) asked.current = true;
+    else if (asked.current) {
+      asked.current = false;
+      trigger.current?.focus();
+    }
+  }, [asking]);
+
   if (!asking && text) {
     return (
-      <Button kind="ghost" size="sm" disabled={disabled} onClick={() => setAsking(true)}>
+      <Button ref={trigger} kind="ghost" size="sm" disabled={disabled} onClick={() => setAsking(true)}>
         {text}
       </Button>
     );
   }
   if (!asking) {
     return (
-      <IconButton kind="ghost" size="sm" label={label} align="left" disabled={disabled} onClick={() => setAsking(true)}>
+      <IconButton ref={trigger} kind="ghost" size="sm" label={label} align="left" disabled={disabled} onClick={() => setAsking(true)}>
         <TrashCan />
       </IconButton>
     );
   }
   return (
-    <span className="t-confirm">
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
+    <span className="t-confirm" onKeyDown={(e) => e.key === "Escape" && setAsking(false)}>
       <Button
         kind="danger"
         size="sm"
-        autoFocus
         onClick={() => {
           setAsking(false);
           onConfirm();
@@ -232,7 +244,7 @@ export function Remove({
       >
         {verb}
       </Button>
-      <Button kind="ghost" size="sm" onClick={() => setAsking(false)}>
+      <Button kind="ghost" size="sm" autoFocus onClick={() => setAsking(false)}>
         Keep
       </Button>
     </span>

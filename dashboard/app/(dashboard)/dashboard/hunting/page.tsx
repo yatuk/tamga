@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Button, Checkbox, DataTableSkeleton, IconButton, Search, Select, SelectItem, TextInput } from "@carbon/react";
-import { Renew, TrashCan } from "@carbon/icons-react";
+import { Button, Checkbox, DataTableSkeleton, Search, Select, SelectItem, TextInput } from "@carbon/react";
+import { Renew } from "@carbon/icons-react";
 import { EventTable, Pager, useOpenEvent } from "@/components/console/events";
 import { EXPRESSIVE, PRODUCTIVE } from "@/components/console/motion";
 import { ACTION_WORDS, counted, dayLabel, RANGE_WORDS, typeName } from "@/components/console/names";
-import { DataNotice, PageHead, RangeSwitch, Section } from "@/components/console/page";
+import { DataNotice, PageHead, RangeSwitch, Remove, Section } from "@/components/console/page";
 import { PAGE_SIZE } from "./_constants";
 import type { SavedHunt } from "./_types";
 import { useHuntingPage } from "./useHuntingPage";
@@ -20,7 +20,7 @@ export default function HuntingPage() {
   const m = useHuntingPage();
   const events = m.data?.events ?? [];
   const total = m.data?.total ?? 0;
-  const { openId, open, toggle, close } = useOpenEvent(events, m.adminKey);
+  const { openId, open, missing, toggle, close } = useOpenEvent(events, m.adminKey);
   const f = m.filters;
   // A saved hunt may carry a type this list does not know.
   const types = f.finding_type && !TYPES.includes(f.finding_type) ? [...TYPES, f.finding_type] : TYPES;
@@ -129,6 +129,7 @@ export default function HuntingPage() {
             swapKey={`${JSON.stringify(f)}|${m.shadow}|${m.range}|${m.page}`}
             openId={openId}
             open={open}
+            missing={missing}
             onToggle={toggle}
             onClose={close}
             adminKey={m.adminKey}
@@ -158,15 +159,24 @@ function SavedHunts({
 }) {
   const [naming, setNaming] = useState(false);
   const [name, setName] = useState("");
-  const [asking, setAsking] = useState<string | null>(null);
+  const save = useRef<HTMLButtonElement>(null);
+  const named = useRef(false);
+  // Leaving the name field, saved or not, puts the focus back on the button that opened it.
+  useEffect(() => {
+    if (naming) named.current = true;
+    else if (named.current) {
+      named.current = false;
+      save.current?.focus();
+    }
+  }, [naming]);
 
   return (
     <section aria-labelledby="saved">
       <div className="t-sectionhead">
         <h2 id="saved">Saved hunts</h2>
         {naming ? null : (
-          <Button kind="ghost" size="sm" onClick={() => setNaming(true)}>
-            Save this one
+          <Button ref={save} kind="ghost" size="sm" onClick={() => setNaming(true)}>
+            Save this search
           </Button>
         )}
       </div>
@@ -205,7 +215,7 @@ function SavedHunts({
               onKeyDown={(e) => e.key === "Escape" && setNaming(false)}
             />
             <Button type="submit" kind="primary" size="md" disabled={!name.trim()}>
-              Save
+              Save search
             </Button>
           </motion.form>
         ) : null}
@@ -227,31 +237,11 @@ function SavedHunts({
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.2, ease: PRODUCTIVE }}
               >
-                {asking === h.id ? (
-                  <>
-                    <span>
-                      Delete <b style={{ display: "inline" }}>{h.name}</b>?
-                    </span>
-                    <span style={{ display: "flex", gap: 1 }}>
-                      <Button kind="danger" size="sm" onClick={() => void onDelete(h.id).then(() => setAsking(null))}>
-                        Delete
-                      </Button>
-                      <Button kind="ghost" size="sm" onClick={() => setAsking(null)}>
-                        Keep
-                      </Button>
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <button type="button" className="t-huntname" onClick={() => onApply(h)}>
-                      <b>{h.name}</b>
-                      <span className="t-note">Saved {dayLabel(h.updated_at)}</span>
-                    </button>
-                    <IconButton kind="ghost" size="sm" label={`Delete ${h.name}`} align="left" onClick={() => setAsking(h.id)}>
-                      <TrashCan />
-                    </IconButton>
-                  </>
-                )}
+                <button type="button" className="t-huntname" onClick={() => onApply(h)}>
+                  <b>{h.name}</b>
+                  <span className="t-note">Saved {dayLabel(h.updated_at)}</span>
+                </button>
+                <Remove label={`Delete ${h.name}`} onConfirm={() => void onDelete(h.id)} />
               </motion.li>
             ))}
           </AnimatePresence>
