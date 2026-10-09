@@ -98,6 +98,30 @@ func (r *Registry) Register(s Scanner) {
 	r.scanners = append(r.scanners, s)
 }
 
+// Without returns a registry holding the same scanners, with the same speed
+// classes, except those named. The scan API uses it to leave out a scanner
+// that publishes what it reads.
+func (r *Registry) Without(names ...string) *Registry {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	skip := make(map[string]bool, len(names))
+	for _, n := range names {
+		skip[n] = true
+	}
+	out := &Registry{speeds: make(map[string]ScannerSpeed, len(r.speeds))}
+	for _, s := range r.scanners {
+		if !skip[s.Name()] {
+			out.scanners = append(out.scanners, s)
+		}
+	}
+	for name, sp := range r.speeds {
+		if !skip[name] {
+			out.speeds[name] = sp
+		}
+	}
+	return out
+}
+
 func (r *Registry) Count() int {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
