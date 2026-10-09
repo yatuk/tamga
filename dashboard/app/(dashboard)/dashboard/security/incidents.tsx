@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ContentSwitcher, DataTableSkeleton, Dropdown, InlineNotification, Search, Switch } from "@carbon/react";
 import { api } from "@/lib/api";
 import { useAdminKey } from "@/hooks/useAdminKey";
+import { useEnumParam } from "@/hooks/useUrlState";
 import { EventTable, useFresh, useOpenEvent } from "@/components/console/events";
 import { kindName, leadFinding, providerName } from "@/components/console/names";
 
@@ -12,7 +13,8 @@ const ACTIONS = ["All", "BLOCK", "REDACT"] as const;
 
 export function Incidents() {
   const [adminKey] = useAdminKey();
-  const [action, setAction] = useState<(typeof ACTIONS)[number]>("All");
+  // The action filter is kept in the URL, so a filtered queue can be linked to.
+  const [action, setAction] = useEnumParam("action", ACTIONS, "All");
   const [provider, setProvider] = useState("All providers");
   const [query, setQuery] = useState("");
 
