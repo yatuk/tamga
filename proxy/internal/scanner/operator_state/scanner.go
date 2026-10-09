@@ -167,6 +167,12 @@ func (s *OperatorStateScanner) ScanWithContext(ctx context.Context, content []by
 	noteCtxs := make(map[string]NoteContext)
 
 	for _, id := range decisionIDs {
+		// A prompt can name any number of decisions, and each is looked up
+		// and matched against every rule. Stop when the request's time is
+		// up, and say the scan was cut short rather than call it clean.
+		if err := ctx.Err(); err != nil {
+			return findings, fmt.Errorf("%w: operator_state scanner stopped: %v", scanner.ErrScanDegraded, err)
+		}
 		rec := s.lookupDecision(ctx, rs, id)
 		if rec == nil {
 			// Default-deny: a governed decision id the projection cannot

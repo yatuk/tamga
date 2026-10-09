@@ -56,26 +56,19 @@ func TestValidateSemantics_InvalidRuleAction(t *testing.T) {
 	}
 }
 
-func TestValidateSemantics_RedosWarning(t *testing.T) {
+// Nested quantifiers are what makes a backtracking engine exponential. Go's
+// regexp does not backtrack, so "(a+)+" costs what "a+" costs and is not
+// flagged; what is costly here is judged by program size (bounds_test.go).
+func TestValidateSemantics_NestedQuantifiersAreNotFlagged(t *testing.T) {
 	p := &Policy{
 		Version: "1.0",
 		Name:    "test",
 		CustomEntities: []CustomEntity{
-			{Name: "risky", Pattern: `(a+)+`, Action: "BLOCK", Severity: "high", Confidence: 0.9},
+			{Name: "nested", Pattern: `(a+)+$`, Action: "BLOCK", Severity: "high", Confidence: 0.9},
 		},
 	}
-	issues := ValidateSemantics(p)
-	var warn bool
-	for _, i := range issues {
-		if i.Rule == "redos_risk" {
-			warn = true
-		}
-	}
-	if !warn {
-		t.Fatal("expected redos warning")
-	}
-	if HasValidationErrors(issues) {
-		t.Fatal("redos should be warning only")
+	if issues := ValidateSemantics(p); len(issues) != 0 {
+		t.Fatalf("a harmless pattern raised %+v", issues)
 	}
 }
 
@@ -788,7 +781,7 @@ func TestValidateSemantics_StreamingBufferTooLargeWarning(t *testing.T) {
 	}
 }
 
-func TestValidateSemantics_OutputBufferBytesTooSmallWarning(t *testing.T) {
+func TestValidateSemantics_OutputBufferBytesTooSmall(t *testing.T) {
 	p := &Policy{
 		Version: "1.0",
 		Name:    "test",
@@ -799,18 +792,17 @@ func TestValidateSemantics_OutputBufferBytesTooSmallWarning(t *testing.T) {
 		},
 	}
 	issues := ValidateSemantics(p)
-	if HasValidationErrors(issues) {
-		t.Fatal("small buffer_bytes should be warning only")
-	}
+	// A response larger than the buffer is forwarded unscanned, so a
+	// buffer this small is the output scan switched off.
 	found := false
 	for _, i := range issues {
-		if i.Rule == "too_small" && i.Field == "output_rules.buffer_bytes" {
+		if i.Rule == "too_small" && i.Field == "output_rules.buffer_bytes" && i.Severity == "error" {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Errorf("expected too_small warning for buffer_bytes, got: %+v", issues)
+		t.Errorf("expected too_small error for buffer_bytes, got: %+v", issues)
 	}
 }
 

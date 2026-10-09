@@ -2,10 +2,11 @@ package scanner
 
 import (
 	"context"
-	"regexp"
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/rs/zerolog/log"
 )
 
 // CompetitorSpec is a competitor detection rule from policy (avoids scanner → policy import).
@@ -20,7 +21,7 @@ type CompetitorSpec struct {
 // competitorCompiled holds the pre-compiled regex patterns for one competitor.
 type competitorCompiled struct {
 	name     string
-	res      []*regexp.Regexp
+	res      []*scanPattern
 	severity string
 	action   string
 }
@@ -55,11 +56,18 @@ func competitorFingerprint(specs []CompetitorSpec) string {
 	return strings.Join(rows, "\n")
 }
 
+// compileCompetitors compiles the patterns the scanner will run. A pattern
+// or a competitor past the limits is left out and logged, once per reload,
+// and not run; see compileCustomSpecs.
 func compileCompetitors(specs []CompetitorSpec) []*competitorCompiled {
-	var out []*competitorCompiled
+	out := []*competitorCompiled{}
 	for _, c := range specs {
 		if !c.Enabled || c.Name == "" || len(c.Patterns) == 0 {
 			continue
+		}
+		if len(out) == MaxCompetitors {
+			log.Warn().Str("component", "competitor_scanner").Int("competitors", len(specs)).Int("limit", MaxCompetitors).Msg("too many competitors; the rest are skipped")
+			break
 		}
 		sev := strings.TrimSpace(c.Severity)
 		if sev == "" {
@@ -69,18 +77,22 @@ func compileCompetitors(specs []CompetitorSpec) []*competitorCompiled {
 		if action == "" {
 			action = "log"
 		}
-		var compiled []*regexp.Regexp
+		var compiled []*scanPattern
 		for _, p := range c.Patterns {
-			p = strings.TrimSpace(p)
-			if p == "" {
+			if strings.TrimSpace(p) == "" {
 				continue
+			}
+			if len(compiled) == MaxPatternsPerCompetitor {
+				log.Warn().Str("component", "competitor_scanner").Str("competitor", c.Name).Int("limit", MaxPatternsPerCompetitor).Msg("too many patterns for one competitor; the rest are skipped")
+				break
 			}
 			// Case-insensitive matching for competitor names.
-			re, err := regexp.Compile("(?i)" + p)
+			pat, err := compileScanPattern(competitorPattern(p))
 			if err != nil {
+				log.Warn().Err(err).Str("component", "competitor_scanner").Str("competitor", c.Name).Msg("competitor pattern refused; skipped")
 				continue
 			}
-			compiled = append(compiled, re)
+			compiled = append(compiled, pat)
 		}
 		if len(compiled) == 0 {
 			continue
@@ -118,9 +130,11 @@ func (s *CompetitorScanner) Refresh() {
 	s.mu.Unlock()
 }
 
-// Scan checks content for competitor mentions and returns findings.
+// Scan checks content for competitor mentions and returns findings. The
+// match is masked like every other stored match: a pattern is the analyst's,
+// and what it matched in a prompt is not theirs to read back. Scan stops on
+// the same limits as CustomScanner.Scan and reports them the same way.
 func (s *CompetitorScanner) Scan(ctx context.Context, content []byte) ([]Finding, error) {
-	_ = ctx
 	s.mu.RLock()
 	compiled := s.compiled
 	s.mu.RUnlock()
@@ -131,26 +145,30 @@ func (s *CompetitorScanner) Scan(ctx context.Context, content []byte) ([]Finding
 		compiled = s.compiled
 		s.mu.RUnlock()
 	}
+	if len(compiled) == 0 {
+		return nil, nil
+	}
 
 	var findings []Finding
-	for _, c := range compiled {
-		for _, re := range c.res {
-			matches := re.FindAllIndex(content, -1)
-			for _, loc := range matches {
-				if len(loc) != 2 {
-					continue
-				}
-				matched := string(content[loc[0]:loc[1]])
-				findings = append(findings, Finding{
-					Type:        "competitor",
-					Category:    c.name,
-					Severity:    c.severity,
-					Match:       matched,
-					StartPos:    loc[0],
-					EndPos:      loc[1],
-					Confidence:  0.95, // competitor names are distinctive
-					ActionTaken: c.action,
+	ps := newPatternScan(ctx, s.Name(), content)
+	for i := range ps.chunks {
+		for _, c := range compiled {
+			for _, pat := range c.res {
+				ok := ps.each(pat, i, func(start, end int) {
+					findings = append(findings, Finding{
+						Type:        "competitor",
+						Category:    c.name,
+						Severity:    c.severity,
+						Match:       maskContent(string(content[start:end])),
+						StartPos:    start,
+						EndPos:      end,
+						Confidence:  0.95, // competitor names are distinctive
+						ActionTaken: c.action,
+					})
 				})
+				if !ok {
+					return findings, ps.err
+				}
 			}
 		}
 	}

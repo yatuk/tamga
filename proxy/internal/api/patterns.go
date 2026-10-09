@@ -9,6 +9,28 @@ import (
 	"github.com/yatuk/tamga/internal/patterns"
 )
 
+// maxPatternBodyBytes bounds the body of a pattern create or update. A
+// pattern is at most scanner.MaxPatternBytes; the rest is a name and three
+// short fields.
+const maxPatternBodyBytes = 16 << 10
+
+// decodePattern reads a pattern from the request, and answers the request
+// itself when it cannot: 413 for a body over the limit, 400 otherwise.
+func decodePattern(w http.ResponseWriter, r *http.Request) (patterns.Pattern, bool) {
+	var body patterns.Pattern
+	r.Body = http.MaxBytesReader(w, r.Body, maxPatternBodyBytes)
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "request body exceeds 16384 bytes"})
+			return body, false
+		}
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
+		return body, false
+	}
+	return body, true
+}
+
 func (cfg Config) handlePatternList(w http.ResponseWriter, _ *http.Request) {
 	if cfg.Patterns == nil {
 		writeJSON(w, http.StatusOK, map[string]interface{}{"items": []patterns.Pattern{}, "total": 0})
@@ -24,9 +46,8 @@ func (cfg Config) handlePatternCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer func() { _ = r.Body.Close() }()
-	var body patterns.Pattern
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
+	body, ok := decodePattern(w, r)
+	if !ok {
 		return
 	}
 	out, err := cfg.Patterns.Create(body)
@@ -57,9 +78,8 @@ func (cfg Config) handlePatternUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	id := r.PathValue("id")
 	defer func() { _ = r.Body.Close() }()
-	var body patterns.Pattern
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
+	body, ok := decodePattern(w, r)
+	if !ok {
 		return
 	}
 	out, err := cfg.Patterns.Update(id, body)

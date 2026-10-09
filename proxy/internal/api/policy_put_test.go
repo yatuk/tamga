@@ -465,9 +465,11 @@ rate_limit:
 	req.Header.Set("Content-Type", "application/x-yaml")
 	resp, _ := http.DefaultClient.Do(req)
 	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusUnprocessableEntity {
-		b, _ := io.ReadAll(resp.Body)
-		t.Fatalf("expected 422 for negative max_tokens_per_day, got %d: %s", resp.StatusCode, b)
+	// A negative quota is no quota. That is a policy that does not load,
+	// so it is refused as one, before validation.
+	b, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusBadRequest || !strings.Contains(string(b), "rate_limit.max_tokens_per_day") {
+		t.Fatalf("expected 400 naming rate_limit.max_tokens_per_day, got %d: %s", resp.StatusCode, b)
 	}
 }
 

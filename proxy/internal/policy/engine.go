@@ -686,6 +686,21 @@ func LoadFromBytes(data []byte) (*Policy, error) {
 	if err := dec.Decode(&p); err != nil && !errors.Is(err, io.EOF) {
 		return nil, fmt.Errorf("parsing policy YAML: %w", err)
 	}
+	// Only the first document is the policy. A second one would be dropped
+	// without a word, and with it whatever the operator wrote there.
+	for {
+		var extra yaml.Node
+		err := dec.Decode(&extra)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("parsing policy YAML: %w", err)
+		}
+		if !emptyDocument(&extra) {
+			return nil, fmt.Errorf("parsing policy YAML: the file holds more than one YAML document (a second \"---\"); a policy is one document")
+		}
+	}
 
 	if p.Version == "" {
 		p.Version = "1.0"
@@ -711,7 +726,26 @@ func LoadFromBytes(data []byte) (*Policy, error) {
 		return nil, fmt.Errorf("parsing policy YAML: %s: %s", issues[0].Field, issues[0].Message)
 	}
 
+	// A value outside its bounds fails the load for the same reason: a
+	// pattern that costs seconds per request, or a number that turns a
+	// control off, must not get in through any door. See bounds.go.
+	if bad, found := firstBoundError(boundsIssues(&p)); found {
+		return nil, fmt.Errorf("parsing policy YAML: %s: %s", bad.Field, bad.Message)
+	}
+
 	return &p, nil
+}
+
+// emptyDocument reports whether a YAML document holds nothing: what a
+// trailing "---" or a comment after one leaves behind.
+func emptyDocument(n *yaml.Node) bool {
+	if n.Kind == 0 {
+		return true
+	}
+	if n.Kind == yaml.DocumentNode {
+		return len(n.Content) == 0 || (len(n.Content) == 1 && emptyDocument(n.Content[0]))
+	}
+	return n.Kind == yaml.ScalarNode && n.Tag == "!!null"
 }
 
 // PolicyStore holds the active policy with atomic swap on reload (thread-safe reads).

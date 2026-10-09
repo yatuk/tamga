@@ -11,13 +11,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"regexp"
+	"fmt"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/yatuk/tamga/internal/docstore"
+	"github.com/yatuk/tamga/internal/scanner"
 )
 
 const (
@@ -47,6 +48,10 @@ type Pattern struct {
 
 // ErrNotFound is returned when the pattern id is unknown.
 var ErrNotFound = errors.New("pattern not found")
+
+// ErrTooMany is returned when the store already holds as many patterns as
+// the custom scanner will run (scanner.MaxStoredPatterns).
+var ErrTooMany = fmt.Errorf("the store already holds %d patterns, which is the limit: delete one first", scanner.MaxStoredPatterns)
 
 // Store describes the HTTP-facing operations.
 type Store interface {
@@ -124,7 +129,9 @@ func validateSeverity(s string) string {
 	return SeverityMedium
 }
 
-// Validate checks pattern integrity and compiles the regex if applicable.
+// Validate checks pattern integrity and, for a regex, the limits every
+// analyst pattern is held to (scanner.CheckPattern): its length, the size of
+// its compiled program, and that it cannot match the empty string.
 // Returns the normalized pattern ready for storage.
 func Validate(p Pattern) (Pattern, error) {
 	p.Name = strings.TrimSpace(p.Name)
@@ -141,8 +148,11 @@ func Validate(p Pattern) (Pattern, error) {
 	}
 	p.Kind = kind
 	p.Severity = validateSeverity(p.Severity)
+	if len(p.Pattern) > scanner.MaxPatternBytes {
+		return p, fmt.Errorf("pattern is %d bytes, the limit is %d", len(p.Pattern), scanner.MaxPatternBytes)
+	}
 	if kind == KindRegex {
-		if _, err := regexp.Compile(p.Pattern); err != nil {
+		if err := scanner.CheckPattern(p.Pattern); err != nil {
 			return p, errors.New("invalid regex: " + err.Error())
 		}
 	}
@@ -184,6 +194,12 @@ func (s *MemoryStore) Create(p Pattern) (Pattern, error) {
 	normalized.UpdatedAt = now
 	s.wmu.Lock()
 	defer s.wmu.Unlock()
+	s.mu.RLock()
+	n := len(s.data)
+	s.mu.RUnlock()
+	if n >= scanner.MaxStoredPatterns {
+		return Pattern{}, ErrTooMany
+	}
 	if s.persist != nil {
 		if err := s.persist.Put(normalized.ID, normalized); err != nil {
 			return Pattern{}, err

@@ -363,7 +363,7 @@ func TestCustomEntityCreate_InvalidRegex(t *testing.T) {
 func TestCustomEntityCreate_Duplicate(t *testing.T) {
 	dir := t.TempDir()
 	policyPath := filepath.Join(dir, "policy.yaml")
-	_ = os.WriteFile(policyPath, []byte("version: \"1.0\"\nname: test\ncustom_entities:\n  - name: existing-entity\n    pattern: existing-pattern\n"), 0o600)
+	_ = os.WriteFile(policyPath, []byte("version: \"1.0\"\nname: test\ncustom_entities:\n  - name: existing_entity\n    pattern: existing-pattern\n"), 0o600)
 	p0, _ := policy.LoadFromFile(policyPath)
 
 	cfg := Config{
@@ -371,7 +371,7 @@ func TestCustomEntityCreate_Duplicate(t *testing.T) {
 		PolicyStore: policy.NewPolicyStore(p0),
 		PolicyPath:  policyPath,
 	}
-	body := strings.NewReader(`{"name":"existing-entity","pattern":"new-pattern"}`)
+	body := strings.NewReader(`{"name":"existing_entity","pattern":"new-pattern"}`)
 	r := httptest.NewRequest(http.MethodPost, "/policies/custom-entities", body)
 	r.Header.Set("X-Tamga-Admin-Key", "test-key")
 	w := httptest.NewRecorder()
@@ -393,7 +393,7 @@ func TestCustomEntityCreate_OK(t *testing.T) {
 		PolicyStore: policy.NewPolicyStore(p0),
 		PolicyPath:  policyPath,
 	}
-	body := strings.NewReader(`{"name":"my-entity","pattern":"my-pattern"}`)
+	body := strings.NewReader(`{"name":"my_entity","pattern":"my-pattern"}`)
 	r := httptest.NewRequest(http.MethodPost, "/policies/custom-entities", body)
 	r.Header.Set("X-Tamga-Admin-Key", "test-key")
 	w := httptest.NewRecorder()
@@ -411,8 +411,8 @@ func TestCustomEntityCreate_OK(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected entity in response, got %T", out["entity"])
 	}
-	if entity["name"] != "my-entity" {
-		t.Fatalf("expected name 'my-entity', got %v", entity["name"])
+	if entity["name"] != "my_entity" {
+		t.Fatalf("expected name 'my_entity', got %v", entity["name"])
 	}
 }
 
@@ -470,7 +470,7 @@ func TestCustomEntityDelete_NotFound(t *testing.T) {
 func TestCustomEntityDelete_OK(t *testing.T) {
 	dir := t.TempDir()
 	policyPath := filepath.Join(dir, "policy.yaml")
-	customEntitiesYAML := "version: \"1.0\"\nname: test\ncustom_entities:\n  - name: to-delete\n    pattern: some-pattern\n"
+	customEntitiesYAML := "version: \"1.0\"\nname: test\ncustom_entities:\n  - name: to_delete\n    pattern: some-pattern\n"
 	_ = os.WriteFile(policyPath, []byte(customEntitiesYAML), 0o600)
 	p0, _ := policy.LoadFromFile(policyPath)
 
@@ -479,8 +479,8 @@ func TestCustomEntityDelete_OK(t *testing.T) {
 		PolicyStore: policy.NewPolicyStore(p0),
 		PolicyPath:  policyPath,
 	}
-	r := httptest.NewRequest(http.MethodDelete, "/policies/custom-entities/to-delete", nil)
-	r.SetPathValue("name", "to-delete")
+	r := httptest.NewRequest(http.MethodDelete, "/policies/custom-entities/to_delete", nil)
+	r.SetPathValue("name", "to_delete")
 	w := httptest.NewRecorder()
 	cfg.handleCustomEntityDelete(w, r)
 
@@ -495,8 +495,8 @@ func TestCustomEntityDelete_OK(t *testing.T) {
 	// Verify the entity was removed from the reloaded policy.
 	updated := cfg.PolicyStore.GetPolicy()
 	for _, ce := range updated.CustomEntities {
-		if ce.Name == "to-delete" {
-			t.Fatalf("entity 'to-delete' should have been removed")
+		if ce.Name == "to_delete" {
+			t.Fatalf("entity 'to_delete' should have been removed")
 		}
 	}
 }

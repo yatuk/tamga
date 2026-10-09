@@ -34,9 +34,9 @@ type AssertionRule struct {
 
 // Compile pre-compiles the decision pattern regex. Call before use.
 func (r *AssertionRule) Compile() error {
-	re, err := regexp.Compile(r.DecisionPattern)
+	re, err := scanner.CompileMatcherPattern(r.DecisionPattern)
 	if err != nil {
-		return fmt.Errorf("invalid decision_pattern %q: %w", r.DecisionPattern, err)
+		return fmt.Errorf("invalid decision_pattern: %w", err)
 	}
 	r.compiledPattern = re
 	return nil
@@ -47,7 +47,20 @@ func (r *AssertionRule) MatchesDecision(decisionID string) bool {
 	if r.compiledPattern == nil {
 		return false
 	}
-	return r.compiledPattern.MatchString(decisionID)
+	return r.compiledPattern.MatchString(matchableID(decisionID))
+}
+
+// maxDecisionIDBytes is how much of a decision id the patterns are matched
+// against. A real id is under 30 bytes; the reference pattern accepts any
+// number of trailing digits, so a prompt can carry one of any length, and
+// matching costs time in proportion to it.
+const maxDecisionIDBytes = 128
+
+func matchableID(id string) string {
+	if len(id) > maxDecisionIDBytes {
+		return id[:maxDecisionIDBytes]
+	}
+	return id
 }
 
 // EvaluateDecision checks whether a decision record satisfies this assertion rule.
@@ -112,9 +125,9 @@ type AuthRule struct {
 
 // Compile pre-compiles the decision pattern regex. Call before use.
 func (r *AuthRule) Compile() error {
-	re, err := regexp.Compile(r.DecisionPattern)
+	re, err := scanner.CompileMatcherPattern(r.DecisionPattern)
 	if err != nil {
-		return fmt.Errorf("invalid decision_pattern %q: %w", r.DecisionPattern, err)
+		return fmt.Errorf("invalid decision_pattern: %w", err)
 	}
 	r.compiledPattern = re
 	return nil
@@ -122,7 +135,7 @@ func (r *AuthRule) Compile() error {
 
 // MatchesDecision returns true if the decision ID matches this rule's pattern.
 func (r *AuthRule) MatchesDecision(decisionID string) bool {
-	return r.compiledPattern != nil && r.compiledPattern.MatchString(decisionID)
+	return r.compiledPattern != nil && r.compiledPattern.MatchString(matchableID(decisionID))
 }
 
 // Allows returns true if the operator is on the allowlist.
@@ -187,6 +200,9 @@ func LoadRulesFromPolicy(cfg *policy.OperatorStateConfig) (*ScannerRules, error)
 		return nil, err
 	}
 
+	if n := len(cfg.Authorization); n > scanner.MaxOperatorStatePatterns {
+		return nil, fmt.Errorf("authorization: %d rules, the limit is %d", n, scanner.MaxOperatorStatePatterns)
+	}
 	auth := make([]AuthRule, 0, len(cfg.Authorization))
 	for i, a := range cfg.Authorization {
 		rule := AuthRule{
@@ -226,6 +242,9 @@ func LoadAssertionsFromPolicy(cfg *policy.OperatorStateConfig) ([]AssertionRule,
 		return nil, nil
 	}
 
+	if n := len(cfg.Assertions); n > scanner.MaxOperatorStatePatterns {
+		return nil, fmt.Errorf("assertions: %d rules, the limit is %d", n, scanner.MaxOperatorStatePatterns)
+	}
 	rules := make([]AssertionRule, 0, len(cfg.Assertions))
 	for i, a := range cfg.Assertions {
 		rule := AssertionRule{

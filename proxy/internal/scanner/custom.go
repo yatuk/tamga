@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -24,7 +23,7 @@ type CustomEntitySpec struct {
 
 type customCompiled struct {
 	name       string
-	re         *regexp.Regexp
+	pat        *scanPattern
 	severity   string
 	confidence float64
 }
@@ -57,15 +56,23 @@ func fingerprintSpecs(specs []CustomEntitySpec) string {
 	return hex.EncodeToString(h[:])
 }
 
+// compileCustomSpecs compiles the patterns the scanner will run. Validation
+// refuses a pattern past the limits before it is installed; one that arrives
+// some other way (a row written to the database, a policy file from an older
+// release) is left out here and logged, once per reload, and not run.
 func compileCustomSpecs(specs []CustomEntitySpec) []*customCompiled {
-	var out []*customCompiled
+	out := []*customCompiled{}
 	for _, sp := range specs {
 		if sp.Name == "" || sp.Pattern == "" {
 			continue
 		}
-		re, err := regexp.Compile(sp.Pattern)
+		if len(out) == MaxCustomEntities+MaxStoredPatterns {
+			log.Warn().Str("component", "custom_scanner").Int("patterns", len(specs)).Int("limit", len(out)).Msg("too many custom patterns; the rest are skipped")
+			break
+		}
+		pat, err := compileScanPattern(sp.Pattern)
 		if err != nil {
-			log.Warn().Err(err).Str("component", "custom_scanner").Str("entity", sp.Name).Msg("custom entity regex invalid; skipped")
+			log.Warn().Err(err).Str("component", "custom_scanner").Str("entity", sp.Name).Msg("custom entity pattern refused; skipped")
 			continue
 		}
 		conf := sp.Confidence
@@ -78,7 +85,7 @@ func compileCustomSpecs(specs []CustomEntitySpec) []*customCompiled {
 		}
 		out = append(out, &customCompiled{
 			name:       sp.Name,
-			re:         re,
+			pat:        pat,
 			severity:   sev,
 			confidence: conf,
 		})
@@ -109,8 +116,12 @@ func (s *CustomScanner) Refresh() {
 	s.mu.Unlock()
 }
 
+// Scan searches content for every custom pattern. It stops when the context
+// ends, when the time budget is spent or at MaxFindingsPerScan findings, and
+// then returns what it found together with an ErrScanDegraded error: the
+// text was not searched completely, and the caller must not read the result
+// as clean.
 func (s *CustomScanner) Scan(ctx context.Context, content []byte) ([]Finding, error) {
-	_ = ctx
 	s.mu.RLock()
 	compiled := s.compiled
 	s.mu.RUnlock()
@@ -122,27 +133,31 @@ func (s *CustomScanner) Scan(ctx context.Context, content []byte) ([]Finding, er
 		compiled = s.compiled
 		s.mu.RUnlock()
 	}
+	if len(compiled) == 0 {
+		return nil, nil
+	}
 
 	var findings []Finding
-	for _, c := range compiled {
-		if c == nil || c.re == nil {
-			continue
-		}
-		matches := c.re.FindAllIndex(content, -1)
-		for _, loc := range matches {
-			if len(loc) != 2 {
+	ps := newPatternScan(ctx, s.Name(), content)
+	for i := range ps.chunks {
+		for _, c := range compiled {
+			if c == nil || c.pat == nil {
 				continue
 			}
-			matched := string(content[loc[0]:loc[1]])
-			findings = append(findings, Finding{
-				Type:       "custom",
-				Category:   c.name,
-				Severity:   c.severity,
-				Match:      maskContent(matched),
-				StartPos:   loc[0],
-				EndPos:     loc[1],
-				Confidence: c.confidence,
+			ok := ps.each(c.pat, i, func(start, end int) {
+				findings = append(findings, Finding{
+					Type:       "custom",
+					Category:   c.name,
+					Severity:   c.severity,
+					Match:      maskContent(string(content[start:end])),
+					StartPos:   start,
+					EndPos:     end,
+					Confidence: c.confidence,
+				})
 			})
+			if !ok {
+				return findings, ps.err
+			}
 		}
 	}
 	return findings, nil

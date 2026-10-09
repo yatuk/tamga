@@ -483,9 +483,9 @@ func TestWrapResponseForOutputScan_NilPolicy(t *testing.T) {
 }
 
 func TestWrapResponseForOutputScan_BufferBytesLimit(t *testing.T) {
-	// Policy has buffer_bytes: 4; body is 10 bytes → too large to scan. The
-	// client must still get all 10 bytes, flagged as unscanned.
-	originalBody := []byte("0123456789")
+	// The buffer is at its smallest (1024) and the body is larger: too large
+	// to scan. The client must still get all of it, flagged as unscanned.
+	originalBody := bytes.Repeat([]byte("0123456789"), 200)
 	resp := &http.Response{
 		Header: http.Header{"Content-Type": []string{"text/plain"}},
 		Body:   io.NopCloser(bytes.NewReader(originalBody)),
@@ -494,7 +494,7 @@ func TestWrapResponseForOutputScan_BufferBytesLimit(t *testing.T) {
 version: "1.0"
 output_rules:
   enabled: true
-  buffer_bytes: 4
+  buffer_bytes: 1024
 providers:
   allowed: [openai]
 `)

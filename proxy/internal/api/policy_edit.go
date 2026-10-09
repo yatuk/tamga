@@ -6,7 +6,6 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"regexp"
 	"strings"
 	"time"
 
@@ -158,8 +157,24 @@ func (cfg Config) handlePolicyPut(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "name": pol.Name, "version": pol.Version})
 }
 
+// A simulation takes a policy of up to 256 KiB, as PUT /policies does, and a
+// sample text of up to 256 KiB, as POST /api/v1/scan does. The built-in
+// scanners need about a second for that much text on one core.
+const (
+	maxSimulateBodyBytes = 512 << 10
+	maxSimulateTextBytes = 256 << 10
+)
+
+// maxEntityBodyBytes bounds the body of a custom entity create.
+const maxEntityBodyBytes = 16 << 10
+
 // handlePolicySimulate runs the full scan + policy pipeline on user-supplied
 // YAML and sample text without writing anything to disk.
+//
+// The policy is the caller's, and so are its regular expressions: it is
+// loaded like any other, so a pattern past the limits is refused, and the
+// pattern scanners stop at the request's deadline. A match is returned
+// masked, as it would be stored.
 //
 // Body: { "yaml": "...", "sample_text": "..." }
 func (cfg Config) handlePolicySimulate(w http.ResponseWriter, r *http.Request) {
@@ -168,8 +183,18 @@ func (cfg Config) handlePolicySimulate(w http.ResponseWriter, r *http.Request) {
 		YAML       string `json:"yaml"`
 		SampleText string `json:"sample_text"`
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxSimulateBodyBytes)
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "request body exceeds 524288 bytes"})
+			return
+		}
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	if len(body.SampleText) > maxSimulateTextBytes {
+		writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "sample_text exceeds 262144 bytes"})
 		return
 	}
 
@@ -205,13 +230,17 @@ func (cfg Config) handlePolicySimulate(w http.ResponseWriter, r *http.Request) {
 	registry.Register(scanner.NewPIIScanner())
 	registry.Register(scanner.NewSecretScanner())
 	registry.Register(scanner.NewInjectionScanner())
-	for _, ce := range pol.CustomEntities {
-		registry.Register(scanner.NewCustomScanner(func() []scanner.CustomEntitySpec {
-			return []scanner.CustomEntitySpec{{
+	// One scanner for all entities, so that its time budget and its cap on
+	// findings hold for the simulation as a whole.
+	if len(pol.CustomEntities) > 0 {
+		specs := make([]scanner.CustomEntitySpec, 0, len(pol.CustomEntities))
+		for _, ce := range pol.CustomEntities {
+			specs = append(specs, scanner.CustomEntitySpec{
 				Name: ce.Name, Pattern: ce.Pattern, Description: ce.Description,
 				Severity: ce.Severity, Confidence: ce.Confidence,
-			}}
-		}))
+			})
+		}
+		registry.Register(scanner.NewCustomScanner(func() []scanner.CustomEntitySpec { return specs }))
 	}
 	// Include competitor scanner in simulation so users can preview
 	// competitor detection findings alongside PII/secret/injection.
@@ -229,6 +258,13 @@ func (cfg Config) handlePolicySimulate(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	findings, err := registry.ScanAll(ctx, []byte(body.SampleText))
 	if err != nil {
+		// A scan that was cut short (too slow, too many matches) has no
+		// verdict to show; answering with what it found so far would read
+		// as one.
+		if errors.Is(err, scanner.ErrScanDegraded) {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "the simulation could not be completed: " + err.Error()})
+			return
+		}
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
@@ -248,7 +284,7 @@ func (cfg Config) handlePolicySimulate(w http.ResponseWriter, r *http.Request) {
 			"type":       f.Type,
 			"category":   f.Category,
 			"severity":   f.Severity,
-			"match":      f.Match,
+			"match":      simulateMatch(f),
 			"confidence": f.Confidence,
 			"action":     string(act),
 		})
@@ -259,6 +295,16 @@ func (cfg Config) handlePolicySimulate(w http.ResponseWriter, r *http.Request) {
 		"action":         string(topAction),
 		"findings":       out,
 	})
+}
+
+// simulateMatch is the match as the simulation shows it. What a pattern of
+// the policy matched is masked by its scanner; this makes sure of it for
+// the two types whose patterns the caller wrote.
+func simulateMatch(f scanner.Finding) string {
+	if f.Type == "custom" || f.Type == "competitor" {
+		return scanner.MaskMatch(f.Match)
+	}
+	return f.Match
 }
 
 func policyActionSeverity(a policy.Action) int {
@@ -315,7 +361,13 @@ func (cfg Config) handleCustomEntityCreate(w http.ResponseWriter, r *http.Reques
 	}
 	defer func() { _ = r.Body.Close() }()
 	var entity policy.CustomEntity
+	r.Body = http.MaxBytesReader(w, r.Body, maxEntityBodyBytes)
 	if err := json.NewDecoder(r.Body).Decode(&entity); err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "request body exceeds 16384 bytes"})
+			return
+		}
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
@@ -325,7 +377,7 @@ func (cfg Config) handleCustomEntityCreate(w http.ResponseWriter, r *http.Reques
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name and pattern are required"})
 		return
 	}
-	if _, err := regexp.Compile(entity.Pattern); err != nil {
+	if err := scanner.CheckPattern(entity.Pattern); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid regex: " + err.Error()})
 		return
 	}
@@ -344,6 +396,13 @@ func (cfg Config) handleCustomEntityCreate(w http.ResponseWriter, r *http.Reques
 	updated, err := yaml.Marshal(pol)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	// The policy with the entity in it must be one that loads: the entity's
+	// name, and how many entities there are, are judged there. Writing a
+	// file the proxy then refuses would leave it unable to restart.
+	if _, err := policy.LoadFromBytes(updated); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
 	if err := atomicWriteFile(cfg.PolicyPath, updated); err != nil {

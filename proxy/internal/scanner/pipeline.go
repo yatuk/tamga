@@ -366,8 +366,9 @@ func (p *Pipeline) scanWorkerPool(ctx context.Context, content []byte) ([]Findin
 	for i := 0; i < submitted; i++ {
 		r := <-resultCh
 		if r.Error != nil {
+			// What the scanner found before it failed still counts, as in
+			// the other modes: a scan cut short is not a clean one.
 			deg.note(r.Scanner, DegradedError, r.Error)
-			continue
 		}
 		if len(r.Findings) > 0 {
 			incDetectionCount(r.Scanner, int64(len(r.Findings)))

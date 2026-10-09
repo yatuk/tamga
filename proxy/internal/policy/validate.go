@@ -2,12 +2,9 @@ package policy
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
 )
-
-var reDosNestedQuant = regexp.MustCompile(`\([^)]*[+*]\)[+*]`)
 
 // ValidationIssue is a single semantic policy problem (error blocks apply; warning is advisory).
 type ValidationIssue struct {
@@ -51,7 +48,9 @@ func isKnownRuleKey(key string) bool {
 	return ok
 }
 
-// ValidateSemantics runs checks beyond YAML/JSON parse: duplicate names, regexp validity, coarse ReDoS hints.
+// ValidateSemantics runs checks beyond YAML/JSON parse: duplicate names,
+// unknown values, and the bounds of bounds.go (pattern cost, counts and
+// numeric ranges), which LoadFromBytes also enforces.
 func ValidateSemantics(p *Policy) []ValidationIssue {
 	if p == nil {
 		return []ValidationIssue{{Field: "", Rule: "policy_nil", Message: "policy is nil", Severity: "error"}}
@@ -89,23 +88,8 @@ func ValidateSemantics(p *Policy) []ValidationIssue {
 			issues = append(issues, ValidationIssue{Field: prefix + ".pattern", Rule: "required", Message: "pattern is empty", Severity: "error"})
 			continue
 		}
-		if _, err := regexp.Compile(ce.Pattern); err != nil {
-			issues = append(issues, ValidationIssue{
-				Field:    prefix + ".pattern",
-				Rule:     "regexp",
-				Message:  err.Error(),
-				Severity: "error",
-			})
-			continue
-		}
-		if hint := reDosHeuristic(ce.Pattern); hint != "" {
-			issues = append(issues, ValidationIssue{
-				Field:    prefix + ".pattern",
-				Rule:     "redos_risk",
-				Message:  hint,
-				Severity: "warning",
-			})
-		}
+		// Whether the pattern is a regular expression within the limits is
+		// judged with the other bounds below.
 	}
 
 	for name, rule := range p.Rules {
@@ -193,12 +177,12 @@ func ValidateSemantics(p *Policy) []ValidationIssue {
 				Severity: "error",
 			})
 		}
-		if p.OutputRules.BufferBytes > 0 && p.OutputRules.BufferBytes < 1024 {
+		if p.OutputRules.MinimumConfidence < 0 {
 			issues = append(issues, ValidationIssue{
-				Field:    "output_rules.buffer_bytes",
-				Rule:     "too_small",
-				Message:  "buffer_bytes below 1024 may miss findings in non-streaming scans",
-				Severity: "warning",
+				Field:    "output_rules.minimum_confidence",
+				Rule:     "negative",
+				Message:  "minimum_confidence must be non-negative",
+				Severity: "error",
 			})
 		}
 		if p.OutputRules.ScanWindowMs < 0 {
@@ -206,14 +190,6 @@ func ValidateSemantics(p *Policy) []ValidationIssue {
 				Field:    "output_rules.scan_window_ms",
 				Rule:     "negative",
 				Message:  "scan_window_ms must be non-negative",
-				Severity: "error",
-			})
-		}
-		if p.OutputRules.MinimumConfidence < 0 {
-			issues = append(issues, ValidationIssue{
-				Field:    "output_rules.minimum_confidence",
-				Rule:     "negative",
-				Message:  "minimum_confidence must be non-negative",
 				Severity: "error",
 			})
 		}
@@ -245,24 +221,6 @@ func ValidateSemantics(p *Policy) []ValidationIssue {
 		}
 	}
 
-	if p.RateLimit != nil && p.RateLimit.MaxTokensPerDay < 0 {
-		issues = append(issues, ValidationIssue{
-			Field:    "rate_limit.max_tokens_per_day",
-			Rule:     "negative",
-			Message:  "max_tokens_per_day must be non-negative",
-			Severity: "error",
-		})
-	}
-
-	if p.Cost != nil && p.Cost.MaxTokensPerDay < 0 {
-		issues = append(issues, ValidationIssue{
-			Field:    "cost.max_tokens_per_day",
-			Rule:     "negative",
-			Message:  "max_tokens_per_day must be non-negative",
-			Severity: "error",
-		})
-	}
-
 	// Validate rule-level minimum_confidence.
 	for name, rule := range p.Rules {
 		if rule.MinimumConfidence < 0 {
@@ -274,6 +232,11 @@ func ValidateSemantics(p *Policy) []ValidationIssue {
 			})
 		}
 	}
+
+	// Patterns and how many there are, numeric ranges, override_action and
+	// the fields that have no effect: the same issues LoadFromBytes refuses
+	// a policy for, plus the warnings.
+	issues = append(issues, boundsIssues(p)...)
 
 	// Warn for rule keys that do not reference known scanner finding types.
 	for name := range p.Rules {
@@ -486,10 +449,6 @@ func ValidateSemantics(p *Policy) []ValidationIssue {
 			prefix := fmt.Sprintf("operator_state.assertions[%d]", i)
 			if strings.TrimSpace(a.DecisionPattern) == "" {
 				issues = append(issues, ValidationIssue{Field: prefix + ".decision_pattern", Rule: "required", Message: "decision_pattern is empty", Severity: "error"})
-			} else if _, err := regexp.Compile(a.DecisionPattern); err != nil {
-				issues = append(issues, ValidationIssue{Field: prefix + ".decision_pattern", Rule: "regexp", Message: err.Error(), Severity: "error"})
-			} else if hint := reDosHeuristic(a.DecisionPattern); hint != "" {
-				issues = append(issues, ValidationIssue{Field: prefix + ".decision_pattern", Rule: "redos_risk", Message: hint, Severity: "warning"})
 			}
 			switch strings.ToLower(strings.TrimSpace(a.RequiredState)) {
 			case "proposed", "accepted", "locked", "rejected", "superseded":
@@ -524,8 +483,6 @@ func ValidateSemantics(p *Policy) []ValidationIssue {
 			prefix := fmt.Sprintf("operator_state.authorization[%d]", i)
 			if strings.TrimSpace(auth.DecisionPattern) == "" {
 				issues = append(issues, ValidationIssue{Field: prefix + ".decision_pattern", Rule: "required", Message: "decision_pattern is empty", Severity: "error"})
-			} else if _, err := regexp.Compile(auth.DecisionPattern); err != nil {
-				issues = append(issues, ValidationIssue{Field: prefix + ".decision_pattern", Rule: "regexp", Message: err.Error(), Severity: "error"})
 			}
 			if len(auth.AllowedOperators) == 0 {
 				issues = append(issues, ValidationIssue{Field: prefix + ".allowed_operators", Rule: "required", Message: "allowed_operators must list at least one operator", Severity: "error"})
@@ -534,13 +491,6 @@ func ValidateSemantics(p *Policy) []ValidationIssue {
 	}
 
 	return issues
-}
-
-func reDosHeuristic(pattern string) string {
-	if reDosNestedQuant.MatchString(pattern) {
-		return "nested quantifiers may cause exponential backtracking; simplify the pattern if possible"
-	}
-	return ""
 }
 
 // HasValidationErrors returns true if any issue has severity "error".
