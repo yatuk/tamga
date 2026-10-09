@@ -68,6 +68,11 @@ func (cfg Config) handleIncidentPatch(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// A comment is signed by the verified caller, not by the name the body
+	// gives.
+	if patch.AddComment != nil {
+		patch.AddComment.Author = actorFromRequest(r)
+	}
 	st, err := cfg.Incidents.Apply(id, patch)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})

@@ -8,7 +8,7 @@ import (
 // Scopes — what the admin middleware enforces beyond simple auth.
 const (
 	scopePoliciesWrite = "policies:write"
-	scopePoliciesAdmin = "policies:admin" // rollback / approve / reject
+	scopePoliciesAdmin = "policies:admin" // rollback
 	scopeAPIKeysWrite  = "apikeys:write"
 	scopeWebhooksWrite = "webhooks:write"
 	scopePatternsWrite = "patterns:write"
@@ -37,8 +37,12 @@ func routeScope(method, path string) string {
 	switch {
 	case method == http.MethodDelete && strings.HasPrefix(path, "/events/subject"):
 		return scopePrivacyErase
-	case strings.HasPrefix(path, "/policies/rollback"), strings.HasPrefix(path, "/policies/proposals"):
+	case strings.HasPrefix(path, "/policies/rollback"):
 		return scopePoliciesAdmin
+	// Proposals are open to every role that may write the policy: under
+	// dual control they are its only way in. What a proposal may change,
+	// and who may approve it, is decided per section by the handlers (see
+	// refusePrivileged), not by the route.
 	case method != http.MethodGet && strings.HasPrefix(path, "/policies"):
 		return scopePoliciesWrite
 	case method != http.MethodGet && strings.HasPrefix(path, "/apikeys"):

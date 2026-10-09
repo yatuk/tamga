@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/yatuk/tamga/internal/incidents"
 	"github.com/yatuk/tamga/internal/policy"
 	"github.com/yatuk/tamga/internal/scanner"
 	"gopkg.in/yaml.v3"
@@ -77,7 +76,7 @@ func (cfg Config) handlePolicyValidate(w http.ResponseWriter, r *http.Request) {
 	}
 	pol, err := policy.LoadFromBytes([]byte(yamlText))
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "policy parse: " + err.Error()})
+		writePolicyLoadError(w, err)
 		return
 	}
 	issues := policy.ValidateSemantics(pol)
@@ -122,15 +121,21 @@ func (cfg Config) handlePolicyPut(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
-	pol, err := policy.LoadFromBytes([]byte(yamlText))
-	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "policy parse: " + err.Error()})
+	policyWriteMu.Lock()
+	defer policyWriteMu.Unlock()
+	// Under dual control nothing is written without a second person, and
+	// this path has only the caller.
+	if cfg.refuseDirectWrite(w, r) {
 		return
 	}
-	if sem := policy.ValidateSemantics(pol); policy.HasValidationErrors(sem) {
-		writePolicyValidationFailed(w, sem)
+	pol := loadPolicyForWrite(w, yamlText)
+	if pol == nil {
 		return
 	}
+	if cfg.refusePrivileged(w, r, pol) {
+		return
+	}
+	before := cfg.PolicyStore.GetPolicy()
 	if err := writePolicyFile(cfg.PolicyPath, []byte(yamlText)); err != nil {
 		writePolicyWriteError(w, err)
 		return
@@ -139,22 +144,21 @@ func (cfg Config) handlePolicyPut(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "reload: " + err.Error()})
 		return
 	}
-	// Refresh policy-driven scanners after write+reload.
-	if cfg.CustomScanner != nil {
-		cfg.CustomScanner.Refresh()
-	}
-	if cfg.CompetitorScanner != nil {
-		cfg.CompetitorScanner.Refresh()
-	}
+	cfg.refreshPolicyScanners()
 	pol = cfg.PolicyStore.GetPolicy()
-	if cfg.Audit != nil {
-		cfg.Audit.Append(incidents.AuditEntry{
-			Kind:   "policy.put",
-			Target: pol.Name,
-			Detail: map[string]interface{}{"version": pol.Version, "size": len(yamlText)},
-		})
+	// Into the history as well as the audit log, as an approved proposal
+	// is: a revision for every policy that was in force.
+	revID, changed := recordPolicyChange(cfg.Audit, cfg.PolicyHistory, policyChange{
+		kind: "policy.put", source: sourcePut, actor: actorFromRequest(r),
+		message: "direct write (PUT /policies)", yaml: yamlText,
+		old: before, new: pol,
+		detail: map[string]interface{}{"size": len(yamlText)},
+	})
+	out := map[string]interface{}{"ok": true, "name": pol.Name, "version": pol.Version, "changed": changed}
+	if revID != "" {
+		out["revision_id"] = revID
 	}
-	writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "name": pol.Name, "version": pol.Version})
+	writeJSON(w, http.StatusOK, out)
 }
 
 // A simulation takes a policy of up to 256 KiB, as PUT /policies does, and a
@@ -381,6 +385,12 @@ func (cfg Config) handleCustomEntityCreate(w http.ResponseWriter, r *http.Reques
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid regex: " + err.Error()})
 		return
 	}
+	policyWriteMu.Lock()
+	defer policyWriteMu.Unlock()
+	// Adding an entity rewrites the policy, so it is a direct write.
+	if cfg.refuseDirectWrite(w, r) {
+		return
+	}
 	pol, err := policy.LoadFromFile(cfg.PolicyPath)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
@@ -401,10 +411,17 @@ func (cfg Config) handleCustomEntityCreate(w http.ResponseWriter, r *http.Reques
 	// The policy with the entity in it must be one that loads: the entity's
 	// name, and how many entities there are, are judged there. Writing a
 	// file the proxy then refuses would leave it unable to restart.
-	if _, err := policy.LoadFromBytes(updated); err != nil {
+	next, err := policy.LoadFromBytes(updated)
+	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
+	// The file is rewritten whole. Should it differ from the active policy
+	// in more than the entity, the rest is judged like any other write.
+	if cfg.refusePrivileged(w, r, next) {
+		return
+	}
+	before := cfg.PolicyStore.GetPolicy()
 	if err := atomicWriteFile(cfg.PolicyPath, updated); err != nil {
 		writePolicyWriteError(w, err)
 		return
@@ -413,12 +430,12 @@ func (cfg Config) handleCustomEntityCreate(w http.ResponseWriter, r *http.Reques
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "reload: " + err.Error()})
 		return
 	}
-	if cfg.CustomScanner != nil {
-		cfg.CustomScanner.Refresh()
-	}
-	if cfg.CompetitorScanner != nil {
-		cfg.CompetitorScanner.Refresh()
-	}
+	cfg.refreshPolicyScanners()
+	recordPolicyChange(cfg.Audit, cfg.PolicyHistory, policyChange{
+		kind: "policy.custom_entity.add", source: sourceEntityAdd, actor: actorFromRequest(r),
+		target: entity.Name, message: "add custom entity " + entity.Name, yaml: string(updated),
+		old: before, new: cfg.PolicyStore.GetPolicy(),
+	})
 	writeJSON(w, http.StatusCreated, map[string]interface{}{"ok": true, "entity": entity})
 }
 
@@ -431,6 +448,11 @@ func (cfg Config) handleCustomEntityDelete(w http.ResponseWriter, r *http.Reques
 	}
 	if cfg.PolicyStore == nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "policy store unavailable"})
+		return
+	}
+	policyWriteMu.Lock()
+	defer policyWriteMu.Unlock()
+	if cfg.refuseDirectWrite(w, r) {
 		return
 	}
 	pol, err := policy.LoadFromFile(cfg.PolicyPath)
@@ -457,6 +479,10 @@ func (cfg Config) handleCustomEntityDelete(w http.ResponseWriter, r *http.Reques
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
+	if cfg.refusePrivileged(w, r, pol) {
+		return
+	}
+	before := cfg.PolicyStore.GetPolicy()
 	if err := atomicWriteFile(cfg.PolicyPath, updated); err != nil {
 		writePolicyWriteError(w, err)
 		return
@@ -465,11 +491,11 @@ func (cfg Config) handleCustomEntityDelete(w http.ResponseWriter, r *http.Reques
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "reload: " + err.Error()})
 		return
 	}
-	if cfg.CustomScanner != nil {
-		cfg.CustomScanner.Refresh()
-	}
-	if cfg.CompetitorScanner != nil {
-		cfg.CompetitorScanner.Refresh()
-	}
+	cfg.refreshPolicyScanners()
+	recordPolicyChange(cfg.Audit, cfg.PolicyHistory, policyChange{
+		kind: "policy.custom_entity.delete", source: sourceEntityDelete, actor: actorFromRequest(r),
+		target: name, message: "delete custom entity " + name, yaml: string(updated),
+		old: before, new: cfg.PolicyStore.GetPolicy(),
+	})
 	writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true})
 }

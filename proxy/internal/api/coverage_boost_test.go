@@ -1781,21 +1781,22 @@ func TestActorFromRequest_Anonymous(t *testing.T) {
 	}
 }
 
-func TestActorFromRequest_AdminKey(t *testing.T) {
+// A header is not an identity: without one in the context the actor is
+// unknown, whatever the client sent.
+func TestActorFromRequest_HeadersAreNotIdentity(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
 	r.Header.Set("X-Tamga-Admin-Key", "secret-key")
-	actor := actorFromRequest(r)
-	if actor != "admin" {
-		t.Fatalf("expected 'admin', got %q", actor)
+	r.Header.Set("X-Tamga-User-Id", "user-123")
+	r.Header.Set("X-Tamga-Actor", "someone")
+	if actor := actorFromRequest(r); actor != "anonymous" {
+		t.Fatalf("expected 'anonymous', got %q", actor)
 	}
 }
 
-func TestActorFromRequest_UserID(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/", nil)
-	r.Header.Set("X-Tamga-User-Id", "user-123")
-	actor := actorFromRequest(r)
-	if actor != "user-123" {
-		t.Fatalf("expected 'user-123', got %q", actor)
+func TestActorFromRequest_Verified(t *testing.T) {
+	r := withIdentity(httptest.NewRequest(http.MethodGet, "/", nil), "user:user-123", "analyst")
+	if actor := actorFromRequest(r); actor != "user:user-123" {
+		t.Fatalf("expected 'user:user-123', got %q", actor)
 	}
 }
 
@@ -2023,7 +2024,7 @@ func TestSubjectEraseImpl_WithAudit(t *testing.T) {
 	}
 	body := strings.NewReader(`{"user_id":"user-456"}`)
 	r := httptest.NewRequest(http.MethodDelete, "/events/subject", body)
-	r.Header.Set("X-Tamga-Actor", "admin-actor")
+	r = withIdentity(r, "admin-actor", "admin")
 	w := httptest.NewRecorder()
 	handleSubjectEraseImpl(cfg, w, r)
 

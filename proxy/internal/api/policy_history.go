@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"os"
+	"strings"
 	"time"
 
 	"github.com/yatuk/tamga/internal/incidents"
@@ -50,31 +50,39 @@ func (cfg Config) handlePolicyRollback(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "revision not found"})
 		return
 	}
+	policyWriteMu.Lock()
+	defer policyWriteMu.Unlock()
+	// A rollback installs a policy on one person's say. Under dual control
+	// the revision's text goes into a proposal instead.
+	if cfg.refuseDirectWrite(w, r) {
+		return
+	}
 	// Checked before the file is touched: a revision saved under looser rules
 	// must not replace a policy that loads with one that does not.
-	if _, err := policy.LoadFromBytes([]byte(rev.YAML)); err != nil {
+	next, err := policy.LoadFromBytes([]byte(rev.YAML))
+	if err != nil {
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "revision is not a valid policy: " + err.Error()})
 		return
 	}
-	if err := os.WriteFile(cfg.PolicyPath, []byte(rev.YAML), 0o600); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	if cfg.refusePrivileged(w, r, next) {
+		return
+	}
+	before := cfg.PolicyStore.GetPolicy()
+	if err := writePolicyFile(cfg.PolicyPath, []byte(rev.YAML)); err != nil {
+		writePolicyWriteError(w, err)
 		return
 	}
 	if err := cfg.PolicyStore.Reload(cfg.PolicyPath); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	_, _ = cfg.PolicyHistory.AppendRevision(history.Revision{
-		Author:  actorFromRequest(r),
-		Message: "rollback to " + id,
-		YAML:    rev.YAML,
+	cfg.refreshPolicyScanners()
+	recordPolicyChange(cfg.Audit, cfg.PolicyHistory, policyChange{
+		kind: "policy.rollback", source: sourceRollback, actor: actorFromRequest(r),
+		target: id, message: "rollback to " + id, yaml: rev.YAML,
+		old: before, new: cfg.PolicyStore.GetPolicy(),
+		detail: map[string]interface{}{"revision": id},
 	})
-	if cfg.Audit != nil {
-		cfg.Audit.Append(incidents.AuditEntry{
-			Kind: "policy.rollback", Target: id, Actor: actorFromRequest(r),
-			Detail: map[string]interface{}{"revision": id},
-		})
-	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "revision": id})
 }
 
@@ -112,6 +120,26 @@ func (cfg Config) handleProposalCreate(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
 		return
 	}
+	if strings.TrimSpace(body.YAML) == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "empty policy"})
+		return
+	}
+	// A proposal is judged when it is written, as a direct write would be,
+	// and again when it is approved: what cannot be installed is not left
+	// waiting for an approver to find out.
+	next := loadPolicyForWrite(w, body.YAML)
+	if next == nil {
+		return
+	}
+	if cfg.refusePrivileged(w, r, next) {
+		return
+	}
+	var active *policy.Policy
+	if cfg.PolicyStore != nil {
+		active = cfg.PolicyStore.GetPolicy()
+	}
+	changes := policy.Diff(active, next)
+	// The author is the verified caller. A name in the body is not read.
 	p, err := cfg.PolicyHistory.CreateProposal(history.Proposal{
 		Author:  actorFromRequest(r),
 		Message: body.Message,
@@ -122,7 +150,14 @@ func (cfg Config) handleProposalCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if cfg.Audit != nil {
-		cfg.Audit.Append(incidents.AuditEntry{Kind: "policy.proposal.create", Target: p.ID, Actor: p.Author})
+		cfg.Audit.Append(incidents.AuditEntry{
+			Kind: "policy.proposal.create", Target: p.ID, Actor: p.Author,
+			Detail: map[string]interface{}{
+				"changed":  policy.ChangedPaths(changes),
+				"sections": policy.ChangedSections(changes),
+				"rules":    policy.ChangedRules(changes),
+			},
+		})
 	}
 	writeJSON(w, http.StatusCreated, p)
 }
@@ -133,56 +168,98 @@ func (cfg Config) handleProposalApprove(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	id := r.PathValue("id")
+	policyWriteMu.Lock()
+	defer policyWriteMu.Unlock()
 	prop, ok := cfg.PolicyHistory.GetProposal(id)
 	if !ok {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "proposal not found"})
 		return
 	}
-	// Dual-control: when governance.require_dual_control is set, the author
-	// cannot approve their own proposal. Without this flag (or when policy
-	// doesn't specify governance), self-approval is allowed.
+	// A proposal is settled once.
+	if refuseSettledProposal(w, prop) {
+		return
+	}
+	// Dual control: when governance.require_dual_control is set in the
+	// active policy, the author cannot approve their own proposal. Both
+	// sides of the comparison are verified actors. Without the flag,
+	// self-approval is allowed.
 	actor := actorFromRequest(r)
-	if cfg.PolicyStore != nil {
-		if pol := cfg.PolicyStore.GetPolicy(); pol != nil &&
-			pol.Governance != nil && pol.Governance.RequireDualControl {
-			if actor != "" && actor == prop.Author {
-				writeJSON(w, http.StatusForbidden, map[string]string{"error": "dual-control required: author cannot self-approve"})
-				return
-			}
+	if cfg.dualControlOn() && (actor == prop.Author || sharedActor(actor)) {
+		msg := "dual control required: the author of a proposal cannot approve it"
+		if sharedActor(actor) {
+			msg += ". " + sharedActorNote(actor)
 		}
-	}
-	// Checked before the proposal is marked approved and before the file is
-	// touched, for the same reason as a rollback.
-	if _, err := policy.LoadFromBytes([]byte(prop.YAML)); err != nil {
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "proposal is not a valid policy: " + err.Error()})
+		writeJSON(w, http.StatusForbidden, map[string]interface{}{"error": msg, "code": codeSelfApproval})
 		return
 	}
-	prop.Status = "approved"
-	prop.ApprovedBy = actor
-	prop.ApprovedAt = time.Now().UTC()
-	if err := cfg.PolicyHistory.UpdateProposal(prop); err != nil {
+	// The proposal replaces the whole policy with its own text. If the
+	// policy changed after it was written, approving it would undo that
+	// change without anyone having looked at it.
+	stale, err := policyChangedSince(cfg.PolicyHistory, prop.Timestamp)
+	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	// Apply the YAML.
-	if err := os.WriteFile(cfg.PolicyPath, []byte(prop.YAML), 0o600); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	if stale {
+		writeJSON(w, http.StatusConflict, map[string]interface{}{
+			"error": "the policy changed after this proposal was written, so approving it would undo that change. " +
+				"Reject it and open a new proposal against the current policy.",
+			"code": codeProposalStale,
+		})
+		return
+	}
+	// The stored text is what is applied, and it is judged again now: the
+	// rules a policy is held to, and who may change what, are those of
+	// today and of the approver. Before the proposal is marked approved and
+	// before the file is touched, for the same reason as a rollback.
+	next := loadPolicyForWrite(w, prop.YAML)
+	if next == nil {
+		return
+	}
+	if cfg.refusePrivileged(w, r, next) {
+		return
+	}
+	before := cfg.PolicyStore.GetPolicy()
+	if err := writePolicyFile(cfg.PolicyPath, []byte(prop.YAML)); err != nil {
+		writePolicyWriteError(w, err)
 		return
 	}
 	if err := cfg.PolicyStore.Reload(cfg.PolicyPath); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	rev, _ := cfg.PolicyHistory.AppendRevision(history.Revision{
-		Author: actor, Message: "approve proposal " + id, YAML: prop.YAML,
+	cfg.refreshPolicyScanners()
+	prop.Status = "approved"
+	prop.ApprovedBy = actor
+	prop.ApprovedAt = time.Now().UTC()
+	updateErr := cfg.PolicyHistory.UpdateProposal(prop)
+	revID, changed := recordPolicyChange(cfg.Audit, cfg.PolicyHistory, policyChange{
+		kind: "policy.proposal.approve", source: sourceApprove, actor: actor,
+		target: id, message: "approve proposal " + id, yaml: prop.YAML,
+		old: before, new: cfg.PolicyStore.GetPolicy(),
+		detail: map[string]interface{}{"proposal_author": prop.Author},
 	})
-	if cfg.Audit != nil {
-		cfg.Audit.Append(incidents.AuditEntry{
-			Kind: "policy.proposal.approve", Target: id, Actor: actor,
-			Detail: map[string]interface{}{"revision_id": rev.ID, "author": prop.Author},
-		})
+	if updateErr != nil {
+		// The policy is in force and recorded; only the proposal's own
+		// state could not be saved.
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "the policy was applied, but the proposal could not be marked approved: " + updateErr.Error()})
+		return
 	}
-	writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "revision_id": rev.ID})
+	writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "revision_id": revID, "changed": changed})
+}
+
+// refuseSettledProposal answers 409 and returns true for a proposal that
+// was already approved or rejected.
+func refuseSettledProposal(w http.ResponseWriter, prop history.Proposal) bool {
+	if prop.Status == "" || prop.Status == "open" {
+		return false
+	}
+	writeJSON(w, http.StatusConflict, map[string]interface{}{
+		"error":  "this proposal is already " + prop.Status + " and cannot be approved or rejected again",
+		"code":   codeProposalClosed,
+		"status": prop.Status,
+	})
+	return true
 }
 
 func (cfg Config) handleProposalReject(w http.ResponseWriter, r *http.Request) {
@@ -191,10 +268,23 @@ func (cfg Config) handleProposalReject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := r.PathValue("id")
+	policyWriteMu.Lock()
+	defer policyWriteMu.Unlock()
 	prop, ok := cfg.PolicyHistory.GetProposal(id)
 	if !ok {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "proposal not found"})
 		return
+	}
+	if refuseSettledProposal(w, prop) {
+		return
+	}
+	// Whoever could not approve a proposal for lack of the admin role
+	// cannot turn it down either; its author can always withdraw it. A
+	// proposal that no longer loads can be rejected by anyone who gets here.
+	if actorFromRequest(r) != prop.Author {
+		if next, err := policy.LoadFromBytes([]byte(prop.YAML)); err == nil && cfg.refusePrivileged(w, r, next) {
+			return
+		}
 	}
 	prop.Status = "rejected"
 	prop.RejectedBy = actorFromRequest(r)
@@ -207,20 +297,4 @@ func (cfg Config) handleProposalReject(w http.ResponseWriter, r *http.Request) {
 		cfg.Audit.Append(incidents.AuditEntry{Kind: "policy.proposal.reject", Target: id, Actor: prop.RejectedBy})
 	}
 	writeJSON(w, http.StatusOK, prop)
-}
-
-// actorFromRequest returns the best-effort identity string used in audit
-// entries. The admin key and scoped API keys provide distinct identities,
-// while Clerk JWT support will drop in via Sprint 2B.
-func actorFromRequest(r *http.Request) string {
-	if v := r.Header.Get("X-Tamga-Actor"); v != "" {
-		return v
-	}
-	if v := r.Header.Get("X-Tamga-User-Id"); v != "" {
-		return v
-	}
-	if v := r.Header.Get("X-Tamga-Admin-Key"); v != "" {
-		return "admin"
-	}
-	return "anonymous"
 }

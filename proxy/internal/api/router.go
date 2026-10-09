@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -336,7 +337,7 @@ func adminAuth(cfg Config) func(http.Handler) http.Handler {
 			// all requests through without authentication (convenience for
 			// local development and air-gapped deployments).
 			if cfg.DevMode {
-				next.ServeHTTP(w, r)
+				next.ServeHTTP(w, withIdentity(r, ActorDevMode, "admin"))
 				return
 			}
 			key := r.Header.Get("X-Tamga-Admin-Key")
@@ -347,7 +348,7 @@ func adminAuth(cfg Config) func(http.Handler) http.Handler {
 			}
 			// 1. Primary admin key (full access, all scopes).
 			if key == cfg.AdminKey && cfg.AdminKey != "" {
-				next.ServeHTTP(w, r)
+				next.ServeHTTP(w, withIdentity(r, ActorAdminKey, "admin"))
 				return
 			}
 			// 2. Scoped API key. Writes require write/admin scope; reads accept any.
@@ -369,7 +370,9 @@ func adminAuth(cfg Config) func(http.Handler) http.Handler {
 						writeJSON(w, http.StatusForbidden, map[string]string{"error": "missing scope: " + required})
 						return
 					}
-					next.ServeHTTP(w, r)
+					// The actor is the key's record, by id. The label is
+					// free text and two keys may share it.
+					next.ServeHTTP(w, withIdentity(r, actorAPIKeyPrefix+meta.ID, role))
 					return
 				}
 			}
@@ -398,13 +401,17 @@ func adminAuth(cfg Config) func(http.Handler) http.Handler {
 						writeJSON(w, http.StatusForbidden, map[string]string{"error": "role " + claims.Role + " lacks " + required})
 						return
 					}
-					// Inject user identity into request headers so downstream
-					// handlers like actorFromRequest can use it.
+					// The headers are kept for handlers that read them; the
+					// identity handlers act on is the one in the context.
 					r.Header.Set("X-Tamga-User-Id", claims.Sub)
 					if claims.Email != "" {
 						r.Header.Set("X-Tamga-User-Email", claims.Email)
 					}
-					next.ServeHTTP(w, r)
+					subject := claims.Sub
+					if subject == "" {
+						subject = claims.Email
+					}
+					next.ServeHTTP(w, withIdentity(r, actorUserPrefix+subject, strings.ToLower(strings.TrimSpace(claims.Role))))
 					return
 				}
 			}
@@ -680,29 +687,36 @@ func (cfg Config) handlePoliciesReload(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "policy store unavailable"})
 		return
 	}
+	policyWriteMu.Lock()
+	defer policyWriteMu.Unlock()
+	before := cfg.PolicyStore.GetPolicy()
 	if err := cfg.PolicyStore.Reload(cfg.PolicyPath); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
 	// Refresh policy-driven scanners so they pick up new custom entities
 	// and competitor rules without a full process restart.
-	if cfg.CustomScanner != nil {
-		cfg.CustomScanner.Refresh()
-	}
-	if cfg.CompetitorScanner != nil {
-		cfg.CompetitorScanner.Refresh()
-	}
+	cfg.refreshPolicyScanners()
 	p := cfg.PolicyStore.GetPolicy()
-	if cfg.Audit != nil {
-		cfg.Audit.Append(incidents.AuditEntry{
-			Kind:   "policy.reload",
-			Target: p.Name,
-			Detail: map[string]interface{}{"path": cfg.PolicyPath, "version": p.Version},
-		})
+	// A reload brings in what someone wrote to the file on disk. The caller
+	// is who asked for it; the history gets a revision only when the reload
+	// changed the policy.
+	text := ""
+	if len(policy.Diff(before, p)) > 0 {
+		if raw, err := os.ReadFile(cfg.PolicyPath); err == nil {
+			text = string(raw)
+		}
 	}
+	_, changed := recordPolicyChange(cfg.Audit, cfg.PolicyHistory, policyChange{
+		kind: "policy.reload", source: sourceReload, actor: actorFromRequest(r),
+		message: "reload from disk", yaml: text,
+		old: before, new: p,
+		detail: map[string]interface{}{"path": cfg.PolicyPath},
+	})
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"ok":   true,
-		"name": p.Name,
+		"ok":      true,
+		"name":    p.Name,
+		"changed": changed,
 	})
 }
 

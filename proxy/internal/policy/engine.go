@@ -427,8 +427,9 @@ type ScanConfig struct {
 	// OnError decides what happens when the scan itself fails: a scanner
 	// errors or panics, the scan times out, or a scanner is shed under load.
 	// "block" answers 503; "pass" forwards the request on the findings of the
-	// scanners that did run. Empty means pass, the behaviour before this
-	// setting existed.
+	// scanners that did run, except when those findings call for masking or
+	// stripping: text is not sent masked in part. Empty means pass, the
+	// behaviour before this setting existed.
 	OnError string `yaml:"on_error" json:"on_error"`
 	// DefaultAction is the action for a finding whose type no rule is
 	// written for (BLOCK, WARN, LOG or PASS). Empty means PASS. It does not
@@ -722,15 +723,14 @@ func LoadFromBytes(data []byte) (*Policy, error) {
 	// A pool endpoint decides where callers' traffic and a key from the
 	// proxy's environment are sent. One the rules refuse fails the load, so
 	// no way of installing a policy can bring it in.
-	if issues := upstreamIssues(&p, ActiveUpstreamRules()); len(issues) > 0 {
-		return nil, fmt.Errorf("parsing policy YAML: %s: %s", issues[0].Field, issues[0].Message)
-	}
-
+	//
 	// A value outside its bounds fails the load for the same reason: a
 	// pattern that costs seconds per request, or a number that turns a
 	// control off, must not get in through any door. See bounds.go.
-	if bad, found := firstBoundError(boundsIssues(&p)); found {
-		return nil, fmt.Errorf("parsing policy YAML: %s: %s", bad.Field, bad.Message)
+	//
+	// Both come back as an IssuesError, one issue per field.
+	if issues := loadBlockingIssues(&p); len(issues) > 0 {
+		return nil, &IssuesError{Issues: issues}
 	}
 
 	return &p, nil

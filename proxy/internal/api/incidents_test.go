@@ -183,8 +183,9 @@ func TestIncidentPatch_AddComment(t *testing.T) {
 	if len(st.Comments) != 1 {
 		t.Errorf("expected 1 comment, got %d", len(st.Comments))
 	}
-	if len(st.Comments) > 0 && st.Comments[0].Author != "dave" {
-		t.Errorf("expected author 'dave', got %q", st.Comments[0].Author)
+	// The body names "dave"; the comment is signed by the verified caller.
+	if len(st.Comments) > 0 && st.Comments[0].Author != ActorAdminKey {
+		t.Errorf("expected author %q, got %q", ActorAdminKey, st.Comments[0].Author)
 	}
 }
 

@@ -58,7 +58,7 @@ func TestProposalApprove_DualControlEnabled(t *testing.T) {
 		}
 		r := httptest.NewRequest(http.MethodPost, "/policies/proposals/"+prop.ID+"/approve", nil)
 		setPathID(r, prop.ID)
-		r.Header.Set("X-Tamga-Actor", "bob")
+		r = withIdentity(r, "bob", "admin")
 		w := httptest.NewRecorder()
 		cfg.handleProposalApprove(w, r)
 		if w.Code != http.StatusOK {
@@ -88,7 +88,7 @@ func TestProposalApprove_DualControlEnabled(t *testing.T) {
 		}
 		r := httptest.NewRequest(http.MethodPost, "/policies/proposals/"+prop.ID+"/approve", nil)
 		setPathID(r, prop.ID)
-		r.Header.Set("X-Tamga-Actor", "alice")
+		r = withIdentity(r, "alice", "admin")
 		w := httptest.NewRecorder()
 		cfg.handleProposalApprove(w, r)
 		if w.Code != http.StatusForbidden {
@@ -96,8 +96,8 @@ func TestProposalApprove_DualControlEnabled(t *testing.T) {
 		}
 		var body map[string]string
 		_ = json.NewDecoder(w.Body).Decode(&body)
-		if body["error"] != "dual-control required: author cannot self-approve" {
-			t.Fatalf("unexpected error: %s", body["error"])
+		if body["code"] != codeSelfApproval {
+			t.Fatalf("unexpected error: %v", body)
 		}
 	})
 }
@@ -123,7 +123,7 @@ func TestProposalApprove_DualControlDisabled(t *testing.T) {
 		}
 		r := httptest.NewRequest(http.MethodPost, "/policies/proposals/"+prop.ID+"/approve", nil)
 		setPathID(r, prop.ID)
-		r.Header.Set("X-Tamga-Actor", "alice")
+		r = withIdentity(r, "alice", "admin")
 		w := httptest.NewRecorder()
 		cfg.handleProposalApprove(w, r)
 		if w.Code != http.StatusOK {
@@ -151,7 +151,7 @@ func TestProposalApprove_DualControlDisabled(t *testing.T) {
 		}
 		r := httptest.NewRequest(http.MethodPost, "/policies/proposals/"+prop.ID+"/approve", nil)
 		setPathID(r, prop.ID)
-		r.Header.Set("X-Tamga-Actor", "alice")
+		r = withIdentity(r, "alice", "admin")
 		w := httptest.NewRecorder()
 		cfg.handleProposalApprove(w, r)
 		if w.Code != http.StatusOK {
@@ -176,7 +176,7 @@ func TestProposalApprove_DualControlDisabled(t *testing.T) {
 		}
 		r := httptest.NewRequest(http.MethodPost, "/policies/proposals/"+prop.ID+"/approve", nil)
 		setPathID(r, prop.ID)
-		r.Header.Set("X-Tamga-Actor", "alice")
+		r = withIdentity(r, "alice", "admin")
 		w := httptest.NewRecorder()
 		cfg.handleProposalApprove(w, r)
 		if w.Code != http.StatusBadRequest {
@@ -200,7 +200,7 @@ func TestProposalReject(t *testing.T) {
 
 	r := httptest.NewRequest(http.MethodPost, "/policies/proposals/"+prop.ID+"/reject", nil)
 	setPathID(r, prop.ID)
-	r.Header.Set("X-Tamga-Actor", "bob")
+	r = withIdentity(r, "bob", "admin")
 	w := httptest.NewRecorder()
 	cfg.handleProposalReject(w, r)
 
@@ -233,7 +233,7 @@ func TestProposalCreate(t *testing.T) {
 
 	body := `{"message":"test","yaml":"version: \"1.0\"\nname: test\n"}`
 	r := httptest.NewRequest(http.MethodPost, "/policies/proposals", strings.NewReader(body))
-	r.Header.Set("X-Tamga-Actor", "alice")
+	r = withIdentity(r, "alice", "admin")
 	w := httptest.NewRecorder()
 	cfg.handleProposalCreate(w, r)
 

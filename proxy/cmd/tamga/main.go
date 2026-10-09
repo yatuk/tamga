@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -146,8 +147,12 @@ func main() {
 	var tierEnforcer *tier.Enforcer
 	var opScanner *operator_state.OperatorStateScanner
 
+	// Set once the audit log and the policy history exist, further down. A
+	// file change seen before that is reloaded but not recorded.
+	var recordFileChange atomic.Pointer[func(old, new *policy.Policy)]
+
 	var stopPolicyWatch func()
-	if sw, err := policy.WatchPolicy(cfg.PolicyPath, policyStore, func() {
+	if sw, err := policy.WatchPolicyChanges(cfg.PolicyPath, policyStore, func() {
 		_ = scanner.ReloadDFA()
 		if customScanner != nil {
 			customScanner.Refresh()
@@ -166,6 +171,11 @@ func main() {
 					opScanner.UpdateRules(rules)
 				}
 			}
+		}
+	}, func(old, new *policy.Policy) {
+		// An edit of the file on disk has no actor; it is recorded as that.
+		if record := recordFileChange.Load(); record != nil {
+			(*record)(old, new)
 		}
 	}); err != nil {
 		log.Warn().Err(err).Msg("policy file watcher disabled; restart required for policy changes")
@@ -401,6 +411,10 @@ func main() {
 			policyHistory = fs
 		}
 	}
+	record := func(old, new *policy.Policy) {
+		api.RecordPolicyFileChange(auditRing, policyHistory, cfg.PolicyPath, old, new)
+	}
+	recordFileChange.Store(&record)
 	// NATS JetStream — fail-open. Proxy runs without NATS if unavailable.
 	var natsPub *events.NATSPublisher
 	if cfg.NATSURL != "" {
@@ -753,20 +767,6 @@ func main() {
 		Alerts:             alertDispatcher,
 		Budget:             budgetStore,
 		Cache:              promptCache,
-		UpstreamRegistry:   upstreamReg,
-		UpstreamTransport:  upstreamTransport,
-		PricingResolver:    costCalculator,
-		TierEnforcer:       tierEnforcer, // nil-safe — falls back to hardcoded map
-		ScannerPool:        scannerPool,
-		ScannerClient:      scannerClient,
-		ProxyBoundRegistry: proxyBoundRegistry,
-		VaultStore:         vaultStore,
-	}
-
-	root := http.NewServeMux()
-	root.Handle("/api/v1/", api.NewHandler(api.Config{
-		AdminKey:               cfg.AdminKey,
-		CORSOrigin:             cfg.CORSOrigin,
 		// The cache key names the patterns the custom scanner is given, so a
 		// pattern added or removed through the API is a miss, not a stale hit.
 		// What the scanners have compiled, not what the policy and the
@@ -783,6 +783,20 @@ func main() {
 			}
 			return state
 		},
+		UpstreamRegistry:   upstreamReg,
+		UpstreamTransport:  upstreamTransport,
+		PricingResolver:    costCalculator,
+		TierEnforcer:       tierEnforcer, // nil-safe — falls back to hardcoded map
+		ScannerPool:        scannerPool,
+		ScannerClient:      scannerClient,
+		ProxyBoundRegistry: proxyBoundRegistry,
+		VaultStore:         vaultStore,
+	}
+
+	root := http.NewServeMux()
+	root.Handle("/api/v1/", api.NewHandler(api.Config{
+		AdminKey:               cfg.AdminKey,
+		CORSOrigin:             cfg.CORSOrigin,
 		CORSOrigins:            cfg.CORSOrigins,
 		CORSAllowedMethods:     cfg.CORSAllowedMethods,
 		CORSCredentials:        cfg.CORSCredentials,
@@ -1076,9 +1090,9 @@ func persistSettings(cfg *config.Config, pg *store.PostgresStore, pats *patterns
 					log.Warn().Err(err).Msg("settings: reload failed, keeping the current copy")
 				}
 			}
-		}
-	}()
-}
 			if afterReload != nil {
 				afterReload()
 			}
+		}
+	}()
+}

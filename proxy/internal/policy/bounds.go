@@ -88,16 +88,6 @@ func boundsIssues(p *Policy) []ValidationIssue {
 	return issues
 }
 
-// firstBoundError returns the first load-blocking issue, if any.
-func firstBoundError(issues []ValidationIssue) (ValidationIssue, bool) {
-	for _, is := range issues {
-		if is.Severity == "error" {
-			return is, true
-		}
-	}
-	return ValidationIssue{}, false
-}
-
 // patternIssues covers the regular expressions of the policy and how many
 // of them there are.
 func patternIssues(p *Policy) []ValidationIssue {

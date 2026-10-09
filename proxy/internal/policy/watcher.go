@@ -19,6 +19,16 @@ const policyReloadDebounce = 500 * time.Millisecond
 // An optional onReload callback fires after each successful policy reload (e.g. for DFA rebuild).
 // Parse failures are logged; the previous policy in the store is unchanged.
 func WatchPolicy(path string, store *PolicyStore, onReload func()) (stop func(), err error) {
+	return WatchPolicyChanges(path, store, onReload, nil)
+}
+
+// WatchPolicyChanges is WatchPolicy with a second callback, onChange, that
+// receives the policy that was active before a reload and the one active
+// after it. It is how a change made to the file on disk reaches the audit
+// log. It fires after every successful reload, also one that changed
+// nothing: a write through the API reloads the store itself, and the reload
+// the watcher then does finds the same policy on both sides.
+func WatchPolicyChanges(path string, store *PolicyStore, onReload func(), onChange func(old, new *Policy)) (stop func(), err error) {
 	if store == nil {
 		return nil, errors.New("policy store is nil")
 	}
@@ -43,9 +53,13 @@ func WatchPolicy(path string, store *PolicyStore, onReload func()) (stop func(),
 			timer.Stop()
 		}
 		timer = time.AfterFunc(policyReloadDebounce, func() {
+			before := store.GetPolicy()
 			if err := store.Reload(path); err != nil {
 				log.Error().Err(err).Str("component", "policy_watcher").Msg("policy reload failed (keeping previous policy)")
 				return
+			}
+			if onChange != nil {
+				onChange(before, store.GetPolicy())
 			}
 			if onReload != nil {
 				onReload()
