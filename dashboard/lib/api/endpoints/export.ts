@@ -50,53 +50,22 @@ export const exportEndpoints = {
     return resp.text();
   },
 
-  /**
-   * Fetch an OWASP compliance PDF report from the analyzer.
-   * Returns a Blob suitable for download via URL.createObjectURL.
-   */
-  getOwaspPdfReport: async (
-    adminKey: string,
-    queryParams?: Record<string, string>,
-  ): Promise<Blob> => {
-    const qs = queryParams
-      ? "?" + new URLSearchParams(queryParams).toString()
-      : "";
-    const resp = await fetch(`${API_BASE}/api/v1/reports/owasp/pdf${qs}`, {
-      headers: authHeaders(adminKey),
-    });
-    if (!resp.ok) {
-      const errBody = await resp.json().catch(() => ({}));
-      const message =
-        typeof errBody.message === "string"
-          ? errBody.message
-          : `PDF generation failed: ${resp.status}`;
-      throw new Error(message);
-    }
-    return resp.blob();
-  },
+  /** The OWASP compliance report as a PDF, made by the analyzer. */
+  getOwaspPdfReport: (adminKey: string, queryParams?: Record<string, string>): Promise<Blob> =>
+    fetchPdf("/api/v1/reports/owasp/pdf", adminKey, queryParams),
 
-  /**
-   * Fetch an incident summary PDF report from the analyzer.
-   * Returns a Blob suitable for download via URL.createObjectURL.
-   */
-  getIncidentPdfReport: async (
-    adminKey: string,
-    queryParams?: Record<string, string>,
-  ): Promise<Blob> => {
-    const qs = queryParams
-      ? "?" + new URLSearchParams(queryParams).toString()
-      : "";
-    const resp = await fetch(`${API_BASE}/api/v1/reports/incident/pdf${qs}`, {
-      headers: authHeaders(adminKey),
-    });
-    if (!resp.ok) {
-      const errBody = await resp.json().catch(() => ({}));
-      const message =
-        typeof errBody.message === "string"
-          ? errBody.message
-          : `PDF generation failed: ${resp.status}`;
-      throw new Error(message);
-    }
-    return resp.blob();
-  },
+  /** The incident summary as a PDF, made by the analyzer. */
+  getIncidentPdfReport: (adminKey: string, queryParams?: Record<string, string>): Promise<Blob> =>
+    fetchPdf("/api/v1/reports/incident/pdf", adminKey, queryParams),
 };
+
+/** A PDF report as a Blob, or an error carrying the proxy's own message. */
+async function fetchPdf(path: string, adminKey: string, queryParams?: Record<string, string>): Promise<Blob> {
+  const qs = queryParams ? "?" + new URLSearchParams(queryParams).toString() : "";
+  const resp = await fetch(`${API_BASE}${path}${qs}`, { headers: authHeaders(adminKey) });
+  if (!resp.ok) {
+    const errBody = await resp.json().catch(() => ({}));
+    throw new Error(typeof errBody.message === "string" ? errBody.message : `PDF generation failed: ${resp.status}`);
+  }
+  return resp.blob();
+}

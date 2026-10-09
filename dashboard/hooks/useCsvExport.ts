@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback } from "react";
+import { saveBlob } from "@/lib/utils/download";
 
 interface CsvExportOptions {
   /** If true, each cell value is wrapped in double quotes with proper escaping. */
@@ -23,15 +24,7 @@ export function useCsvExport() {
       const bodyLines = rows.map((row) => row.map(esc).join(","));
       const csv = [headerLine, ...bodyLines].join("\n");
 
-      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      saveBlob(new Blob([csv], { type: "text/csv;charset=utf-8;" }), filename);
     },
     [],
   );
