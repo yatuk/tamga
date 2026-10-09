@@ -9,7 +9,7 @@ const __dirname = dirname(__filename);
 const compat = new FlatCompat({ baseDirectory: __dirname });
 
 // Ban hardcoded color literals (hex, rgb/hsl/oklch functions) so components
-// are forced to use the design tokens in globals.css / tailwind.config.ts.
+// are forced to use the tokens in app/tamga.css.
 const noHardcodedColor = {
   meta: {
     type: "problem",
@@ -18,7 +18,7 @@ const noHardcodedColor = {
     },
     messages: {
       hardcodedColor:
-        "Hardcoded color detected — use a design token (surface-*, fg-*, status-*, accent, border) instead.",
+        "Hardcoded color: use a token from app/tamga.css (--tamga-*, --cds-*) instead.",
     },
   },
   create(context) {
