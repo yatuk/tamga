@@ -587,6 +587,8 @@ func TestScan_Block(t *testing.T) {
 }
 
 // The response is a projection of a finding, not the scanner's record.
+var scanLatencyField = regexp.MustCompile(`"scan_latency_ms":[0-9.eE+-]+`)
+
 func TestScan_FindingsCarryNoMatchOrScore(t *testing.T) {
 	g := newScanRig(t, scanRigOptions{policy: classifierPolicy("pass", ""), scorer: &semanticScorer{}})
 	texts := []struct{ text, role string }{
@@ -628,8 +630,11 @@ func TestScan_FindingsCarryNoMatchOrScore(t *testing.T) {
 		if len(out.Policy) != 2 {
 			t.Fatalf("policy has %d fields, want name and version: %s", len(out.Policy), raw)
 		}
+		// "0.97" is the classifier's score. The latency is a number of its
+		// own and is left out of the search, or 0.974 ms fails the test.
+		body := scanLatencyField.ReplaceAllString(raw, "")
 		for _, banned := range []string{`"match"`, "confidence", "metadata", "scanner_version", "score", `"path"`, `"role"`, "0.97"} {
-			if strings.Contains(raw, banned) {
+			if strings.Contains(body, banned) {
 				t.Fatalf("response contains %s: %s", banned, raw)
 			}
 		}
