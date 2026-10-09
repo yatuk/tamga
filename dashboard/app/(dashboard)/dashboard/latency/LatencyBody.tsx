@@ -12,11 +12,11 @@ import type { useLatencyPage } from "./useLatencyPage";
 const TARGET_MS = 2000;
 
 /** Circuit states as the proxy reports them, said plainly. */
-const CIRCUIT: Record<string, { word: string; action?: "BLOCK" | "REDACT" }> = {
+const CIRCUIT: Record<string, { word: string; action?: "FAILING" | "STRUGGLING" }> = {
   closed: { word: "Taking traffic" },
-  open: { word: "Cut off", action: "BLOCK" },
-  "half-open": { word: "Being tried again", action: "REDACT" },
-  half_open: { word: "Being tried again", action: "REDACT" },
+  open: { word: "Cut off", action: "FAILING" },
+  "half-open": { word: "Being tried again", action: "STRUGGLING" },
+  half_open: { word: "Being tried again", action: "STRUGGLING" },
 };
 
 type Props = ReturnType<typeof useLatencyPage>;

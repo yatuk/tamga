@@ -10,7 +10,8 @@ export interface Column {
   label: string;
   /** The column read out in words, shown while it is pointed at. */
   says: string;
-  parts: { kind?: "blocked" | "altered"; value: number }[];
+  /** A part with no kind is the only series: it is drawn in ink. */
+  parts: { kind?: "blocked" | "altered" | "passed"; value: number }[];
 }
 
 /** Left and right, Home and End walk the buckets of a chart that has the focus. */

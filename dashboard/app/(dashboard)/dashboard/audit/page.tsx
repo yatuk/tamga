@@ -119,7 +119,7 @@ export default function AuditPage() {
           <>
             {/* An empty log has nothing to verify; that is a plain fact, not a pass. */}
             {broken ? (
-              <span className="t-action" data-action="BLOCK">
+              <span className="t-action" data-action="FAILING">
                 Chain broken at entry {c.broken_at ?? "?"}
               </span>
             ) : (

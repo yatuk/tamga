@@ -163,11 +163,11 @@ function Window({ m }: { m: Page }) {
   );
 }
 
-const CIRCUIT: Record<string, { word: string; action?: "BLOCK" | "REDACT" }> = {
+const CIRCUIT: Record<string, { word: string; action?: "FAILING" | "STRUGGLING" }> = {
   closed: { word: "Taking traffic" },
-  open: { word: "Cut off", action: "BLOCK" },
-  "half-open": { word: "Being tried again", action: "REDACT" },
-  half_open: { word: "Being tried again", action: "REDACT" },
+  open: { word: "Cut off", action: "FAILING" },
+  "half-open": { word: "Being tried again", action: "STRUGGLING" },
+  half_open: { word: "Being tried again", action: "STRUGGLING" },
 };
 
 function Providers({ m }: { m: Page }) {

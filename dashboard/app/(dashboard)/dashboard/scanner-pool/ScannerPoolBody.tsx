@@ -13,15 +13,15 @@ const SHED_CRITICAL_PCT = 15;
 const ms = (n: number) => `${n.toFixed(2)} ms`;
 
 /** One measure against its capacity, as a bar that fills. */
-function Meter({ name, used, of, kind }: { name: string; used: number; of: number; kind: "ink" | "altered" | "blocked" }) {
+function Meter({ name, used, of }: { name: string; used: number; of: number }) {
   const share = of > 0 ? Math.min(1, used / of) : 0;
   return (
     <div style={{ marginTop: "1.5rem" }}>
       <div className="t-split" style={{ marginTop: 0 }} role="img" aria-label={`${name}: ${used} of ${of}`}>
-        <Bar data-kind={kind} share={share} delay={0.15} />
+        <Bar data-kind="ink" share={share} delay={0.15} />
       </div>
       <div className="t-splitkey">
-        <span data-kind={kind}>
+        <span data-kind="ink">
           {name}, {used.toLocaleString("en")} of {of.toLocaleString("en")}
         </span>
         <span>{Math.round(share * 100)}%</span>
@@ -64,8 +64,7 @@ export function ScannerPoolBody({ poolEnabled, pool, scannerCount, pipelineMode,
       <PageHead title="Scanner pool" lede={lede} />
 
       <Statement
-        quiet={!overloaded}
-        figure={<span className="t-verdict" data-action={overloaded ? "BLOCK" : pressed ? "REDACT" : "PASS"}>{overloaded ? "Overloaded" : pressed ? "Under pressure" : "Keeping up"}</span>}
+        figure={<span className="t-verdict">{overloaded ? "Overloaded" : pressed ? "Under pressure" : "Keeping up"}</span>}
         sentence={
           overloaded
             ? "Scans are being dropped or are waiting too long for a worker."
@@ -83,8 +82,8 @@ export function ScannerPoolBody({ poolEnabled, pool, scannerCount, pipelineMode,
         }
         below={
           <>
-            <Meter name="Workers busy" used={pool.workersActive} of={workers} kind={utilPct > 80 ? "altered" : "ink"} />
-            <Meter name="Queue" used={pool.queueDepth} of={pool.queueSize} kind={queuePct >= 80 ? "blocked" : queuePct >= 50 ? "altered" : "ink"} />
+            <Meter name="Workers busy" used={pool.workersActive} of={workers} />
+            <Meter name="Queue" used={pool.queueDepth} of={pool.queueSize} />
           </>
         }
         facts={[

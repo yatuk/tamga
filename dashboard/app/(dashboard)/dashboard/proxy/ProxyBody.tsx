@@ -9,10 +9,10 @@ type Props = ReturnType<typeof useProxyPage>;
 type PartStatus = Props["componentRows"][number]["status"];
 
 /** Not configured is a deployment choice, not a fault: it gets no mark. */
-const STATES: Record<PartStatus, { word: string; action?: "BLOCK" | "REDACT" }> = {
+const STATES: Record<PartStatus, { word: string; action?: "FAILING" | "STRUGGLING" }> = {
   ok: { word: "Working" },
-  warning: { word: "Degraded", action: "REDACT" },
-  error: { word: "Failing", action: "BLOCK" },
+  warning: { word: "Degraded", action: "STRUGGLING" },
+  error: { word: "Failing", action: "FAILING" },
   disabled: { word: "Not set up" },
 };
 

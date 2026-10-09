@@ -70,10 +70,10 @@ export function TamgaShell({ children }: { children: ReactNode }) {
             </HeaderName>
             <HeaderGlobalBar>
               <span className="t-shellstate">
-                <span className="t-dot" data-state={health.up === undefined ? "checking" : health.up ? "up" : "down"} />
+                <span key={health.checkedAt} className="t-dot" data-state={health.up === undefined ? "checking" : health.up ? "up" : "down"} />
                 {/* Only up or down is announced; the scan time changes with every check. */}
                 <span role="status">{health.up === undefined ? "Checking the proxy" : health.up ? "Proxy up" : "Proxy unreachable"}</span>
-                {health.up && health.scanP50 !== null ? <span>scanning in {health.scanP50} ms</span> : null}
+                {health.up && health.scanP50 !== null ? <span style={{ marginLeft: "-0.5rem" }}>, scanning in {health.scanP50} ms</span> : null}
               </span>
               <HeaderGlobalAction
                 aria-label="Search or jump to a page (Ctrl K)"

@@ -44,6 +44,8 @@ export function useHealth() {
     isError: hydrated && query.isError,
     isLoading: !hydrated || query.isLoading,
     isPending: !hydrated || query.isPending,
+    /** When the proxy last answered, in ms; 0 before it has. */
+    dataUpdatedAt: hydrated ? query.dataUpdatedAt : 0,
   };
 }
 

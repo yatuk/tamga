@@ -89,7 +89,7 @@ export function ReportsBody({
         </dl>
       </div>
 
-      <Section id="traffic" title={`Requests by ${unit}`} note="Red is stopped, ochre is redacted, black passed.">
+      <Section id="traffic" title={`Requests by ${unit}`} note="Red is stopped, ochre is redacted, grey passed.">
         {!traffic ? (
           <p className="t-empty">No traffic in this window.</p>
         ) : (
@@ -103,7 +103,7 @@ export function ReportsBody({
               parts: [
                 { kind: "blocked" as const, value: p.blocked },
                 { kind: "altered" as const, value: p.redacted },
-                { value: Math.max(0, p.total - p.blocked - p.redacted) },
+                { kind: "passed" as const, value: Math.max(0, p.total - p.blocked - p.redacted) },
               ],
             }))}
           />

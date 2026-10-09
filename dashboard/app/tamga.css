@@ -13,16 +13,32 @@
  *           for being clickable.
  *   Stamp   One colour, the red of the mark, and it means one thing: this
  *           request was stopped. Ochre means it was changed. A request that
- *           passed gets no colour at all.
+ *           passed gets no colour at all. Nothing else is red or ochre: where
+ *           you are is marked in ink, and so is a part of the system that is
+ *           failing, with a solid square, or struggling, with a hollow one.
+ *           Carbon's own status colours are mapped to ink for the same reason.
  */
 
-.tamga {
-  --tamga-stamp: #c8321f; /* blocked: text and marks */
-  --tamga-stamp-fill: #e04a35;
-  --tamga-altered: #8a5a00; /* redacted or stripped: text */
-  --tamga-altered-fill: #d99e1c;
+/* On the root, not on .tamga: toasts are drawn outside it. */
+:root {
+  --tamga-ink: #161616;
+  --tamga-ink-2: #525252; /* secondary text */
+  --tamga-ink-3: #6f6f6f; /* helper text, placeholders */
+  --tamga-paper: #f4f4f4;
+  --tamga-sheet: #ffffff;
+  --tamga-track: #e0e0e0; /* the empty part of a bar */
+  --tamga-hover: #e8e8e8; /* a row under the pointer, or selected */
   --tamga-rule: #c6c6c6;
 
+  --tamga-stamp: #b82a18; /* stopped: text and marks. 4.5:1 on a hovered row. */
+  --tamga-stamp-fill: #e04a35;
+  --tamga-stamp-tint: #ffd7d0;
+  --tamga-altered: #7a5000; /* redacted or stripped: text */
+  --tamga-altered-fill: #d99e1c;
+  --tamga-altered-tint: #fbe9b8;
+}
+
+.tamga {
   --tamga-font-text: var(--font-atkinson), "Segoe UI", sans-serif;
   --tamga-font-head: var(--font-archivo), "Arial Narrow", sans-serif;
   --tamga-font-data: var(--font-atkinson-mono), Consolas, monospace;
@@ -37,25 +53,35 @@
 .tamga,
 .tamga .cds--g10,
 .tamga .cds--white {
-  --cds-interactive: #161616;
-  --cds-button-primary: #161616;
+  --cds-interactive: var(--tamga-ink);
+  --cds-button-primary: var(--tamga-ink);
   --cds-button-primary-hover: #393939;
-  --cds-button-primary-active: #525252;
-  --cds-button-tertiary: #161616;
+  --cds-button-primary-active: var(--tamga-ink-2);
+  --cds-button-tertiary: var(--tamga-ink);
   --cds-button-tertiary-hover: #393939;
-  --cds-button-tertiary-active: #525252;
-  --cds-link-primary: #161616;
+  --cds-button-tertiary-active: var(--tamga-ink-2);
+  --cds-link-primary: var(--tamga-ink);
   --cds-link-primary-hover: #000000;
-  --cds-link-visited: #161616;
-  --cds-focus: #161616;
-  --cds-border-interactive: #161616;
-  --cds-background-brand: #161616;
-  --cds-highlight: #e8e8e8;
+  --cds-link-visited: var(--tamga-ink);
+  --cds-focus: var(--tamga-ink);
+  --cds-border-interactive: var(--tamga-ink);
+  --cds-background-brand: var(--tamga-ink);
+  --cds-highlight: var(--tamga-hover);
+  --cds-layer-selected: var(--tamga-hover);
+  --cds-text-placeholder: var(--tamga-ink-3);
+  /* Carbon's red, green, blue: all ink here. */
+  --cds-button-danger-primary: var(--tamga-ink);
+  --cds-button-danger-hover: #393939;
+  --cds-button-danger-active: var(--tamga-ink-2);
+  --cds-support-error: var(--tamga-ink);
+  --cds-support-success: var(--tamga-ink);
+  --cds-support-info: var(--tamga-ink);
+  --cds-text-error: var(--tamga-ink);
 }
 .tamga .cds--g100 {
   --cds-interactive: #ffffff;
   --cds-focus: #ffffff;
-  --cds-border-interactive: var(--tamga-stamp-fill);
+  --cds-border-interactive: #ffffff;
   --cds-link-primary: #ffffff;
 }
 
@@ -63,13 +89,29 @@
 .tamga,
 .tamga [class*="cds--"] {
   font-family: var(--tamga-font-text);
+  /* Carbon tracks Plex out by a fraction of a pixel. Atkinson is set wide already. */
+  letter-spacing: 0;
 }
 .tamga code,
 .tamga pre,
-.tamga .cds--snippet,
-.tamga .cds--snippet *,
+.tamga .cds--snippet code,
+.tamga .cds--snippet pre,
+.tamga textarea[data-code],
 .tamga .t-data {
   font-family: var(--tamga-font-data);
+}
+/* The parts of the page the browser draws. */
+.tamga ::selection {
+  background: var(--tamga-ink);
+  color: #ffffff;
+}
+.tamga input,
+.tamga textarea {
+  caret-color: var(--tamga-ink);
+}
+.tamga td,
+.tamga th {
+  font-variant-numeric: tabular-nums;
 }
 .tamga .cds--link {
   text-decoration: underline;
@@ -79,7 +121,7 @@
 html,
 body {
   margin: 0;
-  background: #f4f4f4;
+  background: var(--tamga-paper);
 }
 /* Whatever is scrolled to, by focus or by a link, clears the fixed header. */
 html {
@@ -109,7 +151,7 @@ html {
   gap: 0.5rem;
   padding: 0 1rem;
   font-size: 0.8125rem;
-  color: #c6c6c6;
+  color: var(--tamga-rule);
   white-space: nowrap;
 }
 .tamga .t-dot {
@@ -119,20 +161,23 @@ html {
   border-radius: 50%;
   background: #8d8d8d;
 }
+/* Up is a full dot, down an empty one. The words beside it say which. */
 .tamga .t-dot[data-state="up"] {
-  background: #42be65;
+  background: currentColor;
 }
 .tamga .t-dot[data-state="down"] {
-  background: var(--tamga-stamp-fill);
+  background: none;
+  box-shadow: inset 0 0 0 1.5px currentColor;
 }
-/* A slow ring while the proxy is up: the console is listening. */
+/* One ring each time the proxy answers: the dot is remounted per answer. */
 .tamga .t-dot[data-state="up"]::after {
   content: "";
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  border: 1px solid #42be65;
-  animation: t-listen 3.2s cubic-bezier(0.2, 0, 0.38, 0.9) infinite;
+  border: 1px solid currentColor;
+  opacity: 0;
+  animation: t-listen 1.6s cubic-bezier(0.2, 0, 0.38, 0.9) 1;
 }
 @keyframes t-listen {
   0% { transform: scale(1); opacity: 0.9; }
@@ -144,8 +189,8 @@ html {
   padding: 0 0.75rem 0 0.25rem;
 }
 
-/* Sections. Carbon's side nav frame, our own items: one red mark that
-   travels to the page you open. */
+/* Sections. Carbon's side nav frame, our own items: one mark that travels to
+   the page you open. */
 .tamga .cds--side-nav__items {
   padding: 1rem 0 2rem;
 }
@@ -173,11 +218,11 @@ html {
   top: 0;
   bottom: 0;
   width: 3px;
-  background: var(--tamga-stamp-fill);
+  background: var(--tamga-ink);
 }
 .tamga .t-navlink {
   display: block;
-  padding: 0.4375rem 1rem;
+  padding: 0.5rem 1rem;
   font-size: 0.875rem;
   line-height: 1.25rem;
   color: var(--cds-text-secondary);
@@ -198,6 +243,45 @@ html {
   font-weight: 600;
 }
 
+/* ── Carbon parts, in the console's terms ──────────────────────────── */
+/* A notice is a ruled box in ink. Its title says what kind it is. */
+.tamga .cds--inline-notification,
+.tamga .cds--actionable-notification {
+  border: 1px solid var(--tamga-ink);
+  border-left-width: 1px;
+  background: var(--cds-layer);
+  color: var(--cds-text-primary);
+}
+.tamga .cds--inline-notification::before,
+.tamga .cds--actionable-notification::before {
+  display: none;
+}
+.tamga .cds--inline-notification__icon,
+.tamga .cds--actionable-notification .cds--inline-notification__icon {
+  display: none;
+}
+.tamga .cds--inline-notification__text-wrapper,
+.tamga .cds--actionable-notification__text-wrapper {
+  padding-left: 1rem;
+}
+/* Square, like everything else. */
+.tamga .cds--content-switcher,
+.tamga .cds--content-switcher-btn,
+.tamga .cds--content-switcher-btn::after,
+.tamga .cds--toggle__switch,
+.tamga .cds--toggle__switch::before {
+  border-radius: 0;
+}
+/* The way out of a dialog is quieter than the way on. */
+.tamga .cds--modal-footer .cds--btn--secondary {
+  background: var(--cds-layer);
+  color: var(--cds-text-primary);
+  box-shadow: inset 0 1px 0 var(--tamga-rule);
+}
+.tamga .cds--modal-footer .cds--btn--secondary:hover {
+  background: var(--tamga-hover);
+}
+
 /* ── Type ──────────────────────────────────────────────────────────── */
 .tamga h1,
 .tamga h2,
@@ -211,6 +295,10 @@ html {
   line-height: 1.15;
   letter-spacing: -0.01em;
 }
+.tamga h1,
+.tamga h2 {
+  text-wrap: balance;
+}
 .tamga h2 {
   font-stretch: 88%;
   font-weight: 600;
@@ -219,7 +307,7 @@ html {
 }
 .tamga .t-lede {
   margin-top: 0.5rem;
-  max-width: 44rem;
+  max-width: 68ch;
   font-size: 1rem;
   line-height: 1.5;
   color: var(--cds-text-secondary);
@@ -270,7 +358,7 @@ html {
   gap: 1.25rem;
 }
 .tamga .t-figureline p {
-  padding-bottom: 0.6rem;
+  padding-bottom: 0.5rem;
   font-size: 1.375rem;
   line-height: 1.3;
   max-width: 22rem;
@@ -292,7 +380,7 @@ html {
   display: flex;
   height: 0.75rem;
   margin-top: 1.75rem;
-  background: #e0e0e0;
+  background: var(--tamga-track);
 }
 .tamga .t-split span[data-kind="blocked"] {
   background: var(--tamga-stamp-fill);
@@ -312,8 +400,8 @@ html {
   display: inline-block;
   width: 0.625rem;
   height: 0.625rem;
-  margin-right: 0.4rem;
-  background: #e0e0e0;
+  margin-right: 0.5rem;
+  background: var(--tamga-track);
 }
 .tamga .t-splitkey span[data-kind="blocked"]::before {
   background: var(--tamga-stamp-fill);
@@ -356,16 +444,59 @@ html {
   font-size: 0.875rem;
 }
 .tamga .t-kinds th {
-  padding: 0.625rem 0.5rem 0.5rem 0;
+  padding: 0.5rem 0.5rem 0.5rem 0;
+  border-bottom: 1px solid var(--tamga-ink);
   text-align: left;
   font-weight: 400;
   font-size: 0.75rem;
+  line-height: 1rem;
   color: var(--cds-text-secondary);
 }
 .tamga .t-kinds td {
   padding: 0.5rem 0.5rem 0.5rem 0;
-  border-top: 1px solid var(--tamga-rule);
+  border-bottom: 1px solid var(--tamga-rule);
+  line-height: 1rem;
   vertical-align: middle;
+}
+
+/* One table. Carbon's comes with a grey band for a head and white slabs for
+   rows; here it is drawn as the one above: a quiet head closed by an ink rule,
+   rows in ink on the paper, a hairline between them. */
+.tamga .cds--data-table thead,
+.tamga .cds--data-table tbody,
+.tamga .cds--data-table th,
+.tamga .cds--data-table tbody tr,
+.tamga .cds--data-table td {
+  background: transparent;
+}
+.tamga .cds--data-table th {
+  border-bottom: 1px solid var(--tamga-ink);
+  color: var(--cds-text-secondary);
+}
+.tamga .cds--data-table th,
+.tamga .cds--data-table th .cds--table-header-label {
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+.tamga .cds--data-table td,
+.tamga .cds--data-table tbody tr:hover td {
+  border-top: 0;
+  border-bottom: 1px solid var(--tamga-rule);
+  color: var(--cds-text-primary);
+}
+.tamga .cds--data-table tbody tr:hover td {
+  background: transparent;
+}
+.tamga .t-work .cds--data-table tbody tr:hover td {
+  background: var(--tamga-hover);
+}
+.tamga .cds--data-table th:first-child,
+.tamga .cds--data-table td:first-child {
+  padding-left: 0.5rem;
+}
+.tamga .cds--data-table th:last-child,
+.tamga .cds--data-table td:last-child {
+  padding-right: 0.5rem;
 }
 .tamga .t-kinds td:nth-child(2) {
   white-space: nowrap;
@@ -381,7 +512,7 @@ html {
 .tamga .t-kinds .t-bar span {
   display: block;
   height: 0.5rem;
-  background: #161616;
+  background: var(--tamga-ink);
 }
 
 /* The queue preview. */
@@ -423,7 +554,7 @@ html {
 }
 .tamga .t-day span {
   display: block;
-  background: #c6c6c6;
+  background: var(--tamga-rule);
 }
 .tamga .t-day span[data-kind="blocked"] {
   background: var(--tamga-stamp-fill);
@@ -436,7 +567,7 @@ html {
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
   gap: 0.5rem;
-  margin-top: 0.4rem;
+  margin-top: 0.5rem;
   font-size: 0.75rem;
   color: var(--cds-text-secondary);
   font-variant-numeric: tabular-nums;
@@ -451,7 +582,7 @@ html {
 .tamga .t-action {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.5rem;
   font-size: 0.8125rem;
   font-weight: 600;
   white-space: nowrap;
@@ -469,10 +600,15 @@ html {
 .tamga .t-action[data-action="STRIP"] {
   color: var(--tamga-altered);
 }
-.tamga .t-action[data-action="WARN"] {
+/* Warned, and the two states of a part of the system: in ink. Failing is a
+   solid square, struggling a hollow one. */
+.tamga .t-action[data-action="WARN"],
+.tamga .t-action[data-action="STRUGGLING"],
+.tamga .t-action[data-action="FAILING"] {
   color: var(--cds-text-primary);
 }
-.tamga .t-action[data-action="WARN"]::before {
+.tamga .t-action[data-action="WARN"]::before,
+.tamga .t-action[data-action="STRUGGLING"]::before {
   background: none;
   box-shadow: inset 0 0 0 2px currentColor;
 }
@@ -503,9 +639,10 @@ html {
 .tamga .t-work tbody tr[data-new="true"] td {
   animation: t-arrived 2.4s cubic-bezier(0.2, 0, 0.38, 0.9) 1;
 }
+/* Grey, whatever was done to the request: red would say it was stopped. */
 @keyframes t-arrived {
-  0% { background-color: #ffd7d0; }
-  100% { background-color: var(--cds-layer); }
+  0% { background-color: var(--tamga-rule); }
+  100% { background-color: transparent; }
 }
 .tamga .t-work tbody[data-swap] tr {
   animation: t-rows 200ms cubic-bezier(0.2, 0, 0.38, 0.9) 1 both;
@@ -516,9 +653,10 @@ html {
 }
 @media (prefers-reduced-motion: reduce) {
   .tamga .t-work { transition: none; }
-  .tamga .t-work tbody tr[data-new="true"] td,
   .tamga .t-work tbody[data-swap] tr,
   .tamga .t-dot[data-state="up"]::after { animation: none; }
+  /* The mark stays, without the fade: it is held, then gone. */
+  .tamga .t-work tbody tr[data-new="true"] td { animation-timing-function: steps(1, end); }
 }
 .tamga .t-work .cds--data-table-container {
   padding-top: 0;
@@ -552,7 +690,7 @@ html {
 }
 .tamga .t-work tbody tr[data-selected="true"] td {
   background: var(--cds-layer-selected);
-  box-shadow: inset 0 1px 0 #161616, inset 0 -1px 0 #161616;
+  box-shadow: inset 0 1px 0 var(--tamga-ink), inset 0 -1px 0 var(--tamga-ink);
 }
 .tamga .t-work td .t-data {
   font-size: 0.8125rem;
@@ -582,7 +720,7 @@ html {
   max-height: calc(100vh - 5rem);
   overflow: auto;
   overscroll-behavior: contain;
-  border: 1px solid #161616;
+  border: 1px solid var(--tamga-ink);
   border-left-width: 1px;
   background: var(--cds-layer);
 }
@@ -619,7 +757,7 @@ html {
   display: grid;
   grid-template-columns: 5.5rem minmax(0, 1fr);
   gap: 0.25rem 0.75rem;
-  margin-top: 0.4rem;
+  margin-top: 0.5rem;
   font-size: 0.8125rem;
 }
 .tamga .t-finding dt {
@@ -659,7 +797,7 @@ html {
 }
 .tamga .t-split span[data-kind="ink"],
 .tamga .t-splitkey span[data-kind="ink"]::before {
-  background: #161616;
+  background: var(--tamga-ink);
 }
 .tamga .t-right {
   text-align: right;
@@ -678,7 +816,7 @@ html {
 }
 .tamga .t-footnote {
   margin-top: 0.75rem;
-  max-width: 52rem;
+  max-width: 76ch;
   font-size: 0.8125rem;
   line-height: 1.5;
   color: var(--cds-text-secondary);
@@ -702,7 +840,10 @@ html {
   gap: 2px;
 }
 .tamga .t-chart .t-day span {
-  background: #161616;
+  background: var(--tamga-ink);
+}
+.tamga .t-chart .t-day span[data-kind="passed"] {
+  background: var(--tamga-rule);
 }
 .tamga .t-chart .t-day span[data-kind="blocked"] {
   background: var(--tamga-stamp-fill);
@@ -711,7 +852,7 @@ html {
   background: var(--tamga-altered-fill);
 }
 .tamga .t-chart .t-day[data-at="true"] {
-  background: #e0e0e0;
+  background: var(--tamga-track);
 }
 .tamga .t-chart .t-daylabels {
   gap: 2px;
@@ -743,16 +884,16 @@ html {
 }
 .tamga .t-trace .t-line {
   fill: none;
-  stroke: #161616;
+  stroke: var(--tamga-ink);
   stroke-width: 1.75;
   stroke-linejoin: round;
   stroke-linecap: round;
 }
 .tamga .t-trace .t-spot {
-  fill: #161616;
+  fill: var(--tamga-ink);
 }
 .tamga .t-trace .t-cursor {
-  stroke: #161616;
+  stroke: var(--tamga-ink);
   stroke-width: 1;
 }
 .tamga .t-trace .t-scale {
@@ -772,7 +913,7 @@ html {
 .tamga .t-tracelabels {
   display: flex;
   justify-content: space-between;
-  margin-top: 0.4rem;
+  margin-top: 0.5rem;
   font-size: 0.75rem;
   color: var(--cds-text-secondary);
   font-variant-numeric: tabular-nums;
@@ -783,7 +924,7 @@ html {
   position: relative;
   height: 5.5rem;
   margin-top: 1.75rem;
-  background: linear-gradient(#161616, #161616) 0 50% / 100% 1px no-repeat;
+  background: linear-gradient(var(--tamga-ink), var(--tamga-ink)) 0 50% / 100% 1px no-repeat;
 }
 .tamga .t-mark {
   position: absolute;
@@ -793,7 +934,7 @@ html {
   flex-direction: column;
   justify-content: flex-start;
   padding-left: 0.375rem;
-  border-left: 2px solid #161616;
+  border-left: 2px solid var(--tamga-ink);
   font-size: 0.75rem;
   line-height: 1.2;
   color: var(--cds-text-secondary);
@@ -861,11 +1002,8 @@ html {
   color: var(--cds-text-secondary);
   white-space: nowrap;
 }
-.tamga .t-live .t-dot[data-state="up"] {
-  background: #198038;
-}
-.tamga .t-live .t-dot[data-state="up"]::after {
-  border-color: #198038;
+.tamga .t-live .t-dot {
+  color: var(--cds-text-primary);
 }
 .tamga .t-filters .cds--checkbox-group {
   flex-shrink: 0;
@@ -960,7 +1098,7 @@ html {
 }
 .tamga .t-table tbody tr[data-selected="true"] td {
   background: var(--cds-layer-selected);
-  box-shadow: inset 0 1px 0 #161616, inset 0 -1px 0 #161616;
+  box-shadow: inset 0 1px 0 var(--tamga-ink), inset 0 -1px 0 var(--tamga-ink);
 }
 .tamga .t-table td.t-clip {
   max-width: 20rem;
@@ -979,6 +1117,9 @@ html {
   grid-template-columns: 1fr 1fr;
   gap: 1rem;
 }
+.tamga .t-form .t-pair[data-wide="first"] {
+  grid-template-columns: 3fr 2fr;
+}
 .tamga .t-form .t-buttons {
   display: flex;
   justify-content: flex-end;
@@ -986,15 +1127,14 @@ html {
   padding-top: 0.5rem;
   border-top: 1px solid var(--tamga-rule);
 }
-.tamga .t-form textarea {
-  font-family: var(--tamga-font-data);
+.tamga textarea[data-code] {
   font-size: 0.8125rem;
 }
 /* What a pattern caught in the sample, marked where it was caught. */
 .tamga .t-sample {
   min-height: 1.5rem;
   padding: 0.5rem 0.75rem;
-  border-left: 2px solid #161616;
+  border: 1px solid var(--tamga-rule);
   background: var(--cds-layer);
   font-family: var(--tamga-font-data);
   font-size: 0.8125rem;
@@ -1003,7 +1143,7 @@ html {
   overflow-wrap: anywhere;
 }
 .tamga .t-sample mark {
-  background: #ffd7d0;
+  background: var(--tamga-stamp-tint);
   color: inherit;
   box-shadow: inset 0 -2px 0 var(--tamga-stamp-fill);
 }
@@ -1028,7 +1168,7 @@ html {
 }
 .tamga .t-sample mark[data-action="REDACT"],
 .tamga .t-sample mark[data-action="STRIP"] {
-  background: #fbe9b8;
+  background: var(--tamga-altered-tint);
   box-shadow: inset 0 -2px 0 var(--tamga-altered-fill);
 }
 .tamga .t-table[data-swap] tr,
@@ -1053,7 +1193,7 @@ html {
   padding: 1.5rem 0 0;
 }
 .tamga .t-tabs .cds--tabs__nav-item--selected {
-  border-bottom-color: var(--tamga-stamp-fill);
+  border-bottom-color: var(--tamga-ink);
 }
 .tamga .t-unsaved {
   font-size: 0.8125rem;
@@ -1062,7 +1202,7 @@ html {
   white-space: nowrap;
 }
 .tamga .t-editor {
-  border: 1px solid #161616;
+  border: 1px solid var(--tamga-ink);
 }
 .tamga .t-editorhint {
   padding: 0.5rem 0.75rem;
@@ -1199,7 +1339,7 @@ html {
 }
 .tamga .t-steps p {
   margin: 0.25rem 0 0.75rem;
-  max-width: 44rem;
+  max-width: 72ch;
   font-size: 0.875rem;
   line-height: 1.55;
   color: var(--cds-text-secondary);
@@ -1212,7 +1352,7 @@ html {
   line-height: 1.45;
 }
 .tamga .t-prose p + p {
-  margin-top: 0.9rem;
+  margin-top: 1rem;
 }
 .tamga .t-prose b {
   font-weight: 600;
@@ -1225,20 +1365,16 @@ html {
 /* ── Toasts ────────────────────────────────────────────────────────── */
 /* Rendered at the root, outside .tamga: the tokens are spelled out here. */
 .t-toasts [data-sonner-toast][data-styled="true"] {
-  border: 1px solid #161616;
-  border-left-width: 3px;
+  border: 1px solid var(--tamga-ink);
   border-radius: 0;
   background: #ffffff;
-  color: #161616;
+  color: var(--tamga-ink);
   box-shadow: none;
   font-family: var(--font-atkinson), "Segoe UI", sans-serif;
   font-size: 0.875rem;
 }
-.t-toasts [data-sonner-toast][data-styled="true"][data-type="error"] {
-  border-left-color: #e04a35;
-}
 .t-toasts [data-sonner-toast][data-styled="true"] [data-description] {
-  color: #525252;
+  color: var(--tamga-ink-2);
 }
 
 /* ── Command palette ───────────────────────────────────────────────── */
@@ -1264,7 +1400,7 @@ html {
 }
 .tamga .t-palette li[aria-selected="true"] {
   background: var(--cds-layer-selected);
-  box-shadow: inset 3px 0 0 var(--tamga-stamp-fill);
+  box-shadow: inset 3px 0 0 var(--tamga-ink);
 }
 
 /* ── Sign-in ───────────────────────────────────────────────────────── */
@@ -1277,4 +1413,39 @@ html {
   margin-bottom: 3rem;
   font-size: 1.25rem;
   color: var(--cds-text-primary);
+}
+
+/* ── A window too narrow for the side list ─────────────────────────── */
+/* Reached by zooming a desk window to 200%, not by a phone. The section list
+   moves above the page, in columns, and nothing is left behind a sideways
+   scroll of the whole page. */
+@media (max-width: 56rem) {
+  .tamga .cds--side-nav {
+    position: static;
+    inline-size: auto;
+    max-inline-size: none;
+    block-size: auto;
+    margin-top: 3rem;
+    border-bottom: 1px solid var(--tamga-rule);
+  }
+  .tamga .cds--side-nav__items {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+    padding: 0.5rem 0;
+  }
+  .tamga .t-main {
+    margin-left: 0;
+    padding: 2rem 1rem 4rem;
+  }
+  .tamga .t-main > *,
+  .tamga .t-work > *,
+  .tamga .t-hunt > * {
+    min-width: 0;
+  }
+  .tamga .t-figureline {
+    flex-wrap: wrap;
+  }
+  .tamga .t-controls {
+    flex-wrap: wrap;
+  }
 }
