@@ -21,6 +21,12 @@ import (
 // are refused. An operator who wants more has to write the ranges out, and
 // the proxy logs them when it starts.
 func ParseAlertAllowPrivate(raw string) ([]netip.Prefix, []string, error) {
+	return parseAllowList("TAMGA_ALERT_ALLOW_PRIVATE", "list the ranges the receivers are in", raw)
+}
+
+// parseAllowList reads one allowlist variable; name is the variable, for the
+// error text, and hint what to do in place of allowing every address.
+func parseAllowList(name, hint, raw string) ([]netip.Prefix, []string, error) {
 	var nets []netip.Prefix
 	var hosts []string
 	for _, p := range strings.Split(raw, ",") {
@@ -31,21 +37,21 @@ func ParseAlertAllowPrivate(raw string) ([]netip.Prefix, []string, error) {
 		if strings.Contains(p, "/") {
 			n, err := netip.ParsePrefix(p)
 			if err != nil {
-				return nil, nil, fmt.Errorf("TAMGA_ALERT_ALLOW_PRIVATE: %q is not a CIDR range, an IP address or a host name", p)
+				return nil, nil, fmt.Errorf("%s: %q is not a CIDR range, an IP address or a host name", name, p)
 			}
 			if n.Bits() == 0 {
-				return nil, nil, fmt.Errorf("TAMGA_ALERT_ALLOW_PRIVATE: %q would allow every address; list the ranges the receivers are in", p)
+				return nil, nil, fmt.Errorf("%s: %q would allow every address; %s", name, p, hint)
 			}
 			// An IPv4-mapped range is kept as the IPv4 range it stands for,
 			// which is the form addresses are judged in.
 			if n.Addr().Is4In6() && n.Bits() >= 96 {
 				n = netip.PrefixFrom(n.Addr().Unmap(), n.Bits()-96)
 				if n.Bits() == 0 {
-					return nil, nil, fmt.Errorf("TAMGA_ALERT_ALLOW_PRIVATE: %q would allow every address; list the ranges the receivers are in", p)
+					return nil, nil, fmt.Errorf("%s: %q would allow every address; %s", name, p, hint)
 				}
 			}
 			if n.Addr().Zone() != "" {
-				return nil, nil, fmt.Errorf("TAMGA_ALERT_ALLOW_PRIVATE: %q is not a CIDR range, an IP address or a host name", p)
+				return nil, nil, fmt.Errorf("%s: %q is not a CIDR range, an IP address or a host name", name, p)
 			}
 			nets = append(nets, n.Masked())
 			continue
@@ -57,7 +63,7 @@ func ParseAlertAllowPrivate(raw string) ([]netip.Prefix, []string, error) {
 		}
 		h := strings.TrimSuffix(strings.ToLower(p), ".")
 		if !validAlertHost(h) {
-			return nil, nil, fmt.Errorf("TAMGA_ALERT_ALLOW_PRIVATE: %q is not a CIDR range, an IP address or a host name", p)
+			return nil, nil, fmt.Errorf("%s: %q is not a CIDR range, an IP address or a host name", name, p)
 		}
 		hosts = append(hosts, h)
 	}

@@ -14,6 +14,9 @@ type Options struct {
 	GetPolicy func() *policy.Policy
 	Bus       *events.Bus
 	Hooks     Hooks
+	// Egress says where pool endpoints may be sent and connects to them.
+	// Nil builds one from the rules policies are loaded under.
+	Egress *Egress
 }
 
 // Registry caches ProviderPool values per route key for the current policy pointer.
@@ -28,6 +31,9 @@ type Registry struct {
 
 // NewRegistry builds a registry. Safe for concurrent use.
 func NewRegistry(opts Options) *Registry {
+	if opts.Egress == nil {
+		opts.Egress = NewEgress(policy.ActiveUpstreamRules())
+	}
 	return &Registry{
 		opts:         opts,
 		poolsByRoute: map[string]*ProviderPool{},
@@ -49,12 +55,14 @@ func (r *Registry) refreshLocked() {
 		r.cachedPolicy = p
 		return
 	}
-	if r.cachedPolicy == p && len(r.poolsByRoute) > 0 {
+	// Built once per policy version, also when it yielded no pool: building
+	// logs what it skipped, and that is not for every lookup to repeat.
+	if r.cachedPolicy == p {
 		return
 	}
 	next := make(map[string]*ProviderPool, len(p.Providers.Pools))
 	for routeKey, spec := range p.Providers.Pools {
-		pool := NewProviderPoolFromSpec(routeKey, spec, r.opts.Bus, r.opts.Hooks)
+		pool := NewProviderPoolFromSpec(routeKey, spec, r.opts.Bus, r.opts.Hooks, r.opts.Egress)
 		if pool != nil {
 			next[routeKey] = pool
 		}

@@ -73,6 +73,24 @@ func providerBaseURL(provider string) *url.URL {
 	return nil
 }
 
+// ProviderURLOverrides returns the routes whose upstream the operator set
+// with TAMGA_<PROVIDER>_URL, as providerBaseURL would use them. A provider
+// pool on such a route may point at the same host: the operator already
+// trusts it.
+func ProviderURLOverrides() map[string]*url.URL {
+	out := map[string]*url.URL{}
+	for provider := range providerURLs {
+		override := strings.TrimSpace(envLookup("TAMGA_" + strings.ToUpper(provider) + "_URL"))
+		if override == "" {
+			continue
+		}
+		if u, err := url.Parse(override); err == nil && u.Host != "" {
+			out[provider] = u
+		}
+	}
+	return out
+}
+
 // envLookup exists so tests can monkey-patch env reads if needed.
 var envLookup = func(k string) string { return os.Getenv(k) }
 
@@ -1301,7 +1319,9 @@ func (t *resilientTransport) RoundTrip(req *http.Request) (*http.Response, error
 				_ = rc.Close()
 			}
 		}
-		return t.providerPool.RoundTrip(req.Context(), t.base, req, origBody, retries, t.upstreamHooks)
+		// A pool's endpoints come from the policy, so the pool connects through
+		// its own guarded transport, not t.base.
+		return t.providerPool.RoundTrip(req.Context(), req, origBody, retries, t.upstreamHooks)
 	}
 	if len(t.providers) == 0 {
 		t.providers = []string{"openai"}

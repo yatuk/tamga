@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/yatuk/tamga/internal/incidents"
+	"github.com/yatuk/tamga/internal/policy"
 	"github.com/yatuk/tamga/internal/policy/history"
 )
 
@@ -47,6 +48,12 @@ func (cfg Config) handlePolicyRollback(w http.ResponseWriter, r *http.Request) {
 	rev, ok := cfg.PolicyHistory.GetRevision(id)
 	if !ok {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "revision not found"})
+		return
+	}
+	// Checked before the file is touched: a revision saved under looser rules
+	// must not replace a policy that loads with one that does not.
+	if _, err := policy.LoadFromBytes([]byte(rev.YAML)); err != nil {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "revision is not a valid policy: " + err.Error()})
 		return
 	}
 	if err := os.WriteFile(cfg.PolicyPath, []byte(rev.YAML), 0o600); err != nil {
@@ -143,6 +150,12 @@ func (cfg Config) handleProposalApprove(w http.ResponseWriter, r *http.Request) 
 				return
 			}
 		}
+	}
+	// Checked before the proposal is marked approved and before the file is
+	// touched, for the same reason as a rollback.
+	if _, err := policy.LoadFromBytes([]byte(prop.YAML)); err != nil {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "proposal is not a valid policy: " + err.Error()})
+		return
 	}
 	prop.Status = "approved"
 	prop.ApprovedBy = actor

@@ -178,6 +178,28 @@ type Config struct {
 	AlertAllowNets  []netip.Prefix
 	AlertAllowHosts []string
 
+	// UpstreamKeyEnvs are environment variable names, beyond those ending in
+	// _API_KEY, that a provider pool in the policy may name as api_key_env.
+	// The policy can be edited through the API, so by default it may only
+	// have the proxy read variables that look like a provider key, and never
+	// one of the proxy's own (TAMGA_*). Set via TAMGA_UPSTREAM_KEY_ENVS as a
+	// comma-separated list of exact names, matched as written.
+	UpstreamKeyEnvs []string
+	// UpstreamAllowNets and UpstreamAllowHosts are where a provider pool may
+	// point besides its route's vendor hosts and the route's own
+	// TAMGA_<PROVIDER>_URL: a self-hosted model server or a gateway. A
+	// listed host or address may be used on any route, over plain http too.
+	// Set via TAMGA_UPSTREAM_ALLOW as a comma-separated list of CIDR
+	// ranges, IP addresses and exact host names. An entry ending in ":port"
+	// allows that port only and is kept in UpstreamAllowHostPorts.
+	UpstreamAllowNets      []netip.Prefix
+	UpstreamAllowHosts     []string
+	UpstreamAllowHostPorts []string
+	// NotifyURLEnvs are environment variable names, beyond those ending in
+	// _WEBHOOK_URL, that a rule's notify value may refer to as "${NAME}".
+	// Set via TAMGA_NOTIFY_URL_ENVS as a comma-separated list of exact names.
+	NotifyURLEnvs []string
+
 	// --- Vault / KMS ---
 	// VaultEnabled enables HashiCorp Vault integration. When true, secrets are
 	// resolved from Vault with env-var fallback. When false (default), env vars
@@ -216,10 +238,28 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
+	upstreamNets, upstreamHosts, upstreamHostPorts, err := ParseUpstreamAllow(os.Getenv("TAMGA_UPSTREAM_ALLOW"))
+	if err != nil {
+		return nil, err
+	}
+	upstreamKeyEnvs, err := ParseEnvNames("TAMGA_UPSTREAM_KEY_ENVS", os.Getenv("TAMGA_UPSTREAM_KEY_ENVS"))
+	if err != nil {
+		return nil, err
+	}
+	notifyURLEnvs, err := ParseEnvNames("TAMGA_NOTIFY_URL_ENVS", os.Getenv("TAMGA_NOTIFY_URL_ENVS"))
+	if err != nil {
+		return nil, err
+	}
+
 	return &Config{
 		TrustedProxies:           trustedProxies,
 		AlertAllowNets:           alertNets,
 		AlertAllowHosts:          alertHosts,
+		UpstreamAllowNets:        upstreamNets,
+		UpstreamAllowHosts:       upstreamHosts,
+		UpstreamAllowHostPorts:   upstreamHostPorts,
+		UpstreamKeyEnvs:          upstreamKeyEnvs,
+		NotifyURLEnvs:            notifyURLEnvs,
 		Port:                     port,
 		PolicyPath:               envOrDefault("TAMGA_POLICY_PATH", "./tamga-policy.yaml"),
 		AnalyzerAddr:             envOrDefault("TAMGA_ANALYZER_ADDR", "localhost:50051"),

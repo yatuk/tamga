@@ -704,6 +704,13 @@ func LoadFromBytes(data []byte) (*Policy, error) {
 		}
 	}
 
+	// A pool endpoint decides where callers' traffic and a key from the
+	// proxy's environment are sent. One the rules refuse fails the load, so
+	// no way of installing a policy can bring it in.
+	if issues := upstreamIssues(&p, ActiveUpstreamRules()); len(issues) > 0 {
+		return nil, fmt.Errorf("parsing policy YAML: %s: %s", issues[0].Field, issues[0].Message)
+	}
+
 	return &p, nil
 }
 
@@ -960,7 +967,8 @@ var notifyEnv = os.LookupEnv
 // in place of the URL. Only a value that is exactly one such reference is
 // looked up: nothing is substituted inside a longer string, so a policy
 // cannot be used to build a URL out of other variables. An unset variable
-// gives no URL.
+// gives no URL, and so does a name the rules do not let a policy read (see
+// UpstreamRules.NotifyEnvAllowed).
 func notifyURL(v string) string {
 	v = strings.TrimSpace(v)
 	if !strings.HasPrefix(v, "${") || !strings.HasSuffix(v, "}") {
@@ -968,6 +976,11 @@ func notifyURL(v string) string {
 	}
 	name := v[2 : len(v)-1]
 	if name == "" || strings.ContainsAny(name, "${} ") {
+		return ""
+	}
+	// Any name at all would let a policy post to whatever URL some other
+	// variable holds, and tell an outsider which variables hold one.
+	if !ActiveUpstreamRules().NotifyEnvAllowed(name) {
 		return ""
 	}
 	val, _ := notifyEnv(name)

@@ -35,16 +35,26 @@ type ProviderPool struct {
 	strategy   string
 	endpoints  []*poolEndpoint
 	totalSleep time.Duration // max per-endpoint timeout (for outer context hints)
-	rrCounter  atomic.Uint64 // round-robin position; incremented atomically on each attempt
+	// egress judges and dials every endpoint; nil is the strict default.
+	egress    *Egress
+	rrCounter atomic.Uint64 // round-robin position; incremented atomically on each attempt
 }
 
 type poolEndpoint struct {
-	name      string
+	name string
+	// route is the pool's route key; it decides whether the Bedrock signer
+	// may run for this endpoint.
+	route     string
 	base      *url.URL
 	apiKeyEnv string
-	priority  int
-	timeout   time.Duration
-	breaker   *gobreaker.CircuitBreaker[*http.Response]
+	// rules decide whether apiKeyEnv may be read; nil is the strict default.
+	rules    *policy.UpstreamRules
+	priority int
+	// refusalLogged keeps a refused endpoint to one log line per pool, and a
+	// pool is built once per policy version.
+	refusalLogged atomic.Bool
+	timeout       time.Duration
+	breaker       *gobreaker.CircuitBreaker[*http.Response]
 	// breakerCfg + bus allow replacing the breaker (manual reset / ops) with identical settings.
 	breakerCfg *policy.BreakerConfig
 	bus        *events.Bus
@@ -54,7 +64,12 @@ type poolEndpoint struct {
 }
 
 // NewProviderPoolFromSpec builds a pool from policy YAML. Returns nil if invalid or empty.
-func NewProviderPoolFromSpec(routeKey string, spec policy.ProviderUpstreamPool, bus *events.Bus, hooks Hooks) *ProviderPool {
+// eg says where the endpoints may be sent and connects to them; nil is the
+// strict default (vendor hosts only). An endpoint the rules refuse is kept in
+// the pool and refused on use, so a pool that should not exist fails closed
+// instead of quietly falling back to the route's default upstream.
+func NewProviderPoolFromSpec(routeKey string, spec policy.ProviderUpstreamPool, bus *events.Bus, hooks Hooks, eg *Egress) *ProviderPool {
+	eg = eg.orStrict()
 	if len(spec.Endpoints) == 0 {
 		return nil
 	}
@@ -66,9 +81,11 @@ func NewProviderPoolFromSpec(routeKey string, spec policy.ProviderUpstreamPool, 
 	eps := make([]*poolEndpoint, 0, len(spec.Endpoints))
 	var maxDur time.Duration
 	for _, ep := range spec.Endpoints {
-		base, err := url.Parse(strings.TrimSpace(ep.BaseURL))
-		if err != nil || base.Scheme == "" || base.Host == "" {
-			log.Warn().Str("component", "upstream").Str("base_url", ep.BaseURL).Msg("skip invalid base_url")
+		// The same parse the validator judged: trimmed, host in lower case.
+		base, err := policy.ParseBaseURL(ep.BaseURL)
+		if err != nil {
+			// The URL itself stays out of the log: it can carry credentials.
+			log.Warn().Str("component", "upstream").Str("route", routeKey).Str("endpoint", ep.Name).Msg("skip invalid base_url")
 			continue
 		}
 		dur := 30 * time.Second
@@ -82,9 +99,12 @@ func NewProviderPoolFromSpec(routeKey string, spec policy.ProviderUpstreamPool, 
 		}
 		br := newEndpointBreaker(ep.Name, ep.Breaker, bus)
 		eps = append(eps, &poolEndpoint{
-			name:       strings.TrimSpace(ep.Name),
-			base:       base,
-			apiKeyEnv:  strings.TrimSpace(ep.APIKeyEnv),
+			name:  strings.TrimSpace(ep.Name),
+			route: routeKey,
+			base:  base,
+			// Not trimmed: the name the validator judged is the name read.
+			apiKeyEnv:  ep.APIKeyEnv,
+			rules:      eg.rules,
 			priority:   ep.Priority,
 			timeout:    dur,
 			breaker:    br,
@@ -107,6 +127,7 @@ func NewProviderPoolFromSpec(routeKey string, spec policy.ProviderUpstreamPool, 
 		strategy:   strategy,
 		endpoints:  eps,
 		totalSleep: maxDur,
+		egress:     eg,
 	}
 }
 
@@ -197,8 +218,10 @@ func (p *ProviderPool) TotalTimeout() time.Duration {
 }
 
 // RoundTrip tries endpoints according to the configured strategy (fallback_chain or round_robin).
-func (p *ProviderPool) RoundTrip(ctx context.Context, rt http.RoundTripper, req *http.Request, body []byte, maxRetries int, hooks Hooks) (*http.Response, error) {
-	if p == nil || rt == nil || req == nil {
+// The pool connects through its own guarded transport, never the caller's:
+// see Egress.
+func (p *ProviderPool) RoundTrip(ctx context.Context, req *http.Request, body []byte, maxRetries int, hooks Hooks) (*http.Response, error) {
+	if p == nil || req == nil {
 		return nil, fmt.Errorf("upstream: invalid pool or request")
 	}
 	if maxRetries < 0 {
@@ -206,7 +229,7 @@ func (p *ProviderPool) RoundTrip(ctx context.Context, rt http.RoundTripper, req 
 	}
 
 	if strings.EqualFold(p.strategy, "round_robin") {
-		return p.roundRobinTrip(ctx, rt, req, body, maxRetries, hooks)
+		return p.roundRobinTrip(ctx, req, body, maxRetries, hooks)
 	}
 
 	// fallback_chain (default) — try endpoints in priority order.
@@ -215,7 +238,7 @@ func (p *ProviderPool) RoundTrip(ctx context.Context, rt http.RoundTripper, req 
 		if ep.breaker.State() == gobreaker.StateOpen {
 			continue
 		}
-		resp, err := p.tryEndpoint(ctx, rt, req, body, maxRetries, hooks, ep)
+		resp, err := p.tryEndpoint(ctx, req, body, maxRetries, hooks, ep)
 		if err != nil {
 			lastErr = err
 			continue
@@ -234,19 +257,46 @@ func (p *ProviderPool) RoundTrip(ctx context.Context, rt http.RoundTripper, req 
 
 // tryEndpoint sends the request to a single endpoint with retries and circuit breaker.
 // On success sets X-Tamga-Upstream-Provider and returns the response.
-func (p *ProviderPool) tryEndpoint(ctx context.Context, rt http.RoundTripper, req *http.Request, body []byte, maxRetries int, hooks Hooks, ep *poolEndpoint) (*http.Response, error) {
+func (p *ProviderPool) tryEndpoint(ctx context.Context, req *http.Request, body []byte, maxRetries int, hooks Hooks, ep *poolEndpoint) (*http.Response, error) {
+	eg := p.egress.orStrict()
+	// Judged again on every use, whatever validation let through: the caller's
+	// body and credentials are about to be sent to this host.
+	if err := eg.rules.CheckEndpoint(p.RouteKey, ep.base); err != nil {
+		ep.lastFailUnix.Store(time.Now().Unix())
+		ep.lastFailReason.Store(ErrEndpointRefused.Error())
+		if ep.refusalLogged.CompareAndSwap(false, true) {
+			log.Warn().Str("component", "upstream").Str("route", p.RouteKey).Str("endpoint", ep.name).
+				Msg("pool endpoint refused: base_url is not allowed for this route; nothing is sent to it")
+		}
+		return nil, ErrEndpointRefused
+	}
+	var rt http.RoundTripper = eg.transport
 	for attempt := 0; attempt <= maxRetries; attempt++ {
-		attemptCtx := ctx
-		var cancel context.CancelFunc
+		// The endpoint's timeout bounds the wait for its answer to begin. The
+		// context then has to outlive this function: the body is read by the
+		// caller, and for a stream that takes as long as the model does.
+		// Cancelling here would cut every stream after its first chunk.
+		attemptCtx, cancel := context.WithCancel(ctx)
+		var timer *time.Timer
 		if ep.timeout > 0 {
-			attemptCtx, cancel = context.WithTimeout(ctx, ep.timeout)
+			timer = time.AfterFunc(ep.timeout, cancel)
 		}
 		outReq := cloneRequestForEndpoint(req, body, ep, hooks)
 		resp, err := ep.breaker.Execute(func() (*http.Response, error) {
 			return doHTTP(attemptCtx, rt, outReq)
 		})
-		if cancel != nil {
+		if timer != nil {
+			timer.Stop()
+		}
+		switch {
+		case err != nil || resp == nil:
 			cancel()
+		case resp.StatusCode == http.StatusSwitchingProtocols:
+			// The body of an upgrade is the connection itself and has to stay
+			// writable, so it is not wrapped; the caller's context ends it.
+			context.AfterFunc(ctx, cancel)
+		default:
+			resp.Body = &cancelOnClose{ReadCloser: resp.Body, cancel: cancel}
 		}
 
 		if errors.Is(err, gobreaker.ErrOpenState) {
@@ -272,10 +322,22 @@ func (p *ProviderPool) tryEndpoint(ctx context.Context, rt http.RoundTripper, re
 	return nil, fmt.Errorf("upstream: max retries exceeded for %s", ep.name)
 }
 
+// cancelOnClose releases a request's context when its response body is closed.
+type cancelOnClose struct {
+	io.ReadCloser
+	cancel context.CancelFunc
+}
+
+func (c *cancelOnClose) Close() error {
+	err := c.ReadCloser.Close()
+	c.cancel()
+	return err
+}
+
 // roundRobinTrip distributes requests across endpoints in circular order.
 // Skips endpoints with open circuit breakers. Atomically increments rrCounter
 // on each attempt so the caller's next request starts at the subsequent endpoint.
-func (p *ProviderPool) roundRobinTrip(ctx context.Context, rt http.RoundTripper, req *http.Request, body []byte, maxRetries int, hooks Hooks) (*http.Response, error) {
+func (p *ProviderPool) roundRobinTrip(ctx context.Context, req *http.Request, body []byte, maxRetries int, hooks Hooks) (*http.Response, error) {
 	n := len(p.endpoints)
 	var lastErr error
 
@@ -287,7 +349,7 @@ func (p *ProviderPool) roundRobinTrip(ctx context.Context, rt http.RoundTripper,
 			continue
 		}
 
-		resp, err := p.tryEndpoint(ctx, rt, req, body, maxRetries, hooks, ep)
+		resp, err := p.tryEndpoint(ctx, req, body, maxRetries, hooks, ep)
 		if err != nil {
 			lastErr = err
 			continue
@@ -341,13 +403,32 @@ func cloneRequestForEndpoint(orig *http.Request, body []byte, ep *poolEndpoint, 
 		out.Header.Set("Content-Length", strconv.Itoa(len(body)))
 	}
 	out.Header = orig.Header.Clone()
-	if ep.apiKeyEnv != "" {
+	// Only a variable the rules let a policy name is read. Anything else
+	// (the proxy's own TAMGA_* secrets above all) is left alone, even for an
+	// endpoint that got here without being validated.
+	if ep.apiKeyEnv != "" && ep.rules.KeyEnvAllowed(ep.apiKeyEnv) {
 		if key := strings.TrimSpace(os.Getenv(ep.apiKeyEnv)); key != "" {
 			out.Header.Set("Authorization", "Bearer "+key)
 		}
 	}
-	if hooks.BedrockSign != nil {
-		hooks.BedrockSign(out, body, ep.base)
+	// The proxy signs a Bedrock request with the host's AWS credentials
+	// before the pool runs, and the hook signs it again for the endpoint.
+	// Both belong only on a Bedrock host of the bedrock route. Anywhere else
+	// the signature and the x-amz-* headers (the session token among them)
+	// are taken off, and the hook is not run.
+	if ep.route == "bedrock" && policy.VendorHost("bedrock", strings.ToLower(ep.base.Hostname())) {
+		if hooks.BedrockSign != nil {
+			hooks.BedrockSign(out, body, ep.base)
+		}
+	} else {
+		if strings.HasPrefix(strings.TrimSpace(out.Header.Get("Authorization")), "AWS4-HMAC-SHA256") {
+			out.Header.Del("Authorization")
+		}
+		for name := range out.Header {
+			if strings.HasPrefix(strings.ToLower(name), "x-amz-") {
+				out.Header.Del(name)
+			}
+		}
 	}
 	return out
 }

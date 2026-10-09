@@ -36,14 +36,13 @@ func TestProviderPool_FallbackOn500(t *testing.T) {
 			{Name: "p1", BaseURL: p1.URL, Priority: 1, Timeout: "5s"},
 			{Name: "p2", BaseURL: p2.URL, Priority: 2, Timeout: "5s"},
 		},
-	}, nil, Hooks{})
+	}, nil, Hooks{}, loopbackEgress)
 
 	u, _ := url.Parse(p1.URL + "/v1/chat/completions")
 	req := httptest.NewRequest(http.MethodPost, u.String(), strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
 
-	rt := &http.Transport{}
-	resp, err := pool.RoundTrip(context.Background(), rt, req, []byte(`{}`), 0, Hooks{})
+	resp, err := pool.RoundTrip(context.Background(), req, []byte(`{}`), 0, Hooks{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +75,7 @@ func TestProviderPool_429DoesNotTripBreaker(t *testing.T) {
 				FailureThreshold: floatPtr(0.5),
 			}},
 		},
-	}, nil, Hooks{})
+	}, nil, Hooks{}, loopbackEgress)
 
 	ep := pool.endpoints[0]
 	if ep.breaker.State().String() != "closed" {
@@ -85,8 +84,7 @@ func TestProviderPool_429DoesNotTripBreaker(t *testing.T) {
 
 	u, _ := url.Parse(srv.URL + "/v1/foo")
 	req := httptest.NewRequest(http.MethodPost, u.String(), strings.NewReader(`{}`))
-	rt := &http.Transport{}
-	resp, err := pool.RoundTrip(context.Background(), rt, req, []byte(`{}`), 0, Hooks{})
+	resp, err := pool.RoundTrip(context.Background(), req, []byte(`{}`), 0, Hooks{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,15 +113,14 @@ func TestProviderPool_BreakerOpensAfterFailures(t *testing.T) {
 				FailureThreshold: floatPtr(0.5),
 			}},
 		},
-	}, nil, Hooks{})
+	}, nil, Hooks{}, loopbackEgress)
 
 	ep := pool.endpoints[0]
-	rt := &http.Transport{}
 
 	for i := 0; i < 6; i++ {
 		u, _ := url.Parse(srv.URL + "/v1/foo")
 		req := httptest.NewRequest(http.MethodPost, u.String(), strings.NewReader(`{}`))
-		_, _ = pool.RoundTrip(context.Background(), rt, req, []byte(`{}`), 0, Hooks{})
+		_, _ = pool.RoundTrip(context.Background(), req, []byte(`{}`), 0, Hooks{})
 	}
 
 	if ep.breaker.State().String() != "open" {
@@ -145,14 +142,13 @@ func TestProviderPool_ResetCircuit(t *testing.T) {
 				FailureThreshold: floatPtr(0.5),
 			}},
 		},
-	}, nil, Hooks{})
+	}, nil, Hooks{}, loopbackEgress)
 
 	ep := pool.endpoints[0]
-	rt := &http.Transport{}
 	for i := 0; i < 6; i++ {
 		u, _ := url.Parse(srv.URL + "/v1/foo")
 		req := httptest.NewRequest(http.MethodPost, u.String(), strings.NewReader(`{}`))
-		_, _ = pool.RoundTrip(context.Background(), rt, req, []byte(`{}`), 0, Hooks{})
+		_, _ = pool.RoundTrip(context.Background(), req, []byte(`{}`), 0, Hooks{})
 	}
 	if ep.breaker.State().String() != "open" {
 		t.Fatalf("expected open breaker, got %s", ep.breaker.State())
@@ -257,11 +253,11 @@ func TestIsRetryableNetErr(t *testing.T) {
 // --- cloneRequestForEndpoint ---
 
 func TestCloneRequestForEndpoint_WithAPIKeyEnv(t *testing.T) {
-	_ = os.Setenv("TAMGA_UPSTREAM_KEY", "sk-test-123")
-	defer func() { _ = os.Unsetenv("TAMGA_UPSTREAM_KEY") }()
+	_ = os.Setenv("POOLTEST_API_KEY", "sk-test-123")
+	defer func() { _ = os.Unsetenv("POOLTEST_API_KEY") }()
 
 	base, _ := url.Parse("https://api.example.com")
-	ep := &poolEndpoint{name: "test", base: base, apiKeyEnv: "TAMGA_UPSTREAM_KEY"}
+	ep := &poolEndpoint{name: "test", base: base, apiKeyEnv: "POOLTEST_API_KEY"}
 
 	orig := httptest.NewRequest(http.MethodPost, "/v1/chat", strings.NewReader(`{"prompt":"hi"}`))
 	body := []byte(`{"prompt":"hi"}`)
@@ -280,7 +276,7 @@ func TestCloneRequestForEndpoint_WithAPIKeyEnv(t *testing.T) {
 
 func TestCloneRequestForEndpoint_NoAPIKeyEnv(t *testing.T) {
 	base, _ := url.Parse("https://api.example.com")
-	ep := &poolEndpoint{name: "test", base: base, apiKeyEnv: "NONEXISTENT_ENV_VAR"}
+	ep := &poolEndpoint{name: "test", base: base, apiKeyEnv: "NONEXISTENT_API_KEY"}
 
 	orig := httptest.NewRequest(http.MethodPost, "/v1/chat", strings.NewReader(`{}`))
 	cloned := cloneRequestForEndpoint(orig, []byte(`{}`), ep, Hooks{})
@@ -303,8 +299,8 @@ func TestCloneRequestForEndpoint_EmptyBody(t *testing.T) {
 }
 
 func TestCloneRequestForEndpoint_BedrockHook(t *testing.T) {
-	base, _ := url.Parse("https://bedrock.us-east-1.amazonaws.com")
-	ep := &poolEndpoint{name: "bedrock", base: base}
+	base, _ := url.Parse("https://bedrock-runtime.us-east-1.amazonaws.com")
+	ep := &poolEndpoint{name: "bedrock", route: "bedrock", base: base}
 
 	var hookCalled bool
 	hooks := Hooks{
@@ -332,7 +328,7 @@ func TestDoHTTP_2xx(t *testing.T) {
 	defer srv.Close()
 
 	req := httptest.NewRequest(http.MethodGet, srv.URL, nil)
-	resp, err := doHTTP(context.Background(), http.DefaultTransport, req)
+	resp, err := doHTTP(context.Background(), &http.Transport{}, req)
 	if err != nil {
 		t.Fatalf("doHTTP: %v", err)
 	}
@@ -350,7 +346,7 @@ func TestDoHTTP_4xx_Non429(t *testing.T) {
 	defer srv.Close()
 
 	req := httptest.NewRequest(http.MethodGet, srv.URL, nil)
-	resp, err := doHTTP(context.Background(), http.DefaultTransport, req)
+	resp, err := doHTTP(context.Background(), &http.Transport{}, req)
 	if err != nil {
 		t.Fatalf("doHTTP: %v", err)
 	}
@@ -368,7 +364,7 @@ func TestDoHTTP_429_ReturnsResponse(t *testing.T) {
 	defer srv.Close()
 
 	req := httptest.NewRequest(http.MethodGet, srv.URL, nil)
-	resp, err := doHTTP(context.Background(), http.DefaultTransport, req)
+	resp, err := doHTTP(context.Background(), &http.Transport{}, req)
 	if err != nil {
 		t.Fatalf("doHTTP: %v", err)
 	}
@@ -386,7 +382,7 @@ func TestDoHTTP_5xx_ReturnsError(t *testing.T) {
 	defer srv.Close()
 
 	req := httptest.NewRequest(http.MethodGet, srv.URL, nil)
-	_, err := doHTTP(context.Background(), http.DefaultTransport, req)
+	_, err := doHTTP(context.Background(), &http.Transport{}, req)
 	if err == nil {
 		t.Fatal("expected error for 5xx")
 	}
@@ -413,7 +409,7 @@ func TestHealthSummary_ZeroRequests(t *testing.T) {
 		Endpoints: []policy.ProviderUpstreamEndpoint{
 			{Name: "healthy", BaseURL: srv.URL, Priority: 1, Timeout: "5s"},
 		},
-	}, nil, Hooks{})
+	}, nil, Hooks{}, loopbackEgress)
 
 	summary := pool.healthSummary()
 	if summary == nil {
@@ -483,18 +479,17 @@ func TestProviderPool_AllEndpointsOpen(t *testing.T) {
 				FailureThreshold: floatPtr(0.5),
 			}},
 		},
-	}, nil, Hooks{})
+	}, nil, Hooks{}, loopbackEgress)
 
-	rt := &http.Transport{}
 	// Trip the breaker by sending enough 502 responses.
 	for i := 0; i < 5; i++ {
 		u, _ := url.Parse(srv.URL + "/v1/foo")
 		req := httptest.NewRequest(http.MethodPost, u.String(), strings.NewReader(`{}`))
-		_, _ = pool.RoundTrip(context.Background(), rt, req, []byte(`{}`), 0, Hooks{})
+		_, _ = pool.RoundTrip(context.Background(), req, []byte(`{}`), 0, Hooks{})
 	}
 
 	// All endpoints should now be open.
-	_, err := pool.RoundTrip(context.Background(), rt, httptest.NewRequest(http.MethodPost, srv.URL+"/v1/foo", strings.NewReader(`{}`)), []byte(`{}`), 0, Hooks{})
+	_, err := pool.RoundTrip(context.Background(), httptest.NewRequest(http.MethodPost, srv.URL+"/v1/foo", strings.NewReader(`{}`)), []byte(`{}`), 0, Hooks{})
 	if err == nil {
 		t.Fatal("expected error when all endpoints open")
 	}
@@ -507,14 +502,14 @@ func TestNewProviderPoolFromSpec_EmptyEndpoints(t *testing.T) {
 	t.Parallel()
 	pool := NewProviderPoolFromSpec("empty", policy.ProviderUpstreamPool{
 		Endpoints: nil,
-	}, nil, Hooks{})
+	}, nil, Hooks{}, loopbackEgress)
 	if pool != nil {
 		t.Error("nil endpoints should return nil pool")
 	}
 
 	pool = NewProviderPoolFromSpec("empty", policy.ProviderUpstreamPool{
 		Endpoints: []policy.ProviderUpstreamEndpoint{},
-	}, nil, Hooks{})
+	}, nil, Hooks{}, loopbackEgress)
 	if pool != nil {
 		t.Error("empty endpoints should return nil pool")
 	}
@@ -532,7 +527,7 @@ func TestNewProviderPoolFromSpec_InvalidBaseURL(t *testing.T) {
 			{Name: "bad", BaseURL: "://invalid", Priority: 1, Timeout: "5s"},
 			{Name: "good", BaseURL: srv.URL, Priority: 2, Timeout: "5s"},
 		},
-	}, nil, Hooks{})
+	}, nil, Hooks{}, loopbackEgress)
 
 	if pool == nil {
 		t.Fatal("pool should include valid endpoint even if one is invalid")
@@ -557,7 +552,7 @@ func TestNewProviderPoolFromSpec_DefaultStrategy(t *testing.T) {
 		Endpoints: []policy.ProviderUpstreamEndpoint{
 			{Name: "ep", BaseURL: srv.URL, Priority: 1, Timeout: "5s"},
 		},
-	}, nil, Hooks{})
+	}, nil, Hooks{}, loopbackEgress)
 
 	if pool == nil {
 		t.Fatal("expected non-nil pool")
@@ -581,13 +576,12 @@ func TestHealthSummary_WithFailures(t *testing.T) {
 				FailureThreshold: floatPtr(0.5),
 			}},
 		},
-	}, nil, Hooks{})
+	}, nil, Hooks{}, loopbackEgress)
 
-	rt := &http.Transport{}
 	for i := 0; i < 5; i++ {
 		u, _ := url.Parse(srv.URL + "/v1/foo")
 		req := httptest.NewRequest(http.MethodPost, u.String(), strings.NewReader(`{}`))
-		_, _ = pool.RoundTrip(context.Background(), rt, req, []byte(`{}`), 0, Hooks{})
+		_, _ = pool.RoundTrip(context.Background(), req, []byte(`{}`), 0, Hooks{})
 	}
 
 	summary := pool.healthSummary()
@@ -639,13 +633,12 @@ func TestProviderPool_RoundRobin(t *testing.T) {
 			{Name: "ep1", BaseURL: servers[1].URL, Priority: 1, Timeout: "5s"},
 			{Name: "ep2", BaseURL: servers[2].URL, Priority: 1, Timeout: "5s"},
 		},
-	}, nil, Hooks{})
+	}, nil, Hooks{}, loopbackEgress)
 
-	rt := &http.Transport{}
 	for call := 0; call < 6; call++ {
 		u, _ := url.Parse(servers[0].URL + "/v1/chat")
 		req := httptest.NewRequest(http.MethodPost, u.String(), strings.NewReader(`{}`))
-		resp, err := pool.RoundTrip(context.Background(), rt, req, []byte(`{}`), 0, Hooks{})
+		resp, err := pool.RoundTrip(context.Background(), req, []byte(`{}`), 0, Hooks{})
 		if err != nil {
 			t.Fatalf("call %d: %v", call, err)
 		}
@@ -691,7 +684,7 @@ func TestProviderPool_RoundRobin_SkipsOpenCircuit(t *testing.T) {
 				Breaker: &policy.BreakerConfig{MinimumRequests: intPtr(2), FailureThreshold: floatPtr(0.5)},
 			},
 		},
-	}, nil, Hooks{})
+	}, nil, Hooks{}, loopbackEgress)
 
 	// Force ep1's breaker open by sending 502 responses.
 	badSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -706,16 +699,15 @@ func TestProviderPool_RoundRobin_SkipsOpenCircuit(t *testing.T) {
 				Breaker: &policy.BreakerConfig{MinimumRequests: intPtr(3), FailureThreshold: floatPtr(0.5)},
 			},
 		},
-	}, nil, Hooks{})
+	}, nil, Hooks{}, loopbackEgress)
 
 	// Share the breaker instance: copy the tripped breaker into our pool's ep1.
 	forceEp := poolEp1.endpoints[0]
-	rt := &http.Transport{}
 	for i := 0; i < 5; i++ {
 		u, _ := url.Parse(badSrv.URL + "/v1/foo")
 		req := httptest.NewRequest(http.MethodPost, u.String(), strings.NewReader(`{}`))
 		_, _ = forceEp.breaker.Execute(func() (*http.Response, error) {
-			return doHTTP(context.Background(), rt, req)
+			return doHTTP(context.Background(), &http.Transport{}, req)
 		})
 	}
 	if forceEp.breaker.State().String() != "open" {
@@ -729,7 +721,7 @@ func TestProviderPool_RoundRobin_SkipsOpenCircuit(t *testing.T) {
 	for call := 0; call < 6; call++ {
 		u, _ := url.Parse(servers[0].URL + "/v1/chat")
 		req := httptest.NewRequest(http.MethodPost, u.String(), strings.NewReader(`{}`))
-		resp, err := pool.RoundTrip(context.Background(), rt, req, []byte(`{}`), 0, Hooks{})
+		resp, err := pool.RoundTrip(context.Background(), req, []byte(`{}`), 0, Hooks{})
 		if err != nil {
 			t.Fatalf("call %d: %v", call, err)
 		}
@@ -768,9 +760,7 @@ func TestProviderPool_RoundRobin_AllOpenReturnsError(t *testing.T) {
 				Breaker: &policy.BreakerConfig{MinimumRequests: intPtr(3), FailureThreshold: floatPtr(0.5)},
 			},
 		},
-	}, nil, Hooks{})
-
-	rt := &http.Transport{}
+	}, nil, Hooks{}, loopbackEgress)
 
 	// Trip all breakers to open.
 	for i := 0; i < 3; i++ {
@@ -779,7 +769,7 @@ func TestProviderPool_RoundRobin_AllOpenReturnsError(t *testing.T) {
 			u, _ := url.Parse(badSrv.URL + "/v1/foo")
 			req := httptest.NewRequest(http.MethodPost, u.String(), strings.NewReader(`{}`))
 			_, _ = ep.breaker.Execute(func() (*http.Response, error) {
-				return doHTTP(context.Background(), rt, req)
+				return doHTTP(context.Background(), &http.Transport{}, req)
 			})
 		}
 		if ep.breaker.State().String() != "open" {
@@ -789,7 +779,7 @@ func TestProviderPool_RoundRobin_AllOpenReturnsError(t *testing.T) {
 
 	u, _ := url.Parse(badSrv.URL + "/v1/foo")
 	req := httptest.NewRequest(http.MethodPost, u.String(), strings.NewReader(`{}`))
-	_, err := pool.RoundTrip(context.Background(), rt, req, []byte(`{}`), 0, Hooks{})
+	_, err := pool.RoundTrip(context.Background(), req, []byte(`{}`), 0, Hooks{})
 	if err == nil {
 		t.Fatal("expected error when all breakers are open")
 	}
@@ -824,13 +814,12 @@ func TestProviderPool_RoundRobin_502StillRotates(t *testing.T) {
 			{Name: "ep1", BaseURL: servers[1].URL, Priority: 1, Timeout: "5s"},
 			{Name: "ep2", BaseURL: servers[2].URL, Priority: 1, Timeout: "5s"},
 		},
-	}, nil, Hooks{})
+	}, nil, Hooks{}, loopbackEgress)
 
-	rt := &http.Transport{}
 	for call := 0; call < 6; call++ {
 		u, _ := url.Parse(servers[0].URL + "/v1/chat")
 		req := httptest.NewRequest(http.MethodPost, u.String(), strings.NewReader(`{}`))
-		resp, err := pool.RoundTrip(context.Background(), rt, req, []byte(`{}`), 0, Hooks{})
+		resp, err := pool.RoundTrip(context.Background(), req, []byte(`{}`), 0, Hooks{})
 		if err != nil {
 			t.Fatalf("call %d: unexpected error %v", call, err)
 		}

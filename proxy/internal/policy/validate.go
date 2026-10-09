@@ -2,7 +2,6 @@ package policy
 
 import (
 	"fmt"
-	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -443,14 +442,6 @@ func ValidateSemantics(p *Policy) []ValidationIssue {
 					})
 					continue
 				}
-				if u, err := url.Parse(ep.BaseURL); err != nil || u.Scheme == "" || u.Host == "" {
-					issues = append(issues, ValidationIssue{
-						Field:    eprefix + ".base_url",
-						Rule:     "url",
-						Message:  "base_url must be an absolute URL with scheme and host",
-						Severity: "error",
-					})
-				}
 				if ep.Timeout != "" {
 					if _, err := time.ParseDuration(ep.Timeout); err != nil {
 						issues = append(issues, ValidationIssue{
@@ -464,6 +455,11 @@ func ValidateSemantics(p *Policy) []ValidationIssue {
 			}
 		}
 	}
+
+	// Where a pool endpoint points and which variable it reads, and which
+	// variable a notify value reads, are judged by the upstream rules.
+	issues = append(issues, upstreamIssues(p, ActiveUpstreamRules())...)
+	issues = append(issues, notifyIssues(p, ActiveUpstreamRules())...)
 
 	if os := p.OperatorState; os != nil {
 		switch strings.ToLower(strings.TrimSpace(os.OnUnknownRef)) {

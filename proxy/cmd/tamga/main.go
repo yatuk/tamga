@@ -101,6 +101,36 @@ func main() {
 		}
 	}()
 
+	// What a policy may ask of the proxy's environment and network: which
+	// variables a provider pool or a notify value may name, and where a pool
+	// may point. Set before the first load, so the file on disk, the watcher
+	// and every API path are judged by the same rules.
+	upstreamRules := &policy.UpstreamRules{
+		KeyEnvs:        cfg.UpstreamKeyEnvs,
+		NotifyEnvs:     cfg.NotifyURLEnvs,
+		AllowHosts:     cfg.UpstreamAllowHosts,
+		AllowNets:      cfg.UpstreamAllowNets,
+		AllowHostPorts: cfg.UpstreamAllowHostPorts,
+		RouteURLs:      proxy.ProviderURLOverrides(),
+	}
+	policy.SetUpstreamRules(upstreamRules)
+	if len(cfg.UpstreamAllowNets)+len(cfg.UpstreamAllowHosts)+len(cfg.UpstreamAllowHostPorts) > 0 {
+		nets := make([]string, len(cfg.UpstreamAllowNets))
+		for i, p := range cfg.UpstreamAllowNets {
+			nets[i] = p.String()
+		}
+		log.Warn().Strs("ranges", nets).Strs("hosts", cfg.UpstreamAllowHosts).Strs("host_ports", cfg.UpstreamAllowHostPorts).
+			Msg("upstream: TAMGA_UPSTREAM_ALLOW lets provider pools in the policy send traffic to these hosts, internal ones and plain http included")
+	}
+	if len(cfg.UpstreamKeyEnvs) > 0 {
+		log.Warn().Strs("names", cfg.UpstreamKeyEnvs).
+			Msg("upstream: TAMGA_UPSTREAM_KEY_ENVS lets provider pools in the policy send these environment variables as a provider key")
+	}
+	if len(cfg.NotifyURLEnvs) > 0 {
+		log.Warn().Strs("names", cfg.NotifyURLEnvs).
+			Msg("alerts: TAMGA_NOTIFY_URL_ENVS lets a rule's notify value in the policy read its URL from these environment variables")
+	}
+
 	pol, err := policy.LoadFromFile(cfg.PolicyPath)
 	if err != nil {
 		log.Fatal().Err(err).Str("path", cfg.PolicyPath).Msg("failed to load policy")
@@ -456,6 +486,9 @@ func main() {
 		Hooks: upstream.Hooks{
 			BedrockSign: proxy.BedrockRequestSigner(),
 		},
+		// Pool endpoints come from the policy: they are dialled through
+		// their own guarded transport, not the proxy's ordinary one.
+		Egress: upstream.NewEgress(upstreamRules),
 	})
 
 	// Register scanners
