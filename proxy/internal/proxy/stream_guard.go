@@ -307,6 +307,15 @@ func (g *streamGuard) release(ch *streamChannel, final bool) (released string, s
 				g.stopReason = "content_blocked_by_policy"
 				return "", true
 			case g.redacts != nil && g.redacts(f):
+				if err != nil {
+					// fail_open lets text through that the scanner could not
+					// look at. It does not let text through that was to be
+					// masked and was searched only in part: the stream ends.
+					g.findings = append(g.findings, f)
+					g.stopReason = "redaction_incomplete"
+					scanner.RecordDegraded("redact_stream_incomplete_" + scanner.IncompleteReason(err))
+					return "", true
+				}
 				if !placed {
 					// Found only in a transformed view of the text: there is
 					// nowhere to put the mask, and sending it is not an option.

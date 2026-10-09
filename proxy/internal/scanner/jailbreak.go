@@ -29,8 +29,14 @@ var (
 )
 
 // Scan returns findings for the jailbreak heuristics applied to both the raw
-// content and the normalized variant produced by the normalize package.
+// content and the normalized variant produced by the normalize package. It
+// stops between two heuristics when the context ends, and then returns what
+// it found together with an ErrScanDegraded error.
 func (s *JailbreakScanner) Scan(ctx context.Context, content []byte) ([]Finding, error) {
+	st := &scanStop{ctx: ctx, scanner: s.Name()}
+	if st.stopped() {
+		return nil, st.err
+	}
 	text := string(content)
 	norm := normalize.Apply(text, normalize.Default())
 	// `combined` is the raw text + any decoded Base64/hex payloads so
@@ -41,6 +47,9 @@ func (s *JailbreakScanner) Scan(ctx context.Context, content []byte) ([]Finding,
 	}
 
 	var out []Finding
+	if st.stopped() {
+		return out, st.err
+	}
 	if loc := manyShotRE.FindIndex([]byte(combined)); loc != nil {
 		out = append(out, Finding{
 			Type: "injection", Category: "many_shot", Severity: "high",
@@ -48,6 +57,9 @@ func (s *JailbreakScanner) Scan(ctx context.Context, content []byte) ([]Finding,
 			StartPos: loc[0], EndPos: loc[1],
 			Confidence: 0.78,
 		})
+	}
+	if st.stopped() {
+		return out, st.err
 	}
 	if loc := translateWrapRE.FindIndex([]byte(combined)); loc != nil {
 		out = append(out, Finding{
@@ -57,6 +69,9 @@ func (s *JailbreakScanner) Scan(ctx context.Context, content []byte) ([]Finding,
 			Confidence: 0.55,
 		})
 	}
+	if st.stopped() {
+		return out, st.err
+	}
 	if loc := systemClaimRE.FindIndex([]byte(combined)); loc != nil {
 		out = append(out, Finding{
 			Type: "injection", Category: "system_prompt_spoof", Severity: "high",
@@ -64,6 +79,9 @@ func (s *JailbreakScanner) Scan(ctx context.Context, content []byte) ([]Finding,
 			StartPos: loc[0], EndPos: loc[1],
 			Confidence: 0.82,
 		})
+	}
+	if st.stopped() {
+		return out, st.err
 	}
 	if loc := asciiArtRE.FindIndex([]byte(text)); loc != nil && countArtLines(text[loc[0]:loc[1]]) >= 4 {
 		out = append(out, Finding{
@@ -73,6 +91,9 @@ func (s *JailbreakScanner) Scan(ctx context.Context, content []byte) ([]Finding,
 			Confidence: 0.45,
 		})
 	}
+	if st.stopped() {
+		return out, st.err
+	}
 	if loc := ignoreRulesTR.FindIndex([]byte(combined)); loc != nil {
 		out = append(out, Finding{
 			Type: "injection", Category: "instruction_override", Severity: "high",
@@ -80,6 +101,9 @@ func (s *JailbreakScanner) Scan(ctx context.Context, content []byte) ([]Finding,
 			StartPos: loc[0], EndPos: loc[1],
 			Confidence: 0.84,
 		})
+	}
+	if st.stopped() {
+		return out, st.err
 	}
 	if loc := roleTakeoverTR.FindIndex([]byte(combined)); loc != nil {
 		out = append(out, Finding{
@@ -93,7 +117,10 @@ func (s *JailbreakScanner) Scan(ctx context.Context, content []byte) ([]Finding,
 	// Verb-on-target rules, on the normalised and decoded views. They read
 	// the view from before de-leeting, which rewrites digits as letters:
 	// several rules read numbers ("DAN 11.0", "first 50 tokens").
-	out = append(out, scanIntentRules(intentViews(norm.Plain, norm.Decoded))...)
+	out = append(out, scanIntentRules(intentViews(norm.Plain, norm.Decoded), st)...)
+	if st.stopped() {
+		return out, st.err
+	}
 
 	// Encoding-layer escalation: if normalize surfaced decoded Base64/hex
 	// payloads that contain override phrases, flag as critical jailbreak.

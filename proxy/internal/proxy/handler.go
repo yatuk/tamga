@@ -570,6 +570,9 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 	}
 	scanSpan.SetAttributes(attribute.Int("scanner.findings_count", len(findings)))
 	scanSpan.End()
+	// scanIncomplete names why the scan did not cover the whole request, and
+	// is empty when it did. A verdict that rewrites the text needs it below.
+	scanIncomplete := scanner.IncompleteReason(err)
 	if err != nil {
 		// The proxy fails open here: findings from the scanners that did run
 		// are still enforced, but the caller and the operator are told the
@@ -678,6 +681,35 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 			Str("user_id", userID).
 			Str("reason", match.Reason).
 			Msg("policy exception applied")
+	}
+
+	// REDACT and STRIP (and the vault's tokenisation, which runs under them)
+	// rewrite the text and send the result on as the protected version. That
+	// is only true when the scan read all of it. A scan that was cut short —
+	// a scanner at its findings cap or out of its time budget, the deadline,
+	// a scanner that failed on part of the text — leaves matches nobody
+	// found, and the rewritten body would carry them unmasked next to the
+	// masked ones.
+	//
+	// scan.on_error: pass does not cover this. It says a request may go on
+	// unscanned, and be marked as such, when a scanner fails; it does not say
+	// that text the policy promised to mask may go on half masked. So the
+	// request is refused whatever on_error says. Masking on past the cap was
+	// considered and not done: it would cover the cap only, not the budget or
+	// the deadline, and it needs a second code path for one case of three.
+	if scanIncomplete != "" && (action == policy.ActionRedact || action == policy.ActionStrip) {
+		verb := "redact"
+		if action == policy.ActionStrip {
+			verb = "strip"
+		}
+		logger.Warn().Str("action", string(action)).Str("reason", scanIncomplete).
+			Msg("scan incomplete and the verdict rewrites the text: request refused")
+		scanner.RecordDegraded(verb + "_incomplete_" + scanIncomplete)
+		span.SetAttributes(attribute.Bool("tamga.blocked", true))
+		polSpan.SetAttributes(attribute.String("policy.action", string(action)))
+		polSpan.End()
+		writeRewriteIncomplete(w, requestID, scanIncomplete)
+		return
 	}
 
 	// vaultMapping holds placeholder->original for reversible tokenization when
@@ -927,6 +959,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 	// vaulted request, whose placeholders mean something to this request only.
 	cacheEnabled := cfg.Cache != nil && pol != nil && pol.Cache != nil && pol.Cache.Enabled
 	cacheKey := ""
+	cacheScan := ""
 	if cacheEnabled && r.Method == http.MethodPost && !vaultActive {
 		proxySigns := false
 		if provider == "bedrock" {
@@ -969,7 +1002,6 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 
 			p := req.URL.Path
 			if stripPrefix != "" {
-	cacheScan := ""
 				p = strings.TrimPrefix(p, stripPrefix)
 				if !strings.HasPrefix(p, "/") {
 					p = "/" + p
@@ -1196,6 +1228,9 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 					)
 				}
 			}
+			// outputWithheld is set when the answer was replaced by a refusal
+			// that is not the 403 of an output block.
+			outputWithheld := false
 			if respBuffered && len(respBody) > 0 {
 				winMs := 0
 				if pol.OutputRules != nil {
@@ -1217,11 +1252,43 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 					outputClean = false
 					resp.Header.Set("X-Tamga-Scan-Degraded", "true")
 				}
-				if len(res.findings) > 0 {
+				if err != nil && res.action != policy.ActionBlock && !(pol.OutputRules != nil && pol.OutputRules.FailOpen) {
+					// The answer was not read to the end and nothing found so
+					// far stops it. output_rules.fail_open decides, as it
+					// does for a stream: unless it is set, an answer the scan
+					// could not vouch for is not sent.
+					outputWithheld = true
+					scanner.RecordDegraded("output_unscanned")
+					resp.StatusCode = http.StatusServiceUnavailable
+					blockBody := outputUnscannedBody(requestID)
+					resp.Body = io.NopCloser(bytes.NewReader(blockBody))
+					resp.ContentLength = int64(len(blockBody))
+					resp.Header.Set("Content-Type", "application/json")
+					resp.Header.Set("Content-Length", strconv.Itoa(len(blockBody)))
+					resp.Header.Set("X-Tamga-Output-Action", string(policy.ActionBlock))
+					resp.Header.Set("Retry-After", "1")
+				} else if len(res.findings) > 0 {
 					outputClean = false
 					resp.Header.Set("X-Tamga-Output-Findings", strconv.Itoa(len(res.findings)))
 					resp.Header.Set("X-Tamga-Output-Action", string(res.action))
-					if res.action == policy.ActionBlock {
+					if res.incomplete != "" {
+						// The answer was to be masked and its scan was cut
+						// short (scanResponseBody). An answer masked in part
+						// is not sent: the client gets the same 503 a request
+						// in that state gets, with the reason.
+						outputWithheld = true
+						resp.StatusCode = http.StatusServiceUnavailable
+						blockBody := rewriteIncompleteBody(requestID, res.incomplete,
+							"The scan of the response was cut short, so it could not be masked completely. It was not forwarded.")
+						resp.Body = io.NopCloser(bytes.NewReader(blockBody))
+						resp.ContentLength = int64(len(blockBody))
+						resp.Header.Set("Content-Type", "application/json")
+						resp.Header.Set("Content-Length", strconv.Itoa(len(blockBody)))
+						resp.Header.Del("Content-Encoding")
+						if rewriteRetryable(res.incomplete) {
+							resp.Header.Set("Retry-After", "1")
+						}
+					} else if res.action == policy.ActionBlock {
 						// Replace body with a block JSON; keep status 200→403.
 						resp.StatusCode = http.StatusForbidden
 						blockBody := []byte(`{"error":{"message":"Response blocked by Tamga output policy","type":"output_policy_block","request_id":"` + requestID + `"}}`)
@@ -1276,8 +1343,9 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 			}
 			// Vault restore: swap placeholders back to originals before the
 			// response reaches the client. Skipped when an output-policy block
-			// already replaced the body with a 403.
-			if vaultActive && respBuffered && resp.StatusCode != http.StatusForbidden {
+			// already replaced the body with a 403, or the answer was withheld:
+			// restoring would put the original answer back in its place.
+			if vaultActive && respBuffered && resp.StatusCode != http.StatusForbidden && !outputWithheld {
 				mapping := vaultMapping
 				if len(mapping) == 0 && cfg.VaultStore != nil && cfg.VaultStore.Enabled() {
 					if loaded, lerr := cfg.VaultStore.Load(ctx, requestID); lerr == nil {
@@ -1862,6 +1930,61 @@ func writeScanUnavailable(w http.ResponseWriter, requestID string) {
 			"request_id": requestID,
 		},
 	})
+}
+
+// outputUnscannedBody is the body sent in place of an answer whose scan did
+// not finish, when output_rules.fail_open is not set. It has the shape and
+// the code of writeScanUnavailable's.
+func outputUnscannedBody(requestID string) []byte {
+	b, _ := json.Marshal(map[string]interface{}{
+		"error": map[string]interface{}{
+			"code":       "tamga_scan_unavailable",
+			"message":    "The scan of the response could not be completed and output_rules.fail_open is not set. The response was not forwarded.",
+			"type":       "service_unavailable",
+			"request_id": requestID,
+		},
+	})
+	return append(b, '\n')
+}
+
+// rewriteIncompleteCode is the error code of a request or an answer that was
+// to be masked and was not sent, because the scan behind the masking did not
+// reach the end of the text.
+const rewriteIncompleteCode = "tamga_redaction_incomplete"
+
+// rewriteIncompleteBody is the body of that refusal. It has the shape of
+// writeScanUnavailable's, with its own code and the reason the scan stopped
+// (scanner.IncompleteReason).
+func rewriteIncompleteBody(requestID, reason, message string) []byte {
+	b, _ := json.Marshal(map[string]interface{}{
+		"error": map[string]interface{}{
+			"code":       rewriteIncompleteCode,
+			"message":    message,
+			"type":       "service_unavailable",
+			"reason":     reason,
+			"request_id": requestID,
+		},
+	})
+	return append(b, '\n')
+}
+
+// rewriteRetryable reports whether sending the same text again can end
+// differently. Past the findings cap it cannot: the text has that many
+// matches every time.
+func rewriteRetryable(reason string) bool { return reason != scanner.IncompleteFindingsCap }
+
+// writeRewriteIncomplete refuses a request the policy would have masked or
+// stripped on a scan that was cut short. It is a 503 like the other refusal
+// of an incomplete scan, and is sent whatever scan.on_error says.
+func writeRewriteIncomplete(w http.ResponseWriter, requestID, reason string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Tamga-Request-Id", requestID)
+	if rewriteRetryable(reason) {
+		w.Header().Set("Retry-After", "1")
+	}
+	w.WriteHeader(http.StatusServiceUnavailable)
+	_, _ = w.Write(rewriteIncompleteBody(requestID, reason,
+		"The security scan was cut short, so the request could not be masked completely. It was not forwarded."))
 }
 
 func writeBodyTooLarge(w http.ResponseWriter, requestID string, actualBytes, limitBytes int) {

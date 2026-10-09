@@ -171,7 +171,7 @@ func (s *OperatorStateScanner) ScanWithContext(ctx context.Context, content []by
 		// and matched against every rule. Stop when the request's time is
 		// up, and say the scan was cut short rather than call it clean.
 		if err := ctx.Err(); err != nil {
-			return findings, fmt.Errorf("%w: operator_state scanner stopped: %v", scanner.ErrScanDegraded, err)
+			return findings, fmt.Errorf("%w: operator_state scanner stopped: %w", scanner.ErrScanDegraded, err)
 		}
 		rec := s.lookupDecision(ctx, rs, id)
 		if rec == nil {

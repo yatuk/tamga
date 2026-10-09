@@ -236,7 +236,7 @@ func TestIntentRules(t *testing.T) {
 		"reset your router and try again",
 	}
 	for _, text := range benign {
-		for _, f := range scanIntentRules(intentViewsFor(text)) {
+		for _, f := range scanIntentRules(intentViewsFor(text), nil) {
 			t.Errorf("benign text flagged as %s: %q (matched %q)", f.Category, text, f.Match)
 		}
 	}

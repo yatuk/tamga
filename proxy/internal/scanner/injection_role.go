@@ -77,7 +77,8 @@ func init() {
 // injection attempts.  Base confidence is moderate (0.55–0.60) — higher than
 // paraphrase patterns due to more specific structure, but still below direct
 // DFA matches.
-func scanRoleRegex(text string) []struct {
+// It stops between two patterns when st says the scan has to end.
+func scanRoleRegex(text string, st *scanStop) []struct {
 	start, end int
 	def        injectionPatternDef
 	source     string
@@ -91,6 +92,9 @@ func scanRoleRegex(text string) []struct {
 		source     string
 	}
 	for _, p := range roleRegexPatterns {
+		if st.stopped() {
+			break
+		}
 		for _, loc := range p.re.FindAllStringIndex(text, -1) {
 			matched := text[loc[0]:loc[1]]
 			matches = append(matches, struct {

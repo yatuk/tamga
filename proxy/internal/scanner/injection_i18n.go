@@ -150,7 +150,8 @@ func init() {
 // The returned injectionPatternDef has an empty Phrase field because the
 // matched text is extracted from the byte offsets (Start/End), not from a
 // predefined literal.
-func scanI18nRegex(text string) []struct {
+// It stops between two patterns when st says the scan has to end.
+func scanI18nRegex(text string, st *scanStop) []struct {
 	start, end int
 	def        injectionPatternDef
 	source     string
@@ -164,6 +165,9 @@ func scanI18nRegex(text string) []struct {
 		source     string
 	}
 	for _, p := range i18nRegexPatterns {
+		if st.stopped() {
+			break
+		}
 		for _, loc := range p.re.FindAllStringIndex(text, -1) {
 			// Store matched text as phrase so downstream dedup has a stable key
 			// extracted from the correct text layer (not re-extracted later

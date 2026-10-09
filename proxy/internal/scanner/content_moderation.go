@@ -106,10 +106,13 @@ func NewContentModerationScanner() *ContentModerationScanner {
 
 func (s *ContentModerationScanner) Name() string { return "content_moderation" }
 
-func (s *ContentModerationScanner) Scan(_ context.Context, content []byte) ([]Finding, error) {
+// Scan stops between two patterns when the context ends, and then returns
+// what it found together with an ErrScanDegraded error.
+func (s *ContentModerationScanner) Scan(ctx context.Context, content []byte) ([]Finding, error) {
 	if len(content) == 0 {
 		return nil, nil
 	}
+	st := &scanStop{ctx: ctx, scanner: s.Name()}
 
 	compileModerationPatterns()
 	seen := make(map[string]struct{}, 16)
@@ -117,6 +120,9 @@ func (s *ContentModerationScanner) Scan(_ context.Context, content []byte) ([]Fi
 
 	text := string(content)
 	for _, p := range modPatterns {
+		if st.stopped() {
+			return findings, st.err
+		}
 		matches := p.Regex.FindAllString(text, -1)
 		for _, m := range matches {
 			dedupKey := p.Category + ":" + truncateStr(m, 60)

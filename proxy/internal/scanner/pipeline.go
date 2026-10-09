@@ -411,7 +411,9 @@ func (d *degradation) note(scannerName, reason string, cause error) {
 	defer d.mu.Unlock()
 	if d.err == nil {
 		if cause != nil {
-			d.err = fmt.Errorf("%w: %s (%s): %v", ErrScanDegraded, scannerName, reason, cause)
+			// The cause stays in the chain: a caller tells a scan that was
+			// cut short from one that failed by it (IncompleteReason).
+			d.err = fmt.Errorf("%w: %s (%s): %w", ErrScanDegraded, scannerName, reason, cause)
 		} else {
 			d.err = fmt.Errorf("%w: %s (%s)", ErrScanDegraded, scannerName, reason)
 		}

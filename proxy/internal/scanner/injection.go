@@ -147,8 +147,14 @@ func NewInjectionScanner() *InjectionScanner {
 
 func (s *InjectionScanner) Name() string { return "injection" }
 
+// Scan stops between two passes over the text when the context ends. What
+// the passes before it matched is still reported, together with an
+// ErrScanDegraded error: the text was not searched completely.
 func (s *InjectionScanner) Scan(ctx context.Context, content []byte) ([]Finding, error) {
-	_ = ctx
+	st := &scanStop{ctx: ctx, scanner: s.Name()}
+	if st.stopped() {
+		return nil, st.err
+	}
 	text := string(content)
 
 	// Normalize to catch Unicode-evaded injection patterns.
@@ -164,7 +170,9 @@ func (s *InjectionScanner) Scan(ctx context.Context, content []byte) ([]Finding,
 
 	if dfa := LoadDFA(); dfa != nil {
 		matches := dfa.ScanBytes(content)
-		matches = append(matches, dfa.ScanBytes(normBytes)...)
+		if !st.stopped() {
+			matches = append(matches, dfa.ScanBytes(normBytes)...)
+		}
 		for _, m := range matches {
 			if m.Type != "injection" {
 				continue
@@ -184,12 +192,15 @@ func (s *InjectionScanner) Scan(ctx context.Context, content []byte) ([]Finding,
 		}
 	} else {
 		for _, def := range injectionPatterns {
-			if st, en, ok := findFoldTurkish(text, def.phrase); ok {
+			if st.stopped() {
+				break
+			}
+			if start, end, ok := findFoldTurkish(text, def.phrase); ok {
 				rawMatches = append(rawMatches, struct {
 					start, end int
 					def        injectionPatternDef
 					source     string
-				}{st, en, def, "text"})
+				}{start, end, def, "text"})
 			}
 		}
 	}
@@ -199,10 +210,13 @@ func (s *InjectionScanner) Scan(ctx context.Context, content []byte) ([]Finding,
 		if !strings.Contains(def.phrase, "ı") && !strings.Contains(def.phrase, "İ") && !strings.Contains(def.phrase, "ş") {
 			continue
 		}
-		if st, en, ok := findFoldTurkish(text, def.phrase); ok {
+		if st.stopped() {
+			break
+		}
+		if start, end, ok := findFoldTurkish(text, def.phrase); ok {
 			already := false
 			for i := range rawMatches {
-				if rawMatches[i].start == st && rawMatches[i].end == en && rawMatches[i].def.category == def.category {
+				if rawMatches[i].start == start && rawMatches[i].end == end && rawMatches[i].def.category == def.category {
 					already = true
 					break
 				}
@@ -212,29 +226,29 @@ func (s *InjectionScanner) Scan(ctx context.Context, content []byte) ([]Finding,
 					start, end int
 					def        injectionPatternDef
 					source     string
-				}{st, en, def, "text"})
+				}{start, end, def, "text"})
 			}
 		}
 	}
 
 	// Multi-language regex scan for patterns with flexible whitespace
 	// (Turkish, German, Russian) that the DFA substring match cannot catch.
-	rawMatches = append(rawMatches, scanI18nRegex(text)...)
-	rawMatches = append(rawMatches, scanI18nRegex(normText)...)
+	rawMatches = append(rawMatches, scanI18nRegex(text, st)...)
+	rawMatches = append(rawMatches, scanI18nRegex(normText, st)...)
 
 	// Paraphrase regex scan for semantic evasions (keyword combinations
 	// like "forget what you were told" -> instruction_override).
 	// Base confidence is low (0.50-0.55) to reflect higher FP risk.
-	rawMatches = append(rawMatches, scanParaphraseRegex(text)...)
-	rawMatches = append(rawMatches, scanParaphraseRegex(normText)...)
+	rawMatches = append(rawMatches, scanParaphraseRegex(text, st)...)
+	rawMatches = append(rawMatches, scanParaphraseRegex(normText, st)...)
 
 	// Role-manipulation regex scan for semantic evasions (keyword
 	// combinations like "imagine an AI without ethical guidelines").
 	// Base confidence is moderate (0.55-0.60).
-	rawMatches = append(rawMatches, scanRoleRegex(text)...)
-	rawMatches = append(rawMatches, scanRoleRegex(normText)...)
+	rawMatches = append(rawMatches, scanRoleRegex(text, st)...)
+	rawMatches = append(rawMatches, scanRoleRegex(normText, st)...)
 
-	scanBase64Layer(text, func(start, end int, def injectionPatternDef) {
+	scanBase64Layer(text, st, func(start, end int, def injectionPatternDef) {
 		rawMatches = append(rawMatches, struct {
 			start, end int
 			def        injectionPatternDef
@@ -243,7 +257,7 @@ func (s *InjectionScanner) Scan(ctx context.Context, content []byte) ([]Finding,
 	})
 
 	if len(rawMatches) == 0 {
-		return nil, nil
+		return nil, st.err
 	}
 
 	// Deduplicate matches for cumulative confidence boost: the same evidence
@@ -290,7 +304,7 @@ func (s *InjectionScanner) Scan(ctx context.Context, content []byte) ([]Finding,
 		})
 	}
 
-	return findings, nil
+	return findings, st.err
 }
 
 func severityFromConfidence(c float64) string {
@@ -371,8 +385,14 @@ func utf8ByteIndexForRuneIndex(s string, runeIdx int) int {
 	return len(s)
 }
 
-func scanBase64Layer(text string, onMatch func(start, end int, def injectionPatternDef)) {
+func scanBase64Layer(text string, st *scanStop, onMatch func(start, end int, def injectionPatternDef)) {
+	if st.stopped() {
+		return
+	}
 	for _, loc := range base64TokenRe.FindAllStringIndex(text, -1) {
+		if st.stopped() {
+			return
+		}
 		token := text[loc[0]:loc[1]]
 		decoded := tryDecodeBase64Token(token)
 		if decoded == "" {

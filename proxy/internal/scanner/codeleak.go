@@ -110,10 +110,11 @@ func (s *CodeLeakScanner) Name() string { return "code_leak" }
 // Scan runs source code detection on the provided content and returns zero or
 // more findings. When no code patterns are present, the findings slice is empty.
 func (s *CodeLeakScanner) Scan(ctx context.Context, content []byte) ([]Finding, error) {
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	default:
+	// The verdict is one finding about the text as a whole, so a scan that
+	// is stopped part of the way has none to give.
+	st := &scanStop{ctx: ctx, scanner: s.Name()}
+	if st.stopped() {
+		return nil, st.err
 	}
 
 	contentStr := string(content)
@@ -143,8 +144,17 @@ func (s *CodeLeakScanner) Scan(ctx context.Context, content []byte) ([]Finding, 
 
 	// ── Phase 3-4: count standalone suspicious lines outside fences ──
 	isExcluded := buildByteExclusion(blocks)
+	if st.stopped() {
+		return nil, st.err
+	}
 	standaloneImportCount := countMatches(content, isExcluded, importPatterns)
+	if st.stopped() {
+		return nil, st.err
+	}
 	standaloneFuncClassCount := countMatches(content, isExcluded, funcClassPatterns)
+	if st.stopped() {
+		return nil, st.err
+	}
 
 	hasImport := standaloneImportCount > 0 || fenceHasImportCount > 0
 	hasFuncOrClass := standaloneFuncClassCount > 0 || fenceHasFuncClass

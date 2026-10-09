@@ -39,6 +39,10 @@ type outputScanResult struct {
 	// action is REDACT and the masking was carried out and verified.
 	redacted      []byte
 	redactedCount int
+	// incomplete is set when the answer was to be masked and the scan behind
+	// the masking was cut short. It names why (scanner.IncompleteReason); the
+	// action is then BLOCK and the answer is not sent.
+	incomplete string
 }
 
 // scanResponseBody reads up to `limit` bytes from `body`, runs both the main
@@ -69,7 +73,17 @@ func scanResponseBody(ctx context.Context, reg *scanner.Registry, outputReg *sca
 			}
 		}
 		out := outputScanResult{findings: findings, action: pol.EvaluateOutput(findings)}
-		if out.action == policy.ActionRedact {
+		if out.action == policy.ActionRedact && err != nil {
+			// The scan did not reach the end of the answer: a scanner hit
+			// its findings cap or its time budget, the window ran out, or a
+			// scanner failed on part of the text. Masking what was found
+			// would send an answer that is masked in some places and not in
+			// others, and looks finished. No setting asks for that, so the
+			// answer is withheld whatever fail_open or scan.on_error say.
+			out.incomplete = scanner.IncompleteReason(err)
+			scanner.RecordDegraded("redact_output_incomplete_" + out.incomplete)
+			out.action = policy.ActionBlock
+		} else if out.action == policy.ActionRedact {
 			out.redacted, out.redactedCount = redactResponse(provider.Name(), raw, res.Segments, findings, pol)
 			if out.redacted == nil {
 				// A value that cannot be located, or a rewrite that did not

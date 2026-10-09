@@ -183,20 +183,46 @@ func stripCaptures(re *syntax.Regexp) *syntax.Regexp {
 // a match leaves them.
 func MaskMatch(s string) string { return maskContent(s) }
 
-// patternScan carries the limits of one Scan call over all of its patterns:
-// the context, the time budget and the findings cap.
+// scanStop watches the context of one Scan call. It is the limit every
+// scanner has, the built-in ones included: their patterns are fixed and
+// measured, so they need no time budget or findings cap of their own, but
+// the request's deadline holds for them as for any other.
+type scanStop struct {
+	ctx     context.Context
+	scanner string
+	err     error
+}
+
+// stopped reports whether the scan must end here, and records why. A scanner
+// asks between two units of work (one pattern over the text, one view of the
+// text): a regexp search cannot be interrupted, so that is the longest a
+// scan goes without looking at the context. A nil scanStop never stops.
+func (st *scanStop) stopped() bool {
+	if st == nil {
+		return false
+	}
+	if st.err != nil {
+		return true
+	}
+	if err := st.ctx.Err(); err != nil {
+		st.err = &stopError{msg: fmt.Sprintf("%s scanner stopped: %v", st.scanner, err), reason: err}
+		return true
+	}
+	return false
+}
+
+// patternScan carries the limits of one Scan call over all of an analyst's
+// patterns: the context, the time budget and the findings cap.
 type patternScan struct {
-	ctx      context.Context
-	scanner  string
+	scanStop
 	content  []byte
 	chunks   []chunk
 	deadline time.Time
 	left     int
-	err      error
 }
 
 func newPatternScan(ctx context.Context, scannerName string, content []byte) *patternScan {
-	ps := &patternScan{ctx: ctx, scanner: scannerName, content: content, left: MaxFindingsPerScan}
+	ps := &patternScan{scanStop: scanStop{ctx: ctx, scanner: scannerName}, content: content, left: MaxFindingsPerScan}
 	if len(content) <= chunkSize {
 		ps.chunks = []chunk{{0, len(content)}}
 	} else {
@@ -212,15 +238,11 @@ func newPatternScan(ctx context.Context, scannerName string, content []byte) *pa
 
 // stopped reports whether the scan must end here, and records why.
 func (ps *patternScan) stopped() bool {
-	if ps.err != nil {
-		return true
-	}
-	if err := ps.ctx.Err(); err != nil {
-		ps.err = fmt.Errorf("%w: %s scanner stopped: %v", ErrScanDegraded, ps.scanner, err)
+	if ps.scanStop.stopped() {
 		return true
 	}
 	if time.Now().After(ps.deadline) {
-		ps.err = fmt.Errorf("%w: %s scanner spent its time budget, the rest of the text was not searched", ErrScanDegraded, ps.scanner)
+		ps.err = &stopError{msg: ps.scanner + " scanner spent its time budget, the rest of the text was not searched", reason: ErrTimeBudget}
 		return true
 	}
 	return false
@@ -273,7 +295,7 @@ func (ps *patternScan) each(p *scanPattern, i int, found func(start, end int)) b
 			continue
 		}
 		if ps.left == 0 {
-			ps.err = fmt.Errorf("%w: %s scanner found more than %d matches, the rest are not reported", ErrScanDegraded, ps.scanner, MaxFindingsPerScan)
+			ps.err = &stopError{msg: fmt.Sprintf("%s scanner found more than %d matches, the rest are not reported", ps.scanner, MaxFindingsPerScan), reason: ErrFindingsCap}
 			return false
 		}
 		ps.left--

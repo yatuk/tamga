@@ -15,9 +15,11 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/status"
 
 	"github.com/yatuk/tamga/internal/scanner"
 	"github.com/yatuk/tamga/internal/telemetry"
@@ -52,11 +54,13 @@ func (s *scannerServer) Scan(ctx context.Context, req *pb.ScanRequest) (*pb.Scan
 	findings, err := s.registry.ScanAllWithConfig(ctx, req.Content, cfg)
 	if err != nil {
 		log.Warn().Err(err).Str("request_id", req.RequestId).Msg("scan failed")
-		// Return empty response on error — fail-open semantics.
-		return &pb.ScanResponse{
-			RequestId:  req.RequestId,
-			DurationMs: float64(time.Since(start).Microseconds()) / 1000.0,
-		}, nil
+		// An empty response would read as a clean scan. The caller has to
+		// know the scan did not finish, so that its own scan.on_error applies.
+		code := codes.Unavailable
+		if ctx.Err() != nil {
+			code = codes.DeadlineExceeded
+		}
+		return nil, status.Error(code, "scan incomplete")
 	}
 
 	return &pb.ScanResponse{

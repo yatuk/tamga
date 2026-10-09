@@ -95,7 +95,8 @@ func init() {
 // Each regex targets keyword combinations that indicate paraphrased injection
 // attempts.  Base confidence is low (0.50–0.55) to account for the higher
 // false-positive rate inherent in semantic rather than literal matching.
-func scanParaphraseRegex(text string) []struct {
+// It stops between two patterns when st says the scan has to end.
+func scanParaphraseRegex(text string, st *scanStop) []struct {
 	start, end int
 	def        injectionPatternDef
 	source     string
@@ -109,6 +110,9 @@ func scanParaphraseRegex(text string) []struct {
 		source     string
 	}
 	for _, p := range paraphraseRegexPatterns {
+		if st.stopped() {
+			break
+		}
 		for _, loc := range p.re.FindAllStringIndex(text, -1) {
 			matched := text[loc[0]:loc[1]]
 			matches = append(matches, struct {

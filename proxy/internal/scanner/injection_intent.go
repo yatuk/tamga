@@ -215,10 +215,14 @@ func (r intentRule) mayMatch(view string) bool {
 
 // scanIntentRules runs the rules over each text view and returns at most one
 // finding per rule. Findings carry no position: the views are normalised
-// text, whose offsets do not map back onto the request.
-func scanIntentRules(views []string) []Finding {
+// text, whose offsets do not map back onto the request. It stops between two
+// rules when st says the scan has to end.
+func scanIntentRules(views []string, st *scanStop) []Finding {
 	var out []Finding
 	for _, rule := range intentRules {
+		if st.stopped() {
+			break
+		}
 		for _, view := range views {
 			if !rule.mayMatch(view) {
 				continue

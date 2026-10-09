@@ -29,7 +29,11 @@ func (r *Registry) ScanSegments(ctx context.Context, segs []extract.Segment, cfg
 		all = append(all, perSeg[i]...)
 	}
 
-	all = append(all, r.scanAcrossSegments(ctx, segs, perSeg)...)
+	across, acrossErr := r.scanAcrossSegments(ctx, segs, perSeg)
+	all = append(all, across...)
+	if firstErr == nil {
+		firstErr = acrossErr
+	}
 	return all, firstErr
 }
 
@@ -254,7 +258,11 @@ var crossSegmentScanners = map[string]bool{"injection": true, "jailbreak": true}
 // "instructions" in the next. Each run of such segments is joined and given
 // to the injection scanners; a category already found inside one of the
 // segments is not reported again.
-func (r *Registry) scanAcrossSegments(ctx context.Context, segs []extract.Segment, perSeg [][]Finding) []Finding {
+//
+// A scanner that stops here (the context ended) makes the whole scan
+// incomplete, as it would inside a segment: what it found is kept and the
+// error is returned.
+func (r *Registry) scanAcrossSegments(ctx context.Context, segs []extract.Segment, perSeg [][]Finding) ([]Finding, error) {
 	r.mu.RLock()
 	var scanners []Scanner
 	for _, s := range r.scanners {
@@ -264,10 +272,11 @@ func (r *Registry) scanAcrossSegments(ctx context.Context, segs []extract.Segmen
 	}
 	r.mu.RUnlock()
 	if len(scanners) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	var out []Finding
+	var deg degradation
 	for start := 0; start < len(segs); {
 		end := start + 1
 		for end < len(segs) && segs[end].Role == segs[start].Role {
@@ -286,7 +295,7 @@ func (r *Registry) scanAcrossSegments(ctx context.Context, segs []extract.Segmen
 			for _, s := range scanners {
 				found, err := s.Scan(ctx, joined)
 				if err != nil {
-					continue
+					deg.note(s.Name(), DegradedError, err)
 				}
 				for _, f := range found {
 					key := f.Type + "/" + f.Category
@@ -310,7 +319,7 @@ func (r *Registry) scanAcrossSegments(ctx context.Context, segs []extract.Segmen
 		}
 		start = end
 	}
-	return out
+	return out, deg.result()
 }
 
 // redactable reports whether a finding is one that REDACT removes.

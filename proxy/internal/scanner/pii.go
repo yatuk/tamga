@@ -215,8 +215,15 @@ func NewPIIScanner() *PIIScanner {
 
 func (s *PIIScanner) Name() string { return "pii" }
 
+// Scan stops between two patterns when the context ends, and then returns
+// what it found together with an ErrScanDegraded error: the text was not
+// searched completely, and the caller must not read the result as clean.
 func (s *PIIScanner) Scan(ctx context.Context, content []byte) ([]Finding, error) {
 	piiOnce.Do(compilePIIPatterns)
+	st := &scanStop{ctx: ctx, scanner: s.Name()}
+	if st.stopped() {
+		return nil, st.err
+	}
 	var findings []Finding
 	contentStr := string(content)
 
@@ -231,6 +238,9 @@ func (s *PIIScanner) Scan(ctx context.Context, content []byte) ([]Finding, error
 	normBytes := []byte(normText)
 
 	for _, p := range piiPatterns {
+		if st.stopped() {
+			return findings, st.err
+		}
 		matches := p.Regex.FindAllIndex(content, -1)
 		for _, loc := range matches {
 			loc, ok := p.accept(contentStr, loc)
@@ -283,10 +293,16 @@ func (s *PIIScanner) Scan(ctx context.Context, content []byte) ([]Finding, error
 		}
 	}
 
+	if st.stopped() {
+		return findings, st.err
+	}
 	findings = append(findings, scanIPv4(content)...)
 	// Re-scan the normalized text to catch Unicode-evaded PII
 	// (mathematical bold digits, fullwidth/homoglyph characters, zero-width splits).
 	for _, p := range piiPatterns {
+		if st.stopped() {
+			return findings, st.err
+		}
 		for _, loc := range p.Regex.FindAllIndex(normBytes, -1) {
 			loc, ok := p.accept(normText, loc)
 			if !ok {
@@ -340,6 +356,9 @@ func (s *PIIScanner) Scan(ctx context.Context, content []byte) ([]Finding, error
 
 	// Scan digit-normalized variants to catch format-evaded TCKN
 	// (separator-stripped and reversed digit sequences).
+	if st.stopped() {
+		return findings, st.err
+	}
 	digitVariants := normalize.NormalizeDigitGroups(normText)
 	for vi, variant := range digitVariants {
 		if vi == 0 || variant == normText {
@@ -355,6 +374,9 @@ func (s *PIIScanner) Scan(ctx context.Context, content []byte) ([]Finding, error
 			// number read backwards looks like some phone number.
 			if vi == 2 && p.forwardOnly {
 				continue
+			}
+			if st.stopped() {
+				return findings, st.err
 			}
 			for _, loc := range p.Regex.FindAllIndex(variantBytes, -1) {
 				loc, ok := p.accept(variant, loc)

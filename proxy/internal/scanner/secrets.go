@@ -197,8 +197,14 @@ func NewSecretScanner() *SecretScanner {
 
 func (s *SecretScanner) Name() string { return "secret" }
 
+// Scan stops between two patterns when the context ends, and then returns
+// what it found together with an ErrScanDegraded error.
 func (s *SecretScanner) Scan(ctx context.Context, content []byte) ([]Finding, error) {
 	secretOnce.Do(compileSecretPatterns)
+	st := &scanStop{ctx: ctx, scanner: s.Name()}
+	if st.stopped() {
+		return nil, st.err
+	}
 	var findings []Finding
 
 	// Normalize to defeat Unicode confusables and zero-width splits.
@@ -207,6 +213,9 @@ func (s *SecretScanner) Scan(ctx context.Context, content []byte) ([]Finding, er
 	normBytes := []byte(normText)
 
 	for _, p := range secretPatterns {
+		if st.stopped() {
+			return findings, st.err
+		}
 		matches := p.Regex.FindAllIndex(content, -1)
 		for _, loc := range matches {
 			matched := string(content[loc[0]:loc[1]])
@@ -217,11 +226,17 @@ func (s *SecretScanner) Scan(ctx context.Context, content []byte) ([]Finding, er
 		}
 	}
 
+	if st.stopped() {
+		return findings, st.err
+	}
 	findings = append(findings, scanConnectionStrings(content)...)
 	findings = append(findings, scanDotenvLines(content)...)
 
 	// Re-scan normalized text for Unicode-evaded secrets.
 	for _, p := range secretPatterns {
+		if st.stopped() {
+			return findings, st.err
+		}
 		for _, loc := range p.Regex.FindAllIndex(normBytes, -1) {
 			matched := string(normBytes[loc[0]:loc[1]])
 			if p.validate != nil && !p.validate(matched) {
@@ -234,6 +249,9 @@ func (s *SecretScanner) Scan(ctx context.Context, content []byte) ([]Finding, er
 			f.Metadata["detected_via"] = "unicode_normalization"
 			findings = append(findings, f)
 		}
+	}
+	if st.stopped() {
+		return findings, st.err
 	}
 	findings = append(findings, scanConnectionStrings(normBytes)...)
 	findings = append(findings, scanDotenvLines(normBytes)...)
