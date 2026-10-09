@@ -304,35 +304,53 @@ func (s *MemoryStore) Test(ctx context.Context, id string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	req.Header.Set("Content-Type", WebhookContentType(w.Kind))
-	// Per-kind auto-authentication: Opsgenie's Alert API requires
-	// `Authorization: GenieKey <token>`; we inject it from AuthToken when
-	// the operator hasn't set the header manually. PagerDuty puts its
-	// routing_key in the JSON body (see RenderTestPayload).
-	if w.Kind == KindOpsgenie && w.AuthToken != "" {
-		if _, ok := w.Headers["Authorization"]; !ok {
-			req.Header.Set("Authorization", "GenieKey "+w.AuthToken)
-		}
-	}
-	for k, v := range w.Headers {
-		req.Header.Set(k, v)
-	}
+	req.Header = deliveryHeaders(w)
 	resp, err := s.http.Do(req)
 	if err != nil {
 		return 0, fmt.Errorf("test failed: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	s.mu.Lock()
-	if cur, ok := s.data[id]; ok {
-		cur.LastFired = time.Now().UTC()
-		s.data[id] = cur
-	}
-	s.mu.Unlock()
+	s.MarkFired(id, time.Now().UTC())
 	return resp.StatusCode, nil
 }
 
-// Notify fires a webhook with correlation suppression. The correlationKey
-// groups similar events (e.g. "credential_leak/high"). If the webhook has
+// deliveryHeaders is the header set for a request to a destination, the
+// probe and a live alert alike.
+//
+// Per-kind auto-authentication: Opsgenie's Alert API requires
+// `Authorization: GenieKey <token>`; we inject it from AuthToken when the
+// operator hasn't set the header manually. PagerDuty puts its routing_key in
+// the JSON body (see Render).
+func deliveryHeaders(w Webhook) http.Header {
+	h := http.Header{}
+	h.Set("Content-Type", WebhookContentType(w.Kind))
+	if w.Kind == KindOpsgenie && w.AuthToken != "" {
+		if _, ok := w.Headers["Authorization"]; !ok {
+			h.Set("Authorization", "GenieKey "+w.AuthToken)
+		}
+	}
+	for k, v := range w.Headers {
+		h.Set(k, v)
+	}
+	return h
+}
+
+// MarkFired records when a destination was last sent something. It is kept
+// in memory only, as it was for the probe.
+func (s *MemoryStore) MarkFired(id string, at time.Time) {
+	s.mu.Lock()
+	if cur, ok := s.data[id]; ok && at.After(cur.LastFired) {
+		cur.LastFired = at
+		s.data[id] = cur
+	}
+	s.mu.Unlock()
+}
+
+// Notify fires a webhook with correlation suppression. It sends the map it
+// is given as JSON whatever the destination's kind and it blocks on the
+// request, so the proxy does not use it: live alerts go through Dispatcher.
+//
+// The correlationKey groups similar events (e.g. "credential_leak/high"). If the webhook has
 // threshold_count > 0, ShouldFire is checked against the correlation
 // engine; events below the threshold or within the cooldown period are
 // silently suppressed (no error returned).
@@ -376,15 +394,7 @@ func (s *MemoryStore) Notify(ctx context.Context, id, correlationKey string, pay
 	if err != nil {
 		return false, correlatedCount, 0, fmt.Errorf("notify build request: %w", err)
 	}
-	req.Header.Set("Content-Type", WebhookContentType(w.Kind))
-	if w.Kind == KindOpsgenie && w.AuthToken != "" {
-		if _, ok := w.Headers["Authorization"]; !ok {
-			req.Header.Set("Authorization", "GenieKey "+w.AuthToken)
-		}
-	}
-	for k, v := range w.Headers {
-		req.Header.Set(k, v)
-	}
+	req.Header = deliveryHeaders(w)
 
 	resp, err := s.http.Do(req)
 	if err != nil {
@@ -392,12 +402,7 @@ func (s *MemoryStore) Notify(ctx context.Context, id, correlationKey string, pay
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	s.mu.Lock()
-	if cur, ok := s.data[id]; ok {
-		cur.LastFired = time.Now().UTC()
-		s.data[id] = cur
-	}
-	s.mu.Unlock()
+	s.MarkFired(id, time.Now().UTC())
 
 	return true, correlatedCount, resp.StatusCode, nil
 }

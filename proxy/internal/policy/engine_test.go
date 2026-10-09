@@ -580,9 +580,9 @@ func TestCustomEntityByName_EmptyName(t *testing.T) {
 	}
 }
 
-// --- WebhookURLsForFindings tests ---
+// --- NotifyURLsForFindings tests ---
 
-func TestWebhookURLsForFindings_EmptyFindings(t *testing.T) {
+func TestNotifyURLsForFindings_EmptyFindings(t *testing.T) {
 	p := &Policy{
 		Version: "1.0",
 		Name:    "test",
@@ -590,17 +590,17 @@ func TestWebhookURLsForFindings_EmptyFindings(t *testing.T) {
 			"pii_detection": {Action: ActionWarn, Notify: []Notify{{Webhook: "https://hooks.example.com"}}},
 		},
 	}
-	urls := p.WebhookURLsForFindings(nil, ActionWarn)
+	urls := p.NotifyURLsForFindings(nil)
 	if len(urls) != 0 {
 		t.Fatalf("nil findings should return empty, got %d urls", len(urls))
 	}
-	urls = p.WebhookURLsForFindings([]scanner.Finding{}, ActionWarn)
+	urls = p.NotifyURLsForFindings([]scanner.Finding{})
 	if len(urls) != 0 {
 		t.Fatalf("empty findings should return empty, got %d urls", len(urls))
 	}
 }
 
-func TestWebhookURLsForFindings_NoMatch(t *testing.T) {
+func TestNotifyURLsForFindings_NoMatch(t *testing.T) {
 	p := &Policy{
 		Version: "1.0",
 		Name:    "test",
@@ -608,31 +608,35 @@ func TestWebhookURLsForFindings_NoMatch(t *testing.T) {
 			"pii_detection": {Action: ActionWarn, Notify: []Notify{{Webhook: "https://hooks.example.com"}}},
 		},
 	}
-	urls := p.WebhookURLsForFindings([]scanner.Finding{
+	urls := p.NotifyURLsForFindings([]scanner.Finding{
 		{Type: "secret", Category: "github_token", Severity: "high"},
-	}, ActionWarn)
+	})
 	if len(urls) != 0 {
 		t.Fatalf("unmatched type should return empty, got %d urls", len(urls))
 	}
 }
 
-func TestWebhookURLsForFindings_WrongAction(t *testing.T) {
-	p := &Policy{
-		Version: "1.0",
-		Name:    "test",
-		Rules: map[string]Rule{
-			"pii_detection": {Action: ActionBlock, Notify: []Notify{{Webhook: "https://hooks.example.com"}}},
-		},
-	}
-	urls := p.WebhookURLsForFindings([]scanner.Finding{
-		{Type: "pii", Category: "email", Severity: "high"},
-	}, ActionWarn)
-	if len(urls) != 0 {
-		t.Fatalf("wrong action filter should return empty, got %d urls", len(urls))
+// A rule's notify is not tied to its action: a rule that blocks or redacts
+// tells its URLs as one that warns does.
+func TestNotifyURLsForFindings_AnyAction(t *testing.T) {
+	for _, action := range []Action{ActionBlock, ActionRedact, ActionStrip, ActionWarn, ActionLog} {
+		p := &Policy{
+			Version: "1.0",
+			Name:    "test",
+			Rules: map[string]Rule{
+				"pii_detection": {Action: action, Notify: []Notify{{Webhook: "https://hooks.example.com"}}},
+			},
+		}
+		urls := p.NotifyURLsForFindings([]scanner.Finding{
+			{Type: "pii", Category: "email", Severity: "high"},
+		})
+		if len(urls) != 1 {
+			t.Fatalf("%s rule: want its notify URL, got %v", action, urls)
+		}
 	}
 }
 
-func TestWebhookURLsForFindings_MatchingWebhooks(t *testing.T) {
+func TestNotifyURLsForFindings_MatchingWebhooks(t *testing.T) {
 	p := &Policy{
 		Version: "1.0",
 		Name:    "test",
@@ -646,15 +650,15 @@ func TestWebhookURLsForFindings_MatchingWebhooks(t *testing.T) {
 			},
 		},
 	}
-	urls := p.WebhookURLsForFindings([]scanner.Finding{
+	urls := p.NotifyURLsForFindings([]scanner.Finding{
 		{Type: "pii", Category: "email", Severity: "high"},
-	}, ActionWarn)
+	})
 	if len(urls) != 2 {
 		t.Fatalf("expected 2 webhooks, got %d: %v", len(urls), urls)
 	}
 }
 
-func TestWebhookURLsForFindings_Deduplicates(t *testing.T) {
+func TestNotifyURLsForFindings_Deduplicates(t *testing.T) {
 	p := &Policy{
 		Version: "1.0",
 		Name:    "test",
@@ -669,16 +673,16 @@ func TestWebhookURLsForFindings_Deduplicates(t *testing.T) {
 			},
 		},
 	}
-	urls := p.WebhookURLsForFindings([]scanner.Finding{
+	urls := p.NotifyURLsForFindings([]scanner.Finding{
 		{Type: "pii", Category: "email", Severity: "high"},
 		{Type: "secret", Category: "aws_key", Severity: "high"},
-	}, ActionWarn)
+	})
 	if len(urls) != 1 {
 		t.Fatalf("expected 1 deduplicated webhook, got %d: %v", len(urls), urls)
 	}
 }
 
-func TestWebhookURLsForFindings_EmptyWebhookURL(t *testing.T) {
+func TestNotifyURLsForFindings_EmptyWebhookURL(t *testing.T) {
 	p := &Policy{
 		Version: "1.0",
 		Name:    "test",
@@ -689,9 +693,9 @@ func TestWebhookURLsForFindings_EmptyWebhookURL(t *testing.T) {
 			},
 		},
 	}
-	urls := p.WebhookURLsForFindings([]scanner.Finding{
+	urls := p.NotifyURLsForFindings([]scanner.Finding{
 		{Type: "pii", Category: "email", Severity: "high"},
-	}, ActionWarn)
+	})
 	if len(urls) != 0 {
 		t.Fatalf("empty webhook should be skipped, got %d urls", len(urls))
 	}
@@ -1162,5 +1166,43 @@ exceptions:
 	}
 	if len(matches) != 1 {
 		t.Fatalf("expected 1 deduplicated exception match, got %d: %+v", len(matches), matches)
+	}
+}
+
+// The shipped policy names an environment variable in place of the URL,
+// which is a credential. Only a value that is exactly one reference is
+// looked up.
+func TestNotifyURLsForFindings_EnvReference(t *testing.T) {
+	old := notifyEnv
+	t.Cleanup(func() { notifyEnv = old })
+	notifyEnv = func(name string) (string, bool) {
+		switch name {
+		case "SLACK_WEBHOOK_URL":
+			return " https://hooks.example.com/a ", true
+		case "SECRET":
+			return "s3cr3t", true
+		}
+		return "", false
+	}
+	finding := []scanner.Finding{{Type: "pii", Category: "email", Severity: "medium"}}
+	for _, tc := range []struct {
+		webhook string
+		want    []string
+	}{
+		{"${SLACK_WEBHOOK_URL}", []string{"https://hooks.example.com/a"}},
+		{"${NOT_SET}", nil},
+		{"https://hooks.example.com/b", []string{"https://hooks.example.com/b"}},
+		// Not substituted inside a longer value: a policy cannot build a URL from other variables.
+		{"https://evil.example.com/?k=${SECRET}", []string{"https://evil.example.com/?k=${SECRET}"}},
+		{"${SLACK_WEBHOOK_URL}${SECRET}", nil},
+		{"${}", nil},
+	} {
+		p := &Policy{Version: "1.0", Name: "test", Rules: map[string]Rule{
+			"pii_detection": {Action: ActionRedact, Notify: []Notify{{Webhook: tc.webhook}}},
+		}}
+		got := p.NotifyURLsForFindings(finding)
+		if len(got) != len(tc.want) || (len(got) == 1 && got[0] != tc.want[0]) {
+			t.Errorf("%q: got %v, want %v", tc.webhook, got, tc.want)
+		}
 	}
 }

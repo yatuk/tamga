@@ -9,6 +9,7 @@ import (
 	"github.com/yatuk/tamga/internal/classifier"
 	"github.com/yatuk/tamga/internal/extract"
 	"github.com/yatuk/tamga/internal/scanner"
+	"github.com/yatuk/tamga/internal/webhooks"
 )
 
 // handleMetrics exposes a Prometheus text-format snapshot of the proxy.
@@ -194,6 +195,20 @@ func (cfg Config) handleMetrics(w http.ResponseWriter, _ *http.Request) {
 		_, _ = fmt.Fprintf(w, "tamga_events_dropped_total %d\n", dropped)
 	}
 
+	// Alert deliveries, by destination kind. Never by URL: a webhook URL is
+	// a credential and a label would publish it.
+	if alertStats != nil {
+		stats := alertStats()
+		_, _ = fmt.Fprintln(w, "# HELP tamga_alerts_total Alerts for saved destinations and rule notify URLs, by destination kind and result (sent, failed, dropped: queue full, suppressed: correlation).")
+		_, _ = fmt.Fprintln(w, "# TYPE tamga_alerts_total counter")
+		for _, st := range stats {
+			_, _ = fmt.Fprintf(w, "tamga_alerts_total{kind=%q,result=\"sent\"} %d\n", st.Kind, st.Sent)
+			_, _ = fmt.Fprintf(w, "tamga_alerts_total{kind=%q,result=\"failed\"} %d\n", st.Kind, st.Failed)
+			_, _ = fmt.Fprintf(w, "tamga_alerts_total{kind=%q,result=\"dropped\"} %d\n", st.Kind, st.Dropped)
+			_, _ = fmt.Fprintf(w, "tamga_alerts_total{kind=%q,result=\"suppressed\"} %d\n", st.Kind, st.Suppressed)
+		}
+	}
+
 	// Cache hit/miss counters — expose prompt cache efficiency for
 	// capacity planning and cache warming diagnostics.
 	if cfg.Cache != nil {
@@ -220,3 +235,11 @@ var classifierStats func() classifier.Stats
 // SetClassifierStats registers the source of the classifier counters. Call
 // once at startup.
 func SetClassifierStats(fn func() classifier.Stats) { classifierStats = fn }
+
+// alertStats returns the alert delivery counters; nil when nothing delivers
+// alerts.
+var alertStats func() []webhooks.KindStats
+
+// SetAlertStats registers the source of the alert delivery counters. Call
+// once at startup.
+func SetAlertStats(fn func() []webhooks.KindStats) { alertStats = fn }

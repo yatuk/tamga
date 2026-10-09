@@ -411,6 +411,12 @@ func main() {
 	eventBus.Subscribe(events.OperatorStateAnalyzerHandler(analyzerClient))
 	eventBus.Subscribe(events.RecentBufferHandler(recentBuf))
 	eventBus.Subscribe(liveBroker.Publish)
+	// Decisions reach the saved alert destinations from here. The handler
+	// only renders and queues; its own workers do the sending, so a slow
+	// receiver cannot hold up the bus.
+	alertDispatcher := webhooks.NewDispatcher(webhookStore, webhooks.DispatcherConfig{DefaultOrg: cfg.DefaultOrgID})
+	api.SetAlertStats(alertDispatcher.Stats)
+	eventBus.Subscribe(alertDispatcher.HandleEvent)
 	eventBus.Start()
 
 	// NATS consumers: DB persistence (async, durable, replayable).
@@ -691,6 +697,7 @@ func main() {
 		RateLimit:          rateLimiter,
 		Config:             cfg,
 		Bus:                eventBus,
+		Alerts:             alertDispatcher,
 		Budget:             budgetStore,
 		Cache:              promptCache,
 		UpstreamRegistry:   upstreamReg,
@@ -837,6 +844,8 @@ func main() {
 		log.Fatal().Err(err).Msg("forced shutdown")
 	}
 	eventBus.Stop()
+	// After the bus, so the last decisions are queued before the drain.
+	alertDispatcher.Stop(3 * time.Second)
 	if analyzerClient != nil {
 		if err := analyzerClient.Close(); err != nil {
 			log.Warn().Err(err).Msg("analyzer gRPC client close")

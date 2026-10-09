@@ -14,14 +14,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rs/zerolog/log"
-
 	"github.com/yatuk/tamga/internal/budget"
 	"github.com/yatuk/tamga/internal/cache"
 	"github.com/yatuk/tamga/internal/config"
 	"github.com/yatuk/tamga/internal/events"
 	"github.com/yatuk/tamga/internal/policy"
 	"github.com/yatuk/tamga/internal/scanner"
+	"github.com/yatuk/tamga/internal/webhooks"
 )
 
 // ---------------------------------------------------------------------------
@@ -450,10 +449,10 @@ func TestRoundTrip_NilTransport(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// notifyWarnWebhooks
+// notifyRuleWebhooks
 // ---------------------------------------------------------------------------
 
-func TestNotifyWarnWebhooks_NoWebhooksConfigured(t *testing.T) {
+func TestNotifyRuleWebhooks_NoWebhooksConfigured(t *testing.T) {
 	pol := &policy.Policy{
 		Version: "1.0",
 		Name:    "no-webhooks",
@@ -466,13 +465,34 @@ func TestNotifyWarnWebhooks_NoWebhooksConfigured(t *testing.T) {
 		},
 		Providers: &policy.Providers{Allowed: []string{"openai"}},
 	}
+	d := webhooks.NewDispatcher(nil, webhooks.DispatcherConfig{})
+	defer d.Stop(time.Second)
 	// Should not panic and should not make any HTTP calls.
-	notifyWarnWebhooks(pol, []scanner.Finding{
+	notifyRuleWebhooks(HandlerConfig{Alerts: d}, pol, nil, "req-1", "openai", "gpt-4o", []scanner.Finding{
 		{Type: "pii", Category: "credit_card", Severity: "high"},
-	}, "req-1", "openai", log.Logger)
+	}, policy.ActionWarn, scanner.RiskScore{})
+	if st := d.Stats(); len(st) != 0 {
+		t.Fatalf("nothing should have been queued, got %+v", st)
+	}
 }
 
-func TestNotifyWarnWebhooks_FiresCorrectPayload(t *testing.T) {
+// Without a dispatcher there is nowhere to send from: the call is a no-op.
+func TestNotifyRuleWebhooks_NoDispatcher(t *testing.T) {
+	pol := &policy.Policy{
+		Version: "1.0",
+		Rules: map[string]policy.Rule{
+			"pii_detection": {
+				Action: policy.ActionWarn,
+				Notify: []policy.Notify{{Webhook: "http://127.0.0.1:1/no-call-expected"}},
+			},
+		},
+	}
+	notifyRuleWebhooks(HandlerConfig{}, pol, nil, "req-1", "openai", "", []scanner.Finding{
+		{Type: "pii", Category: "credit_card", Severity: "high"},
+	}, policy.ActionWarn, scanner.RiskScore{})
+}
+
+func TestNotifyRuleWebhooks_FiresCorrectPayload(t *testing.T) {
 	var receivedPayload []byte
 	var mu sync.Mutex
 	webhookSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -484,7 +504,7 @@ func TestNotifyWarnWebhooks_FiresCorrectPayload(t *testing.T) {
 	defer webhookSrv.Close()
 
 	findings := []scanner.Finding{
-		{Type: "pii", Category: "credit_card", Severity: "high", Confidence: 0.95},
+		{Type: "pii", Category: "credit_card", Severity: "high", Confidence: 0.95, Match: "4532********0366"},
 	}
 
 	pol := &policy.Policy{
@@ -492,7 +512,7 @@ func TestNotifyWarnWebhooks_FiresCorrectPayload(t *testing.T) {
 		Name:    "with-webhooks",
 		Rules: map[string]policy.Rule{
 			"pii_detection": {
-				Action: policy.ActionWarn,
+				Action: policy.ActionBlock,
 				Types:  []string{"credit_card"},
 				Notify: []policy.Notify{
 					{Webhook: webhookSrv.URL},
@@ -502,9 +522,10 @@ func TestNotifyWarnWebhooks_FiresCorrectPayload(t *testing.T) {
 		Providers: &policy.Providers{Allowed: []string{"openai"}},
 	}
 
-	notifyWarnWebhooks(pol, findings, "req-w1", "openai", log.Logger)
+	d := webhooks.NewDispatcher(nil, webhooks.DispatcherConfig{})
+	defer d.Stop(time.Second)
+	notifyRuleWebhooks(HandlerConfig{Alerts: d}, pol, nil, "req-w1", "openai", "gpt-4o", findings, policy.ActionBlock, scanner.RiskScore{Percentage: 80})
 
-	// Wait for async webhook call (runs in a goroutine with 8s timeout).
 	deadline := time.After(3 * time.Second)
 	for {
 		mu.Lock()
@@ -528,8 +549,8 @@ func TestNotifyWarnWebhooks_FiresCorrectPayload(t *testing.T) {
 	if err := json.Unmarshal(payload, &out); err != nil {
 		t.Fatalf("invalid webhook JSON: %v", err)
 	}
-	if out["text"] != "Tamga security warning" {
-		t.Errorf("text = %q, want 'Tamga security warning'", out["text"])
+	if text, _ := out["text"].(string); !strings.Contains(text, "BLOCK") || !strings.Contains(text, "req-w1") {
+		t.Errorf("text = %q, want the action and the request id", out["text"])
 	}
 	tamga, _ := out["tamga"].(map[string]interface{})
 	if tamga["request_id"] != "req-w1" {
@@ -538,15 +559,21 @@ func TestNotifyWarnWebhooks_FiresCorrectPayload(t *testing.T) {
 	if tamga["provider"] != "openai" {
 		t.Errorf("provider = %q, want openai", tamga["provider"])
 	}
-	if tamga["severity"] != "warn" {
-		t.Errorf("severity = %q, want warn", tamga["severity"])
+	if tamga["action"] != "BLOCK" {
+		t.Errorf("action = %q, want BLOCK", tamga["action"])
 	}
-	if findings, ok := tamga["findings"].(float64); !ok || findings != 1 {
-		t.Errorf("findings = %v, want 1", tamga["findings"])
+	if tamga["severity"] != "high" {
+		t.Errorf("severity = %q, want high", tamga["severity"])
+	}
+	if n, ok := tamga["findings_count"].(float64); !ok || n != 1 {
+		t.Errorf("findings_count = %v, want 1", tamga["findings_count"])
+	}
+	if strings.Contains(string(payload), "4532") {
+		t.Errorf("payload carries the finding's match: %s", payload)
 	}
 }
 
-func TestNotifyWarnWebhooks_EmptyFindings(t *testing.T) {
+func TestNotifyRuleWebhooks_EmptyFindings(t *testing.T) {
 	pol := &policy.Policy{
 		Version: "1.0",
 		Name:    "empty-findings",
@@ -555,15 +582,19 @@ func TestNotifyWarnWebhooks_EmptyFindings(t *testing.T) {
 				Action: policy.ActionWarn,
 				Types:  []string{"credit_card"},
 				Notify: []policy.Notify{
-					{Webhook: "http://localhost:9999/no-call-expected"},
+					{Webhook: "http://127.0.0.1:1/no-call-expected"},
 				},
 			},
 		},
 		Providers: &policy.Providers{Allowed: []string{"openai"}},
 	}
-	// Empty findings → WebhookURLsForFindings returns empty → no-op.
-	notifyWarnWebhooks(pol, nil, "req-empty", "openai", log.Logger)
-	// No panic, no webhook call. Test passes by surviving.
+	d := webhooks.NewDispatcher(nil, webhooks.DispatcherConfig{})
+	defer d.Stop(time.Second)
+	// Empty findings match no rule, so there is no URL to post to.
+	notifyRuleWebhooks(HandlerConfig{Alerts: d}, pol, nil, "req-empty", "openai", "", nil, policy.ActionWarn, scanner.RiskScore{})
+	if st := d.Stats(); len(st) != 0 {
+		t.Fatalf("nothing should have been queued, got %+v", st)
+	}
 }
 
 // ---------------------------------------------------------------------------

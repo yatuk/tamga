@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
 	"github.com/yatuk/tamga/internal/api"
@@ -37,6 +36,7 @@ import (
 	"github.com/yatuk/tamga/internal/telemetry"
 	"github.com/yatuk/tamga/internal/upstream"
 	"github.com/yatuk/tamga/internal/vault"
+	"github.com/yatuk/tamga/internal/webhooks"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -119,6 +119,10 @@ type HandlerConfig struct {
 	Config    *config.Config
 	// Bus publishes scan/block/hint events (optional; nil disables publishing).
 	Bus *events.Bus
+	// Alerts posts to the notify URLs of the policy rules a request matched
+	// (optional; nil posts nothing). Saved destinations are not reached
+	// through here: the same dispatcher hears of decisions on the Bus.
+	Alerts *webhooks.Dispatcher
 	// UpstreamURLs overrides default LLM API hosts (e.g. httptest.Server in integration tests).
 	UpstreamURLs map[string]*url.URL
 	// Breaker holds shared provider circuit breaker state across requests.
@@ -728,6 +732,14 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 	if model != "" {
 		span.SetAttributes(attribute.String("gen_ai.request.model", model))
 	}
+	// A decision on the response is published from the upstream callbacks,
+	// which have this context and not the request.
+	ctx = withOutputEventMeta(ctx, r, model)
+	// Whatever was decided, the rules that matched are told. PASS is not a
+	// decision against the request, so it tells nobody.
+	if action != policy.ActionPass {
+		notifyRuleWebhooks(cfg, pol, r, requestID, provider, model, findings, action, inputRisk)
+	}
 	redactedCount := 0
 	var redactedTypes []string
 	vaultActive := false
@@ -810,7 +822,6 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 			Int("input_risk", inputRisk.Percentage).
 			Str("risk_level", inputRisk.Level).
 			Msg("✂ STRIP content removed — request forwarded")
-		notifyWarnWebhooks(pol, findings, requestID, provider, logger)
 
 	case policy.ActionWarn:
 		logger.Warn().
@@ -821,7 +832,6 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 			Int("input_risk", inputRisk.Percentage).
 			Str("risk_level", inputRisk.Level).
 			Msg("⚠ WARN security warning — request forwarded")
-		notifyWarnWebhooks(pol, findings, requestID, provider, logger)
 
 	case policy.ActionLog:
 		logger.Debug().
@@ -1873,44 +1883,36 @@ func defaultStreamingTransport() *http.Transport {
 	}
 }
 
-func notifyWarnWebhooks(pol *policy.Policy, findings []scanner.Finding, requestID, provider string, logger zerolog.Logger) {
-	urls := pol.WebhookURLsForFindings(findings, policy.ActionWarn)
+// notifyRuleWebhooks queues an alert for the notify URLs of every rule the
+// findings matched, whatever the rule's action and whatever was decided. It
+// does not wait: the dispatcher's queue is bounded and drops when full.
+//
+// The alert names the request and the kinds of finding. It carries no text
+// from the request and no finding's match.
+func notifyRuleWebhooks(cfg HandlerConfig, pol *policy.Policy, r *http.Request, requestID, provider, model string, findings []scanner.Finding, action policy.Action, inputRisk scanner.RiskScore) {
+	if cfg.Alerts == nil || pol == nil {
+		return
+	}
+	urls := pol.NotifyURLsForFindings(findings)
 	if len(urls) == 0 {
 		return
 	}
-	payload := map[string]interface{}{
-		"text": "Tamga security warning",
-		"tamga": map[string]interface{}{
-			"request_id": requestID,
-			"provider":   provider,
-			"findings":   len(findings),
-			"severity":   "warn",
-		},
+	a := webhooks.Alert{
+		RequestID: requestID,
+		Timestamp: time.Now().UTC(),
+		OrgID:     orgIDForRequest(r, cfg),
+		Provider:  provider,
+		Model:     model,
+		Action:    string(action),
+		Direction: "input",
+		EventType: "rule_notify",
+		InputRisk: inputRisk.Percentage,
+		Findings:  webhooks.AlertFindings(findings),
 	}
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		logger.Error().Err(err).Msg("marshal notify payload")
-		return
+	if r != nil {
+		a.UserID = r.Header.Get("X-Tamga-User-Id")
 	}
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-		defer cancel()
-		for _, u := range urls {
-			req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, bytes.NewReader(raw))
-			if err != nil {
-				logger.Warn().Err(err).Str("url", u).Msg("build notify request")
-				continue
-			}
-			req.Header.Set("Content-Type", "application/json")
-			resp, err := http.DefaultClient.Do(req)
-			if resp != nil {
-				_ = resp.Body.Close()
-			}
-			if err != nil {
-				logger.Warn().Err(err).Str("url", u).Msg("notify webhook failed")
-			}
-		}
-	}()
+	cfg.Alerts.NotifyURLs(urls, a)
 }
 
 const maxEventBodyBytes = 65536
@@ -2067,13 +2069,35 @@ func orgIDForRequest(r *http.Request, cfg HandlerConfig) string {
 	return "default"
 }
 
+// outputEventMeta is what an output event says about the request it answers:
+// the same organisation, model and user the request's own event carries.
+type outputEventMeta struct {
+	orgID, model, userID string
+}
+
+type outputEventMetaKey struct{}
+
+func withOutputEventMeta(ctx context.Context, r *http.Request, model string) context.Context {
+	m := outputEventMeta{model: model}
+	if r != nil {
+		m.orgID = r.Header.Get("X-Tamga-Org-Id")
+		m.userID = r.Header.Get("X-Tamga-User-Id")
+	}
+	return context.WithValue(ctx, outputEventMetaKey{}, m)
+}
+
 func publishOutputEvent(ctx context.Context, cfg HandlerConfig, requestID, provider string, findings []scanner.Finding, action policy.Action, elapsed time.Duration) {
 	if cfg.Bus == nil {
 		return
 	}
+	meta, _ := ctx.Value(outputEventMetaKey{}).(outputEventMeta)
 	cfg.Bus.PublishContext(ctx, events.Event{
 		RequestID:      requestID,
+		OrgID:          meta.orgID,
 		Provider:       provider,
+		Model:          meta.model,
+		ModelFamily:    extractModelFamily(meta.model),
+		UserID:         meta.userID,
 		EventType:      "output_scanned",
 		OutputFindings: findings,
 		OutputAction:   string(action),

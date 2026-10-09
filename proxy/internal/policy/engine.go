@@ -926,28 +926,52 @@ func (p *Policy) MatchedRule(f scanner.Finding) (Rule, bool) {
 	return Rule{}, false
 }
 
-// WebhookURLsForFindings returns unique notify webhook URLs from rules that match the given findings
-// and whose configured rule action equals wantRuleAction (e.g. only WARN rules when notifying on WARN).
-func (p *Policy) WebhookURLsForFindings(findings []scanner.Finding, wantRuleAction Action) []string {
+// NotifyURLsForFindings returns the unique notify webhook URLs of the rules
+// that match the given findings, whatever each rule's action: a rule that
+// blocks or redacts is as entitled to tell someone as one that warns.
+func (p *Policy) NotifyURLsForFindings(findings []scanner.Finding) []string {
 	var urls []string
 	seen := map[string]struct{}{}
 	for _, f := range findings {
 		rule, ok := p.MatchedRule(f)
-		if !ok || rule.Action != wantRuleAction {
+		if !ok {
 			continue
 		}
 		for _, n := range rule.Notify {
-			if n.Webhook == "" {
+			u := notifyURL(n.Webhook)
+			if u == "" {
 				continue
 			}
-			if _, dup := seen[n.Webhook]; dup {
+			if _, dup := seen[u]; dup {
 				continue
 			}
-			seen[n.Webhook] = struct{}{}
-			urls = append(urls, n.Webhook)
+			seen[u] = struct{}{}
+			urls = append(urls, u)
 		}
 	}
 	return urls
+}
+
+// notifyEnv reads the environment for notifyURL; tests replace it.
+var notifyEnv = os.LookupEnv
+
+// notifyURL resolves a rule's webhook value. A webhook URL is a credential,
+// so the shipped policy names an environment variable, "${SLACK_WEBHOOK_URL}",
+// in place of the URL. Only a value that is exactly one such reference is
+// looked up: nothing is substituted inside a longer string, so a policy
+// cannot be used to build a URL out of other variables. An unset variable
+// gives no URL.
+func notifyURL(v string) string {
+	v = strings.TrimSpace(v)
+	if !strings.HasPrefix(v, "${") || !strings.HasSuffix(v, "}") {
+		return v
+	}
+	name := v[2 : len(v)-1]
+	if name == "" || strings.ContainsAny(name, "${} ") {
+		return ""
+	}
+	val, _ := notifyEnv(name)
+	return strings.TrimSpace(val)
 }
 
 // ProviderAllowed returns false if the provider is blocked or not on the allowlist (when allowlist is non-empty).
