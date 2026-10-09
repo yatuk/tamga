@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"io"
@@ -14,11 +16,13 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/rs/zerolog/log"
 	"github.com/sony/gobreaker/v2"
 
+	"github.com/yatuk/tamga/internal/egress"
 	"github.com/yatuk/tamga/internal/events"
 	"github.com/yatuk/tamga/internal/policy"
 )
@@ -59,8 +63,71 @@ type poolEndpoint struct {
 	breakerCfg *policy.BreakerConfig
 	bus        *events.Bus
 
-	lastFailUnix   atomic.Int64
+	lastFailUnix atomic.Int64
+	// lastFailReason is one of the Fail* classes, never the error's text.
 	lastFailReason atomic.Value // string
+}
+
+// What an endpoint's last failure is reported as. The error's own text names
+// the host, the address and the port, so it goes to the log and nowhere else.
+const (
+	FailTimeout     = "timeout"
+	FailRefused     = "refused"
+	FailDNS         = "dns"
+	FailTLS         = "tls"
+	FailUpstream5xx = "upstream_5xx"
+	FailNotAllowed  = "not_allowed"
+	FailOther       = "other"
+)
+
+// errUpstreamStatus marks a 5xx answer, which doHTTP turns into an error so
+// the breaker counts it.
+var errUpstreamStatus = errors.New("upstream status")
+
+// wsaeconnrefused is what Windows reports for a refused connection; it is
+// not the value of syscall.ECONNREFUSED there.
+const wsaeconnrefused = syscall.Errno(10061)
+
+// failureClass names a failed attempt. endpointTimedOut says the endpoint's
+// own timeout cancelled the attempt, which otherwise reads as a cancellation.
+func failureClass(err error, endpointTimedOut bool) string {
+	var (
+		errno    syscall.Errno
+		recErr   tls.RecordHeaderError
+		alertErr tls.AlertError
+		caErr    x509.UnknownAuthorityError
+		hostErr  x509.HostnameError
+		certErr  x509.CertificateInvalidError
+	)
+	switch {
+	case errors.Is(err, ErrEndpointRefused):
+		return FailNotAllowed
+	case errors.Is(err, errUpstreamStatus):
+		return FailUpstream5xx
+	case errors.Is(err, context.Canceled):
+		if endpointTimedOut {
+			return FailTimeout
+		}
+		return FailOther
+	}
+	switch egress.Class(err) {
+	case "blocked":
+		return FailNotAllowed
+	case "timeout":
+		return FailTimeout
+	case "dns":
+		return FailDNS
+	case "tls":
+		return FailTLS
+	}
+	switch {
+	case errors.As(err, &errno) && (errno == syscall.ECONNREFUSED || errno == wsaeconnrefused):
+		return FailRefused
+	case errors.As(err, &recErr), errors.As(err, &alertErr),
+		errors.As(err, &caErr), errors.As(err, &hostErr), errors.As(err, &certErr):
+		return FailTLS
+	}
+	return FailOther
 }
 
 // NewProviderPoolFromSpec builds a pool from policy YAML. Returns nil if invalid or empty.
@@ -263,7 +330,7 @@ func (p *ProviderPool) tryEndpoint(ctx context.Context, req *http.Request, body 
 	// body and credentials are about to be sent to this host.
 	if err := eg.rules.CheckEndpoint(p.RouteKey, ep.base); err != nil {
 		ep.lastFailUnix.Store(time.Now().Unix())
-		ep.lastFailReason.Store(ErrEndpointRefused.Error())
+		ep.lastFailReason.Store(FailNotAllowed)
 		if ep.refusalLogged.CompareAndSwap(false, true) {
 			log.Warn().Str("component", "upstream").Str("route", p.RouteKey).Str("endpoint", ep.name).
 				Msg("pool endpoint refused: base_url is not allowed for this route; nothing is sent to it")
@@ -307,8 +374,11 @@ func (p *ProviderPool) tryEndpoint(ctx context.Context, req *http.Request, body 
 		}
 		if err != nil {
 			ep.lastFailUnix.Store(time.Now().Unix())
-			ep.lastFailReason.Store(err.Error())
-			log.Warn().Err(err).Str("component", "upstream").Str("endpoint", ep.name).Msg("provider request failed")
+			// The caller's context is still live when the endpoint's own
+			// timeout is what cancelled the attempt.
+			class := failureClass(err, ctx.Err() == nil)
+			ep.lastFailReason.Store(class)
+			log.Warn().Err(err).Str("component", "upstream").Str("endpoint", ep.name).Str("class", class).Msg("provider request failed")
 			if attempt < maxRetries && isRetryableNetErr(err) {
 				SleepRetryJitter(ctx, attempt)
 				continue
@@ -380,7 +450,7 @@ func doHTTP(ctx context.Context, rt http.RoundTripper, req *http.Request) (*http
 	if code >= 500 {
 		_, _ = io.Copy(io.Discard, resp.Body)
 		_ = resp.Body.Close()
-		return nil, fmt.Errorf("upstream status %d", code)
+		return nil, fmt.Errorf("%w %d", errUpstreamStatus, code)
 	}
 	return resp, nil
 }

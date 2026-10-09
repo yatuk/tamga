@@ -16,7 +16,7 @@ type Config struct {
 	// DefaultOrgID is used when X-Tamga-Org-Id is absent (UUID string, e.g. dev org from migrations).
 	DefaultOrgID string
 	RedisURL     string
-	// AdminKey protects /api/v1/* except GET /api/v1/health/detailed (X-Tamga-Admin-Key). Empty key → 401 on protected routes.
+	// AdminKey protects /api/v1/* (X-Tamga-Admin-Key). The health endpoints answer without it, with up or down only. Empty key → 401 on protected routes.
 	AdminKey string
 	// CORSOrigin for Access-Control-Allow-Origin (default * for dev).
 	// Deprecated: use CORSOrigins for allowlist support.

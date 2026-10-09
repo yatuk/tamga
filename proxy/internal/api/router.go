@@ -133,6 +133,8 @@ type TierEnforcer interface {
 // NewHandler serves /api/v1/* (mount with mux.Handle("/api/v1/", handler)).
 func NewHandler(cfg Config) http.Handler {
 	inner := http.NewServeMux()
+	// Public for uptime checks, which get a reduced body. The full body
+	// needs a management credential: see healthFull.
 	inner.HandleFunc("GET /health/detailed", cfg.handleHealthDetailed)
 	inner.HandleFunc("GET /health/detail", cfg.handleHealthDetail)
 
@@ -723,6 +725,38 @@ func (cfg Config) handleRatelimitStats(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
+// healthFull reports whether the caller may read the full health body. The
+// question is put to adminAuth itself, so these routes accept exactly what
+// the management API accepts and follow it when it changes. A proxy key, a
+// revoked key and a wrong key are all refused there, and get the public body
+// here instead of an error: an uptime check must not fail on a stale header.
+func (cfg Config) healthFull(r *http.Request) bool {
+	probe := r.Clone(r.Context())
+	// A key in the query string ends up in access logs, and nothing that
+	// polls health has to put it there. Only a header counts.
+	probe.URL.RawQuery = ""
+	full := false
+	adminAuth(cfg)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		full = true
+	})).ServeHTTP(discardResponse{}, probe)
+	return full
+}
+
+// discardResponse takes the refusal adminAuth writes when healthFull asks.
+type discardResponse struct{}
+
+func (discardResponse) Header() http.Header         { return http.Header{} }
+func (discardResponse) Write(b []byte) (int, error) { return len(b), nil }
+func (discardResponse) WriteHeader(int)             {}
+
+// writeHealth sends a health body. The same URL answers differently by
+// credential, so nothing between the proxy and the caller may keep it.
+func writeHealth(w http.ResponseWriter, status int, full bool, payload map[string]interface{}) {
+	payload["authenticated"] = full
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, status, payload)
+}
+
 func (cfg Config) handleHealthDetailed(w http.ResponseWriter, r *http.Request) {
 	dbStatus := "not_configured"
 	dbHealthy := true
@@ -773,17 +807,18 @@ func (cfg Config) handleHealthDetailed(w http.ResponseWriter, r *http.Request) {
 		statusCode = http.StatusServiceUnavailable
 	}
 
-	uptime := int64(time.Since(cfg.Started).Seconds())
+	// What anyone may read: that the proxy answers, whether something it
+	// depends on is failing (without naming it) and how long scanning takes.
+	// Everything that describes the deployment is added below, for a caller
+	// with a management credential.
+	status := "ok"
+	if statusCode != http.StatusOK {
+		status = "degraded"
+	}
 	payload := map[string]interface{}{
-		"proxy":          "up",
-		"proxy_status":   map[string]interface{}{"up": true},
-		"database":       dbStatus,
-		"redis":          redisStatus,
-		"analyzer":       analyzerStatus,
-		"scanner_count":  cfg.ScannerCount,
-		"uptime_seconds": uptime,
-		"policy_path":    cfg.PolicyPath,
-		"events_dropped": dropped,
+		"proxy":        "up",
+		"proxy_status": map[string]interface{}{"up": true},
+		"status":       status,
 	}
 	// Scan latency percentiles over the recent buffer. Omitted until at
 	// least one request has been scanned, so "no data" is not reported as 0 ms.
@@ -792,12 +827,22 @@ func (cfg Config) handleHealthDetailed(w http.ResponseWriter, r *http.Request) {
 		payload["scan_latency_ms_p95"] = percentile(lat, 0.95)
 		payload["scan_latency_ms_p99"] = percentile(lat, 0.99)
 	}
-	if cfg.Upstream != nil {
-		if snap := cfg.Upstream.HealthSnapshot(); len(snap) > 0 {
-			payload["providers"] = snap
+	full := cfg.healthFull(r)
+	if full {
+		payload["database"] = dbStatus
+		payload["redis"] = redisStatus
+		payload["analyzer"] = analyzerStatus
+		payload["scanner_count"] = cfg.ScannerCount
+		payload["uptime_seconds"] = int64(time.Since(cfg.Started).Seconds())
+		payload["policy_path"] = cfg.PolicyPath
+		payload["events_dropped"] = dropped
+		if cfg.Upstream != nil {
+			if snap := cfg.Upstream.HealthSnapshot(); len(snap) > 0 {
+				payload["providers"] = snap
+			}
 		}
 	}
-	writeJSON(w, statusCode, payload)
+	writeHealth(w, statusCode, full, payload)
 }
 
 // recentScanLatencies returns the scan latency of every scanned or blocked
@@ -820,8 +865,14 @@ func recentScanLatencies(recent *events.RecentBuffer) []float64 {
 // handleHealthDetail exposes the runtime operational profile
 // (TLS, mTLS, Redis, Postgres, policy identity) so the dashboard
 // Settings → Runtime tab can render a live "what's enabled" overview
-// for support and compliance reviewers.
+// for support and compliance reviewers. All of it describes the deployment,
+// so a caller without a management credential is told only that the proxy
+// is up.
 func (cfg Config) handleHealthDetail(w http.ResponseWriter, r *http.Request) {
+	if !cfg.healthFull(r) {
+		writeHealth(w, http.StatusOK, false, map[string]interface{}{"proxy": "up"})
+		return
+	}
 	dbStatus := "not_configured"
 	if cfg.DatabaseURL != "" && cfg.Store != nil {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
@@ -867,7 +918,7 @@ func (cfg Config) handleHealthDetail(w http.ResponseWriter, r *http.Request) {
 		payload["tier"] = cfg.TierEnforcer.TierName()
 		payload["tier_custom_entities"] = cfg.TierEnforcer.CustomEntitiesAllowed()
 	}
-	writeJSON(w, http.StatusOK, payload)
+	writeHealth(w, http.StatusOK, true, payload)
 }
 
 func (cfg Config) handleRetentionRun(w http.ResponseWriter, r *http.Request) {

@@ -99,9 +99,24 @@ paths:
       tags: [health]
       summary: Detailed health status with provider pool snapshots
       description: |
-        Returns proxy, database, Redis, analyzer status plus scanner
-        count, uptime, and any upstream provider pool health snapshots.
-        Returns 503 when any dependency (DB/Redis/analyzer) is unhealthy.
+        Without a credential: whether the proxy is up, `status` (`ok` or
+        `degraded`) and the scan latency percentiles. Nothing else.
+
+        With the admin key or a scoped key of read, write or admin scope in
+        `X-Tamga-Admin-Key` (or a session token in `Authorization`): also
+        database, Redis and analyzer status, scanner count, uptime, the
+        policy file path and the upstream provider pool snapshots.
+        `authenticated` says which of the two bodies this is.
+
+        A proxy-scope key, a revoked key and a wrong key get the first
+        body, not an error. A key in the query string is not read.
+
+        Returns 503 when any dependency (DB/Redis/analyzer) is unhealthy,
+        to every caller.
+      security:
+        - {}
+        - AdminKey: []
+        - ApiKey: []
       responses:
         "200":
           description: All dependencies healthy
@@ -123,6 +138,15 @@ paths:
       description: |
         Exposes TLS, mTLS, Redis, Postgres status plus policy identity and
         tier information for the Settings / Runtime dashboard tab.
+
+        All of it needs the admin key or a scoped key of read, write or
+        admin scope in `X-Tamga-Admin-Key` (or a session token in
+        `Authorization`). Any other caller gets `proxy` and
+        `authenticated: false` only, with status 200.
+      security:
+        - {}
+        - AdminKey: []
+        - ApiKey: []
       responses:
         "200":
           description: OK
@@ -1892,7 +1916,10 @@ components:
         p95_latency_ms: { type: number }
         requests_in_window: { type: integer }
         last_failure: { type: string }
-        failure_reason: { type: string }
+        failure_reason:
+          type: string
+          description: The class of the last failure. The error text itself is only in the proxy's log.
+          enum: [timeout, refused, dns, tls, upstream_5xx, not_allowed, other]
 
     DashboardHealthProviderPool:
       type: object
@@ -1907,12 +1934,22 @@ components:
 
     DashboardHealthDetailed:
       type: object
+      description: |
+        Only proxy, proxy_status, status, authenticated and the scan latency
+        percentiles are sent to a caller without a management credential.
       properties:
         proxy: { type: string }
         proxy_status:
           type: object
           properties:
             up: { type: boolean }
+        status:
+          type: string
+          description: degraded when a dependency is failing, as the 503 says.
+          enum: [ok, degraded]
+        authenticated:
+          type: boolean
+          description: True when the caller's credential was accepted and this is the full body.
         database: { type: string }
         redis: { type: string }
         analyzer: { type: string }
@@ -1935,8 +1972,10 @@ components:
           properties:
             version: { type: string }
             policy_name: { type: string }
+            policy_writable: { type: boolean }
             tls_enabled: { type: boolean }
             mtls_enabled: { type: boolean }
+            ip_allowlist: { type: string }
             redis_enabled: { type: boolean }
             timestamp: { type: string, format: date-time }
             trace_ui_url: { type: string }

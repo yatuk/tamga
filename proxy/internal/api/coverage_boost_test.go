@@ -1699,6 +1699,7 @@ func TestPoliciesReload_BadPath(t *testing.T) {
 
 func TestHealthDetailed_WithUpstreamAndBus(t *testing.T) {
 	cfg := Config{
+		AdminKey:     healthTestKey,
 		Started:      time.Now().Add(-2 * time.Minute),
 		PolicyPath:   "/tmp/policy.yaml",
 		ScannerCount: 4,
@@ -1709,7 +1710,7 @@ func TestHealthDetailed_WithUpstreamAndBus(t *testing.T) {
 	ts := httptest.NewServer(testMux(cfg))
 	defer ts.Close()
 
-	resp, err := http.Get(ts.URL + "/api/v1/health/detailed")
+	resp, err := healthGet(ts.URL + "/api/v1/health/detailed")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2072,6 +2073,7 @@ func TestCircuitReset_GETMethod(t *testing.T) {
 func TestHealthDetail_WithPolicyStore(t *testing.T) {
 	pol := &policy.Policy{Name: "production-policy", Version: "2.0"}
 	cfg := Config{
+		AdminKey:     healthTestKey,
 		Started:      time.Now().Add(-1 * time.Hour),
 		PolicyPath:   "/tmp/policy.yaml",
 		ScannerCount: 1,
@@ -2082,7 +2084,7 @@ func TestHealthDetail_WithPolicyStore(t *testing.T) {
 	ts := httptest.NewServer(testMux(cfg))
 	defer ts.Close()
 
-	resp, _ := http.Get(ts.URL + "/api/v1/health/detail")
+	resp, _ := healthGet(ts.URL + "/api/v1/health/detail")
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("want 200, got %d", resp.StatusCode)
@@ -2100,6 +2102,7 @@ func TestHealthDetail_WithPolicyStore(t *testing.T) {
 
 func TestHealthDetail_DBConnected(t *testing.T) {
 	cfg := Config{
+		AdminKey:     healthTestKey,
 		Started:      time.Now().Add(-1 * time.Hour),
 		PolicyPath:   "/tmp/policy.yaml",
 		ScannerCount: 1,
@@ -2109,7 +2112,7 @@ func TestHealthDetail_DBConnected(t *testing.T) {
 	ts := httptest.NewServer(testMux(cfg))
 	defer ts.Close()
 
-	resp, _ := http.Get(ts.URL + "/api/v1/health/detail")
+	resp, _ := healthGet(ts.URL + "/api/v1/health/detail")
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("want 200, got %d", resp.StatusCode)

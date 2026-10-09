@@ -121,9 +121,9 @@ func (r *Registry) HealthSnapshot() []map[string]interface{} {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.refreshLocked()
-	out := make([]map[string]interface{}, len(r.healthSnap))
-	copy(out, r.healthSnap)
-	return out
+	// Built on every call: the snapshot kept from when the pools were built
+	// never shows a breaker opening or an endpoint's last failure.
+	return buildHealthSnapshot(r.poolsByRoute)
 }
 
 func buildHealthSnapshot(pools map[string]*ProviderPool) []map[string]interface{} {

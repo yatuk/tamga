@@ -27,6 +27,7 @@ func testMux(cfg Config) http.Handler {
 
 func TestHealthDetailed_OK(t *testing.T) {
 	cfg := Config{
+		AdminKey:     healthTestKey,
 		Started:      time.Now().Add(-2 * time.Minute),
 		PolicyPath:   "/tmp/policy.yaml",
 		ScannerCount: 4,
@@ -35,7 +36,7 @@ func TestHealthDetailed_OK(t *testing.T) {
 	ts := httptest.NewServer(testMux(cfg))
 	defer ts.Close()
 
-	resp, err := http.Get(ts.URL + "/api/v1/health/detailed")
+	resp, err := healthGet(ts.URL + "/api/v1/health/detailed")
 	if err != nil {
 		t.Fatal(err)
 	}

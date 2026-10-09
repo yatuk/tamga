@@ -663,6 +663,7 @@ func TestCostsBreakdown_WithPricingAndUsage(t *testing.T) {
 
 func TestHealthDetailed_DBConnected(t *testing.T) {
 	cfg := Config{
+		AdminKey:     healthTestKey,
 		Started:      time.Now().Add(-2 * time.Minute),
 		PolicyPath:   "/tmp/policy.yaml",
 		ScannerCount: 3,
@@ -672,7 +673,7 @@ func TestHealthDetailed_DBConnected(t *testing.T) {
 	ts := httptest.NewServer(testMux(cfg))
 	defer ts.Close()
 
-	resp, err := http.Get(ts.URL + "/api/v1/health/detailed")
+	resp, err := healthGet(ts.URL + "/api/v1/health/detailed")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -690,6 +691,7 @@ func TestHealthDetailed_DBConnected(t *testing.T) {
 func TestHealthDetailed_DBDisconnected(t *testing.T) {
 	errStore := &errorPingStore{NoopStore: store.NewNoopStoreSilent()}
 	cfg := Config{
+		AdminKey:     healthTestKey,
 		Started:      time.Now().Add(-2 * time.Minute),
 		PolicyPath:   "/tmp/policy.yaml",
 		ScannerCount: 3,
@@ -699,7 +701,7 @@ func TestHealthDetailed_DBDisconnected(t *testing.T) {
 	ts := httptest.NewServer(testMux(cfg))
 	defer ts.Close()
 
-	resp, err := http.Get(ts.URL + "/api/v1/health/detailed")
+	resp, err := healthGet(ts.URL + "/api/v1/health/detailed")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -725,6 +727,7 @@ func (e *errorPingStore) Ping(_ context.Context) error {
 
 func TestHealthDetailed_RedisAndAnalyzer(t *testing.T) {
 	cfg := Config{
+		AdminKey:     healthTestKey,
 		Started:      time.Now().Add(-2 * time.Minute),
 		PolicyPath:   "/tmp/policy.yaml",
 		ScannerCount: 3,
@@ -736,7 +739,7 @@ func TestHealthDetailed_RedisAndAnalyzer(t *testing.T) {
 	ts := httptest.NewServer(testMux(cfg))
 	defer ts.Close()
 
-	resp, err := http.Get(ts.URL + "/api/v1/health/detailed")
+	resp, err := healthGet(ts.URL + "/api/v1/health/detailed")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -756,6 +759,7 @@ func TestHealthDetailed_RedisAndAnalyzer(t *testing.T) {
 
 func TestHealthDetailed_RedisConnected(t *testing.T) {
 	cfg := Config{
+		AdminKey:     healthTestKey,
 		Started:      time.Now().Add(-2 * time.Minute),
 		PolicyPath:   "/tmp/policy.yaml",
 		ScannerCount: 3,
@@ -767,7 +771,7 @@ func TestHealthDetailed_RedisConnected(t *testing.T) {
 	ts := httptest.NewServer(testMux(cfg))
 	defer ts.Close()
 
-	resp, _ := http.Get(ts.URL + "/api/v1/health/detailed")
+	resp, _ := healthGet(ts.URL + "/api/v1/health/detailed")
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200 with healthy components, got %d", resp.StatusCode)
@@ -784,6 +788,7 @@ func TestHealthDetailed_RedisConnected(t *testing.T) {
 
 func TestHealthDetail_FullFeatures(t *testing.T) {
 	cfg := Config{
+		AdminKey:     healthTestKey,
 		Started:      time.Now().Add(-2 * time.Minute),
 		PolicyPath:   "/tmp/policy.yaml",
 		ScannerCount: 3,
@@ -799,7 +804,7 @@ func TestHealthDetail_FullFeatures(t *testing.T) {
 	ts := httptest.NewServer(testMux(cfg))
 	defer ts.Close()
 
-	resp, _ := http.Get(ts.URL + "/api/v1/health/detail")
+	resp, _ := healthGet(ts.URL + "/api/v1/health/detail")
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
@@ -839,6 +844,7 @@ func (s *stubTierEnforcer) TierName() string            { return s.name }
 
 func TestHealthDetail_RetentionEnabled(t *testing.T) {
 	cfg := Config{
+		AdminKey:     healthTestKey,
 		Started:      time.Now().Add(-2 * time.Minute),
 		PolicyPath:   "/tmp/policy.yaml",
 		ScannerCount: 3,
@@ -848,7 +854,7 @@ func TestHealthDetail_RetentionEnabled(t *testing.T) {
 	ts := httptest.NewServer(testMux(cfg))
 	defer ts.Close()
 
-	resp, _ := http.Get(ts.URL + "/api/v1/health/detail")
+	resp, _ := healthGet(ts.URL + "/api/v1/health/detail")
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)

@@ -1150,7 +1150,10 @@ providers:
 
 	// ---- API: health endpoint (no auth required) ----
 	t.Run("api_health", func(t *testing.T) {
-		resp, err := http.Get(ts.URL + "/api/v1/health/detailed")
+		// The detail needs a management credential; without one the body is only up or down.
+		healthReq, _ := http.NewRequest(http.MethodGet, ts.URL+"/api/v1/health/detailed", nil)
+		healthReq.Header.Set("X-Tamga-Admin-Key", "e2e-admin-key")
+		resp, err := http.DefaultClient.Do(healthReq)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1437,7 +1440,9 @@ providers:
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
 
-	resp, err := http.Get(ts.URL + "/api/v1/health/detailed")
+	healthReq, _ := http.NewRequest(http.MethodGet, ts.URL+"/api/v1/health/detailed", nil)
+	healthReq.Header.Set("X-Tamga-Admin-Key", "test-key")
+	resp, err := http.DefaultClient.Do(healthReq)
 	if err != nil {
 		t.Fatal(err)
 	}
