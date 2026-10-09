@@ -290,7 +290,7 @@ function EventDetail({ event, adminKey, onClose }: { event: SecurityEvent; admin
               {detail.data ? `${detail.data.policy_name || "Unnamed"}, version ${detail.data.policy_version || "?"}` : "Reading"}
             </dd>
             <dt>Scan time</dt>
-            <dd>{event.scan_latency_ms ?? 0} ms</dd>
+            <dd>{scanTime(detail.data?.scan_latency_ms ?? event.scan_latency_ms)}</dd>
             {tokens ? (
               <>
                 <dt>Tokens</dt>
@@ -374,6 +374,11 @@ function Triage({ requestId, adminKey }: { requestId: string; adminKey: string }
       ) : null}
     </section>
   );
+}
+
+/** The list does not carry the scan time; the full record does. */
+function scanTime(ms?: number) {
+  return ms === undefined ? "Not recorded" : `${Number(ms.toFixed(1))} ms`;
 }
 
 /** "score=100 action=BLOCK factors=[a (+30), b (+30)]" → "a, b". */
