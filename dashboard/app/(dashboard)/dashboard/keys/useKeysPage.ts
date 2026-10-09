@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useAdminKey } from "@/hooks/useAdminKey";
 
-export type RevealedKey = {
+type RevealedKey = {
   rawKey: string;
   id: string;
   label: string;
@@ -15,7 +15,6 @@ export type RevealedKey = {
 export function useKeysPage() {
   const [adminKey] = useAdminKey();
   const [createOpen, setCreateOpen] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<{ id: string; label: string } | null>(null);
   const [revealedKey, setRevealedKey] = useState<RevealedKey>(null);
   const queryClient = useQueryClient();
 
@@ -29,7 +28,6 @@ export function useKeysPage() {
 
   const hasError = !!listError;
   const apiKeys = data?.items ?? [];
-  const total = data?.total ?? 0;
 
   const invalidate = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["tamga-apikeys", adminKey] });
@@ -56,7 +54,6 @@ export function useKeysPage() {
     mutationFn: (id: string) => api.deleteApiKey(adminKey, id),
     onSuccess: () => {
       invalidate();
-      setDeleteTarget(null);
       toast.success("API key revoked");
     },
     onError: () => {
@@ -71,12 +68,9 @@ export function useKeysPage() {
     isLoading,
     hasError,
     apiKeys,
-    total,
     createOpen,
     setCreateOpen,
     createMutation,
-    deleteTarget,
-    setDeleteTarget,
     deleteMutation,
     revealedKey,
     dismissReveal,

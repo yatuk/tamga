@@ -55,25 +55,7 @@ export function useCostsPage() {
   const costToday = budget?.cost_today_usd ?? 0;
   const limitTokens = budget?.limit_tokens ?? 0;
   const limitCost = budget?.limit_cost_usd ?? 0;
-  const remainingPct =
-    limitTokens > 0
-      ? Math.max(0, ((limitTokens - tokensToday) / limitTokens) * 100).toFixed(1)
-      : "100.0";
 
-  // Chart data from timeseries.
-  const chartData = useMemo(
-    () =>
-      (ts?.points || []).map((p) => ({
-        time: new Date(p.t).toLocaleString("en-GB", {
-          month: "short",
-          day: "2-digit",
-          hour: "2-digit",
-        }),
-        total: p.total,
-        blocked: p.blocked,
-      })),
-    [ts],
-  );
 
   /** Per-model cost rows from backend billing endpoint. */
   const modelCostRows = useMemo(() => {
@@ -144,40 +126,15 @@ export function useCostsPage() {
       familyMap.set(fam, (familyMap.get(fam) ?? 0) + b.total_cost);
     }
     const total = [...familyMap.values()].reduce((s, v) => s + v, 0);
-    const colorMap: Record<string, string> = {
-      openai: "bg-status-pass",
-      anthropic: "bg-status-medium",
-      gemini: "bg-status-low",
-      mistral: "bg-status-high",
-      bedrock: "bg-purple-500",
-    };
     return [...familyMap.entries()]
       .map(([family, cost]) => ({
         family,
         cost: Math.round(cost * 10000) / 10000,
         pct: total > 0 ? Math.round((cost / total) * 100) : 0,
-        color: colorMap[family.toLowerCase()] ?? "bg-surface-subtle0",
       }))
       .sort((a, b) => b.cost - a.cost);
   }, [costBreakdown]);
 
-  /** Daily sparkline data (last 10 entries, summed by date). */
-  const dailySparkline = useMemo(() => {
-    const daily = costBreakdown?.daily ?? [];
-    const dateMap = new Map<string, number>();
-    for (const d of daily) {
-      dateMap.set(d.date, (dateMap.get(d.date) ?? 0) + d.cost_usd);
-    }
-    const sorted = [...dateMap.entries()]
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .slice(-10)
-      .map(([date, cost]) => ({
-        date,
-        cost: Math.round(cost * 10000) / 10000,
-      }));
-    const maxCost = sorted.length > 0 ? Math.max(...sorted.map((d) => d.cost)) : 1;
-    return Object.assign(sorted, { maxCost });
-  }, [costBreakdown]);
 
   return {
     adminKey,
@@ -189,8 +146,6 @@ export function useCostsPage() {
     costToday,
     limitTokens,
     limitCost,
-    remainingPct,
-    chartData,
     modelCostRows,
     dailyRows,
     totalCostEstimate,
@@ -201,6 +156,5 @@ export function useCostsPage() {
     costPerRequest,
     avgTokensPerRequest,
     modelFamilyBars,
-    dailySparkline,
   };
 }

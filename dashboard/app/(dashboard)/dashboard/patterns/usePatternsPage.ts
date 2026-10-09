@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type CustomPattern, type PatternKind } from "@/lib/api";
 import { toast } from "@/lib/toast";
-import { toLowerEn } from "@/lib/utils/case";
 import { EMPTY_DRAFT, type Draft } from "./_constants";
 import { useAdminKey } from "@/hooks/useAdminKey";
 
@@ -13,7 +12,6 @@ export function usePatternsPage() {
   const [adminKey] = useAdminKey();
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [testInput, setTestInput] = useState("");
-  const [testMatch, setTestMatch] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["tamga-patterns", adminKey],
@@ -92,23 +90,6 @@ export function usePatternsPage() {
     }
   }
 
-  function onTest() {
-    if (!draft.pattern) {
-      toast.error("Enter a pattern to test");
-      return;
-    }
-    if (draft.kind === "regex") {
-      if (compiledRegex === "invalid" || !compiledRegex) {
-        toast.error("This is not a valid regular expression");
-        return;
-      }
-      const m = testInput.match(compiledRegex);
-      setTestMatch(m && m.length ? m.join(", ") : "no match");
-      return;
-    }
-    const idx = toLowerEn(testInput).indexOf(toLowerEn(draft.pattern));
-    setTestMatch(idx >= 0 ? `at position ${idx}` : "no match");
-  }
 
   function editPattern(p: CustomPattern) {
     setDraft({
@@ -131,7 +112,6 @@ export function usePatternsPage() {
     setDraftKind,
     testInput,
     setTestInput,
-    testMatch,
     items,
     isLoading,
     compiledRegex,
@@ -139,7 +119,6 @@ export function usePatternsPage() {
     updateMut,
     deleteMut,
     onSubmit,
-    onTest,
     editPattern,
   };
 }

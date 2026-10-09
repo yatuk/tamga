@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { useAdminKey } from "@/hooks/useAdminKey";
 import { useCsvExport } from "@/hooks/useCsvExport";
 import { useRangeParam } from "@/hooks/useRangeParam";
+import { topEntries } from "@/lib/utils/top";
 
 export function useTrafficPage() {
   const [adminKey] = useAdminKey();
@@ -35,22 +36,10 @@ export function useTrafficPage() {
     staleTime: 60 * 1000,
   });
 
-  const { data: breakdown, isLoading: breakdownLoading } = useQuery({
-    queryKey: ["tamga-breakdown", adminKey, range],
-    queryFn: () => api.getBreakdown(adminKey, range),
-    enabled: !!adminKey,
-    retry: 1,
-    staleTime: 60 * 1000,
-  });
-
-  const isLoading = statsLoading || tsLoading || modelLoading || breakdownLoading;
+  const isLoading = statsLoading || tsLoading || modelLoading;
   const hasError = !!statsError;
 
   const totalRequests = stats?.total_requests ?? 0;
-  const blockedRequests = stats?.blocked_requests ?? 0;
-  const passedRequests = stats?.passed_requests ?? 0;
-  const warnedRequests = stats?.warned_requests ?? 0;
-  const passRate = totalRequests > 0 ? ((passedRequests / totalRequests) * 100).toFixed(1) : "0.0";
 
   const chartData = useMemo(
     () =>
@@ -69,23 +58,11 @@ export function useTrafficPage() {
 
   const topProviders = useMemo(() => {
     const m = stats?.top_providers || {};
-    return Object.entries(m)
-      .map(([k, v]) => [k, Number(v)] as [string, number])
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 6);
+    return topEntries(m, 6);
   }, [stats]);
 
-  const topProvidersTotal = topProviders.reduce((acc, [, v]) => acc + v, 0);
 
-  const topFindingTypes = useMemo(() => {
-    const m = breakdown?.by_type || {};
-    return Object.entries(m)
-      .map(([k, v]) => [k, Number(v)] as [string, number])
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 8);
-  }, [breakdown]);
 
-  const topFindingsTotal = topFindingTypes.reduce((acc, [, v]) => acc + v, 0);
 
   const modelUsage = useMemo(() => {
     const m = modelStats?.by_family || {};
@@ -110,14 +87,6 @@ export function useTrafficPage() {
     return totalRequests / secondsInRange;
   }, [range, totalRequests]);
 
-  const peakHour = useMemo(() => {
-    if (!ts?.points || ts.points.length === 0) return null;
-    const maxPoint = ts.points.reduce((prev, curr) => (curr.total > prev.total ? curr : prev));
-    return {
-      time: new Date(maxPoint.t).toLocaleString("en-GB", { month: "short", day: "2-digit", hour: "2-digit" }),
-      count: maxPoint.total,
-    };
-  }, [ts]);
 
   const topEndpoints = useMemo((): [string, number][] => {
     const m = (stats as Record<string, unknown> | undefined)?.["top_endpoints"] as Record<string, number> | undefined;
@@ -131,24 +100,15 @@ export function useTrafficPage() {
     adminKey,
     range,
     setRange,
-    stats,
     isLoading,
     hasError,
     totalRequests,
-    blockedRequests,
-    passedRequests,
-    warnedRequests,
-    passRate,
     chartData,
     points: ts?.points ?? [],
     hourly: ts?.bucket === "hour",
     topProviders,
-    topProvidersTotal,
-    topFindingTypes,
-    topFindingsTotal,
     modelUsage,
     requestsPerSecond,
-    peakHour,
     topEndpoints,
     exportCsv,
   };

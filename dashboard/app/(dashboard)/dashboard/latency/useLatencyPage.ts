@@ -29,53 +29,10 @@ export function useLatencyPage() {
   const p95 = health?.scan_latency_ms_p95 ?? 0;
   const p99 = health?.scan_latency_ms_p99 ?? 0;
 
-  const healthAny = health as Record<string, unknown> | undefined;
-  const p75 = (healthAny?.scan_latency_ms_p75 as number) ?? (p50 + (p95 - p50) * 0.5);
-  const p90 = (healthAny?.scan_latency_ms_p90 as number) ?? (p50 + (p95 - p50) * 0.8);
   const scannerCount = health?.scanner_count ?? 0;
 
-  const histogramBars = useMemo(() => {
-    const bars = [
-      { label: "P50", ms: p50, color: "bg-status-pass" },
-      { label: "P75", ms: p75, color: "bg-lime-500" },
-      { label: "P90", ms: p90, color: "bg-status-medium" },
-      { label: "P95", ms: p95, color: "bg-status-high" },
-      { label: "P99", ms: p99, color: "bg-status-critical" },
-    ];
-    const maxMs = Math.max(...bars.map((b) => b.ms), 1);
-    return bars.map((b) => ({ ...b, pct: Math.round((b.ms / maxMs) * 100) }));
-  }, [p50, p75, p90, p95, p99]);
 
-  const slowestEndpoints = useMemo(() => {
-    if (!ts?.points || ts.points.length === 0) return [];
-    return ts.points
-      .filter((p) => (p.scan_p95 ?? 0) > 0)
-      .sort((a, b) => (b.scan_p95 ?? 0) - (a.scan_p95 ?? 0))
-      .slice(0, 5)
-      .map((p) => ({
-        time: new Date(p.t!).toLocaleString("en-GB", {
-          month: "short",
-          day: "2-digit",
-          hour: "2-digit",
-        }),
-        p95: p.scan_p95 ?? 0,
-        requests: p.total ?? 0,
-      }));
-  }, [ts]);
 
-  const chartData = useMemo(
-    () =>
-      (ts?.points || []).map((p) => ({
-        time: new Date(p.t).toLocaleString("en-GB", {
-          month: "short",
-          day: "2-digit",
-          hour: "2-digit",
-        }),
-        p95: p.scan_p95,
-        total: p.total,
-      })),
-    [ts],
-  );
 
   /** Provider pool entries from health */
   const providerPools = useMemo(() => {
@@ -114,14 +71,9 @@ export function useLatencyPage() {
     isLoading,
     hasError,
     p50,
-    p75,
-    p90,
     p95,
     p99,
-    histogramBars,
-    slowestEndpoints,
     scannerCount,
-    chartData,
     points: ts?.points ?? [],
     hourly: ts?.bucket === "hour",
     providerPools,

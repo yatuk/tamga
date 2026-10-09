@@ -121,7 +121,6 @@ export function usePoliciesPage() {
     data,
     isLoading,
     error,
-    refetch,
     activePolicy,
     onReload,
     onSave,

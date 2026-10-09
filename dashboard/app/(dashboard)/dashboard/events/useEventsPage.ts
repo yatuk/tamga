@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { api } from "@/lib/api";
@@ -21,7 +21,6 @@ interface Filters {
 
 export function useEventsPage() {
   const [adminKey] = useAdminKey();
-  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -104,14 +103,6 @@ export function useEventsPage() {
 
   const { liveCount, status: sseStatus, resetCounter } = useLiveEventsStream(adminKey);
 
-  // Selected event detail query (lazy — only when sheet is open)
-  const { data: eventDetail, isLoading: detailLoading } = useQuery({
-    queryKey: ["tamga-event-detail", adminKey, selectedEventId],
-    queryFn: () => api.getEventDetail(adminKey, selectedEventId!),
-    enabled: !!adminKey && !!selectedEventId,
-    retry: 1,
-    staleTime: 60 * 1000,
-  });
 
   const events: SecurityEvent[] = useMemo(() => data?.pages.flatMap((pg) => pg.events ?? []) ?? [], [data]);
   /** Events matching the current filters, across all pages. */
@@ -130,15 +121,6 @@ export function useEventsPage() {
     return { all, blocked, redacted, passed, passRate: all > 0 ? (passed / all) * 100 : null };
   }, [ts]);
 
-  const timeseriesData = useMemo(
-    () =>
-      (ts?.points ?? []).map((p) => ({
-        time: new Date(p.t).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }),
-        count: p.total,
-        blocked: p.blocked,
-      })),
-    [ts],
-  );
 
   const loadMore = useCallback(() => {
     if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
@@ -160,16 +142,11 @@ export function useEventsPage() {
     events,
     total,
     windowTotals,
-    timeseriesData,
     liveCount,
     sseStatus,
     showNew,
     hasNextPage,
     isFetchingNextPage,
-    selectedEventId,
-    setSelectedEventId,
-    eventDetail,
-    detailLoading,
     loadMore,
   };
 }

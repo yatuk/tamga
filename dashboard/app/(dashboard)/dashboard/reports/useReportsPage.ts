@@ -9,6 +9,7 @@ import { useAdminKey } from "@/hooks/useAdminKey";
 import { useCsvExport } from "@/hooks/useCsvExport";
 import { useDownload } from "@/hooks/useDownload";
 import { useRangeParam } from "@/hooks/useRangeParam";
+import { topEntries } from "@/lib/utils/top";
 
 export function useReportsPage() {
   const [adminKey] = useAdminKey();
@@ -75,16 +76,6 @@ export function useReportsPage() {
       });
   }, [breakdown]);
 
-  const chartData = useMemo(
-    () =>
-      (ts?.points || []).map((p) => ({
-        time: new Date(p.t).toLocaleString("en-GB", { month: "short", day: "2-digit", hour: "2-digit" }),
-        total: p.total,
-        blocked: p.blocked,
-        redacted: p.redacted,
-      })),
-    [ts],
-  );
 
   const recentBlocked = useMemo(
     () =>
@@ -103,12 +94,8 @@ export function useReportsPage() {
 
   const topFindingEntries = useMemo(() => {
     const m = stats?.top_finding_types || {};
-    return Object.entries(m)
-      .map(([k, v]) => [k, Number(v)] as [string, number])
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 8);
+    return topEntries(m, 8);
   }, [stats]);
-  const topFindingsTotal = topFindingEntries.reduce((acc, [, v]) => acc + v, 0);
 
   const comparisonDelta = useMemo(() => {
     const points = ts?.points || [];
@@ -226,12 +213,10 @@ export function useReportsPage() {
     range,
     setRange,
     stats,
-    chartData,
     points: ts?.points ?? [],
     hourly: ts?.bucket === "hour",
     recentBlocked,
     topFindingEntries,
-    topFindingsTotal,
     owaspCoverageRows,
     exportBlockedCsv,
     exportEventsCsv,
