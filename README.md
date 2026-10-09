@@ -7,9 +7,10 @@
 
 # Tamga
 
-**Self-hosted security proxy for LLM traffic.**<br/>
-Scans every prompt and response inline, and blocks or redacts PII, secrets and
-prompt injection before anything leaves your network.
+**A guardrail for LLM traffic that you run on your own servers.**<br/>
+Tamga sits in front of the model APIs your applications, RAG pipelines and
+agents call. It scans each request routed through it and blocks or redacts
+PII, secrets and prompt injection before the request is forwarded to the provider.
 
 [![Tests](https://img.shields.io/github/actions/workflow/status/yatuk/tamga/proxy-ci.yml?branch=main&label=tests&style=flat-square)](https://github.com/yatuk/tamga/actions/workflows/proxy-ci.yml)
 [![Version](https://img.shields.io/badge/version-v0.8.0--rc1-blue?style=flat-square)](CHANGELOG.md)
@@ -30,9 +31,12 @@ prompt injection before anything leaves your network.
 
 ## Why Tamga
 
-People paste customer data into LLMs every day: national IDs, IBANs, card
-numbers, API keys. In regulated industries that is a reportable incident, and
-the usual controls do not help:
+An application that calls a model API forwards whatever it is handed. A
+support bot passes on a ticket with the customer's national ID in it, and a
+RAG pipeline retrieves a document that holds an IBAN or an API key. An agent
+reads a web page that carries instructions written for the model, and that
+text arrives in its next request as a tool result. The usual controls do not
+help:
 
 - **Network DLP** sees an encrypted request to an API, not what the prompt says.
 - **Hosted LLM gateways** inspect your prompts on *their* servers, which is the
@@ -40,8 +44,35 @@ the usual controls do not help:
 - **Provider guardrails** cover one vendor and leave no audit trail of your own.
 
 Tamga is a reverse proxy you run yourself. It speaks the OpenAI and Anthropic
-APIs, so applications only change their base URL. Built for KVKK, GDPR and
+APIs, so applications only change their base URL. It reads each request
+message by message and knows whether a piece of text is the user's prompt, a
+tool result, a tool description or the system prompt. Scanners look for PII,
+secrets and injection wording in that text, and a YAML policy turns each
+finding into a block, a redaction, a warning or a pass. A rule can be limited
+to some of those roles, and a tool result that carries an injection can be
+stripped so the agent's session continues. Responses are scanned too when the
+policy's `output_rules` are on. Every decision is recorded in your own
+Postgres. Built for KVKK, GDPR and
 BDDK workloads, with first-class Turkish PII (TC Kimlik, Turkish IBAN and phone formats).
+
+## What Tamga does not cover
+
+Tamga sees only the requests that are sent to it. It does not see:
+
+- **Chat websites.** Text someone types or pastes into chatgpt.com, claude.ai
+  or gemini.google.com in a browser goes from the browser to that site and
+  never reaches the proxy. A browser extension for this is planned. It is not
+  available.
+- **Traffic between an agent and its MCP servers.** The agent talks to them
+  directly. What a tool returned reaches Tamga only when the agent puts it in
+  its next model request, as a tool result.
+- **Anything else that does not pass through the proxy.** An application that
+  still calls the provider's own URL is not scanned. Tamga does not discover
+  or stop such calls.
+- **Images, audio and PDFs.** They are forwarded without being read. An
+  attached text file is decoded and scanned.
+
+More limits are listed under [Project status](#project-status).
 
 ## Quick start
 
@@ -83,7 +114,9 @@ client = OpenAI(
 ```
 
 Provider routes: `/v1` (OpenAI), `/anthropic`, `/gemini`, `/azure`, `/bedrock`,
-`/mistral`, `/local`. The default policy allows the first four.
+`/mistral`, `/local`. The default policy allows the first four. Only the first
+three are tested by forwarding a request to a stand-in provider; see
+[Project status](#project-status).
 
 ## How it works
 
@@ -109,9 +142,11 @@ flowchart LR
    `PASS`. It hot-reloads, is parsed strictly, and warns at startup if nothing
    acts on PII, secrets or injection.
 3. **Forward.** Clean or redacted requests go to the provider. Responses are
-   scanned on the way back.
-4. **Record.** Every decision becomes an event: Postgres audit log, dashboard,
-   webhooks, SIEM, OpenTelemetry.
+   scanned on the way back when the policy's `output_rules` are on; they are
+   off in the shipped policy.
+4. **Record.** Every decision becomes an event in the Postgres request log
+   and the dashboard. A rule whose action is `WARN` can also post to a
+   webhook. Alerts for blocked and redacted requests are not sent yet.
 
 Diagrams for the request lifecycle, scanner pipeline, policy flow and database
 schema are in [docs/architecture](docs/architecture/README.md).
@@ -140,41 +175,45 @@ an incident queue. See [docs/operations.md](docs/operations.md), and
 
 Measured on 2026-10-03. Everything here is reproducible from this repository.
 
-**Accuracy**, deterministic scanners only, on two sets:
+**Accuracy**, as precision / recall, on two sets of prompts written for this
+repository. The inline classifier is optional: a local model asked about what
+the rules did not block, here
+[`prompt-injection-guard-small`](https://huggingface.co/Horizon-Labs/prompt-injection-guard-small)
+at threshold 0.98.
 
-| Set | Prompts | Precision | Recall | F1 |
-|---|---|---|---|---|
-| Tuning corpus (gates CI) | 309, about 40% benign | 1.000 | 0.896 | 0.945 |
-| Held-out set | 163, about half benign | 1.000 | 1.000 | 1.000 |
+| Set | Prompts | Deterministic scanners alone | With the inline classifier |
+|---|---|---|---|
+| Tuning corpus `prompts.csv` (gates CI) | 309, of which 117 benign | 1.000 / 0.896 | 1.000 / 0.927 |
+| Held-out set `holdout.csv` | 163, of which 85 benign | 1.000 / 1.000 | 1.000 / 1.000 |
+
+Source: [docs/benchmarks/README.md](docs/benchmarks/README.md#with-the-inline-classifier),
+from the reports
+[redteam_latest.json](docs/benchmarks/redteam_latest.json),
+[redteam_holdout.json](docs/benchmarks/redteam_holdout.json),
+[redteam_classifier_latest.json](docs/benchmarks/redteam_classifier_latest.json) and
+[redteam_classifier_holdout.json](docs/benchmarks/redteam_classifier_holdout.json).
 
 Read that honestly. The rules were written against the misses in the tuning
-corpus, so 0.896 says how well they fit it, not how they do on new traffic; on
-2026-10-01, before that work, the same corpus scored 0.969 / 0.495. The
+corpus, so its recall says how well they fit it, not how they do on new
+traffic; on 2026-10-01, before that work, the same corpus scored 0.969 / 0.495. The
 held-out set was written separately but by the same author, in the same attack
 families, so it overstates too. Expect less on your own traffic and measure
 there. What the rules still miss in the corpus is semantic: fictional and
 hypothetical framings, data-exfiltration requests, health data, street
 addresses.
 
-**With the inline classifier** (optional; a local model asked about what the
-rules did not block,
-[`prompt-injection-guard-small`](https://huggingface.co/Horizon-Labs/prompt-injection-guard-small)
-at threshold 0.98):
-
-| Set | Precision | Recall | Added by the classifier |
-|---|---|---|---|
-| Tuning corpus | 1.000 | 0.927 | 6 attacks caught, 0 benign flagged |
-| Held-out set | 1.000 | 1.000 | nothing: the rules already caught every attack |
-
-The threshold was chosen on the tuning corpus as the lowest that flagged no
+**What the classifier added.** On the tuning corpus it caught 6 attacks the
+rules missed and flagged no benign sample. On the held-out set it added
+nothing: the rules already caught every attack. The threshold was chosen on the tuning corpus as the lowest that flagged no
 benign sample, then run unchanged on the held-out set. The gain is small
 because both sets were built around what rules can catch; they are the wrong
 instrument for a model whose purpose is phrasing nobody anticipated, and no
-independent set has been run yet. A classifier call took p50 16–24 ms and
+independent set has been run yet. A classifier call took p50 14–24 ms and
 p95 23–58 ms across runs on the machine below; text seen in the last ten
 minutes is answered from memory. At threshold 0.9 the classifier catches two
-more attacks and flags 1 to 2% of benign samples. It did not catch the three
-injection vectors that bypass the adversarial suite: they score 0.83 to 0.94.
+more attacks in the tuning corpus and flags 1 of its 117 benign samples, and
+2 of the 85 in the held-out set. It did not catch the three injection vectors
+that bypass the adversarial suite.
 
 **Latency.** Scan stage: p50 0.2 ms, p95 0.7–0.8 ms. End to end through the
 Docker Compose stack with a mocked upstream:
@@ -198,10 +237,11 @@ arguments, tool descriptions and attachments, and bodies that parsers read
 differently. The bypasses are published in
 [tests/stress/baseline.json](tests/stress/baseline.json) and include leetspeak
 and character-by-character smuggling. The vectors are known to the authors, so this is a regression
-suite, not an independent evaluation. With the classifier on, the result is
-the same 78 and 6, and the load figures are within the run-to-run spread of
+suite, not an independent evaluation. With the classifier on, the result was
+the same 78 and 6, and the load figures were within the run-to-run spread of
 the table above (the load test repeats its prompts, so it exercises the
-classifier's cache, not the model).
+classifier's cache, not the model). No result file for that run is in the
+repository; the baseline describes the run without the classifier.
 
 ```bash
 cd proxy && go run ./cmd/redteam -in ./testdata/redteam/prompts.csv   # accuracy
@@ -220,7 +260,7 @@ Method and per-category results: [docs/benchmarks](docs/benchmarks/README.md) ·
 | KVKK / BDDK control mapping | Documented | No | No | Partial |
 | Inline redaction | Yes | Yes | Tier-gated | HTTPS only |
 | Reversible tokenization | Yes | Partial | No | Some |
-| Hash-chained audit log | Yes | No | Partial | Some |
+| Hash-chained audit log | Admin actions | No | Partial | Some |
 | Published bypasses | Yes | No | No | No |
 | Open source | AGPL-3.0 | No | Often MIT | Mostly no |
 
@@ -311,6 +351,10 @@ helm install tamga ./deploy/helm/tamga-proxy -n security --create-namespace
 No public container image is published yet: build one from `proxy/Dockerfile`,
 push it to your registry, and set `image.repository` in `values.yaml`.
 
+The chart has not been tested: nothing in this repository lints, renders or
+installs it, and its version fields are behind the release. Read the
+templates before you rely on it.
+
 </details>
 
 **What is stored.** Request metadata and masked findings, for 30 days by
@@ -334,10 +378,40 @@ default. Prompt and response bodies are not written to the database.
 Pre-1.0 and maintained by one person. Use it, test it against your own traffic,
 and expect rough edges.
 
-**Works today:** inline PII, secret and injection scanning · YAML policy with
-hot reload · OpenAI- and Anthropic-compatible routes for seven providers ·
-Postgres audit log · dashboard with incident queue · Docker Compose and Helm ·
-Python and TypeScript SDKs.
+**Works today**, each with a test that runs the whole path against a stand-in
+for the other side: inline PII, secret and injection scanning · YAML policy
+with hot reload · the OpenAI, Anthropic and Gemini routes · role-aware
+scanning of tool results, and `STRIP` · the optional inline classifier ·
+per-key rate limits and daily budgets · response cache · the Postgres request
+log · `POST /api/v1/scan` · Docker Compose.
+
+None of it has been run against a real provider or a real third-party service
+as part of the tests: the other side is always a stand-in.
+
+**In the repository, not tested end to end.** The code is there; nothing
+exercises the whole path, so treat these as experimental:
+
+- The `/azure`, `/bedrock`, `/mistral` and `/local` routes. No test forwards a
+  request through them; the Bedrock signature is checked only for its headers.
+- Alert destinations (Slack, Teams, Splunk, Sentinel, QRadar, Datadog, Jira,
+  PagerDuty, Opsgenie, ServiceNow). A destination can be saved and sent a
+  test message, and the payload of each is unit tested. Live events are not
+  delivered to them, and none has been tried against the real service.
+- Streamed-response scanning outside OpenAI chat completions. The Anthropic,
+  Gemini and OpenAI Responses stream formats are tested at parsing level only.
+- The Helm chart and the Terraform module (never linted, rendered or applied).
+- The Python and TypeScript SDKs (unit tests with a mocked transport, not
+  run in CI).
+- The analyzer (its tests mock Presidio, LLM Guard and the LLM judge).
+- Redis, NATS and OpenTelemetry export: tested with in-memory or mocked
+  substitutes, not against the real servers.
+- mTLS as the proxy sets it up, the remote scanner service, and SCIM (no
+  tests at all).
+- The dashboard against a real proxy: the browser tests in CI answer the API
+  themselves; the suite that drives a real proxy is run by hand.
+
+The audit log's hash chain covers administrative actions. Request decisions
+are stored in the request log, which is not chained.
 
 **On `main`, not yet released (v0.9.0):** vault · canary tokens · trend graphs ·
 custom entity UI · the security fixes listed in the [changelog](CHANGELOG.md).
