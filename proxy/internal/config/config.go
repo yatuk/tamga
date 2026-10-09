@@ -2,6 +2,7 @@ package config
 
 import (
 	"net"
+	"net/netip"
 	"os"
 	"strconv"
 )
@@ -166,6 +167,17 @@ type Config struct {
 	// and CIDR ranges.
 	TrustedProxies []*net.IPNet
 
+	// AlertAllowNets and AlertAllowHosts are the internal receivers alerts
+	// may be sent to. By default an alert destination or a rule's notify URL
+	// must be https and must not lead to a loopback, private, link-local or
+	// otherwise reserved address. An address range listed here may be
+	// connected to; a host name listed here may be connected to whatever it
+	// resolves to; either may use plain http. Set via
+	// TAMGA_ALERT_ALLOW_PRIVATE as a comma-separated list of CIDR ranges, IP
+	// addresses and exact host names, e.g. "10.20.0.0/16,splunk.internal".
+	AlertAllowNets  []netip.Prefix
+	AlertAllowHosts []string
+
 	// --- Vault / KMS ---
 	// VaultEnabled enables HashiCorp Vault integration. When true, secrets are
 	// resolved from Vault with env-var fallback. When false (default), env vars
@@ -199,8 +211,15 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
+	alertNets, alertHosts, err := ParseAlertAllowPrivate(os.Getenv("TAMGA_ALERT_ALLOW_PRIVATE"))
+	if err != nil {
+		return nil, err
+	}
+
 	return &Config{
 		TrustedProxies:           trustedProxies,
+		AlertAllowNets:           alertNets,
+		AlertAllowHosts:          alertHosts,
 		Port:                     port,
 		PolicyPath:               envOrDefault("TAMGA_POLICY_PATH", "./tamga-policy.yaml"),
 		AnalyzerAddr:             envOrDefault("TAMGA_ANALYZER_ADDR", "localhost:50051"),

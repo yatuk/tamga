@@ -87,6 +87,12 @@ func (cfg Config) handleWebhookTest(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 			return
 		}
+		// The guard's refusal is the destination's fault, not the
+		// receiver's, and it is one fixed sentence: see MemoryStore.Test.
+		if errors.Is(err, webhooks.ErrDestinationNotAllowed) || errors.Is(err, webhooks.ErrInsecureScheme) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
 		return
 	}

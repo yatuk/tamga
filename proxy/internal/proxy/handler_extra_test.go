@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"net/url"
 	"strings"
 	"sync"
@@ -522,7 +523,10 @@ func TestNotifyRuleWebhooks_FiresCorrectPayload(t *testing.T) {
 		Providers: &policy.Providers{Allowed: []string{"openai"}},
 	}
 
-	d := webhooks.NewDispatcher(nil, webhooks.DispatcherConfig{})
+	// The receiver is an httptest server: loopback is allowed on purpose.
+	d := webhooks.NewDispatcher(nil, webhooks.DispatcherConfig{
+		Guard: webhooks.NewGuard(webhooks.GuardConfig{AllowNets: []netip.Prefix{netip.MustParsePrefix("127.0.0.0/8")}}),
+	})
 	defer d.Stop(time.Second)
 	notifyRuleWebhooks(HandlerConfig{Alerts: d}, pol, nil, "req-w1", "openai", "gpt-4o", findings, policy.ActionBlock, scanner.RiskScore{Percentage: 80})
 

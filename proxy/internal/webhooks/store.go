@@ -6,7 +6,6 @@
 package webhooks
 
 import (
-	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -19,7 +18,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rs/zerolog/log"
+
 	"github.com/yatuk/tamga/internal/docstore"
+	"github.com/yatuk/tamga/internal/egress"
 )
 
 type Kind string
@@ -99,16 +101,18 @@ type MemoryStore struct {
 	persist    docstore.Persister
 	mu         sync.RWMutex
 	data       map[string]Webhook
-	http       *http.Client
+	guard      *Guard
 	correlator *CorrelationEngine
+
+	// blocked counts probes the guard refused, by destination kind.
+	blockedMu sync.Mutex
+	blocked   map[Kind]int64
 }
 
+// NewMemoryStore returns a store whose requests go through the strict guard:
+// https only, no internal addresses. UseGuard replaces it.
 func NewMemoryStore() *MemoryStore {
-	return &MemoryStore{
-		data:       make(map[string]Webhook),
-		http:       &http.Client{Timeout: 5 * time.Second},
-		correlator: NewCorrelationEngine(0),
-	}
+	return NewMemoryStoreWithCorrelator(nil)
 }
 
 // NewMemoryStoreWithCorrelator is used for test injection.
@@ -119,9 +123,48 @@ func NewMemoryStoreWithCorrelator(ce *CorrelationEngine) *MemoryStore {
 	}
 	return &MemoryStore{
 		data:       make(map[string]Webhook),
-		http:       &http.Client{Timeout: 5 * time.Second},
+		guard:      NewGuard(GuardConfig{}),
 		correlator: ce,
+		blocked:    make(map[Kind]int64),
 	}
+}
+
+// UseGuard sets the guard that judges where this store may send and what it
+// may save. Call it before the store is used; nil keeps the current one.
+func (s *MemoryStore) UseGuard(g *Guard) {
+	if g == nil {
+		return
+	}
+	s.mu.Lock()
+	s.guard = g
+	s.mu.Unlock()
+}
+
+func (s *MemoryStore) egress() *Guard {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.guard
+}
+
+// BlockedProbes returns how many probes the guard refused, by kind.
+func (s *MemoryStore) BlockedProbes() map[Kind]int64 {
+	s.blockedMu.Lock()
+	defer s.blockedMu.Unlock()
+	out := make(map[Kind]int64, len(s.blocked))
+	for k, n := range s.blocked {
+		out[k] = n
+	}
+	return out
+}
+
+// noteBlocked counts and logs a request the guard refused. The log names the
+// kind and the id and nothing else: not the URL, not its host.
+func (s *MemoryStore) noteBlocked(w Webhook) {
+	s.blockedMu.Lock()
+	s.blocked[w.Kind]++
+	s.blockedMu.Unlock()
+	log.Warn().Str("component", "alerts").Str("kind", string(w.Kind)).Str("destination_id", w.ID).
+		Str("error", "blocked").Msg("alert destination refused by the egress guard")
 }
 
 // Correlator exposes the correlation engine for external management
@@ -199,6 +242,9 @@ func (s *MemoryStore) Create(w Webhook) (Webhook, error) {
 	if w.URL == "" {
 		return Webhook{}, errors.New("url required")
 	}
+	if err := s.egress().CheckURL(w.URL); err != nil {
+		return Webhook{}, err
+	}
 	if w.Kind == "" {
 		w.Kind = KindGeneric
 	}
@@ -232,7 +278,12 @@ func (s *MemoryStore) Update(id string, w Webhook) (Webhook, error) {
 	if w.Kind != "" {
 		cur.Kind = w.Kind
 	}
-	if w.URL != "" {
+	// A URL that is not being changed is not judged again, so a destination
+	// saved before the guard existed can still be switched off or relabelled.
+	if w.URL != "" && w.URL != cur.URL {
+		if err := s.egress().CheckURL(w.URL); err != nil {
+			return Webhook{}, err
+		}
 		cur.URL = w.URL
 	}
 	if w.Headers != nil {
@@ -289,6 +340,12 @@ func (s *MemoryStore) Delete(id string) error {
 }
 
 // Test posts a probe payload to the webhook URL and returns the HTTP status.
+//
+// What the caller learns is kept small on purpose. A refusal by the guard is
+// ErrDestinationNotAllowed whatever the reason, and a name that does not
+// resolve gets the same answer, so the probe cannot tell an internal name
+// that exists from one that does not. Any other failure is a one-word class,
+// never the transport's own text, which names the URL and the address.
 func (s *MemoryStore) Test(ctx context.Context, id string) (int, error) {
 	s.mu.RLock()
 	w, ok := s.data[id]
@@ -300,18 +357,30 @@ func (s *MemoryStore) Test(ctx context.Context, id string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, w.URL, bytes.NewReader(body))
+	status, err := s.egress().Post(ctx, w.URL, deliveryHeaders(w), body)
 	if err != nil {
-		return 0, err
+		return 0, s.probeError(w, "test failed", err)
 	}
-	req.Header = deliveryHeaders(w)
-	resp, err := s.http.Do(req)
-	if err != nil {
-		return 0, fmt.Errorf("test failed: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
 	s.MarkFired(id, time.Now().UTC())
-	return resp.StatusCode, nil
+	return status, nil
+}
+
+// probeError turns a failed request into what the caller may be told.
+func (s *MemoryStore) probeError(w Webhook, what string, err error) error {
+	switch class := egress.Class(err); class {
+	case "blocked":
+		s.noteBlocked(w)
+		if errors.Is(err, ErrInsecureScheme) {
+			return ErrInsecureScheme
+		}
+		return ErrDestinationNotAllowed
+	case "dns":
+		log.Warn().Str("component", "alerts").Str("kind", string(w.Kind)).Str("destination_id", w.ID).
+			Str("error", class).Msg("alert destination did not resolve")
+		return ErrDestinationNotAllowed
+	default:
+		return fmt.Errorf("%s: %s", what, class)
+	}
 }
 
 // deliveryHeaders is the header set for a request to a destination, the
@@ -390,19 +459,12 @@ func (s *MemoryStore) Notify(ctx context.Context, id, correlationKey string, pay
 		return false, correlatedCount, 0, fmt.Errorf("notify marshal: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, w.URL, bytes.NewReader(body))
+	status, err := s.egress().Post(ctx, w.URL, deliveryHeaders(w), body)
 	if err != nil {
-		return false, correlatedCount, 0, fmt.Errorf("notify build request: %w", err)
+		return false, correlatedCount, 0, s.probeError(w, "notify post", err)
 	}
-	req.Header = deliveryHeaders(w)
-
-	resp, err := s.http.Do(req)
-	if err != nil {
-		return false, correlatedCount, 0, fmt.Errorf("notify post: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
 
 	s.MarkFired(id, time.Now().UTC())
 
-	return true, correlatedCount, resp.StatusCode, nil
+	return true, correlatedCount, status, nil
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"strings"
 	"testing"
 	"time"
@@ -249,7 +250,9 @@ func TestWebhookTest_Success(t *testing.T) {
 	}))
 	defer probeSrv.Close()
 
+	// The probe goes to an httptest server: loopback is allowed on purpose.
 	store := webhooks.NewMemoryStore()
+	store.UseGuard(webhooks.NewGuard(webhooks.GuardConfig{AllowNets: []netip.Prefix{netip.MustParsePrefix("127.0.0.0/8")}}))
 	wh, err := store.Create(webhooks.Webhook{
 		Label:   "slack-test",
 		Kind:    "slack",

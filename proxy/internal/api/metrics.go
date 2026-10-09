@@ -199,13 +199,15 @@ func (cfg Config) handleMetrics(w http.ResponseWriter, _ *http.Request) {
 	// a credential and a label would publish it.
 	if alertStats != nil {
 		stats := alertStats()
-		_, _ = fmt.Fprintln(w, "# HELP tamga_alerts_total Alerts for saved destinations and rule notify URLs, by destination kind and result (sent, failed, dropped: queue full, suppressed: correlation).")
+		_, _ = fmt.Fprintln(w, "# HELP tamga_alerts_total Alerts for saved destinations and rule notify URLs, by destination kind and result (sent, failed, dropped: queue full, suppressed: correlation, blocked: refused by the egress guard, skipped: destination failing).")
 		_, _ = fmt.Fprintln(w, "# TYPE tamga_alerts_total counter")
 		for _, st := range stats {
 			_, _ = fmt.Fprintf(w, "tamga_alerts_total{kind=%q,result=\"sent\"} %d\n", st.Kind, st.Sent)
 			_, _ = fmt.Fprintf(w, "tamga_alerts_total{kind=%q,result=\"failed\"} %d\n", st.Kind, st.Failed)
 			_, _ = fmt.Fprintf(w, "tamga_alerts_total{kind=%q,result=\"dropped\"} %d\n", st.Kind, st.Dropped)
 			_, _ = fmt.Fprintf(w, "tamga_alerts_total{kind=%q,result=\"suppressed\"} %d\n", st.Kind, st.Suppressed)
+			_, _ = fmt.Fprintf(w, "tamga_alerts_total{kind=%q,result=\"blocked\"} %d\n", st.Kind, st.Blocked)
+			_, _ = fmt.Fprintf(w, "tamga_alerts_total{kind=%q,result=\"skipped\"} %d\n", st.Kind, st.Skipped)
 		}
 	}
 

@@ -1,12 +1,7 @@
 package webhooks
 
 import (
-	"bytes"
 	"context"
-	"crypto/tls"
-	"errors"
-	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"sort"
@@ -18,6 +13,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
+	"github.com/yatuk/tamga/internal/egress"
 	"github.com/yatuk/tamga/internal/events"
 	"github.com/yatuk/tamga/internal/scanner"
 )
@@ -44,6 +40,41 @@ const (
 	ruleNotifyCooldownSecs = 60
 )
 
+// Isolation between destinations. One queue and one pool serve them all, so
+// two limits keep a destination that hangs from holding up the rest.
+//
+// A destination occupies at most half the workers (2 of 4). Alerts for it
+// that arrive meanwhile wait in a line of its own, not in a worker.
+//
+// After defaultBreakerThreshold deliveries in a row have failed on the
+// network or with a 5xx, the destination is skipped for
+// defaultBreakerCooldown. Then one alert is let through with a single
+// attempt: it closes the breaker, or opens it for another cooldown.
+//
+// Three failures, not one or two, so a receiver that restarts while two
+// alerts are in flight is not cut off for it. Thirty seconds, so a receiver
+// that comes back is alerted again within half a minute.
+//
+// Worst case, for a destination that accepts the connection and never
+// answers: a delivery lasts 3 x 5s plus 0.5s and 2s of backoff, 17.5s. Two
+// run at once, so failures one and two land at 17.5s and the third at 35s.
+// Until then it holds two workers and the other two serve everyone else.
+// After that it costs one worker 5s in every 35s, a twenty-eighth of the
+// pool, so some two dozen dead destinations still leave room for live ones.
+//
+// The state is bounded. A healthy destination keeps none between alerts. A
+// failing one keeps an entry until it recovers, has been idle for
+// destStateTTL, or was deleted from the store; there are never more than
+// maxDestStates entries, and never more than a queue's worth of alerts
+// waiting in the per-destination lines.
+const (
+	defaultBreakerThreshold = 3
+	defaultBreakerCooldown  = 30 * time.Second
+	destStateTTL            = 10 * time.Minute
+	destSweepEvery          = time.Minute
+	maxDestStates           = 1024
+)
+
 // DispatcherConfig tunes a Dispatcher. A zero value takes the defaults.
 type DispatcherConfig struct {
 	// DefaultOrg names the organisation of an event that carries none.
@@ -59,7 +90,16 @@ type DispatcherConfig struct {
 	// Backoff is the wait before the second attempt; it grows fourfold
 	// before each one after.
 	Backoff time.Duration
-	Client  *http.Client
+	// Guard judges every address a delivery connects to. Nil is the strict
+	// default: https only, nothing internal.
+	Guard *Guard
+	// BreakerThreshold is how many deliveries in a row must fail before a
+	// destination is skipped, and BreakerCooldown for how long.
+	BreakerThreshold int
+	BreakerCooldown  time.Duration
+
+	// now is the clock; tests replace it.
+	now func() time.Time
 }
 
 // KindStats is the delivery counters of one destination kind.
@@ -69,10 +109,15 @@ type KindStats struct {
 	Failed     int64
 	Dropped    int64
 	Suppressed int64
+	// Blocked counts requests the egress guard refused, probes included.
+	Blocked int64
+	// Skipped counts alerts not attempted because the destination's breaker
+	// was open.
+	Skipped int64
 }
 
 type kindCounters struct {
-	sent, failed, dropped, suppressed atomic.Int64
+	sent, failed, dropped, suppressed, blocked, skipped atomic.Int64
 }
 
 // delivery is one rendered request waiting for a worker.
@@ -85,6 +130,43 @@ type delivery struct {
 	body   []byte
 }
 
+// key names the destination for isolation: a saved destination by its id, a
+// rule's notify URL by the URL.
+func (j delivery) key() string {
+	if j.destID != "" {
+		return "dest:" + j.destID
+	}
+	return "rule:" + j.url
+}
+
+// destState is what the dispatcher remembers about one destination.
+type destState struct {
+	// inflight is how many workers are delivering to it now.
+	inflight int
+	// pending are alerts waiting for one of those workers.
+	pending []delivery
+	// fails counts deliveries that failed in a row.
+	fails int
+	// openUntil is when a skipped destination is tried again; zero when the
+	// breaker is closed.
+	openUntil time.Time
+	// probing is set while the one trial delivery is in flight.
+	probing  bool
+	lastUsed time.Time
+}
+
+// outcome is what a delivery means to the destination's breaker.
+type outcome int
+
+const (
+	// outcomeNeutral says nothing about the receiver: shutdown.
+	outcomeNeutral outcome = iota
+	// outcomeAlive: the receiver answered, or was never contacted.
+	outcomeAlive
+	// outcomeDown: timeout, network error or 5xx.
+	outcomeDown
+)
+
 // Dispatcher delivers alerts to saved destinations and to policy rules'
 // notify URLs. Callers hand it work and return at once: everything that
 // touches the network happens on its own workers, behind a bounded queue.
@@ -92,7 +174,7 @@ type delivery struct {
 type Dispatcher struct {
 	store *MemoryStore
 	cfg   DispatcherConfig
-	http  *http.Client
+	guard *Guard
 	log   zerolog.Logger
 
 	// mu guards closed and the close of queue against a late enqueue.
@@ -110,6 +192,12 @@ type Dispatcher struct {
 
 	statsMu sync.Mutex
 	stats   map[Kind]*kindCounters
+
+	// destMu guards the per-destination state below.
+	destMu    sync.Mutex
+	dests     map[string]*destState
+	parked    int
+	lastSweep time.Time
 }
 
 // NewDispatcher starts the workers. store may be nil, in which case only
@@ -130,21 +218,30 @@ func NewDispatcher(store *MemoryStore, cfg DispatcherConfig) *Dispatcher {
 	if cfg.Backoff <= 0 {
 		cfg.Backoff = defaultBackoff
 	}
-	client := cfg.Client
-	if client == nil {
-		client = &http.Client{Timeout: cfg.AttemptTimeout}
+	if cfg.Guard == nil {
+		cfg.Guard = NewGuard(GuardConfig{})
+	}
+	if cfg.BreakerThreshold <= 0 {
+		cfg.BreakerThreshold = defaultBreakerThreshold
+	}
+	if cfg.BreakerCooldown <= 0 {
+		cfg.BreakerCooldown = defaultBreakerCooldown
+	}
+	if cfg.now == nil {
+		cfg.now = time.Now
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	d := &Dispatcher{
 		store:  store,
 		cfg:    cfg,
-		http:   client,
+		guard:  cfg.Guard,
 		log:    log.With().Str("component", "alerts").Logger(),
 		queue:  make(chan delivery, cfg.QueueSize),
 		ctx:    ctx,
 		cancel: cancel,
 		rules:  NewCorrelationEngine(0),
 		stats:  make(map[Kind]*kindCounters),
+		dests:  make(map[string]*destState),
 	}
 	for i := 0; i < cfg.Workers; i++ {
 		d.wg.Add(1)
@@ -342,8 +439,13 @@ func (d *Dispatcher) Stats() []KindStats {
 	if d == nil {
 		return nil
 	}
+	// Probes are counted by the store, which makes them.
+	var probes map[Kind]int64
+	if d.store != nil {
+		probes = d.store.BlockedProbes()
+	}
 	d.statsMu.Lock()
-	out := make([]KindStats, 0, len(d.stats))
+	out := make([]KindStats, 0, len(d.stats)+len(probes))
 	for k, c := range d.stats {
 		out = append(out, KindStats{
 			Kind:       string(k),
@@ -351,9 +453,15 @@ func (d *Dispatcher) Stats() []KindStats {
 			Failed:     c.failed.Load(),
 			Dropped:    c.dropped.Load(),
 			Suppressed: c.suppressed.Load(),
+			Blocked:    c.blocked.Load() + probes[k],
+			Skipped:    c.skipped.Load(),
 		})
+		delete(probes, k)
 	}
 	d.statsMu.Unlock()
+	for k, n := range probes {
+		out = append(out, KindStats{Kind: string(k), Blocked: n})
+	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Kind < out[j].Kind })
 	return out
 }
@@ -372,7 +480,12 @@ func (d *Dispatcher) enqueue(j delivery) {
 		}
 		reason = "queue_full"
 	}
-	// One line per hundred: a full queue is a burst by definition.
+	d.drop(j, reason)
+}
+
+// drop counts an alert that was never attempted. One line per hundred: a
+// full queue is a burst by definition.
+func (d *Dispatcher) drop(j delivery, reason string) {
 	if n := d.counters(j.kind).dropped.Add(1); n%100 == 1 {
 		d.logFor(j, d.log.Warn()).Int64("dropped", n).Str("reason", reason).Msg("alert dropped")
 	}
@@ -381,7 +494,175 @@ func (d *Dispatcher) enqueue(j delivery) {
 func (d *Dispatcher) worker() {
 	defer d.wg.Done()
 	for j := range d.queue {
-		d.deliver(j)
+		d.run(j)
+	}
+}
+
+// perDestination is how many workers one destination may hold at once.
+func (d *Dispatcher) perDestination() int {
+	if n := d.cfg.Workers / 2; n > 1 {
+		return n
+	}
+	return 1
+}
+
+// run delivers j, unless its destination already holds its share of the
+// workers: then j joins that destination's line and this worker goes back to
+// the queue. A worker that finishes a delivery takes the next from the line
+// before it returns, so nothing in a line is left behind.
+func (d *Dispatcher) run(j delivery) {
+	key := j.key()
+	for {
+		d.destMu.Lock()
+		st := d.state(key)
+		if st.inflight >= d.perDestination() {
+			full := d.parked >= d.cfg.QueueSize
+			if !full {
+				st.pending = append(st.pending, j)
+				d.parked++
+			}
+			d.destMu.Unlock()
+			if full {
+				d.drop(j, "destination_busy")
+			}
+			return
+		}
+		st.inflight++
+		attempts, trial, skip := d.admit(st)
+		d.destMu.Unlock()
+
+		result := outcomeAlive
+		if skip {
+			if n := d.counters(j.kind).skipped.Add(1); n%100 == 1 {
+				d.logFor(j, d.log.Warn()).Int64("skipped", n).Msg("alert skipped, destination is failing")
+			}
+		} else {
+			result = d.deliver(j, attempts)
+		}
+
+		d.destMu.Lock()
+		st.inflight--
+		if !skip {
+			d.settle(st, result, trial)
+		}
+		if len(st.pending) == 0 {
+			d.release(key, st)
+			d.destMu.Unlock()
+			return
+		}
+		j = st.pending[0]
+		st.pending[0] = delivery{}
+		st.pending = st.pending[1:]
+		d.parked--
+		d.destMu.Unlock()
+	}
+}
+
+// state returns the entry for a destination, making one if need be. The
+// caller holds destMu.
+func (d *Dispatcher) state(key string) *destState {
+	now := d.cfg.now()
+	if now.Sub(d.lastSweep) >= destSweepEvery {
+		d.sweep(now)
+	}
+	st, ok := d.dests[key]
+	if !ok {
+		if len(d.dests) >= maxDestStates {
+			d.sweep(now)
+		}
+		if len(d.dests) >= maxDestStates {
+			d.evictOldest()
+		}
+		st = &destState{}
+		d.dests[key] = st
+	}
+	st.lastUsed = now
+	return st
+}
+
+// admit decides what a delivery about to start may do: the usual attempts,
+// one attempt as the trial of a destination whose cooldown is over, or
+// nothing at all. The caller holds destMu.
+func (d *Dispatcher) admit(st *destState) (attempts int, trial, skip bool) {
+	if st.openUntil.IsZero() {
+		return d.cfg.MaxAttempts, false, false
+	}
+	if st.probing || d.cfg.now().Before(st.openUntil) {
+		return 0, false, true
+	}
+	st.probing = true
+	return 1, true, false
+}
+
+// settle records how a delivery ended. The caller holds destMu.
+func (d *Dispatcher) settle(st *destState, result outcome, trial bool) {
+	if trial {
+		st.probing = false
+	}
+	switch result {
+	case outcomeAlive:
+		st.fails = 0
+		st.openUntil = time.Time{}
+	case outcomeDown:
+		st.fails++
+		if trial || st.fails >= d.cfg.BreakerThreshold {
+			st.openUntil = d.cfg.now().Add(d.cfg.BreakerCooldown)
+		}
+	}
+}
+
+// open reports whether a destination is being skipped; a delivery already
+// in flight uses it to give up its remaining attempts.
+func (d *Dispatcher) open(key string) bool {
+	d.destMu.Lock()
+	defer d.destMu.Unlock()
+	st, ok := d.dests[key]
+	return ok && !st.openUntil.IsZero()
+}
+
+// release forgets a destination that has nothing in flight, nothing waiting
+// and no failures to remember. The caller holds destMu.
+func (d *Dispatcher) release(key string, st *destState) {
+	if st.inflight == 0 && len(st.pending) == 0 && st.fails == 0 && st.openUntil.IsZero() {
+		delete(d.dests, key)
+	}
+}
+
+// sweep forgets idle destinations that have not been used for destStateTTL
+// or that the store no longer holds. The caller holds destMu.
+func (d *Dispatcher) sweep(now time.Time) {
+	d.lastSweep = now
+	for key, st := range d.dests {
+		if st.inflight > 0 || len(st.pending) > 0 {
+			continue
+		}
+		gone := now.Sub(st.lastUsed) >= destStateTTL
+		if id, saved := strings.CutPrefix(key, "dest:"); saved && !gone && d.store != nil {
+			_, err := d.store.Get(id)
+			gone = err != nil
+		}
+		if gone {
+			delete(d.dests, key)
+		}
+	}
+}
+
+// evictOldest makes room by forgetting the idle destination used longest
+// ago. Its breaker closes with it, which costs a few attempts at most. The
+// caller holds destMu.
+func (d *Dispatcher) evictOldest() {
+	var oldest string
+	var at time.Time
+	for key, st := range d.dests {
+		if st.inflight > 0 || len(st.pending) > 0 {
+			continue
+		}
+		if oldest == "" || st.lastUsed.Before(at) {
+			oldest, at = key, st.lastUsed
+		}
+	}
+	if oldest != "" {
+		delete(d.dests, oldest)
 	}
 }
 
@@ -399,14 +680,21 @@ func (d *Dispatcher) logFor(j delivery, e *zerolog.Event) *zerolog.Event {
 	return e
 }
 
-func (d *Dispatcher) deliver(j delivery) {
+// deliver makes up to attempts tries and reports what the result says about
+// the receiver.
+func (d *Dispatcher) deliver(j delivery, attempts int) outcome {
 	c := d.counters(j.kind)
+	key := j.key()
 	wait := d.cfg.Backoff
 	var status int
 	var class string
-	for attempt := 1; attempt <= d.cfg.MaxAttempts; attempt++ {
+	for attempt := 1; attempt <= attempts; attempt++ {
 		if d.ctx.Err() != nil {
 			class = "shutdown"
+			break
+		}
+		// Another delivery opened the breaker while this one was waiting.
+		if attempt > 1 && d.open(key) {
 			break
 		}
 		status, class = d.post(j)
@@ -416,14 +704,27 @@ func (d *Dispatcher) deliver(j delivery) {
 				d.store.MarkFired(j.destID, time.Now().UTC())
 			}
 			d.logFor(j, d.log.Debug()).Int("status", status).Int("attempt", attempt).Msg("alert sent")
-			return
+			return outcomeAlive
 		}
-		// A 4xx would get the same answer again, and a URL that does not
-		// parse will not parse next time either.
-		if (status >= 300 && status < 500) || class == "bad_url" {
+		if class == "blocked" {
+			// Kind and id only, not even the host: where the guard said no
+			// is not for the log. One line per hundred, because a refused
+			// destination is refused every time until someone changes it.
+			if n := c.blocked.Add(1); n%100 == 1 {
+				e := d.log.Warn().Str("kind", string(j.kind))
+				if j.destID != "" {
+					e = e.Str("destination_id", j.destID)
+				}
+				e.Int64("blocked", n).Str("error", class).Msg("alert destination refused by the egress guard")
+			}
+			return outcomeAlive
+		}
+		// A 4xx would get the same answer again, a URL that does not parse
+		// will not parse next time either, and a redirect loop stays one.
+		if (status >= 300 && status < 500) || class == "bad_url" || class == "redirects" {
 			break
 		}
-		if attempt == d.cfg.MaxAttempts {
+		if attempt == attempts {
 			break
 		}
 		t := time.NewTimer(wait)
@@ -436,6 +737,13 @@ func (d *Dispatcher) deliver(j delivery) {
 	}
 	c.failed.Add(1)
 	d.logFor(j, d.log.Warn()).Int("status", status).Str("error", class).Msg("alert not delivered")
+	switch {
+	case class == "shutdown" || class == "canceled":
+		return outcomeNeutral
+	case (status >= 300 && status < 500) || class == "bad_url" || class == "redirects":
+		return outcomeAlive
+	}
+	return outcomeDown
 }
 
 // post makes one attempt. It returns the HTTP status (0 when there was no
@@ -444,42 +752,14 @@ func (d *Dispatcher) deliver(j delivery) {
 func (d *Dispatcher) post(j delivery) (int, string) {
 	ctx, cancel := context.WithTimeout(d.ctx, d.cfg.AttemptTimeout)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, j.url, bytes.NewReader(j.body))
+	status, err := d.guard.Post(ctx, j.url, j.header, j.body)
 	if err != nil {
-		return 0, "bad_url"
+		return 0, egress.Class(err)
 	}
-	req.Header = j.header.Clone()
-	resp, err := d.http.Do(req)
-	if err != nil {
-		return 0, errClass(err)
+	if status >= 200 && status < 300 {
+		return status, ""
 	}
-	// The body is read so the connection can be reused, and thrown away: a
-	// receiver's answer is not ours to log.
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10))
-	_ = resp.Body.Close()
-	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		return resp.StatusCode, ""
-	}
-	return resp.StatusCode, "http_status"
-}
-
-func errClass(err error) string {
-	var netErr net.Error
-	var dnsErr *net.DNSError
-	var certErr *tls.CertificateVerificationError
-	switch {
-	case errors.Is(err, context.Canceled):
-		return "canceled"
-	case errors.Is(err, context.DeadlineExceeded):
-		return "timeout"
-	case errors.As(err, &dnsErr):
-		return "dns"
-	case errors.As(err, &certErr):
-		return "tls"
-	case errors.As(err, &netErr) && netErr.Timeout():
-		return "timeout"
-	}
-	return "network"
+	return status, "http_status"
 }
 
 // Stop refuses new work, gives what is queued and in flight up to drain to

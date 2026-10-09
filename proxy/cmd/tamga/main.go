@@ -323,7 +323,20 @@ func main() {
 	} else {
 		log.Warn().Msg("api keys: no database configured, keys are kept in memory and lost on restart")
 	}
+	// One guard judges every address an alert is sent to: the probe, live
+	// delivery and rule notify URLs. Internal addresses are refused unless
+	// the operator listed them.
+	alertGuard := webhooks.NewGuard(webhooks.GuardConfig{AllowNets: cfg.AlertAllowNets, AllowHosts: cfg.AlertAllowHosts})
+	if len(cfg.AlertAllowNets)+len(cfg.AlertAllowHosts) > 0 {
+		nets := make([]string, len(cfg.AlertAllowNets))
+		for i, p := range cfg.AlertAllowNets {
+			nets[i] = p.String()
+		}
+		log.Warn().Strs("ranges", nets).Strs("hosts", cfg.AlertAllowHosts).
+			Msg("alerts: TAMGA_ALERT_ALLOW_PRIVATE lets alert destinations reach these internal addresses, over plain http too")
+	}
 	webhookStore := webhooks.NewMemoryStore()
+	webhookStore.UseGuard(alertGuard)
 	patternStore := patterns.NewMemoryStore()
 	userStore := users.NewMemoryStore()
 	persistSettings(cfg, pgStore, patternStore, userStore, webhookStore)
@@ -414,7 +427,7 @@ func main() {
 	// Decisions reach the saved alert destinations from here. The handler
 	// only renders and queues; its own workers do the sending, so a slow
 	// receiver cannot hold up the bus.
-	alertDispatcher := webhooks.NewDispatcher(webhookStore, webhooks.DispatcherConfig{DefaultOrg: cfg.DefaultOrgID})
+	alertDispatcher := webhooks.NewDispatcher(webhookStore, webhooks.DispatcherConfig{DefaultOrg: cfg.DefaultOrgID, Guard: alertGuard})
 	api.SetAlertStats(alertDispatcher.Stats)
 	eventBus.Subscribe(alertDispatcher.HandleEvent)
 	eventBus.Start()

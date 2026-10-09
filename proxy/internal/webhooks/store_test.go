@@ -320,7 +320,7 @@ func TestWebhookStore_Delete_NotFound(t *testing.T) {
 // correct content type and a non-empty body, and that the response
 // indicates success.
 func TestMemoryStore_Test_Success(t *testing.T) {
-	s := NewMemoryStore()
+	s := loopbackStore()
 
 	var receivedBody []byte
 	var receivedContentType string
@@ -361,17 +361,16 @@ func TestMemoryStore_Test_Success(t *testing.T) {
 func TestMemoryStore_Test_InvalidURL(t *testing.T) {
 	s := NewMemoryStore()
 
-	wh, err := s.Create(Webhook{
-		Label: "invalid-url",
-		Kind:  KindGeneric,
-		URL:   "://invalid",
-	})
-	if err != nil {
-		t.Fatalf("create: %v", err)
+	// A malformed URL is refused when it is saved. One that was saved before
+	// that check existed is still in the database, and the probe must cope.
+	wh := Webhook{ID: "legacy", Label: "invalid-url", Kind: KindGeneric, URL: "://invalid"}
+	if _, err := s.Create(wh); err == nil {
+		t.Fatal("create accepted a malformed url")
 	}
+	storeUnchecked(s, wh)
 
 	ctx := context.Background()
-	_, err = s.Test(ctx, wh.ID)
+	_, err := s.Test(ctx, wh.ID)
 	if err == nil {
 		t.Fatal("expected error for invalid URL")
 	}
@@ -381,7 +380,7 @@ func TestMemoryStore_Test_InvalidURL(t *testing.T) {
 // server that sleeps longer than the request context deadline returns a
 // timeout error without panicking.
 func TestMemoryStore_Test_Timeout(t *testing.T) {
-	s := NewMemoryStore()
+	s := loopbackStore()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(500 * time.Millisecond)
@@ -408,7 +407,7 @@ func TestMemoryStore_Test_Timeout(t *testing.T) {
 // TestMemoryStore_Test_NilPayload verifies that calling Test with an empty
 // PayloadTemplate does not panic and successfully sends a default payload.
 func TestMemoryStore_Test_NilPayload(t *testing.T) {
-	s := NewMemoryStore()
+	s := loopbackStore()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -439,7 +438,7 @@ func TestMemoryStore_Test_NilPayload(t *testing.T) {
 // server returning 5xx does not treat the response as an error — the status
 // code is returned and err is nil.
 func TestMemoryStore_Test_Non2xxResponse(t *testing.T) {
-	s := NewMemoryStore()
+	s := loopbackStore()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -501,7 +500,7 @@ func TestMemoryStore_Notify_CorrelationSuppression(t *testing.T) {
 	}))
 	defer server.Close()
 
-	s := NewMemoryStore()
+	s := loopbackStore()
 	wh, err := s.Create(Webhook{
 		Label:               "corr-test",
 		Kind:                KindGeneric,
@@ -553,7 +552,7 @@ func TestMemoryStore_Notify_CooldownSuppression(t *testing.T) {
 	}))
 	defer server.Close()
 
-	s := NewMemoryStore()
+	s := loopbackStore()
 	wh, err := s.Create(Webhook{
 		Label:               "cool-test",
 		Kind:                KindGeneric,
@@ -603,7 +602,7 @@ func TestMemoryStore_Notify_ZeroThresholdFiresImmediately(t *testing.T) {
 	}))
 	defer server.Close()
 
-	s := NewMemoryStore()
+	s := loopbackStore()
 	wh, err := s.Create(Webhook{
 		Label:          "zero-threshold",
 		Kind:           KindGeneric,
@@ -645,7 +644,7 @@ func TestMemoryStore_Notify_CorrelatedCountInPayload(t *testing.T) {
 	}))
 	defer server.Close()
 
-	s := NewMemoryStore()
+	s := loopbackStore()
 	wh, err := s.Create(Webhook{
 		Label:               "payload-check",
 		Kind:                KindGeneric,
@@ -709,7 +708,7 @@ func TestMemoryStore_Notify_Disabled(t *testing.T) {
 	}))
 	defer server.Close()
 
-	s := NewMemoryStore()
+	s := loopbackStore()
 	wh, err := s.Create(Webhook{
 		Label:          "disabled-webhook",
 		Kind:           KindGeneric,

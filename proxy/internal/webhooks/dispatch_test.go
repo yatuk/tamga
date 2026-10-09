@@ -23,6 +23,7 @@ var fastDispatch = DispatcherConfig{
 	DefaultOrg:     "default",
 	AttemptTimeout: 2 * time.Second,
 	Backoff:        5 * time.Millisecond,
+	Guard:          loopbackGuard(),
 }
 
 // hit is one request a receiver saw.
@@ -165,7 +166,7 @@ func TestCorrelationKey(t *testing.T) {
 
 func TestDispatcher_DeliversAndMarksFired(t *testing.T) {
 	rcv := newReceiver(t, http.StatusOK)
-	store := NewMemoryStore()
+	store := loopbackStore()
 	w := mustCreate(t, store, Webhook{Kind: KindOpsgenie, URL: rcv.URL + "/v2/alerts", Enabled: true, AuthToken: "GKEY", Headers: map[string]string{"X-Team": "soc"}})
 	off := mustCreate(t, store, Webhook{Kind: KindGeneric, URL: rcv.URL + "/disabled", Enabled: false})
 	d := NewDispatcher(store, fastDispatch)
@@ -198,7 +199,7 @@ func TestDispatcher_DeliversAndMarksFired(t *testing.T) {
 func TestDispatcher_RetriesServerErrorsOnly(t *testing.T) {
 	bad := newReceiver(t, http.StatusInternalServerError)
 	refused := newReceiver(t, http.StatusBadRequest)
-	store := NewMemoryStore()
+	store := loopbackStore()
 	w500 := mustCreate(t, store, Webhook{Kind: KindSlack, URL: bad.URL, Enabled: true})
 	mustCreate(t, store, Webhook{Kind: KindGeneric, URL: refused.URL, Enabled: true})
 	d := NewDispatcher(store, fastDispatch)
@@ -235,7 +236,7 @@ func TestDispatcher_RetriesNetworkErrors(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	defer srv.Close()
-	store := NewMemoryStore()
+	store := loopbackStore()
 	mustCreate(t, store, Webhook{Kind: KindGeneric, URL: srv.URL, Enabled: true})
 	d := NewDispatcher(store, fastDispatch)
 	defer d.Stop(time.Second)
@@ -249,7 +250,7 @@ func TestDispatcher_RetriesNetworkErrors(t *testing.T) {
 
 func TestDispatcher_CooldownAloneSuppresses(t *testing.T) {
 	rcv := newReceiver(t, http.StatusOK)
-	store := NewMemoryStore()
+	store := loopbackStore()
 	mustCreate(t, store, Webhook{Kind: KindGeneric, URL: rcv.URL, Enabled: true, CooldownSecs: 60})
 	d := NewDispatcher(store, fastDispatch)
 	defer d.Stop(time.Second)
@@ -274,7 +275,7 @@ func TestDispatcher_CooldownAloneSuppresses(t *testing.T) {
 
 func TestDispatcher_ThresholdHoldsUntilMet(t *testing.T) {
 	rcv := newReceiver(t, http.StatusOK)
-	store := NewMemoryStore()
+	store := loopbackStore()
 	// No window given: the documented default applies.
 	mustCreate(t, store, Webhook{Kind: KindGeneric, URL: rcv.URL, Enabled: true, ThresholdCount: 3})
 	d := NewDispatcher(store, fastDispatch)
@@ -294,7 +295,7 @@ func TestDispatcher_ThresholdHoldsUntilMet(t *testing.T) {
 
 func TestDispatcher_BlocksPerMinute(t *testing.T) {
 	rcv := newReceiver(t, http.StatusOK)
-	store := NewMemoryStore()
+	store := loopbackStore()
 	mustCreate(t, store, Webhook{Kind: KindGeneric, URL: rcv.URL, Enabled: true, Rule: &AlertRule{BlocksPerMinute: 2}})
 	d := NewDispatcher(store, fastDispatch)
 	defer d.Stop(time.Second)
@@ -326,9 +327,9 @@ func TestDispatcher_FullQueueDropsWithoutBlocking(t *testing.T) {
 	defer srv.Close()
 	defer close(release)
 
-	store := NewMemoryStore()
+	store := loopbackStore()
 	mustCreate(t, store, Webhook{Kind: KindGeneric, URL: srv.URL, Enabled: true})
-	d := NewDispatcher(store, DispatcherConfig{QueueSize: 1, Workers: 1, AttemptTimeout: 30 * time.Second, MaxAttempts: 1})
+	d := NewDispatcher(store, DispatcherConfig{QueueSize: 1, Workers: 1, AttemptTimeout: 30 * time.Second, MaxAttempts: 1, Guard: loopbackGuard()})
 	defer d.Stop(10 * time.Millisecond)
 
 	d.HandleEvent(blockEvent("req-0"))
@@ -352,9 +353,9 @@ func TestDispatcher_StopCutsOffAfterTheDrain(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { <-release }))
 	defer srv.Close()
 	defer close(release)
-	store := NewMemoryStore()
+	store := loopbackStore()
 	mustCreate(t, store, Webhook{Kind: KindGeneric, URL: srv.URL, Enabled: true})
-	d := NewDispatcher(store, DispatcherConfig{AttemptTimeout: 30 * time.Second})
+	d := NewDispatcher(store, DispatcherConfig{AttemptTimeout: 30 * time.Second, Guard: loopbackGuard()})
 
 	for i := 0; i < 10; i++ {
 		d.HandleEvent(blockEvent("req-n"))
@@ -378,7 +379,7 @@ func TestDispatcher_StopCutsOffAfterTheDrain(t *testing.T) {
 
 func TestDispatcher_StopDrainsWhatIsQueued(t *testing.T) {
 	rcv := newReceiver(t, http.StatusOK)
-	store := NewMemoryStore()
+	store := loopbackStore()
 	mustCreate(t, store, Webhook{Kind: KindGeneric, URL: rcv.URL, Enabled: true})
 	d := NewDispatcher(store, fastDispatch)
 	for i := 0; i < 20; i++ {
@@ -431,11 +432,13 @@ func TestDispatcher_LogsNeverCarryTheURL(t *testing.T) {
 
 	const secretPath = "/services/T000/B000/XXXXSECRETPATHXXXX"
 	const secretQuery = "?token=XXXXSECRETQUERYXXXX"
-	store := NewMemoryStore()
+	store := loopbackStore()
 	w := mustCreate(t, store, Webhook{Kind: KindSlack, URL: bad.URL + secretPath + secretQuery, Enabled: true})
 	mustCreate(t, store, Webhook{Kind: KindTeams, URL: goneURL + secretPath + secretQuery, Enabled: true})
 	mustCreate(t, store, Webhook{Kind: KindGeneric, URL: ok.URL + secretPath + secretQuery, Enabled: true})
-	mustCreate(t, store, Webhook{Kind: KindDatadog, URL: "http://bad host/" + secretPath + secretQuery, Enabled: true})
+	// A URL that does not parse can no longer be saved, but one saved before
+	// that was checked is still in the database.
+	storeUnchecked(store, Webhook{ID: "legacy-bad-url", Kind: KindDatadog, URL: "http://bad host/" + secretPath + secretQuery, Enabled: true})
 	d := NewDispatcher(store, fastDispatch)
 
 	d.HandleEvent(blockEvent("req-1"))

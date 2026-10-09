@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"net/url"
 	"strings"
 	"sync"
@@ -167,9 +168,16 @@ func newAlertRig(t *testing.T, policyYAML string, dcfg webhooks.DispatcherConfig
 	registry := testRegistry()
 	registry.Register(scanner.NewJailbreakScanner())
 
+	// The receivers are httptest servers, so the rig allows loopback on
+	// purpose. main gives the guard the operator's allowlist instead.
+	guard := webhooks.NewGuard(webhooks.GuardConfig{AllowNets: []netip.Prefix{netip.MustParsePrefix("127.0.0.0/8")}})
 	store := webhooks.NewMemoryStore()
+	store.UseGuard(guard)
 	if dcfg.DefaultOrg == "" {
 		dcfg.DefaultOrg = "default"
+	}
+	if dcfg.Guard == nil {
+		dcfg.Guard = guard
 	}
 	disp := webhooks.NewDispatcher(store, dcfg)
 	bus := events.NewBus()
