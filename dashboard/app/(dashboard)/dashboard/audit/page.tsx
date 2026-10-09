@@ -28,8 +28,6 @@ import { useStringParam } from "@/hooks/useUrlState";
 import { api, type AuditEntry } from "@/lib/api";
 import { humanizeAuditKind } from "@/lib/humanize";
 
-/** The part of the product an entry is about: "policy.reload" is "policy". */
-const areaOf = (kind: string) => kind.split(".")[0] || kind;
 /**
  * An entry is known by its hash in the chain. Its place in the list is no use:
  * the list is newest first, so every entry moves down when one is added.
@@ -202,9 +200,7 @@ export default function AuditPage() {
                     <TableCell style={{ fontVariantNumeric: "tabular-nums" }}>
                       {clockTime(it.timestamp)} <span className="t-note">{dayLabel(it.timestamp)}</span>
                     </TableCell>
-                    <TableCell>
-                      {humanizeAuditKind(it.kind)} <span className="t-note">{areaOf(it.kind)}</span>
-                    </TableCell>
+                    <TableCell>{humanizeAuditKind(it.kind)}</TableCell>
                     <TableCell>{it.actor || <span className="t-note">Not recorded</span>}</TableCell>
                     {open ? null : (
                       <TableCell className="t-clip" title={it.target}>
