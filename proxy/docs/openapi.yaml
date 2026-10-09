@@ -48,6 +48,8 @@ tags:
     description: Server-Sent Events stream
   - name: policies
     description: Policy CRUD, validation, simulation, custom entities, history, proposals
+  - name: scan
+    description: Policy verdict for a text, without calling a provider
   - name: apikeys
     description: Scoped API key management
   - name: webhooks
@@ -837,6 +839,80 @@ paths:
                 $ref: "#/components/schemas/PolicySimulateResult"
         "400":
           description: Parse error or no policy to simulate
+
+  /api/v1/scan:
+    post:
+      tags: [scan]
+      summary: Policy verdict for a text, without calling a provider
+      description: |
+        Runs the active policy over one piece of text and returns what the
+        proxy path would do with a message carrying that text in that role.
+        Nothing is forwarded and nothing is stored: no event, no audit log
+        entry, no request record, no vault entry. The call is counted and
+        logged without the text.
+
+        Authentication is this route's own. Send a Tamga key of any scope,
+        `proxy` included, as `X-Tamga-Key`, or the admin key as
+        `X-Tamga-Admin-Key`. Keys in the query string, sessions and dev mode
+        do not open it. A request from a web page (an `http` or `https`
+        `Origin`) is refused unless the origin is on the CORS allowlist.
+
+        Limits: 60 calls a minute per key unless the policy sets
+        `rate_limit.max_requests_per_minute`, counted apart from the key's
+        proxy requests and always refused when exceeded; a body of at most
+        262144 bytes; a small number of scans at a time, answered 503 when
+        all are in use. Calls do not count against the monthly request cap.
+
+        A 200 is a complete verdict. If any scanner or the inline classifier
+        did not finish, the answer is 503, whatever `scan.on_error` says.
+        A text longer than `scan.classifier.max_chars` is such a case when
+        the classifier is on, for a verdict of PASS or WARN. A verdict that
+        already stops or rewrites the text (BLOCK, STRIP, REDACT) is given,
+        with the header `X-Tamga-Classifier: incomplete`.
+
+        For a custom entity or a competitor, a `proxy` key gets `custom` or
+        `competitor` as the category, not the name the operator chose.
+
+        Where the verdict can differ from the proxy path:
+        - An injection split over several messages of one role is found on
+          the proxy path and not here, where the text is a single message.
+        - Only input rules are applied. Text given the role `assistant` is
+          not checked against `output_rules`.
+        - With `vault.enabled` the proxy sends numbered placeholders and
+          restores them in the response; `redacted_text` shows the plain
+          `[category_REDACTED]` markers.
+        - The `operator_state` scanner is not run.
+        - The IP allowlist covers the proxy routes, not `/api/v1`.
+      security:
+        - TamgaKey: []
+        - AdminKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScanRequest"
+      responses:
+        "200":
+          description: The verdict. BLOCK is a verdict, not an error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanResult"
+        "400":
+          description: Body is not unambiguous UTF-8 JSON, text is missing or empty, or role is not one of the four
+        "401":
+          description: No valid key
+        "403":
+          description: Request came from a web page whose origin is not on the CORS allowlist
+        "413":
+          description: Body over 262144 bytes
+        "415":
+          description: Content-Type is not application/json
+        "429":
+          description: Rate limit exceeded (Retry-After is set)
+        "503":
+          description: No verdict. The scan did not complete, the policy is not loaded, or every scan slot is in use (Retry-After is set)
 
   /api/v1/policies/custom-entities:
     get:
@@ -1784,6 +1860,11 @@ components:
       in: header
       name: X-Tamga-Admin-Key
       description: Scoped API key (read/write/admin)
+    TamgaKey:
+      type: apiKey
+      in: header
+      name: X-Tamga-Key
+      description: Tamga key of any scope, proxy included. In the management API it opens POST /api/v1/scan only.
 
   schemas:
     # ── Shared ────────────────────────────────────────────────────────
@@ -2165,6 +2246,68 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PolicySimulateFinding"
+
+    ScanRequest:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+          minLength: 1
+          description: Text to scan
+        role:
+          type: string
+          enum: [system, user, assistant, tool]
+          default: user
+          description: Who the text speaks for. Rules with applies_to are matched against it.
+
+    ScanFinding:
+      type: object
+      required: [type, category, severity, action]
+      properties:
+        type: { type: string }
+        category: { type: string }
+        severity:
+          type: string
+          enum: [critical, high, medium, low]
+        start:
+          type: integer
+          description: |
+            Byte offset into the text as UTF-8 where the finding begins.
+            Absent with `end` for injection, jailbreak, content moderation
+            and classifier findings, and for a value seen only in a
+            normalised view of the text.
+        end:
+          type: integer
+          description: Byte offset just past the finding
+        action:
+          type: string
+          enum: [PASS, WARN, REDACT, STRIP, BLOCK]
+          description: What the policy does about this finding on its own
+
+    ScanResult:
+      type: object
+      required: [action, findings, policy, scan_latency_ms]
+      properties:
+        action:
+          type: string
+          enum: [PASS, WARN, REDACT, STRIP, BLOCK]
+          description: The strictest action among the findings. LOG is reported as PASS.
+        findings:
+          type: array
+          description: Always an array. The matched text is never included.
+          items:
+            $ref: "#/components/schemas/ScanFinding"
+        redacted_text:
+          type: string
+          description: The text as the proxy would forward it. Present only when action is REDACT.
+        policy:
+          type: object
+          required: [name, version]
+          properties:
+            name: { type: string }
+            version: { type: string }
+        scan_latency_ms: { type: number }
 
     CustomEntity:
       type: object

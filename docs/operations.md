@@ -199,6 +199,90 @@ Once every application has a key, set `TAMGA_REQUIRE_KEY=true` and requests
 without one get 401. Keys need the database: without `TAMGA_DB_URL` they are
 kept in memory and lost on restart.
 
+## Checking a text without sending it
+
+`POST /api/v1/scan` runs the active policy over one piece of text and returns
+the verdict the proxy path would reach for a message with that text in that
+role. No provider is called. It is what a browser extension, a gateway
+guardrail or a CI check asks before the text goes anywhere.
+
+Any Tamga key opens it, an application's `proxy` key included, sent as
+`X-Tamga-Key`. That key opens nothing else in the management API. The admin
+key in `X-Tamga-Admin-Key` works too.
+
+```bash
+curl -s -X POST "https://tamga.internal/api/v1/scan" \
+  -H "X-Tamga-Key: tk_your_key_here" -H "Content-Type: application/json" \
+  -d '{"text":"Please write to jane.doe@example.com about the invoice.","role":"user"}'
+```
+
+```json
+{
+  "action": "REDACT",
+  "findings": [
+    {"type": "pii", "category": "email", "severity": "high", "start": 16, "end": 36, "action": "REDACT"}
+  ],
+  "redacted_text": "Please write to [email_REDACTED] about the invoice.",
+  "policy": {"name": "default", "version": "1.0"},
+  "scan_latency_ms": 0.6
+}
+```
+
+`role` is `system`, `user`, `assistant` or `tool`, and `user` when left out.
+It matters when a rule has `applies_to`: the same instruction can be a BLOCK
+in a tool result and a PASS from the user. `action` is `PASS`, `WARN`,
+`REDACT`, `STRIP` or `BLOCK`. A BLOCK is a 200 like the others: the caller
+asked for a verdict and got one. `redacted_text` is there only for REDACT.
+`start` and `end` are byte offsets into the text as UTF-8, and are left out
+for injection, jailbreak, content moderation and classifier findings. The
+matched text is never returned.
+
+`category` names what was found: `email`, `aws_access_key`. For a custom
+entity or a competitor that name is one you chose, and the names together are
+your watch list, so a `proxy` key, the kind an application or an extension
+holds, is told only `custom` or `competitor`. Read, write and admin keys get
+the name.
+
+A 200 is a complete verdict. If a scanner or the inline classifier did not
+finish, the answer is 503 with `Retry-After`, whatever `scan.on_error` says:
+a check that passes because half the scan was missing is worse than one that
+fails. A text longer than `scan.classifier.max_chars` is such a case while
+the classifier is on: the part it did not read cannot be called clean, so a
+verdict of PASS or WARN is not given. A verdict that already stops or
+rewrites the text (BLOCK, STRIP, REDACT) is, since the unread part could only
+have made it stricter; the response then carries
+`X-Tamga-Classifier: incomplete`.
+
+The text is not kept. A scan publishes no event, so nothing reaches the
+request store, the audit log or the live feed, and nothing is written to the
+vault. One log line per call records the key, the size, the verdict and the
+count of findings by type.
+
+Limits:
+
+- 60 calls a minute per key, or `rate_limit.max_requests_per_minute` when the
+  policy sets it. Scans are counted apart from the key's proxy requests, and
+  going over is always a 429, also when `action_on_exceed` is `WARN`.
+- A body of at most 256 KB (413), sent as `application/json` (415).
+- A few scans at a time, about half the processors. When all are busy the
+  answer is 503 with `Retry-After`, so that scans cannot slow the proxy path.
+- Scans do not count against the plan's monthly request cap.
+- A request from a web page is refused (403) unless its origin is in
+  `TAMGA_CORS_ORIGINS`. A browser extension's background worker is not a web
+  page and is let in.
+
+Where the verdict can differ from the proxy path:
+
+- An injection split across several messages of the same role is caught on
+  the proxy path. Here the text is one message, so each part is judged alone.
+- Only the input rules apply. Text sent as `assistant` is not checked against
+  `output_rules`.
+- With the vault on, the proxy forwards numbered placeholders and restores
+  them in the response. `redacted_text` shows `[email_REDACTED]` style markers
+  instead.
+- The `operator_state` scanner is not run.
+- The IP allowlist covers the proxy routes, not `/api/v1`.
+
 ## Inline classifier
 
 The rules are exact and fast, and they match wording. An attack phrased in a
@@ -316,6 +400,7 @@ The proxy serves a management API on the same port (`:8443`).
 | `GET` | `/api/v1/events?page=&limit=` | Admin | Security event feed |
 | `GET` | `/api/v1/policies` | Admin | Active policy as JSON |
 | `POST` | `/api/v1/policies/reload` | Admin | Hot-reload policy from disk |
+| `POST` | `/api/v1/scan` | Any Tamga key, or admin | Policy verdict for a text, nothing forwarded |
 
 ```bash
 # Health check: public

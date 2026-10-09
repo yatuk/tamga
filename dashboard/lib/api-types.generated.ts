@@ -1480,6 +1480,135 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Policy verdict for a text, without calling a provider
+         * @description Runs the active policy over one piece of text and returns what the
+         *     proxy path would do with a message carrying that text in that role.
+         *     Nothing is forwarded and nothing is stored: no event, no audit log
+         *     entry, no request record, no vault entry. The call is counted and
+         *     logged without the text.
+         *
+         *     Authentication is this route's own. Send a Tamga key of any scope,
+         *     `proxy` included, as `X-Tamga-Key`, or the admin key as
+         *     `X-Tamga-Admin-Key`. Keys in the query string, sessions and dev mode
+         *     do not open it. A request from a web page (an `http` or `https`
+         *     `Origin`) is refused unless the origin is on the CORS allowlist.
+         *
+         *     Limits: 60 calls a minute per key unless the policy sets
+         *     `rate_limit.max_requests_per_minute`, counted apart from the key's
+         *     proxy requests and always refused when exceeded; a body of at most
+         *     262144 bytes; a small number of scans at a time, answered 503 when
+         *     all are in use. Calls do not count against the monthly request cap.
+         *
+         *     A 200 is a complete verdict. If any scanner or the inline classifier
+         *     did not finish, the answer is 503, whatever `scan.on_error` says.
+         *     A text longer than `scan.classifier.max_chars` is such a case when
+         *     the classifier is on, for a verdict of PASS or WARN. A verdict that
+         *     already stops or rewrites the text (BLOCK, STRIP, REDACT) is given,
+         *     with the header `X-Tamga-Classifier: incomplete`.
+         *
+         *     For a custom entity or a competitor, a `proxy` key gets `custom` or
+         *     `competitor` as the category, not the name the operator chose.
+         *
+         *     Where the verdict can differ from the proxy path:
+         *     - An injection split over several messages of one role is found on
+         *       the proxy path and not here, where the text is a single message.
+         *     - Only input rules are applied. Text given the role `assistant` is
+         *       not checked against `output_rules`.
+         *     - With `vault.enabled` the proxy sends numbered placeholders and
+         *       restores them in the response; `redacted_text` shows the plain
+         *       `[category_REDACTED]` markers.
+         *     - The `operator_state` scanner is not run.
+         *     - The IP allowlist covers the proxy routes, not `/api/v1`.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ScanRequest"];
+                };
+            };
+            responses: {
+                /** @description The verdict. BLOCK is a verdict, not an error. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ScanResult"];
+                    };
+                };
+                /** @description Body is not unambiguous UTF-8 JSON, text is missing or empty, or role is not one of the four */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No valid key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Request came from a web page whose origin is not on the CORS allowlist */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Body over 262144 bytes */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Content-Type is not application/json */
+                415: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Rate limit exceeded (Retry-After is set) */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No verdict. The scan did not complete, the policy is not loaded, or every scan slot is in use (Retry-After is set) */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/policies/custom-entities": {
         parameters: {
             query?: never;
@@ -3649,6 +3778,52 @@ export interface components {
             policy_version?: string;
             action?: string;
             findings?: components["schemas"]["PolicySimulateFinding"][];
+        };
+        ScanRequest: {
+            /** @description Text to scan */
+            text: string;
+            /**
+             * @description Who the text speaks for. Rules with applies_to are matched against it.
+             * @default user
+             * @enum {string}
+             */
+            role: "system" | "user" | "assistant" | "tool";
+        };
+        ScanFinding: {
+            type: string;
+            category: string;
+            /** @enum {string} */
+            severity: "critical" | "high" | "medium" | "low";
+            /**
+             * @description Byte offset into the text as UTF-8 where the finding begins.
+             *     Absent with `end` for injection, jailbreak, content moderation
+             *     and classifier findings, and for a value seen only in a
+             *     normalised view of the text.
+             */
+            start?: number;
+            /** @description Byte offset just past the finding */
+            end?: number;
+            /**
+             * @description What the policy does about this finding on its own
+             * @enum {string}
+             */
+            action: "PASS" | "WARN" | "REDACT" | "STRIP" | "BLOCK";
+        };
+        ScanResult: {
+            /**
+             * @description The strictest action among the findings. LOG is reported as PASS.
+             * @enum {string}
+             */
+            action: "PASS" | "WARN" | "REDACT" | "STRIP" | "BLOCK";
+            /** @description Always an array. The matched text is never included. */
+            findings: components["schemas"]["ScanFinding"][];
+            /** @description The text as the proxy would forward it. Present only when action is REDACT. */
+            redacted_text?: string;
+            policy: {
+                name: string;
+                version: string;
+            };
+            scan_latency_ms: number;
         };
         CustomEntity: {
             name?: string;
