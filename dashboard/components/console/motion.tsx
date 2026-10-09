@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useRef, type CSSProperties, type ReactNode } from "react";
-import { animate, motion, MotionConfig, useReducedMotion } from "motion/react";
+import { animate, AnimatePresence, motion, MotionConfig, useReducedMotion } from "motion/react";
 
 /**
  * Motion in the console says one of three things: a number changed, a thing
- * arrived, or where you are. Nothing moves for decoration.
+ * arrived, or where you are. Nothing moves for decoration, and a page that
+ * has just loaded has not changed: it is drawn as it is, with no entrance.
  *
  * The curves are Carbon's: "productive" for the small, frequent moves and
  * "expressive" for the few that should be noticed.
@@ -19,9 +20,9 @@ export function Motion({ children }: { children: ReactNode }) {
 }
 
 /**
- * A number that counts to its value, and from its old value to a new one.
- * The eye follows it there, which is the point for the one figure a page is
- * about; do not use it on every number.
+ * A number that counts from its old value to a new one. The eye follows it
+ * there, which is the point for the one figure a page is about; do not use it
+ * on every number. The first value is simply shown.
  */
 const whole = (n: number) => Math.round(n).toLocaleString("en");
 
@@ -36,13 +37,13 @@ export function Count({
   format?: (n: number) => string;
 }) {
   const node = useRef<HTMLSpanElement>(null);
-  const shown = useRef(0);
+  const shown = useRef(value);
   const reduced = useReducedMotion();
 
   useEffect(() => {
     const el = node.current;
     if (!el) return;
-    if (reduced) {
+    if (reduced || shown.current === value) {
       shown.current = value;
       el.textContent = format(value);
       return;
@@ -70,21 +71,18 @@ export function Count({
 }
 
 /**
- * A bar that grows to its share. On first paint it draws from nothing; when
- * the data changes it moves from where it was, so a change in the window
- * reads as a change and not as a new chart.
+ * A bar as long as its share. When the data changes it moves from where it
+ * was, so a change in the window reads as a change and not as a new chart.
  */
 export function Bar({
   share,
   axis = "x",
-  delay = 0,
   className,
   style,
   ...rest
 }: {
   share: number;
   axis?: "x" | "y";
-  delay?: number;
   className?: string;
   style?: CSSProperties;
 } & Record<`data-${string}`, string | undefined>) {
@@ -94,24 +92,27 @@ export function Bar({
     <motion.span
       className={className}
       style={style}
-      initial={{ [prop]: 0 }}
+      initial={false}
       animate={{ [prop]: size }}
-      transition={{ duration: 0.55, ease: EXPRESSIVE, delay }}
+      transition={{ duration: 0.4, ease: EXPRESSIVE }}
       {...rest}
     />
   );
 }
 
-/** Rows of a list arriving one after another. Use for a handful, not a table. */
-export function Arrive({ index = 0, children, as = "li", className }: { index?: number; children: ReactNode; as?: "li" | "div" | "tr"; className?: string }) {
+/**
+ * A short list whose rows may arrive while it is on screen. The rows that are
+ * there when the list is first drawn do not move; one that joins later rises
+ * into place. Put `Arrive` rows inside it.
+ */
+export function Arriving({ children }: { children: ReactNode }) {
+  return <AnimatePresence initial={false}>{children}</AnimatePresence>;
+}
+
+export function Arrive({ children, as = "li", className }: { children: ReactNode; as?: "li" | "div" | "tr"; className?: string }) {
   const Tag = motion[as];
   return (
-    <Tag
-      className={className}
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.24, ease: PRODUCTIVE, delay: 0.04 * index }}
-    >
+    <Tag className={className} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.24, ease: PRODUCTIVE }}>
       {children}
     </Tag>
   );

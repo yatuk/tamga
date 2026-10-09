@@ -64,7 +64,7 @@ export function Columns({ columns, idle, label }: { columns: Column[]; idle: str
         {columns.map((c, i) => (
           <div className="t-day" key={c.key} data-at={at === i} onPointerEnter={() => setAt(i)}>
             {c.parts.map((p, j) => (
-              <Bar key={j} axis="y" data-kind={p.kind} share={p.value / top} delay={Math.min(i * 0.02, 0.5) + j * 0.08} />
+              <Bar key={j} axis="y" data-kind={p.kind} share={p.value / top} />
             ))}
           </div>
         ))}
@@ -98,7 +98,7 @@ const HEIGHT = 176;
 const PAD = 6;
 
 /**
- * One measure over time, as a line that draws itself once. Pointing at the
+ * One measure over time, as a line. Pointing at the
  * chart, or walking it with the arrow keys, reads a bucket out in the line
  * above it. One measurement is not a line: it is said as a sentence.
  */
@@ -190,13 +190,12 @@ export function Trace({
             {limitInView ? <line className="t-limit" x1={0} x2={width} y1={y(limit.value)} y2={y(limit.value)} /> : null}
             {d ? (
               <motion.path
-                // A new window is a new line; the same window refreshed moves in place.
+                // A new window is a new line, drawn as it is; the same window refreshed moves in place.
                 key={`${points.length}|${points[0]?.key}`}
                 className="t-line"
-                // Drawing is motion too: with reduced motion the line is simply there.
-                initial={still ? false : { pathLength: 0, d }}
-                animate={{ pathLength: 1, d }}
-                transition={{ duration: 0.9, ease: EXPRESSIVE }}
+                initial={false}
+                animate={{ d }}
+                transition={{ duration: still ? 0 : 0.4, ease: EXPRESSIVE }}
               />
             ) : null}
             {alone.map((i) => (
@@ -228,20 +227,20 @@ export function Trace({
 }
 
 /**
- * Marks on one scale, each sliding to its place. For a handful of values of
- * the same measure, where the distance between them is the point.
+ * Marks on one scale. For a handful of values of the same measure, where the
+ * distance between them is the point; a mark slides when its value changes.
  */
 export function Scale({ marks, format, label }: { marks: { name: string; value: number }[]; format: (n: number) => string; label: string }) {
   const top = Math.max(1e-9, ...marks.map((m) => m.value)) * 1.08;
   return (
     <div className="t-scaleline" role="img" aria-label={label}>
-      {marks.map((m, i) => (
+      {marks.map((m) => (
         <motion.div
           key={m.name}
           className="t-mark"
-          initial={{ left: 0, opacity: 0 }}
-          animate={{ left: `${(m.value / top) * 100}%`, opacity: 1 }}
-          transition={{ duration: 0.7, ease: EXPRESSIVE, delay: 0.15 + i * 0.08 }}
+          initial={false}
+          animate={{ left: `${(m.value / top) * 100}%` }}
+          transition={{ duration: 0.4, ease: EXPRESSIVE }}
         >
           <b>{format(m.value)}</b>
           <span>{m.name}</span>

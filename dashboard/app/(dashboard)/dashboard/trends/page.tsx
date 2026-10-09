@@ -70,7 +70,7 @@ export default function TrendsPage() {
           ) : (
             <Trace
               label={`Share of requests acted on, by ${unit}`}
-              idle={`Point at the line to read one ${unit}.`}
+              idle={`Point at the line, or use the arrow keys, to read one ${unit}.`}
               format={percent}
               points={points.map((p) => ({
                 key: p.t,

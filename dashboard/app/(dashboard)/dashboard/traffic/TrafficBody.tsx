@@ -67,7 +67,7 @@ export function TrafficBody({
         ) : (
           <Columns
             label={`Requests by ${unit}`}
-            idle={`Point at a column to read that ${unit}.`}
+            idle={`Point at a column, or use the arrow keys, to read that ${unit}.`}
             columns={points.map((p) => ({
               key: p.t,
               label: bucketLabel(p.t, hourly),

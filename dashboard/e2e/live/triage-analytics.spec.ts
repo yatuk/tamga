@@ -765,12 +765,12 @@ test.describe("Analytics", () => {
     const readout = page.locator("section[aria-labelledby='volume'] .t-readout");
     const column = page.locator("section[aria-labelledby='volume'] .t-days .t-day");
     await expect(column).toHaveCount(points.length);
-    await expect(readout).toHaveText("Point at a column to read that day.");
+    await expect(readout).toHaveText("Point at a column, or use the arrow keys, to read that day.");
     await column.nth(busiest).hover();
     await expect(readout).toContainText(`: ${points[busiest].total.toLocaleString("en")} request`);
     await expect(readout).not.toContainText(BROKEN_TEXT);
     await page.locator("h1").hover();
-    await expect(readout).toHaveText("Point at a column to read that day.");
+    await expect(readout).toHaveText("Point at a column, or use the arrow keys, to read that day.");
 
     // The file has a row per column, and every row has as many fields as the header.
     const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Export CSV" }).click()]);
@@ -797,14 +797,14 @@ test.describe("Analytics", () => {
 
     const readout = page.locator("section[aria-labelledby='share'] .t-readout");
     const trace = page.locator("section[aria-labelledby='share'] .t-trace");
-    await expect(readout).toHaveText("Point at the line to read one day.");
+    await expect(readout).toHaveText("Point at the line, or use the arrow keys, to read one day.");
     await trace.hover({ position: { x: 4, y: 40 } });
     await expect(readout).toHaveText(/^\w{3} \d{1,2} \w{3,4}: (nothing measured|\d+(\.\d)?%)$/);
     const box = await trace.boundingBox();
     await trace.hover({ position: { x: (box?.width ?? 200) - 4, y: 40 } });
     await expect(readout).toHaveText(/^\w{3} \d{1,2} \w{3,4}: (nothing measured|\d+(\.\d)?%)$/);
     await page.locator("h1").hover();
-    await expect(readout).toHaveText("Point at the line to read one day.");
+    await expect(readout).toHaveText("Point at the line, or use the arrow keys, to read one day.");
   });
 
   test("Token costs follows the range and offers no export without cost data", async ({ page }) => {
@@ -835,11 +835,11 @@ test.describe("Analytics", () => {
     const scanned = ((await series(page, "30d")).points ?? []).some((p) => (p.scan_p95 ?? 0) > 0);
     test.skip(!scanned, "nothing was scanned in this window, so there is no line");
     await expect(trace).toBeVisible();
-    await expect(readout).toHaveText("Point at the line to read one day.");
+    await expect(readout).toHaveText("Point at the line, or use the arrow keys, to read one day.");
     await trace.hover({ position: { x: 4, y: 40 } });
     await expect(readout).toHaveText(/^\w{3} \d{1,2} \w{3,4}: (nothing measured|[\d.]+(µs|ms|s))$/);
     await page.locator("h1").hover();
-    await expect(readout).toHaveText("Point at the line to read one day.");
+    await expect(readout).toHaveText("Point at the line, or use the arrow keys, to read one day.");
   });
 });
 

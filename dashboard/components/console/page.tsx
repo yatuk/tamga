@@ -171,13 +171,13 @@ export function Shares({
         </tr>
       </thead>
       <tbody>
-        {rows.map((r, i) => (
+        {rows.map((r) => (
           <tr key={r.label}>
             <td className={r.data ? "t-data" : undefined}>{r.label}</td>
             {noted ? <td className="t-note">{r.note}</td> : null}
             <td className="t-num">{r.text ?? format(r.value)}</td>
             <td className="t-bar">
-              <Bar share={top > 0 ? r.value / top : 0} delay={0.15 + i * 0.035} />
+              <Bar share={top > 0 ? r.value / top : 0} />
             </td>
           </tr>
         ))}

@@ -18,7 +18,7 @@ function Meter({ name, used, of }: { name: string; used: number; of: number }) {
   return (
     <div style={{ marginTop: "1.5rem" }}>
       <div className="t-split" style={{ marginTop: 0 }} role="img" aria-label={`${name}: ${used} of ${of}`}>
-        <Bar data-kind="ink" share={share} delay={0.15} />
+        <Bar data-kind="ink" share={share} />
       </div>
       <div className="t-splitkey">
         <span data-kind="ink">

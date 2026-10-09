@@ -7,10 +7,13 @@ import { api } from "@/lib/api";
 import { useAdminKey } from "@/hooks/useAdminKey";
 import { useHealth } from "@/hooks/useHealth";
 import { useRangeParam } from "@/hooks/useRangeParam";
-import { Arrive, Bar, Count } from "@/components/console/motion";
+import { Columns } from "@/components/console/charts";
+import { Arrive, Arriving, Bar, Count } from "@/components/console/motion";
 import {
+  bucketLabel,
+  bucketName,
   clockTime,
-  dayLabel,
+  counted,
   kindName,
   kindType,
   leadFinding,
@@ -18,7 +21,6 @@ import {
   RANGE_WORDS,
   typeName,
   uptimeText,
-  weekdayLabel,
 } from "@/components/console/names";
 
 const RANGES = ["24h", "7d", "30d"] as const;
@@ -60,7 +62,6 @@ export function Overview() {
   const kindMax = kinds[0]?.[1] ?? 1;
   const waiting = (events.data?.events ?? []).filter((e) => e.action === "BLOCK").slice(0, 7);
   const points = series.data?.points ?? [];
-  const dayMax = Math.max(1, ...points.map((p) => p.total));
   const hourly = series.data?.bucket === "hour";
 
   return (
@@ -127,8 +128,8 @@ export function Overview() {
                 untouched.
               </p>
               <div className="t-split" role="img" aria-label={`${blocked} stopped, ${altered} redacted, ${passed} passed`}>
-                <Bar data-kind="blocked" share={blocked / total} delay={0.15} />
-                <Bar data-kind="altered" share={altered / total} delay={0.3} />
+                <Bar data-kind="blocked" share={blocked / total} />
+                <Bar data-kind="altered" share={altered / total} />
               </div>
               <div className="t-splitkey">
                 <span data-kind="blocked">Stopped, {Math.round((blocked / total) * 100)}%</span>
@@ -168,12 +169,12 @@ export function Overview() {
                 </tr>
               </thead>
               <tbody>
-                {kinds.map(([category, count], i) => (
+                {kinds.map(([category, count]) => (
                   <tr key={category}>
                     <td>{kindName(category)}</td>
                     <td className="t-note">{typeName(kindType(category))}</td>
                     <td className="t-num">{count}</td>
-                    <td className="t-bar"><Bar share={count / kindMax} delay={0.2 + i * 0.035} /></td>
+                    <td className="t-bar"><Bar share={count / kindMax} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -190,10 +191,11 @@ export function Overview() {
             <p className="t-empty">No request has been stopped yet.</p>
           ) : (
             <ul className="t-queue">
-              {waiting.map((e, i) => {
+              <Arriving>
+              {waiting.map((e) => {
                 const f = leadFinding(e);
                 return (
-                  <Arrive key={e.request_id} index={i}>
+                  <Arrive key={e.request_id}>
                     <time dateTime={e.timestamp}>{clockTime(e.timestamp)}</time>
                     <span>
                       {f ? kindName(f.category) : "No finding recorded"}
@@ -206,6 +208,7 @@ export function Overview() {
                   </Arrive>
                 );
               })}
+              </Arriving>
             </ul>
           )}
         </section>
@@ -219,31 +222,20 @@ export function Overview() {
         {points.length === 0 ? (
           <p className="t-empty">No traffic in this window.</p>
         ) : (
-          <>
-            <div className="t-days" role="img" aria-label="Requests over time">
-              {points.map((p, i) => (
-                <div
-                  className="t-day"
-                  key={p.t}
-                  title={`${dayLabel(p.t)}: ${p.total} requests, ${p.blocked} stopped, ${p.redacted} redacted`}
-                >
-                  <Bar axis="y" data-kind="blocked" share={p.blocked / dayMax} delay={i * 0.02} />
-                  <Bar axis="y" data-kind="altered" share={p.redacted / dayMax} delay={i * 0.02 + 0.08} />
-                  <Bar axis="y" share={(p.total - p.blocked - p.redacted) / dayMax} delay={i * 0.02 + 0.16} />
-                </div>
-              ))}
-            </div>
-            {points.length <= 31 ? (
-              <div className="t-daylabels">
-                {points.map((p) => (
-                  <span key={p.t}>
-                    <b>{p.total.toLocaleString("en")}</b>
-                    {hourly ? clockTime(p.t).slice(0, 5) : `${weekdayLabel(p.t)} ${dayLabel(p.t)}`}
-                  </span>
-                ))}
-              </div>
-            ) : null}
-          </>
+          <Columns
+            label={`Requests by ${hourly ? "hour" : "day"}`}
+            idle={`Point at a column, or use the arrow keys, to read that ${hourly ? "hour" : "day"}.`}
+            columns={points.map((p) => ({
+              key: p.t,
+              label: bucketLabel(p.t, hourly),
+              says: `${bucketName(p.t, hourly)}: ${counted(p.total, "request")}, ${p.blocked.toLocaleString("en")} stopped, ${p.redacted.toLocaleString("en")} redacted`,
+              parts: [
+                { kind: "blocked" as const, value: p.blocked },
+                { kind: "altered" as const, value: p.redacted },
+                { kind: "passed" as const, value: Math.max(0, p.total - p.blocked - p.redacted) },
+              ],
+            }))}
+          />
         )}
       </section>
     </>

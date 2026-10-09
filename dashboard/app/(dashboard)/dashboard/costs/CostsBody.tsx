@@ -83,7 +83,7 @@ export function CostsBody({
           hasLimit ? (
             <>
               <div className="t-split" role="img" aria-label={`${Math.round(used * 100)}% of today's token budget used`}>
-                <Bar data-kind={left === 0 ? "blocked" : "ink"} share={used} delay={0.15} />
+                <Bar data-kind={left === 0 ? "blocked" : "ink"} share={used} />
               </div>
               <div className="t-splitkey">
                 <span data-kind={left === 0 ? "blocked" : "ink"}>
@@ -110,7 +110,7 @@ export function CostsBody({
           ) : (
             <Columns
               label="Estimated cost by day"
-              idle="Point at a column to read that day."
+              idle="Point at a column, or use the arrow keys, to read that day."
               columns={days.map(([date, cost]) => ({
                 key: date,
                 label: dayLabel(date),

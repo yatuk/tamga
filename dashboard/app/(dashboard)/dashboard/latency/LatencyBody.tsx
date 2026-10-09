@@ -97,7 +97,7 @@ export function LatencyBody({
           ) : (
             <Trace
               label={`95th percentile scan time by ${unit}`}
-              idle={`Point at the line to read one ${unit}.`}
+              idle={`Point at the line, or use the arrow keys, to read one ${unit}.`}
               format={formatMs}
               limit={{ value: TARGET_MS, name: "Target" }}
               points={points.map((p) => ({ key: p.t, name: bucketName(p.t, hourly), value: p.scan_p95 > 0 ? p.scan_p95 : null }))}

@@ -4,7 +4,7 @@ import NextLink from "next/link";
 import { Button, Link } from "@carbon/react";
 import { Download, DocumentPdf } from "@carbon/icons-react";
 import { Columns } from "@/components/console/charts";
-import { Arrive } from "@/components/console/motion";
+import { Arrive, Arriving } from "@/components/console/motion";
 import { bucketLabel, bucketName, clockTime, dayLabel, providerName, RANGE_WORDS, typeName } from "@/components/console/names";
 import { DataNotice, PageHead, RangeSwitch, Section, Shares } from "@/components/console/page";
 import type { useReportsPage } from "./useReportsPage";
@@ -95,7 +95,7 @@ export function ReportsBody({
         ) : (
           <Columns
             label={`Requests by ${unit}`}
-            idle={`Point at a column to read that ${unit}.`}
+            idle={`Point at a column, or use the arrow keys, to read that ${unit}.`}
             columns={points.map((p) => ({
               key: p.t,
               label: bucketLabel(p.t, hourly),
@@ -130,8 +130,9 @@ export function ReportsBody({
             <p className="t-empty">No request was stopped in this window.</p>
           ) : (
             <ul className="t-queue">
-              {recentBlocked.map((e, i) => (
-                <Arrive key={e.request_id} index={i}>
+              <Arriving>
+              {recentBlocked.map((e) => (
+                <Arrive key={e.request_id}>
                   <time dateTime={e.timestamp}>{clockTime(e.timestamp)}</time>
                   <span>
                     {providerName(e.provider)}
@@ -142,6 +143,7 @@ export function ReportsBody({
                   </Link>
                 </Arrive>
               ))}
+              </Arriving>
             </ul>
           )}
         </section>
