@@ -11,8 +11,14 @@ helm install tamga ./deploy/helm/tamga-proxy -n security --create-namespace
 ```
 
 Edit `values.yaml` to configure your providers, resource limits, and
-autoscaling. The chart includes network policies, pod disruption budgets,
-and PodSecurityContext defaults.
+autoscaling. The chart contains a Deployment, a Service, a ConfigMap for the
+policy, a ServiceAccount, a PodDisruptionBudget, a HorizontalPodAutoscaler,
+and pod and container security context defaults. `values.yaml` also has
+`networkPolicy:` and `ingress:` keys that no template reads: the chart
+creates no NetworkPolicy and no Ingress. Nothing in this repository lints,
+renders or installs the chart, and its version fields are behind the release
+(`appVersion` 0.5.0, image tag 0.7.0). Read the templates before you rely on
+it.
 
 ## Configuration
 
@@ -162,7 +168,10 @@ finding ends the stream with an error event. The client sees the text about
 64 characters later than it would have.
 
 What is read is the model's prose, in OpenAI (chat, completions, Responses),
-Anthropic and Gemini streams. Tool-call arguments and thinking are forwarded
+Anthropic and Gemini streams. Only the OpenAI chat completions stream has a
+test of the whole path (`proxy/internal/proxy/stream_e2e_test.go`); the
+other formats are tested where their events are parsed
+(`stream_guard_test.go`). Tool-call arguments and thinking are forwarded
 unread. A stream in a shape Tamga does not know is forwarded unread too and
 counted in `tamga_scan_degraded_total{reason="stream_unrecognised"}`. If the
 scanner fails the stream ends, unless `output_rules.fail_open` is set.
@@ -357,36 +366,85 @@ on every replica: request logs, incidents, the audit log, policy history,
 saved hunts, API keys, custom patterns and team roles. Webhooks are kept too
 when `TAMGA_VAULT_KEY` is set; they are stored encrypted with it, so without
 the key they stay in memory. A change to keys, patterns, team roles or
-webhooks made on one replica reaches the others within 30 seconds.
+webhooks made on one replica is meant to reach the others within 30 seconds:
+each replica reloads patterns, team roles and webhooks from the database on
+a 30-second ticker (`settingsReloadInterval` in `proxy/cmd/tamga/main.go`)
+and serves a verified key from memory for 30 seconds
+(`proxy/internal/apikeys/postgres.go`). No test runs two replicas, so that
+figure describes the mechanism and is not a measured result.
 
 Without a database all of these live in memory and startup logs a warning for
 each.
 
 ## Cost control and budget enforcement
 
-Track token spend per API key, team, and provider in real time. Set hard
-budget caps to prevent runaway costs.
+There are two budget caps. Both are daily, both are per organisation, and
+both are set in the policy under `cost`.
 
-| Control | Granularity | Behavior |
-|---------|-------------|----------|
-| Daily budget | Per API key | BLOCK 429 when exceeded |
-| Monthly budget | Per team | WARN webhook, then BLOCK |
-| Provider quota | Per provider | Failover to cheaper provider |
-| Per-request cap | Per API key | BLOCK requests above token threshold |
+| Control | Policy key | Granularity | Behavior |
+|---------|------------|-------------|----------|
+| Daily token cap | `cost.max_tokens_per_day` | Per organisation | 402 `budget_exceeded` once the day's tokens reach the cap |
+| Daily USD cap | `cost.max_cost_usd_per_day` | Per organisation | 402 `budget_exceeded` once the day's cost reaches the cap |
 
-Cost attribution by provider, model family, team (API key tagging), and
-user (`X-User-ID` header). The dashboard shows daily burn, MTD totals,
-per-model breakdown, and monthly projections.
+The shipped policy has no `cost` block, so neither cap is on until you add
+one:
 
-```bash
-# Set a $100/day budget for a team
-curl -X PUT $TAMGA_URL/api/v1/budgets/team_finance \
-  -H "X-Tamga-Admin-Key: $KEY" \
-  -d '{"daily_limit_usd":100,"action":"block"}'
+```yaml
+cost:
+  max_tokens_per_day: 2000000
+  max_cost_usd_per_day: 100
 ```
 
-Semantic caching (exact + embedding-based similarity) is on the roadmap;
-sensitive prompts (PII detected) are never cached.
+How the caps behave:
+
+- The organisation is the one the request's Tamga key belongs to. A request
+  without a key is counted under the organisation it names in
+  `X-Tamga-Org-Id`, or the default one, so a cap holds only for callers that
+  must send a key (`TAMGA_REQUIRE_KEY=true`).
+- Usage is added when the response comes back, so the request that crosses
+  the cap is served and the next one is refused. A streamed response is
+  counted by an estimate of the request's tokens.
+- Cost is the token count times the model's price. A model with no price
+  adds tokens and no cost.
+- Counters are kept in memory and start again at midnight UTC. With
+  `REDIS_URL` set they are also written to Redis, and the check still reads
+  the replica's own count: each replica enforces the cap on what it has
+  served itself.
+
+There is no monthly budget, no budget per team, per key or per provider, no
+cap on a single request, no failover to a cheaper provider, and no API that
+sets a budget: the caps change with the policy. Apart from these,
+`rate_limit.max_tokens_per_day` is a daily token quota per Tamga key and
+answers 429 when `action_on_exceed` is `BLOCK`.
+
+Read the counters and the limits for an organisation, here before any
+traffic that day:
+
+```bash
+curl -s -H "X-Tamga-Admin-Key: $TAMGA_ADMIN_KEY" \
+  "$TAMGA_URL/api/v1/budget/stats?org=acme" | jq .
+```
+
+```json
+{
+  "org_id": "acme",
+  "day": "2026-10-09",
+  "tokens_today": 0,
+  "cost_today_usd": 0,
+  "limit_tokens": 2000000,
+  "limit_cost_usd": 100
+}
+```
+
+`GET /api/v1/billing/costs/breakdown?range=24h|7d|30d` returns usage and
+cost by day, provider and model from the request log, with a month-to-date
+total and a projection for the month. Models without a price are listed
+under `unpriced` and are in no USD total.
+
+The response cache matches a request exactly, by a SHA-256 of its content,
+and is off unless the policy sets `cache.enabled`. A response is stored
+only when its output scan found nothing and the vault is not in use.
+Similarity ("semantic") caching is not implemented.
 
 ## Management REST API
 

@@ -154,8 +154,9 @@ What this does not show:
 - **Recall (0.896)** — on the tuning corpus. The 20 misses need semantic
   reasoning (grandma prompts, hypothetical and fictional framings, bulk
   data-exfiltration requests, health data, street addresses), which pattern
-  matching cannot do. Closing that gap is what an inline classifier is for;
-  it is not implemented yet.
+  matching cannot do. Closing that gap is what the optional inline
+  classifier is for. In the run above it caught 6 of the 20 at threshold
+  0.98; see [With the inline classifier](#with-the-inline-classifier).
 - **Latency** — the median scan is a fraction of a millisecond and the
   tail stays under 2 ms, well inside a 5 ms budget.
 

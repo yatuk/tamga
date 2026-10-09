@@ -44,10 +44,12 @@ make dashboard-build                            # Production dashboard build
 
 ## Adversarial testing
 
-Tamga ships an automated stress-test suite that validates scanner
-resilience against adversarial bypass attempts and load thresholds. Every
-PR triggers a regression gate comparing the adversarial results to a known
-baseline.
+Tamga ships a stress-test suite that runs a fixed set of adversarial vectors
+against the scanners and, on request, a load test. A pull request that
+touches `proxy/`, `analyzer/`, `deploy/docker-compose.yml` or `tests/stress/`
+triggers a regression gate comparing the adversarial results to a known
+baseline. The vectors are known to the authors, so this is a regression
+suite, not an independent evaluation.
 
 - **Adversarial tests** — 6 categories (PII, injection, secret, policy,
   operator state, request structure), 93 published vectors: 84 attacks (78
@@ -78,19 +80,35 @@ Full docs: [tests/stress/README.md](../tests/stress/README.md).
 | Observability | OpenTelemetry, Jaeger 1.54 |
 | Deployment | Docker Compose, Helm, Terraform (AWS) |
 
+The table lists what the repository uses. It does not say the tests run
+against each of them:
+
+- **Analyzer.** Its tests (`analyzer/tests/`) mock Presidio, LLM Guard and
+  the LLM judge, and no CI workflow runs them.
+- **Redis and NATS.** The Go tests use in-memory or mocked substitutes. The
+  adversarial gate and the integration smoke workflow start the proxy next
+  to real containers (Redis in both, NATS and Jaeger in the gate's Compose
+  stack) and check the proxy's HTTP answers. Nothing asserts on what reaches
+  Redis, NATS or Jaeger.
+- **PostgreSQL.** The store's tests start their own Postgres container.
+- **OpenTelemetry and Jaeger.** The Go tests initialise the exporter and
+  never assert on an exported span.
+- **Helm and Terraform.** Never linted, rendered or applied by anything in
+  this repository.
+
 ## Built with
 
 Tamga stands on open-source foundations:
 
 | Project | Role |
 |---------|------|
-| [Microsoft Presidio](https://github.com/microsoft/presidio) | PII detection patterns and NER |
+| [Microsoft Presidio](https://github.com/microsoft/presidio) | NER in the analyzer, after the proxy's decision |
 | [Aho-Corasick DFA](https://github.com/coregx/ahocorasick) | High-throughput string matching |
 | [k6](https://k6.io) | Load testing and stress benchmarks |
 | [OpenTelemetry](https://opentelemetry.io) | Distributed tracing (OTLP export) |
 | [Next.js](https://nextjs.org) | Dashboard framework |
 | [TanStack Table/Query](https://tanstack.com) | Virtual scrolling, server-state sync |
 | [Tailwind CSS](https://tailwindcss.com) | Utility-first design system |
-| [NATS JetStream](https://nats.io) | Async event processing |
+| [NATS JetStream](https://nats.io) | Optional async event stream, used when `TAMGA_NATS_URL` is set |
 | [PostgreSQL 16](https://www.postgresql.org) | Audit storage, policies, billing |
 | [Redis 7](https://redis.io) | Rate limiting, caching, counters |

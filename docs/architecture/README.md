@@ -277,8 +277,12 @@ Decision order (first match wins):
 
 ## Integrations
 
-12 pre-configured integrations. Tamga plugs into your existing security and
-observability stack:
+Twelve kinds of alert destination are defined in
+`proxy/internal/webhooks/store.go`: Slack, Teams, Splunk (two kinds, JSON
+and CEF), Sentinel, QRadar, Datadog, Jira, PagerDuty, Opsgenie, ServiceNow
+and a generic webhook. Tamga can post alerts to a destination of one of
+these kinds. The diagram shows six of them, each with the format it is
+sent, next to sign-in and observability:
 
 ```mermaid
 %%{init: {
@@ -306,15 +310,13 @@ graph TB
     subgraph "SIEM / Security Tools"
         Splunk[Splunk HEC]
         Sentinel[Microsoft Sentinel]
-        Elastic[Elastic / OpenSearch]
-        Datadog[Datadog Logs]
+        Datadog[Datadog]
     end
 
     subgraph "Notification"
         Slack[Slack Webhooks]
         Teams[MS Teams]
         PagerDuty[PagerDuty]
-        Email[Email/SMTP]
     end
 
     subgraph "Observability"
@@ -327,15 +329,13 @@ graph TB
     SAML --> Auth
     Auth --> Proxy
 
-    Proxy -.->|HEC events| Splunk
-    Proxy -.->|Log Analytics| Sentinel
-    Proxy -.->|JSON logs| Elastic
-    Proxy -.->|datadog-go| Datadog
+    Proxy -.->|JSON or CEF over HEC| Splunk
+    Proxy -.->|CEF over HTTP| Sentinel
+    Proxy -.->|JSON POST| Datadog
 
     Proxy -.->|webhook| Slack
     Proxy -.->|webhook| Teams
-    Proxy -.->|events| PagerDuty
-    Proxy -.->|smtp| Email
+    Proxy -.->|Events API v2 JSON| PagerDuty
 
     Proxy -.->|traces| OTLP
     Proxy -.->|metrics| Prometheus
@@ -347,8 +347,8 @@ graph TB
     classDef obs fill:#0d3a3a,stroke:#14b8a6,color:#ccfbf1
 
     class Github,SAML idp
-    class Splunk,Sentinel,Elastic,Datadog siem
-    class Slack,Teams,PagerDuty,Email notif
+    class Splunk,Sentinel,Datadog siem
+    class Slack,Teams,PagerDuty notif
     class OTLP,Prometheus,Jaeger obs
 ```
 
