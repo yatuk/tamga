@@ -149,6 +149,25 @@
   forwarded whole with `X-Tamga-Output-Scan: skipped-too-large`; the default
   limit is raised from 256 KB to 1 MB.
 
+### Console data
+- **After a restart the console showed no traffic and older requests would
+  not open**, although the requests were in PostgreSQL. The summary, the
+  charts, the findings breakdown, model shares, a request's detail and the
+  CSV export read only the last 1000 requests in the proxy's memory. They now
+  read the stored request logs when there is a database: the same after a
+  restart and on every replica, a few seconds behind the live feed.
+- `GET /api/v1/stats` honours `?range` for every field. The counts were
+  process-lifetime counters whatever the range.
+- `GET /api/v1/events/export` takes the event list's filters and exports up
+  to 50,000 rows instead of 1000, marking a cut with
+  `X-Tamga-Export-Truncated`.
+- New response header `X-Tamga-Data-Source: database|memory` on these
+  endpoints.
+- A request log written through the in-process bus is dated by the request,
+  not by the moment its batch was flushed.
+- `daily_stats` is no longer read; nothing ever filled it. The earlier entry
+  about the day-bucket timeseries reading it is superseded.
+
 ### Agents
 - **A long tool result or file no longer stalls the proxy.** Scanning a large
   piece of text did not finish: the secret scanner's separator normalisation

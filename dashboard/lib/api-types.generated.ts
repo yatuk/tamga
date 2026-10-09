@@ -296,7 +296,21 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Dashboard overview statistics */
+        /**
+         * Dashboard overview statistics
+         * @description Counted over the asked range from the stored request logs when the
+         *     proxy has a database, so the figures are the same after a restart and
+         *     on every replica; they trail the live feed by the log writer's flush
+         *     interval (about 5 seconds). Without a database, or when it does not
+         *     answer, they come from process memory (counters since start and the
+         *     last ~1000 events) and the range is not applied to the counts.
+         *
+         *     The response header `X-Tamga-Data-Source` says which: `database` or
+         *     `memory`. The same header is set on `/stats/models`, `/timeseries`,
+         *     `/findings/breakdown`, `/providers`, `/events/{request_id}` and
+         *     `/events/export`. `avg_input_risk_pct` is left out when it could not
+         *     be worked out.
+         */
         get: {
             parameters: {
                 query?: {
@@ -444,7 +458,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get a single security event by request ID */
+        /**
+         * Get a single security event by request ID
+         * @description Looked up in process memory first and then, in the caller's
+         *     organisation, in the stored request logs (`X-Tamga-Data-Source` says
+         *     which answered). A stored request carries what its row holds:
+         *     `output_risk`, `policy_name` and `policy_version` are not recorded
+         *     and are left out, `input_risk` is computed from the stored findings,
+         *     and each finding's `action_taken` is the request's action.
+         */
         get: {
             parameters: {
                 query?: never;
@@ -496,7 +518,18 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Export filtered events as CSV or JSON */
+        /**
+         * Export filtered events as CSV or JSON
+         * @description With a database the rows come from the stored request logs, newest
+         *     first, with the filters and window of `GET /api/v1/events`
+         *     (`finding_type`, `severity`, `category`, `technique`, `q`, `since`,
+         *     `until` are accepted as well as the parameters below). One export
+         *     returns at most 50000 rows; when more matched, the response carries
+         *     `X-Tamga-Export-Truncated: true` and the file is the newest 50000:
+         *     narrow the window with `since`/`until` to get the rest. Without a
+         *     database the rows are the events still in process memory
+         *     (`X-Tamga-Data-Source: memory`).
+         */
         get: {
             parameters: {
                 query?: {
@@ -674,7 +707,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Bucketed time series for the overview chart */
+        /**
+         * Bucketed time series for the overview chart
+         * @description Hour and day buckets start on UTC boundaries. With a database the
+         *     counts and `scan_p95` come from the stored request logs for the
+         *     whole range, and add up to `GET /api/v1/stats` for the same range;
+         *     see `X-Tamga-Data-Source` there.
+         */
         get: {
             parameters: {
                 query?: {

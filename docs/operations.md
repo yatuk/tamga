@@ -484,8 +484,29 @@ and serves a verified key from memory for 30 seconds
 (`proxy/internal/apikeys/postgres.go`). No test runs two replicas, so that
 figure describes the mechanism and is not a measured result.
 
-Without a database all of these live in memory and startup logs a warning for
-each.
+The console's numbers are read from the stored request logs, not from the
+proxy's memory: the overview, traffic, trends, the findings breakdown, model
+shares, a request's detail and the CSV export. They are the same after a
+restart and on every replica, and trail the live feed by the few seconds the
+log writer batches for. Each of these responses says where it came from in
+`X-Tamga-Data-Source` (`database` or `memory`). When the database cannot be
+reached they fall back to the last 1000 requests this process saw and say
+`memory`; they do not fail.
+
+A stored request has no policy name or version and no output risk, so the
+detail of a request older than the proxy's memory leaves those out. The CSV
+export takes the same filters as the event list and stops at 50,000 rows,
+newest first, with `X-Tamga-Export-Truncated: true` when more matched.
+
+Still per process and reset by a restart: the scan-time percentiles on the
+health check and the Latency page's headline, the counters under `/metrics`,
+today's spend and token use under `/budget/stats`, rate-limit counters, and
+the SSO settings.
+
+Without a database the request logs are not kept at all and the console shows
+the last 1000 requests from memory. Policy history is then a file next to the
+policy; incidents, the audit log, API keys, patterns, team roles and webhooks
+live in memory.
 
 ## Provider pools
 
@@ -733,7 +754,7 @@ The proxy serves a management API on the same port (`:8443`).
 |---|---|---|---|
 | `GET` | `/health` | — | Liveness |
 | `GET` | `/api/v1/health/detailed` | — for up or down; a management key for the rest | Without a key: `proxy`, `status`, scan latency. With one: database, Redis, scanner count, uptime, provider pools |
-| `GET` | `/api/v1/stats` | Admin | 7-day summary (DB or in-memory) |
+| `GET` | `/api/v1/stats?range=` | Admin | Summary of the asked range, from the stored request logs when there is a database |
 | `GET` | `/api/v1/events?page=&limit=` | Admin | Security event feed |
 | `GET` | `/api/v1/policies` | Admin | Active policy as JSON |
 | `POST` | `/api/v1/policies/reload` | Admin | Hot-reload policy from disk |
