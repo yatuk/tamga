@@ -28,7 +28,8 @@ const PAGES: Entry[] = navGroups.flatMap((group) =>
 /**
  * Ctrl+K: every page, a few filtered views and common actions, found by
  * typing. "incident <id>" and "provider <name>" jump straight there. The
- * shortcut itself is handled by the shell, which loads this on first use.
+ * shortcut itself is handled by the shell, which loads this on first use and
+ * puts the focus back where it was when this closes.
  */
 export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const router = useRouter();
@@ -69,45 +70,48 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
   };
 
   return (
-    <Modal
-      open={open}
-      passiveModal
-      size="sm"
-      className="t-palette"
-      modalHeading="Go to"
-      onRequestClose={() => onOpenChange(false)}
+    // Carbon wraps Shift+Tab to the search field's hidden clear button, and the
+    // focus then leaves the dialog. From the close button it goes to the field.
+    <div
+      onKeyDownCapture={(e) => {
+        if (e.key === "Tab" && e.shiftKey && e.target instanceof Element && e.target.closest(".cds--modal-close-button, .cds--modal-close")) {
+          e.preventDefault();
+          e.stopPropagation();
+          document.getElementById("palette-search")?.focus();
+        }
+      }}
     >
-      <Search
-        id="palette-search"
-        size="lg"
-        labelText="Search pages and actions"
-        placeholder='A page, or "incident" and a request ID'
-        data-modal-primary-focus
-        role="combobox"
-        aria-expanded
-        aria-controls="palette-results"
-        aria-activedescendant={entries[at] ? `palette-${at}` : undefined}
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "ArrowDown") {
-            e.preventDefault();
-            setAt((i) => Math.min(entries.length - 1, i + 1));
-          } else if (e.key === "ArrowUp") {
-            e.preventDefault();
-            setAt((i) => Math.max(0, i - 1));
-          } else if (e.key === "Enter" && entries[at]) {
-            e.preventDefault();
-            go(entries[at].href);
-          }
-        }}
-      />
-      {entries.length === 0 ? (
-        <p className="t-note" style={{ padding: "1rem 0" }}>
-          Nothing by that name.
+      <Modal open={open} passiveModal size="sm" className="t-palette" modalHeading="Go to" onRequestClose={() => onOpenChange(false)}>
+        <Search
+          id="palette-search"
+          size="lg"
+          labelText="Search pages and actions"
+          placeholder="A page, or “incident” and a request ID"
+          data-modal-primary-focus
+          role="combobox"
+          aria-expanded={entries.length > 0}
+          aria-controls="palette-results"
+          aria-activedescendant={entries[at] ? `palette-${at}` : undefined}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "ArrowDown") {
+              e.preventDefault();
+              setAt((i) => Math.min(entries.length - 1, i + 1));
+            } else if (e.key === "ArrowUp") {
+              e.preventDefault();
+              setAt((i) => Math.max(0, i - 1));
+            } else if (e.key === "Enter" && entries[at]) {
+              e.preventDefault();
+              go(entries[at].href);
+            }
+          }}
+        />
+        <p className="t-note" role="status" style={entries.length === 0 ? { padding: "1rem 0" } : undefined}>
+          {entries.length === 0 ? "Nothing by that name." : ""}
         </p>
-      ) : (
-        <ul id="palette-results" ref={list} role="listbox" aria-label="Results">
+        {/* The list stays in the page when it is empty, because the field points at it. It is not a tab stop of its own. */}
+        <ul id="palette-results" ref={list} role="listbox" aria-label="Results" tabIndex={-1}>
           {entries.map((e, i) => (
             // The search field keeps the focus; the pointer and the arrow keys only move the mark.
             // eslint-disable-next-line jsx-a11y/click-events-have-key-events
@@ -117,7 +121,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
             </li>
           ))}
         </ul>
-      )}
-    </Modal>
+      </Modal>
+    </div>
   );
 }

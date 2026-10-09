@@ -1,9 +1,9 @@
 "use client";
 
-import { Suspense, useEffect, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { motion } from "motion/react";
 import {
   ActionableNotification,
@@ -33,11 +33,22 @@ export function TamgaShell({ children }: { children: ReactNode }) {
   const health = useProxyHealth();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteLoaded, setPaletteLoaded] = useState(false);
+  const router = useRouter();
+  // What had the focus when the palette opened gets it back when it closes.
+  const opener = useRef<HTMLElement | null>(null);
+  const remember = () => {
+    const el = document.activeElement;
+    if (el instanceof HTMLElement && !el.closest(".cds--modal")) opener.current = el;
+  };
+  useEffect(() => {
+    if (!paletteOpen) opener.current?.focus();
+  }, [paletteOpen]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
+        remember();
         setPaletteLoaded(true);
         setPaletteOpen((open) => !open);
       }
@@ -58,21 +69,17 @@ export function TamgaShell({ children }: { children: ReactNode }) {
               </span>
             </HeaderName>
             <HeaderGlobalBar>
-              <span className="t-shellstate" role="status">
-                {/* The ring runs once each time the proxy answers a health check. */}
+              <span className="t-shellstate">
                 <span className="t-dot" data-state={health.up === undefined ? "checking" : health.up ? "up" : "down"} />
-                {health.up === undefined
-                  ? "Checking the proxy"
-                  : health.up
-                    ? health.scanP50 !== null
-                      ? `Proxy up, scanning in ${health.scanP50} ms`
-                      : "Proxy up"
-                    : "Proxy unreachable"}
+                {/* Only up or down is announced; the scan time changes with every check. */}
+                <span role="status">{health.up === undefined ? "Checking the proxy" : health.up ? "Proxy up" : "Proxy unreachable"}</span>
+                {health.up && health.scanP50 !== null ? <span>scanning in {health.scanP50} ms</span> : null}
               </span>
               <HeaderGlobalAction
                 aria-label="Search or jump to a page (Ctrl K)"
                 tooltipAlignment="end"
                 onClick={() => {
+                  remember();
                   setPaletteLoaded(true);
                   setPaletteOpen(true);
                 }}
@@ -122,7 +129,7 @@ export function TamgaShell({ children }: { children: ReactNode }) {
               title="The proxy is not answering."
               subtitle={health.reason ? `${health.reason}. Requests may be going out unscanned.` : "Requests may be going out unscanned."}
               actionButtonLabel="Proxy status"
-              onActionButtonClick={() => window.location.assign("/dashboard/proxy")}
+              onActionButtonClick={() => router.push("/dashboard/proxy")}
               style={{ maxWidth: "none", marginBottom: "1.5rem" }}
             />
           ) : null}
