@@ -131,7 +131,7 @@ export default function PatternsPage() {
                           <IconButton kind="ghost" size="sm" label={`Edit ${p.name}`} align="left" onClick={() => m.editPattern(p)}>
                             <Edit />
                           </IconButton>
-                          <Remove label={`Delete ${p.name}`} onConfirm={() => m.deleteMut.mutate(p.id)} />
+                          <Remove label={`Delete ${p.name}`} verb="Delete the pattern" onConfirm={() => m.deleteMut.mutate(p.id)} />
                         </span>
                       </TableCell>
                     </TableRow>
@@ -216,7 +216,7 @@ export default function PatternsPage() {
             />
             {result ? (
               <div aria-live="polite">
-                <p className="t-note" style={{ marginBottom: "0.4rem" }}>
+                <p className="t-note">
                   {result.count === 0 ? "It catches nothing in this text." : `It catches ${counted(result.count, "piece")} of this text.`}
                 </p>
                 <div className="t-sample">{result.parts}</div>

@@ -244,7 +244,7 @@ function SavedHunts({
                   <b>{h.name}</b>
                   <span className="t-note">Saved {dayLabel(h.updated_at)}</span>
                 </button>
-                <Remove label={`Delete ${h.name}`} onConfirm={() => void onDelete(h.id)} />
+                <Remove label={`Delete ${h.name}`} verb="Delete the search" onConfirm={() => void onDelete(h.id)} />
               </motion.li>
             ))}
           </AnimatePresence>

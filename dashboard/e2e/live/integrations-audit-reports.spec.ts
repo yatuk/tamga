@@ -229,7 +229,7 @@ test.describe("Integrations", () => {
     expect((await listHooks(request)).some((h) => h.label === label)).toBeTruthy();
 
     await row.getByRole("button", { name: `Disconnect ${label}` }).click();
-    await row.getByRole("button", { name: "Disconnect", exact: true }).click();
+    await row.getByRole("button", { name: "Disconnect the destination", exact: true }).click();
     await expect(page.getByText("Destination disconnected")).toBeVisible();
     await expect(page.getByText(label, { exact: true })).toHaveCount(0);
     expect((await listHooks(request)).some((h) => h.label === label)).toBeFalsy();

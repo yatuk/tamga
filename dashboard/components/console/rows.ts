@@ -41,6 +41,24 @@ export function useRows(ids: string[], openId: string | null) {
 }
 
 /**
+ * Whether the rows of a table body are a later set, to be faded in as one.
+ * The first rows a table shows have not changed, and are drawn as they are;
+ * only a change of `swapKey` after that (another window, another filter,
+ * another page) sets the attribute the stylesheet fades on. Pass `ready` as
+ * false while the first read is still on its way, so that a filter changed
+ * before anything was shown does not count as a change.
+ *
+ *   <TableBody key={swapKey} data-swap={useSwap(swapKey)}>
+ */
+export function useSwap(swapKey: string, ready = true): "" | undefined {
+  const first = useRef(swapKey);
+  const [swapped, setSwapped] = useState(false);
+  if (!ready) first.current = swapKey;
+  else if (!swapped && first.current !== swapKey) setSwapped(true);
+  return swapped ? "" : undefined;
+}
+
+/**
  * Focus follows the panel: into it when a row opens, back to that row when it
  * closes. Put the returned ref on the panel, which needs tabIndex -1.
  */

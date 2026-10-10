@@ -15,7 +15,8 @@ export function useProxyPage() {
   const isLoading = healthLoading || detailLoading;
   const hasError = !!healthError;
 
-  const isOnline = up?.proxy === "up" || up?.proxy_status?.up === true;
+  // The last answer is kept while a check fails: it says what the proxy was, not what it is.
+  const isOnline = !healthError && (up?.proxy === "up" || up?.proxy_status?.up === true);
 
   const componentRows = useMemo(() => {
     const rows: { component: string; status: "ok" | "warning" | "error" | "disabled"; detail: string; dependsOn?: string }[] = [];

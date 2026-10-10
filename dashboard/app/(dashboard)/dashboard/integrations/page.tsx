@@ -130,7 +130,7 @@ export default function IntegrationsPage() {
                         <Button kind="ghost" size="sm" onClick={() => testMut.mutate(h.id)} disabled={testing === h.id}>
                           {testing === h.id ? "Sending" : "Send a test"}
                         </Button>
-                        <Remove label={`Disconnect ${h.label}`} verb="Disconnect" onConfirm={() => deleteMut.mutate(h.id)} />
+                        <Remove label={`Disconnect ${h.label}`} verb="Disconnect the destination" onConfirm={() => deleteMut.mutate(h.id)} />
                       </span>
                     </TableCell>
                   </TableRow>

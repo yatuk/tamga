@@ -394,7 +394,7 @@ describe("Policies page: custom entities", () => {
     await openTab(user, "Custom entities");
     await user.click(await screen.findByRole("button", { name: "Delete project_mercury" }));
     policyMock.writeBehind(DUAL_CONTROL);
-    await user.click(screen.getByRole("button", { name: "Delete" }));
+    await user.click(screen.getByRole("button", { name: "Delete the entity" }));
 
     expect(await screen.findByText("This proxy requires a second person for every policy change.")).toBeInTheDocument();
     expect(screen.getByText(/The entity was not deleted\. Make the change to custom_entities/)).toBeInTheDocument();

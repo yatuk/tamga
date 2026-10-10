@@ -24,7 +24,7 @@ import { EXPRESSIVE, PRODUCTIVE } from "@/components/console/motion";
 import { clockTime, counted, dayLabel } from "@/components/console/names";
 import { Pager } from "@/components/console/events";
 import { DataNotice, NoData, PageHead, Section, Shares } from "@/components/console/page";
-import { useEscape, usePanelFocus, useRows } from "@/components/console/rows";
+import { useEscape, usePanelFocus, useRows, useSwap } from "@/components/console/rows";
 import { useAdminKey } from "@/hooks/useAdminKey";
 import { useStringParam } from "@/hooks/useUrlState";
 import { api, type AuditEntry } from "@/lib/api";
@@ -97,6 +97,9 @@ export default function AuditPage() {
     openId,
   );
   const panel = usePanelFocus<HTMLElement>(open ? openId : "", !!open);
+  // Another filter or another page is a different set of rows; the first set is not.
+  const swapKey = `${kind}|${actor}|${page}`;
+  const swap = useSwap(swapKey, !log.isLoading);
 
   const total = log.data?.total ?? 0;
   const c = chain.data;
@@ -211,7 +214,7 @@ export default function AuditPage() {
                   {open ? null : <TableHeader>To</TableHeader>}
                 </TableRow>
               </TableHead>
-              <TableBody key={`${kind}|${actor}|${page}`} data-swap="">
+              <TableBody key={swapKey} data-swap={swap}>
                 {shown.map(({ it, id }) => (
                   <TableRow key={id} data-selected={id === openId} aria-current={id === openId ? "true" : undefined} {...row(id, () => toggle(id))}>
                     <TableCell style={{ fontVariantNumeric: "tabular-nums" }}>

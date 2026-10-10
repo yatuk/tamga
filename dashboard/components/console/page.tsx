@@ -71,7 +71,7 @@ export function DataNotice({
         ? [session.title, session.detail]
         : health.detailState === "rejected"
           ? ["The proxy did not accept the admin key.", "It is up. Check the key under Settings."]
-          : health.data
+          : health.data && !health.isError
             ? ["The proxy is up, but it did not return this page's data.", "Proxy status shows whether one of its parts is down."]
             : ["The proxy did not answer.", "Check that it is running and that this console points at it."];
   return (
@@ -165,7 +165,7 @@ export function Section({
 export function Statement({
   loading,
   figure,
-  quiet = true,
+  stopped,
   sentence,
   rest,
   below,
@@ -173,8 +173,12 @@ export function Statement({
 }: {
   loading?: boolean;
   figure: ReactNode;
-  /** Ink instead of the stamp red. Red is only for "stopped". */
-  quiet?: boolean;
+  /**
+   * The figure counts requests that were stopped, and there are some: it is
+   * drawn in the stamp red. Nothing else is; a bad answer that is not a
+   * stopped request (the proxy down, a target missed) is said in ink.
+   */
+  stopped?: boolean;
   sentence: ReactNode;
   rest?: ReactNode;
   below?: ReactNode;
@@ -188,7 +192,7 @@ export function Statement({
         ) : (
           <>
             <div className="t-figureline">
-              <span className="t-figure" data-quiet={quiet}>
+              <span className="t-figure" data-stopped={stopped ? "true" : undefined}>
                 {figure}
               </span>
               <p>{sentence}</p>
@@ -211,6 +215,8 @@ export function Statement({
 }
 
 export interface ShareRow {
+  /** What tells two rows apart, where two could carry the same label. */
+  id?: string;
   label: string;
   note?: string;
   value: number;
@@ -251,7 +257,7 @@ export function Shares({
       </thead>
       <tbody>
         {rows.map((r) => (
-          <tr key={r.label}>
+          <tr key={r.id ?? r.label}>
             <td className={r.data ? "t-data" : undefined}>{r.label}</td>
             {noted ? <td className="t-note">{r.note}</td> : null}
             <td className="t-num">{r.text ?? format(r.value)}</td>
@@ -270,22 +276,31 @@ export function Shares({
  * to read for something this small. The question opens with the focus on the
  * way out, so a second Enter keeps the thing; Escape does the same.
  *
- * The answer that does it is red. Something that can be undone says so by
- * passing recoverable, and is asked in ink.
+ * Neither answer is red: red is a stopped request. An answer that cannot be
+ * taken back is the solid ink button, and its words name what will be gone
+ * ("Delete the pattern", "Revoke the key for good"). One that can be undone
+ * says so by passing recoverable, and is the outlined ink button.
  */
 export function Remove({
   label,
-  verb = "Delete",
+  verb,
   text,
   keep = "Keep",
   recoverable,
   onConfirm,
   disabled,
 }: {
+  /** The accessible name of the bin: what it removes, by name ("Delete Leaked keys"). */
   label: string;
-  verb?: string;
+  /** The answer that does it. For something that cannot be undone it names what will be gone. */
+  verb: string;
   /** The way out, where "Keep" alone would not say what is kept. */
   keep?: string;
+  /**
+   * The thing can be had back (a session can be signed in to again). The
+   * answer is then drawn outlined instead of solid. Leave it out for anything
+   * that is gone for good.
+   */
   recoverable?: boolean;
   /** A worded button in place of the bin, for something other than deleting a row. */
   text?: string;
@@ -322,8 +337,9 @@ export function Remove({
     // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <span className="t-confirm" onKeyDown={(e) => e.key === "Escape" && setAsking(false)}>
       <Button
-        kind={recoverable ? "primary" : "danger"}
+        kind={recoverable ? "tertiary" : "primary"}
         size="sm"
+        data-answer={recoverable ? "recoverable" : "irreversible"}
         onClick={() => {
           setAsking(false);
           onConfirm();

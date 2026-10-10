@@ -274,7 +274,7 @@ describe("Team page: what is said about an account is the last thing that happen
 
     const row = await rowOf("900000001");
     await user.click(within(row).getByRole("button", { name: "Remove access" }));
-    await user.click(within(row).getByRole("button", { name: "Remove and sign out" }));
+    await user.click(within(row).getByRole("button", { name: "Remove access and sign out" }));
 
     expect(await within(await rowOf("900000001")).findByRole("status")).toHaveTextContent(
       "Access removed and signed out. The account cannot sign in until it is given a role again.",
@@ -305,7 +305,7 @@ describe("Team page: what is said about an account is the last thing that happen
 
     const again = await rowOf("Mehmet Demir");
     await user.click(within(again).getByRole("button", { name: "Remove access" }));
-    await user.click(within(again).getByRole("button", { name: "Remove and sign out" }));
+    await user.click(within(again).getByRole("button", { name: "Remove access and sign out" }));
     await waitFor(() => expect(within(screen.getByRole("row", { name: /Mehmet Demir/ })).getByRole("status")).toHaveTextContent(/^Access removed/));
     expect(within(screen.getByRole("row", { name: /Mehmet Demir/ })).getAllByRole("status")).toHaveLength(1);
     expect(screen.queryByText(/^Now viewer/)).toBeNull();
@@ -362,7 +362,7 @@ describe("Team page: removing access", () => {
     await user.click(within(row).getByRole("button", { name: "Remove access" }));
     // The first press only asks.
     expect(teamMock.member("1002")?.role).toBe("analyst");
-    await user.click(within(row).getByRole("button", { name: "Remove and sign out" }));
+    await user.click(within(row).getByRole("button", { name: "Remove access and sign out" }));
 
     // The proxy goes on listing the account, without a role. The row is there once, with what happened.
     const after = await rowOf("Mehmet Demir");
@@ -396,7 +396,7 @@ describe("Team page: removing access", () => {
     const user = show();
     const row = await rowOf("Mehmet Demir");
     await user.click(within(row).getByRole("button", { name: "Remove access" }));
-    await user.click(within(row).getByRole("button", { name: "Remove and sign out" }));
+    await user.click(within(row).getByRole("button", { name: "Remove access and sign out" }));
 
     expect(await within(await rowOf("Mehmet Demir")).findByRole("status")).toHaveTextContent(/^Access removed and signed out\./);
     expect(await screen.findByText("2 accounts hold a role on this proxy: 1 admin, 0 analysts, 1 viewer. 1 account has none.")).toBeInTheDocument();
@@ -420,7 +420,7 @@ describe("Team page: removing access", () => {
     const user = show();
     const row = await rowOf("Mehmet Demir");
     await user.click(within(row).getByRole("button", { name: "Remove access" }));
-    await user.click(within(row).getByRole("button", { name: "Remove and sign out" }));
+    await user.click(within(row).getByRole("button", { name: "Remove access and sign out" }));
 
     expect(await within(await rowOf("Mehmet Demir")).findByRole("status")).toHaveTextContent(
       "Role removed and signed out. This proxy admits accounts without a role as viewers, so the account can still sign in as one.",
@@ -441,7 +441,7 @@ describe("Team page: removing access", () => {
     const user = show();
     const row = await rowOf("Ayse Kaya");
     await user.click(within(row).getByRole("button", { name: "Remove access" }));
-    await user.click(within(row).getByRole("button", { name: "Remove and sign out" }));
+    await user.click(within(row).getByRole("button", { name: "Remove access and sign out" }));
 
     expect(await within(row).findByRole("alert")).toHaveTextContent(
       "This is the only admin. Access was not removed: make someone else an admin first.",
@@ -453,7 +453,7 @@ describe("Team page: removing access", () => {
     const user = show("session-1002");
     const row = await rowOf("Mehmet Demir");
     await user.click(within(row).getByRole("button", { name: "Remove access" }));
-    await user.click(within(row).getByRole("button", { name: "Remove and sign out" }));
+    await user.click(within(row).getByRole("button", { name: "Remove access and sign out" }));
 
     expect(await within(row).findByRole("alert")).toHaveTextContent(
       "You cannot remove your own access. Another admin can, or whoever holds the admin key.",

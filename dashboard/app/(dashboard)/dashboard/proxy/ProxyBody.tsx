@@ -44,7 +44,6 @@ export function ProxyBody({ adminKey, isLoading, hasError, isOnline, detailState
 
       <Statement
         loading={isLoading}
-        quiet={isOnline}
         figure={isOnline ? "Up" : "Down"}
         sentence={
           !isOnline

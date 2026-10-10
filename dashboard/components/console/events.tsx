@@ -20,7 +20,7 @@ import { api } from "@/lib/api";
 import type { IncidentStatus, SecurityEvent, SecurityEventDetail } from "@/lib/api/types-core";
 import { useStringParam } from "@/hooks/useUrlState";
 import { EXPRESSIVE, PRODUCTIVE } from "./motion";
-import { useEscape, usePanelFocus, useRows } from "./rows";
+import { useEscape, usePanelFocus, useRows, useSwap } from "./rows";
 import { ACTION_WORDS, clockTime, dayLabel, kindName, leadFinding, providerName, roleName, typeName } from "./names";
 
 /** A request the proxy only looked at: nothing to triage. */
@@ -114,7 +114,7 @@ export function EventTable({
 }: {
   events: SecurityEvent[];
   label: string;
-  /** Changes when the rows are a different set: they then fade in as one. */
+  /** Changes when the rows are a different set: they then fade in as one. The first set does not. */
   swapKey: string;
   fresh?: Set<string>;
   openId: string;
@@ -134,6 +134,7 @@ export function EventTable({
     openId,
   );
   const panel = usePanelFocus<HTMLElement>(openId, shown);
+  const swap = useSwap(swapKey);
 
   return (
     <div className="t-work" data-open={shown}>
@@ -149,7 +150,7 @@ export function EventTable({
               {shown ? null : <TableHeader>Request</TableHeader>}
             </TableRow>
           </TableHead>
-          <TableBody key={swapKey} data-swap="">
+          <TableBody key={swapKey} data-swap={swap}>
             {events.map((e) => {
               const f = leadFinding(e);
               const selected = e.request_id === openId;
@@ -251,7 +252,7 @@ function EventDetail({ event, adminKey, onClose }: { event: SecurityEvent; admin
       <header>
         <div>
           <ActionMark action={event.action} />
-          <h2 style={{ marginTop: "0.4rem" }}>{lead ? kindName(lead.category) : "Nothing was found"}</h2>
+          <h2>{lead ? kindName(lead.category) : "Nothing was found"}</h2>
           <p className="t-note" style={{ marginTop: "0.25rem" }}>
             {dayLabel(event.timestamp)}, {clockTime(event.timestamp)}. {providerName(event.provider)}
             {event.model ? `, ${event.model}` : ""}.

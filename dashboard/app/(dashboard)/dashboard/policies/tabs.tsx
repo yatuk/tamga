@@ -311,6 +311,7 @@ export function Entities({
                       <span className="t-rowactions">
                         <Remove
                           label={`Delete ${ce.name}`}
+                          verb="Delete the entity"
                           onConfirm={() => {
                             setDeleteRefusal(null);
                             remove.mutate(ce.name);

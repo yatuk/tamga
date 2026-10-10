@@ -14,9 +14,18 @@ import { animate, AnimatePresence, motion, MotionConfig, useReducedMotion } from
 export const PRODUCTIVE = [0.2, 0, 0.38, 0.9] as const;
 export const EXPRESSIVE = [0.4, 0.14, 0.3, 1] as const;
 
-/** Honours the operating system's reduced-motion setting for everything inside. */
+/**
+ * Honours the operating system's reduced-motion setting for everything inside.
+ * With it on, nothing tweens: every animation inside jumps to its end state,
+ * the fades as well as the moves.
+ */
 export function Motion({ children }: { children: ReactNode }) {
-  return <MotionConfig reducedMotion="user">{children}</MotionConfig>;
+  const still = useReducedMotion() ?? false;
+  return (
+    <MotionConfig reducedMotion="user" skipAnimations={still}>
+      {children}
+    </MotionConfig>
+  );
 }
 
 /**
@@ -73,6 +82,7 @@ export function Count({
 /**
  * A bar as long as its share. When the data changes it moves from where it
  * was, so a change in the window reads as a change and not as a new chart.
+ * With reduced motion it is simply as long as its share.
  */
 export function Bar({
   share,
@@ -88,6 +98,8 @@ export function Bar({
 } & Record<`data-${string}`, string | undefined>) {
   const size = `${Math.max(0, Math.min(1, share)) * 100}%`;
   const prop = axis === "x" ? "width" : "height";
+  const still = useReducedMotion();
+  if (still) return <span className={className} style={{ ...style, [prop]: size }} {...rest} />;
   return (
     <motion.span
       className={className}

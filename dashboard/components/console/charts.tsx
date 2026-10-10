@@ -229,23 +229,31 @@ export function Trace({
 /**
  * Marks on one scale. For a handful of values of the same measure, where the
  * distance between them is the point; a mark slides when its value changes.
+ * With reduced motion it is simply at its value.
  */
 export function Scale({ marks, format, label }: { marks: { name: string; value: number }[]; format: (n: number) => string; label: string }) {
   const top = Math.max(1e-9, ...marks.map((m) => m.value)) * 1.08;
+  const still = useReducedMotion();
   return (
     <div className="t-scaleline" role="img" aria-label={label}>
-      {marks.map((m) => (
-        <motion.div
-          key={m.name}
-          className="t-mark"
-          initial={false}
-          animate={{ left: `${(m.value / top) * 100}%` }}
-          transition={{ duration: 0.4, ease: EXPRESSIVE }}
-        >
-          <b>{format(m.value)}</b>
-          <span>{m.name}</span>
-        </motion.div>
-      ))}
+      {marks.map((m) => {
+        const left = `${(m.value / top) * 100}%`;
+        const words = (
+          <>
+            <b>{format(m.value)}</b>
+            <span>{m.name}</span>
+          </>
+        );
+        return still ? (
+          <div key={m.name} className="t-mark" style={{ left }}>
+            {words}
+          </div>
+        ) : (
+          <motion.div key={m.name} className="t-mark" initial={false} animate={{ left }} transition={{ duration: 0.4, ease: EXPRESSIVE }}>
+            {words}
+          </motion.div>
+        );
+      })}
     </div>
   );
 }

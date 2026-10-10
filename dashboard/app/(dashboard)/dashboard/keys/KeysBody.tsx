@@ -145,7 +145,7 @@ export function KeysBody({
                       <Remove
                         label={`Revoke ${key.label}`}
                         text="Revoke"
-                        verb="Revoke for good"
+                        verb="Revoke the key for good"
                         disabled={deleteMutation.isPending}
                         onConfirm={() => deleteMutation.mutate(key.id)}
                       />

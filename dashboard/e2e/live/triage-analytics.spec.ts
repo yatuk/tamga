@@ -674,12 +674,12 @@ test.describe("Threat hunting", () => {
 
     // Delete asks in place; "Keep" backs out.
     await item.getByRole("button", { name: `Delete ${name}` }).click();
-    await expect(item.getByRole("button", { name: "Delete", exact: true })).toBeVisible();
+    await expect(item.getByRole("button", { name: "Delete the search", exact: true })).toBeVisible();
     await item.getByRole("button", { name: "Keep" }).click();
     await expect(item.getByRole("button", { name: `Delete ${name}` })).toBeVisible();
 
     await item.getByRole("button", { name: `Delete ${name}` }).click();
-    await item.getByRole("button", { name: "Delete", exact: true }).click();
+    await item.getByRole("button", { name: "Delete the search", exact: true }).click();
     await expect(item).toHaveCount(0);
     const after = await apiGet<{ items: { id: string; name: string }[] | null }>(page, "/api/v1/saved-hunts");
     expect((after.items ?? []).some((h) => h.name === name)).toBe(false);

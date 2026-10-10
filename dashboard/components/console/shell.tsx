@@ -71,8 +71,10 @@ export function TamgaShell({ children }: { children: ReactNode }) {
               <span className="t-shellstate">
                 <span key={health.checkedAt} className="t-dot" data-state={health.up === undefined ? "checking" : health.up ? "up" : "down"} />
                 {/* Only up or down is announced; the scan time changes with every check. */}
-                <span role="status">{health.up === undefined ? "Checking the proxy" : health.up ? "Proxy up" : "Proxy unreachable"}</span>
-                {health.up && health.scanP50 !== null ? <span style={{ marginLeft: "-0.5rem" }}>, scanning in {health.scanP50} ms</span> : null}
+                <span>
+                  <span role="status">{health.up === undefined ? "Checking the proxy" : health.up ? "Proxy up" : "Proxy unreachable"}</span>
+                  {health.up && health.scanP50 !== null ? <span>, scanning in {health.scanP50} ms</span> : null}
+                </span>
               </span>
               <HeaderGlobalAction
                 aria-label="Search or jump to a page (Ctrl K)"
@@ -117,16 +119,18 @@ export function TamgaShell({ children }: { children: ReactNode }) {
 
         <main id="main" tabIndex={-1} className="t-main">
           {health.up === false ? (
+            // Ink, not red: nothing was stopped. It is set apart from an ordinary
+            // notice by its place above every page, a heading-size title and a 3px rule.
             <ActionableNotification
               kind="error"
               lowContrast
               inline
               hideCloseButton
+              className="t-proxydown"
               title="The proxy is not answering."
               subtitle={health.reason ? `${health.reason}. Requests may be going out unscanned.` : "Requests may be going out unscanned."}
               actionButtonLabel="Proxy status"
               onActionButtonClick={() => router.push("/dashboard/proxy")}
-              style={{ maxWidth: "none", marginBottom: "1.5rem" }}
             />
           ) : null}
           {/* Pages read filters from the URL, which suspends during prerender. */}

@@ -172,7 +172,7 @@ export function Members({
                       <Remove
                         label={`Remove access of ${who}`}
                         text="Remove access"
-                        verb="Remove and sign out"
+                        verb="Remove access and sign out"
                         disabled={pending}
                         onConfirm={() => onRemove(m)}
                       />

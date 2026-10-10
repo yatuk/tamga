@@ -59,7 +59,6 @@ export function LatencyBody({
 
       <Statement
         loading={isLoading}
-        quiet={!slow}
         figure={measured ? <Count value={p95} format={formatMs} /> : "No data"}
         sentence={
           measured
@@ -70,7 +69,12 @@ export function LatencyBody({
           measured ? (
             <>
               Half are done within <b>{formatMs(p50)}</b>. The slowest 1 in 100 take <b>{formatMs(p99)}</b> or longer.
-              {slow ? <> That is above the {formatMs(TARGET_MS)} target.</> : null}
+              {slow ? (
+                <>
+                  {" "}
+                  <b>That is above the {formatMs(TARGET_MS)} target.</b>
+                </>
+              ) : null}
             </>
           ) : undefined
         }

@@ -1,8 +1,9 @@
 "use client";
 
+import type { ReactNode } from "react";
 import NextLink from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { ContentSwitcher, Link, SkeletonText, Switch } from "@carbon/react";
+import { Link } from "@carbon/react";
 import { api } from "@/lib/api";
 import { formatMs } from "@/lib/utils/format";
 import { useAdminKey } from "@/hooks/useAdminKey";
@@ -10,7 +11,7 @@ import { useHealth } from "@/hooks/useHealth";
 import { useRangeParam } from "@/hooks/useRangeParam";
 import { Columns } from "@/components/console/charts";
 import { NEEDS_KEY } from "@/components/console/health";
-import { DataNotice, NoData } from "@/components/console/page";
+import { DataNotice, NoData, PageHead, RangeSwitch, Section, Shares, Statement } from "@/components/console/page";
 import { Arrive, Arriving, Bar, Count } from "@/components/console/motion";
 import {
   bucketLabel,
@@ -26,13 +27,11 @@ import {
   uptimeText,
 } from "@/components/console/names";
 
-const RANGES = ["24h", "7d", "30d"] as const;
-
 export function Overview() {
   const [adminKey] = useAdminKey();
   const [range, setRange] = useRangeParam("7d");
   // `health` is what the proxy tells anyone. `detail` needs the admin key.
-  const { data: health, detail, detailState } = useHealth();
+  const { data: health, isError: unreachable, detail, detailState } = useHealth();
   // Shown in place of a value the proxy keeps back; before it has answered, nothing is known.
   const unknown = detailState === "no-key" || detailState === "rejected" ? NEEDS_KEY : "Not known";
 
@@ -65,10 +64,19 @@ export function Overview() {
   const passed = s?.passed_requests ?? 0;
 
   const kinds = Object.entries(s?.top_categories ?? {}).sort((a, b) => b[1] - a[1]);
-  const kindMax = kinds[0]?.[1] ?? 1;
   const waiting = (events.data?.events ?? []).filter((e) => e.action === "BLOCK").slice(0, 7);
   const points = series.data?.points ?? [];
   const hourly = series.data?.bucket === "hour";
+
+  const facts: [string, ReactNode][] = [
+    // The last answer is kept while a check fails; it must not be read as the proxy being up now.
+    ["Proxy", unreachable ? "Unreachable" : health ? (health.proxy === "up" ? "Up" : "Unreachable") : "Checking"],
+    ["Uptime", detail ? uptimeText(detail.uptime_seconds) : unknown],
+    ["Scan time, median", formatMs(health?.scan_latency_ms_p50)],
+    ["Scan time, 95th percentile", formatMs(health?.scan_latency_ms_p95)],
+    ["Scanners running", detail?.scanner_count ?? unknown],
+    ["Database", detail?.database === "connected" ? "Connected" : (detail?.database ?? unknown)],
+  ];
 
   if (!adminKey || (stats.isError && !s)) {
     return <NoData title="Overview" lede="What the proxy scanned, and what it did about it." adminKey={adminKey} error={stats.error} />;
@@ -76,49 +84,37 @@ export function Overview() {
 
   return (
     <>
-      <div className="t-pagehead">
-        <div>
-          <h1>Overview</h1>
-          <p className="t-lede">What the proxy scanned in {RANGE_WORDS[range]}, and what it did about it.</p>
-        </div>
-        <ContentSwitcher
-          size="sm"
-          selectedIndex={Math.max(0, RANGES.indexOf(range as (typeof RANGES)[number]))}
-          onChange={({ index }) => setRange(RANGES[index ?? 1])}
-          style={{ width: "19rem", flexShrink: 0 }}
-        >
-          <Switch name="24h" text="24 hours" />
-          <Switch name="7d" text="7 days" />
-          <Switch name="30d" text="30 days" />
-        </ContentSwitcher>
-      </div>
+      <PageHead title="Overview" lede={`What the proxy scanned in ${RANGE_WORDS[range]}, and what it did about it.`}>
+        <RangeSwitch value={range} onChange={setRange} />
+      </PageHead>
 
       <DataNotice adminKey={adminKey} failed={stats.isError} />
 
-      <div className="t-statement">
-        <div>
-          {stats.isLoading ? (
-            <SkeletonText heading width="60%" />
-          ) : total === 0 ? (
-            <div className="t-figureline">
-              <span className="t-figure" data-quiet="true">0</span>
-              <p>requests went through the proxy in {RANGE_WORDS[range]}.</p>
-            </div>
-          ) : (
+      {total === 0 ? (
+        <Statement
+          loading={stats.isLoading}
+          figure="0"
+          sentence={`requests went through the proxy in ${RANGE_WORDS[range]}.`}
+          facts={facts}
+        />
+      ) : (
+        <Statement
+          // Red, because this figure counts requests that were stopped.
+          stopped={blocked > 0}
+          figure={<Count value={blocked} />}
+          sentence={
             <>
-              <div className="t-figureline">
-                <span className="t-figure" data-quiet={blocked === 0}>
-                  <Count value={blocked} />
-                </span>
-                <p>
-                  of {total.toLocaleString("en")} requests {blocked === 1 ? "was" : "were"} stopped before{" "}
-                  {blocked === 1 ? "it" : "they"} reached a provider.
-                </p>
-              </div>
-              <p className="t-rest">
-                <b>{altered.toLocaleString("en")}</b> went on with something redacted. <b>{passed.toLocaleString("en")}</b> passed
-                untouched.
-              </p>
+              of {total.toLocaleString("en")} requests {blocked === 1 ? "was" : "were"} stopped before {blocked === 1 ? "it" : "they"}{" "}
+              reached a provider.
+            </>
+          }
+          rest={
+            <>
+              <b>{altered.toLocaleString("en")}</b> went on with something redacted. <b>{passed.toLocaleString("en")}</b> passed untouched.
+            </>
+          }
+          below={
+            <>
               <div className="t-split" role="img" aria-label={`${blocked} stopped, ${altered} redacted, ${passed} passed`}>
                 <Bar data-kind="blocked" share={blocked / total} />
                 <Bar data-kind="altered" share={altered / total} />
@@ -129,88 +125,67 @@ export function Overview() {
                 <span>Passed, {Math.round((passed / total) * 100)}%</span>
               </div>
             </>
-          )}
-        </div>
-
-        <dl className="t-facts">
-          <div><dt>Proxy</dt><dd>{health ? (health.proxy === "up" ? "Up" : "Unreachable") : "Checking"}</dd></div>
-          <div><dt>Uptime</dt><dd>{detail ? uptimeText(detail.uptime_seconds) : unknown}</dd></div>
-          <div><dt>Scan time, median</dt><dd>{formatMs(health?.scan_latency_ms_p50)}</dd></div>
-          <div><dt>Scan time, 95th percentile</dt><dd>{formatMs(health?.scan_latency_ms_p95)}</dd></div>
-          <div><dt>Scanners running</dt><dd>{detail?.scanner_count ?? unknown}</dd></div>
-          <div><dt>Database</dt><dd>{detail?.database === "connected" ? "Connected" : (detail?.database ?? unknown)}</dd></div>
-        </dl>
-      </div>
+          }
+          facts={facts}
+        />
+      )}
 
       <div className="t-columns">
-        <section aria-labelledby="kinds">
-          <div className="t-sectionhead">
-            <h2 id="kinds">What was found</h2>
-            <span className="t-note">Findings, not requests: one request can carry several.</span>
-          </div>
-          {kinds.length === 0 ? (
-            <p className="t-empty">Nothing was found in this window.</p>
-          ) : (
-            <table className="t-kinds">
-              <thead>
-                <tr>
-                  <th>Finding</th>
-                  <th>Kind</th>
-                  <th className="t-num">Count</th>
-                  <th className="t-bar"><span className="cds--visually-hidden">Share</span></th>
-                </tr>
-              </thead>
-              <tbody>
-                {kinds.map(([category, count]) => (
-                  <tr key={category}>
-                    <td>{kindName(category)}</td>
-                    <td className="t-note">{typeName(kindType(category))}</td>
-                    <td className="t-num">{count}</td>
-                    <td className="t-bar"><Bar share={count / kindMax} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </section>
+        <Section id="kinds" title="What was found" note="Findings, not requests: one request can carry several.">
+          <Shares
+            head={["Finding", "Kind", "Count"]}
+            rows={kinds.map(([category, count]) => ({
+              id: category,
+              label: kindName(category),
+              note: typeName(kindType(category)),
+              value: count,
+            }))}
+            empty="Nothing was found in this window."
+          />
+        </Section>
 
-        <section aria-labelledby="waiting">
-          <div className="t-sectionhead">
-            <h2 id="waiting">Stopped most recently</h2>
-            <Link as={NextLink} href="/dashboard/security">Open the queue</Link>
-          </div>
+        <Section
+          id="waiting"
+          title="Stopped most recently"
+          note={
+            <Link as={NextLink} href="/dashboard/security">
+              Open the queue
+            </Link>
+          }
+        >
           {waiting.length === 0 ? (
             <p className="t-empty">No request has been stopped yet.</p>
           ) : (
             <ul className="t-queue">
               <Arriving>
-              {waiting.map((e) => {
-                const f = leadFinding(e);
-                return (
-                  <Arrive key={e.request_id}>
-                    <time dateTime={e.timestamp}>{clockTime(e.timestamp)}</time>
-                    <span>
-                      {f ? kindName(f.category) : "No finding recorded"}
-                      {e.findings_count > 1 ? <span className="t-note"> and {e.findings_count - 1} more</span> : null}
-                    </span>
-                    <span className="t-where">
-                      {providerName(e.provider)}
-                      {e.model ? `, ${e.model}` : ""}
-                    </span>
-                  </Arrive>
-                );
-              })}
+                {waiting.map((e) => {
+                  const f = leadFinding(e);
+                  return (
+                    <Arrive key={e.request_id}>
+                      <time dateTime={e.timestamp}>{clockTime(e.timestamp)}</time>
+                      <span>
+                        {f ? kindName(f.category) : "No finding recorded"}
+                        {e.findings_count > 1 ? <span className="t-note"> and {e.findings_count - 1} more</span> : null}
+                      </span>
+                      <span className="t-where">
+                        {providerName(e.provider)}
+                        {e.model ? `, ${e.model}` : ""}
+                      </span>
+                    </Arrive>
+                  );
+                })}
               </Arriving>
             </ul>
           )}
-        </section>
+        </Section>
       </div>
 
-      <section aria-labelledby="days" style={{ marginTop: "3rem" }}>
-        <div className="t-sectionhead">
-          <h2 id="days">Requests by {hourly ? "hour" : "day"}</h2>
-          <span className="t-note">Red is stopped, ochre is redacted, grey passed.</span>
-        </div>
+      <Section
+        id="days"
+        title={`Requests by ${hourly ? "hour" : "day"}`}
+        note="Red is stopped, ochre is redacted, grey passed."
+        style={{ marginTop: "3rem" }}
+      >
         {points.length === 0 ? (
           <p className="t-empty">No traffic in this window.</p>
         ) : (
@@ -229,7 +204,7 @@ export function Overview() {
             }))}
           />
         )}
-      </section>
+      </Section>
     </>
   );
 }

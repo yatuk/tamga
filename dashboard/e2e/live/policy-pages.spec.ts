@@ -355,7 +355,7 @@ test.describe("Policies", () => {
     await expect(row).toBeVisible();
 
     await row.getByRole("button", { name: `Delete ${name}` }).click();
-    await row.getByRole("button", { name: "Delete", exact: true }).click();
+    await row.getByRole("button", { name: "Delete the entity", exact: true }).click();
     await expect(row).toBeHidden({ timeout: 15_000 });
     expect((await listEntities()).map((e) => e.name)).not.toContain(name);
   });
@@ -458,7 +458,7 @@ test.describe("Patterns", () => {
     await row.getByRole("button", { name: "Keep" }).click();
     await expect(row).toBeVisible();
     await row.getByRole("button", { name: `Delete ${name}` }).click();
-    await row.getByRole("button", { name: "Delete", exact: true }).click();
+    await row.getByRole("button", { name: "Delete the pattern", exact: true }).click();
     await expect(toast(page, "Pattern deleted")).toBeVisible({ timeout: 15_000 });
     await expect(row).toBeHidden();
     expect((await listPatterns()).map((p) => p.name)).not.toContain(name);

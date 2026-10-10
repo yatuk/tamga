@@ -211,7 +211,7 @@ export function Proposals({
                       <Remove
                         label={`Reject proposal ${p.id.slice(0, 8)}`}
                         text="Reject"
-                        verb="Reject it"
+                        verb="Reject the proposal"
                         disabled={busy}
                         onConfirm={() => {
                           setRefused(null);

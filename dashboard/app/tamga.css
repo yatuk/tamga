@@ -17,6 +17,9 @@
  *           you are is marked in ink, and so is a part of the system that is
  *           failing, with a solid square, or struggling, with a hollow one.
  *           Carbon's own status colours are mapped to ink for the same reason.
+ *           The two exceptions are the full stop of the wordmark, which is
+ *           the mark itself, and the diff, whose red and green are older than
+ *           this console.
  */
 
 /* On the root, not on .tamga: toasts are drawn outside it. */
@@ -24,18 +27,29 @@
   --tamga-ink: #161616;
   --tamga-ink-2: #525252; /* secondary text */
   --tamga-ink-3: #6f6f6f; /* helper text, placeholders */
+  --tamga-ink-hover: #393939; /* an ink button under the pointer */
+  --tamga-black: #000000; /* a link under the pointer */
   --tamga-paper: #f4f4f4;
   --tamga-sheet: #ffffff;
   --tamga-track: #e0e0e0; /* the empty part of a bar */
-  --tamga-hover: #e8e8e8; /* a row under the pointer, or selected */
+  --tamga-hover: #e8e8e8; /* a row under the pointer, selected, or just arrived */
   --tamga-rule: #c6c6c6;
+  --tamga-mark-checking: #8d8d8d; /* the status dot before the first answer */
 
   --tamga-stamp: #b82a18; /* stopped: text and marks. 4.5:1 on a hovered row. */
   --tamga-stamp-fill: #e04a35;
   --tamga-stamp-tint: #ffd7d0;
+  --tamga-stamp-on-ink: #e5503b; /* the full stop of the wordmark in the header. 4.5:1 on ink. */
   --tamga-altered: #7a5000; /* redacted or stripped: text */
   --tamga-altered-fill: #d99e1c;
   --tamga-altered-tint: #fbe9b8;
+
+  /* The diff only. Removed is red and added is green by a convention older
+     than this console; nothing else may use these. */
+  --tamga-diff-added-tint: #dff1e2;
+  --tamga-diff-added-text: #0e4a20;
+  --tamga-diff-removed-tint: #ffe3de;
+  --tamga-diff-removed-text: #8f1d0f;
 }
 
 .tamga {
@@ -55,13 +69,13 @@
 .tamga .cds--white {
   --cds-interactive: var(--tamga-ink);
   --cds-button-primary: var(--tamga-ink);
-  --cds-button-primary-hover: #393939;
+  --cds-button-primary-hover: var(--tamga-ink-hover);
   --cds-button-primary-active: var(--tamga-ink-2);
   --cds-button-tertiary: var(--tamga-ink);
-  --cds-button-tertiary-hover: #393939;
+  --cds-button-tertiary-hover: var(--tamga-ink-hover);
   --cds-button-tertiary-active: var(--tamga-ink-2);
   --cds-link-primary: var(--tamga-ink);
-  --cds-link-primary-hover: #000000;
+  --cds-link-primary-hover: var(--tamga-black);
   --cds-link-visited: var(--tamga-ink);
   --cds-focus: var(--tamga-ink);
   --cds-border-interactive: var(--tamga-ink);
@@ -69,9 +83,11 @@
   --cds-highlight: var(--tamga-hover);
   --cds-layer-selected: var(--tamga-hover);
   --cds-text-placeholder: var(--tamga-ink-3);
-  /* Carbon's red, green, blue: all ink here. */
+  /* Carbon's red, green, blue: all ink here. The console draws no danger
+     button; the tokens are mapped so that one cannot arrive in red. */
   --cds-button-danger-primary: var(--tamga-ink);
-  --cds-button-danger-hover: #393939;
+  --cds-button-danger-secondary: var(--tamga-ink);
+  --cds-button-danger-hover: var(--tamga-ink-hover);
   --cds-button-danger-active: var(--tamga-ink-2);
   --cds-support-error: var(--tamga-ink);
   --cds-support-success: var(--tamga-ink);
@@ -79,10 +95,10 @@
   --cds-text-error: var(--tamga-ink);
 }
 .tamga .cds--g100 {
-  --cds-interactive: #ffffff;
-  --cds-focus: #ffffff;
-  --cds-border-interactive: #ffffff;
-  --cds-link-primary: #ffffff;
+  --cds-interactive: var(--tamga-sheet);
+  --cds-focus: var(--tamga-sheet);
+  --cds-border-interactive: var(--tamga-sheet);
+  --cds-link-primary: var(--tamga-sheet);
 }
 
 /* Our faces everywhere Carbon would put Plex. */
@@ -103,7 +119,7 @@
 /* The parts of the page the browser draws. */
 .tamga ::selection {
   background: var(--tamga-ink);
-  color: #ffffff;
+  color: var(--tamga-sheet);
 }
 .tamga input,
 .tamga textarea {
@@ -140,6 +156,10 @@ html {
   font-style: normal;
   color: var(--tamga-stamp-fill);
 }
+/* On the ink header the same full stop needs a lighter red to stay at 4.5:1. */
+.tamga .cds--header .t-brand i {
+  color: var(--tamga-stamp-on-ink);
+}
 .tamga .t-main {
   margin-left: 16rem;
   padding: 5rem 2rem 4rem;
@@ -159,7 +179,7 @@ html {
   width: 0.5rem;
   height: 0.5rem;
   border-radius: 50%;
-  background: #8d8d8d;
+  background: var(--tamga-mark-checking);
 }
 /* Up is a full dot, down an empty one. The words beside it say which. */
 .tamga .t-dot[data-state="up"] {
@@ -219,10 +239,13 @@ html {
   display: block;
   padding: 0.5rem 1rem;
   font-size: 0.875rem;
-  line-height: 1.25rem;
+  line-height: 1.45;
   color: var(--cds-text-secondary);
   text-decoration: none;
   transition: background-color 110ms cubic-bezier(0.2, 0, 0.38, 0.9), color 110ms cubic-bezier(0.2, 0, 0.38, 0.9);
+}
+@media (prefers-reduced-motion: reduce) {
+  .tamga .t-navlink { transition: none; }
 }
 .tamga .t-navlink:hover {
   background: var(--cds-background-hover);
@@ -247,6 +270,12 @@ html {
   background: var(--cds-layer);
   color: var(--cds-text-primary);
 }
+/* Carbon sets its 3px edge with a logical property, which the build turns
+   into a rule more specific than the one above; this one is its match. */
+.tamga .cds--inline-notification.cds--inline-notification--low-contrast,
+.tamga .cds--actionable-notification.cds--actionable-notification--low-contrast {
+  border-left-width: 1px;
+}
 .tamga .cds--inline-notification::before,
 .tamga .cds--actionable-notification::before {
   display: none;
@@ -264,8 +293,59 @@ html {
 .tamga .cds--content-switcher-btn,
 .tamga .cds--content-switcher-btn::after,
 .tamga .cds--toggle__switch,
-.tamga .cds--toggle__switch::before {
+.tamga .cds--toggle__switch::before,
+.tamga .cds--toggle__button:focus + .cds--toggle__label .cds--toggle__switch::after,
+.tamga .cds--toggle:not(.cds--toggle--disabled):active .cds--toggle__switch::after,
+.tamga .cds--content-switcher-btn:focus::after,
+.tamga .cds--content-switcher-btn:not(.cds--content-switcher--selected):focus::before,
+.tamga .cds--content-switcher-btn.cds--content-switcher--selected:disabled,
+.tamga .cds--checkbox-label::before,
+.tamga .cds--popover-content,
+.tamga .cds--copy-btn__feedback {
   border-radius: 0;
+}
+/* The proxy is not answering: said above every page, in ink, under the
+   heaviest rule the console draws. Not red: nothing was stopped. */
+.tamga .t-proxydown {
+  max-width: none;
+  margin-bottom: 1.5rem;
+  border-top-width: 3px;
+}
+.tamga .t-proxydown .cds--actionable-notification__title {
+  font-family: var(--tamga-font-head);
+  font-stretch: 88%;
+  font-size: 1.125rem;
+  line-height: 1.3;
+}
+.tamga .t-proxydown .cds--actionable-notification__content {
+  align-items: baseline;
+}
+.tamga .t-proxydown .cds--actionable-notification__subtitle {
+  font-weight: 600;
+}
+
+/* What opens over the page. A menu is set apart by an ink line, not by a
+   shadow; a tooltip is a square ink label. */
+.tamga {
+  --cds-popover-border-radius: 0;
+  --cds-popover-drop-shadow: none;
+}
+.tamga .cds--tooltip,
+.tamga .cds--toggletip,
+.tamga .cds--definition-tooltip {
+  --cds-popover-border-radius: 0;
+}
+.tamga .cds--list-box__menu,
+.tamga .cds--dropdown-list,
+.tamga .cds--copy-btn__feedback {
+  box-shadow: none;
+}
+.tamga .cds--list-box--expanded .cds--list-box__menu {
+  outline: 1px solid var(--tamga-ink);
+  outline-offset: -1px;
+}
+.tamga .cds--modal-container {
+  border-color: var(--tamga-ink);
 }
 /* The way out of a dialog is quieter than the way on. */
 .tamga .cds--modal-footer .cds--btn--secondary {
@@ -342,10 +422,11 @@ html {
   line-height: 0.9;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
-  color: var(--tamga-stamp);
-}
-.tamga .t-figure[data-quiet="true"] {
   color: var(--cds-text-primary);
+}
+/* Red only where the figure counts requests that were stopped. */
+.tamga .t-figure[data-stopped="true"] {
+  color: var(--tamga-stamp);
 }
 .tamga .t-figureline {
   display: flex;
@@ -370,12 +451,19 @@ html {
   font-variant-numeric: tabular-nums;
 }
 
-/* One bar for the whole window: how much was stopped, changed, let through. */
+/* One bar for the whole window: how much was stopped, changed, let through.
+   The track and each part are closed by an ink hairline: the fills alone do
+   not reach 3:1 against the page or against each other. */
 .tamga .t-split {
   display: flex;
   height: 0.75rem;
   margin-top: 1.75rem;
   background: var(--tamga-track);
+  outline: 1px solid var(--tamga-ink);
+  outline-offset: -1px;
+}
+.tamga .t-split span {
+  box-shadow: inset -1px 0 0 var(--tamga-ink);
 }
 .tamga .t-split span[data-kind="blocked"] {
   background: var(--tamga-stamp-fill);
@@ -397,6 +485,12 @@ html {
   height: 0.625rem;
   margin-right: 0.5rem;
   background: var(--tamga-track);
+  box-shadow: inset 0 0 0 1px var(--tamga-ink);
+}
+/* A state the key has to say aloud, such as a budget with nothing left. */
+.tamga .t-splitkey b {
+  font-weight: 600;
+  color: var(--cds-text-primary);
 }
 .tamga .t-splitkey span[data-kind="blocked"]::before {
   background: var(--tamga-stamp-fill);
@@ -547,9 +641,12 @@ html {
   flex-direction: column-reverse;
   height: 100%;
 }
+/* Each part of a column is capped by an ink hairline, so stopped, redacted
+   and passed are told apart by a line as well as by their fills. */
 .tamga .t-day span {
   display: block;
   background: var(--tamga-rule);
+  box-shadow: inset 0 1px 0 var(--tamga-ink);
 }
 .tamga .t-day span[data-kind="blocked"] {
   background: var(--tamga-stamp-fill);
@@ -634,11 +731,21 @@ html {
 .tamga .t-work tbody tr[data-new="true"] td {
   animation: t-arrived 2.4s cubic-bezier(0.2, 0, 0.38, 0.9) 1;
 }
-/* Grey, whatever was done to the request: red would say it was stopped. */
+/* The ground of a hovered row, whatever was done to the request: red would
+   say it was stopped, and on this grey every action mark stays above 4.5:1.
+   An ink bar on the leading edge makes it plain which rows are new. */
 @keyframes t-arrived {
-  0% { background-color: var(--tamga-rule); }
+  0% { background-color: var(--tamga-hover); }
   100% { background-color: transparent; }
 }
+.tamga .t-work tbody tr[data-new="true"]:not([data-selected="true"]) td:first-child {
+  animation-name: t-arrived, t-arrived-edge;
+}
+@keyframes t-arrived-edge {
+  0% { box-shadow: inset 3px 0 0 var(--tamga-ink); }
+  100% { box-shadow: inset 3px 0 0 transparent; }
+}
+/* Only a later change sets data-swap: the first rows a table shows are still. */
 .tamga .t-work tbody[data-swap] tr {
   animation: t-rows 200ms cubic-bezier(0.2, 0, 0.38, 0.9) 1 both;
 }
@@ -726,6 +833,9 @@ html {
   gap: 1rem;
   padding: 1rem 1rem 0.75rem;
   border-bottom: 1px solid var(--tamga-rule);
+}
+.tamga .t-detail header .t-action + h2 {
+  margin-top: 0.5rem;
 }
 .tamga .t-detail section {
   padding: 1rem;
@@ -872,8 +982,9 @@ html {
   stroke: var(--tamga-rule);
   stroke-width: 1;
 }
+/* A limit is an ink rule with its name on it. Being over it is said in words. */
 .tamga .t-trace .t-limit {
-  stroke: var(--tamga-stamp);
+  stroke: var(--tamga-ink);
   stroke-width: 1;
   stroke-dasharray: 4 3;
 }
@@ -903,7 +1014,8 @@ html {
 .tamga .t-trace .t-scale[data-limit="true"] {
   right: auto;
   left: 0;
-  color: var(--tamga-stamp);
+  font-weight: 600;
+  color: var(--cds-text-primary);
 }
 .tamga .t-tracelabels {
   display: flex;
@@ -1146,7 +1258,8 @@ html {
 .tamga textarea[data-code] {
   font-size: 0.8125rem;
 }
-/* What a pattern caught in the sample, marked where it was caught. */
+/* What a pattern caught in the sample, marked where it was caught. Caught is
+   not stopped: the mark is ink unless the policy's action is known. */
 .tamga .t-sample {
   min-height: 1.5rem;
   padding: 0.5rem 0.75rem;
@@ -1159,8 +1272,15 @@ html {
   overflow-wrap: anywhere;
 }
 .tamga .t-sample mark {
-  background: var(--tamga-stamp-tint);
+  background: var(--tamga-track);
   color: inherit;
+  box-shadow: inset 0 -2px 0 var(--tamga-ink);
+}
+.tamga .t-note + .t-sample {
+  margin-top: 0.5rem;
+}
+.tamga .t-sample mark[data-action="BLOCK"] {
+  background: var(--tamga-stamp-tint);
   box-shadow: inset 0 -2px 0 var(--tamga-stamp-fill);
 }
 
@@ -1187,7 +1307,6 @@ html {
   background: var(--tamga-altered-tint);
   box-shadow: inset 0 -2px 0 var(--tamga-altered-fill);
 }
-.tamga .t-table[data-swap] tr,
 .tamga .t-table tbody[data-swap] tr {
   animation: t-rows 200ms cubic-bezier(0.2, 0, 0.38, 0.9) 1 both;
 }
@@ -1318,13 +1437,14 @@ html {
   white-space: pre;
   font: inherit;
 }
+/* The one place green appears, and the one red that is not a stopped request. */
 .tamga .t-diff > div[data-type="+"] {
-  background: #dff1e2;
-  color: #0e4a20;
+  background: var(--tamga-diff-added-tint);
+  color: var(--tamga-diff-added-text);
 }
 .tamga .t-diff > div[data-type="-"] {
-  background: #ffe3de;
-  color: #8f1d0f;
+  background: var(--tamga-diff-removed-tint);
+  color: var(--tamga-diff-removed-text);
 }
 
 .tamga .t-table .cds--data-table-content {
@@ -1390,7 +1510,7 @@ html {
   padding-left: 1.25rem;
   list-style: disc;
   font-size: 0.875rem;
-  line-height: 1.6;
+  line-height: 1.45;
 }
 .tamga .t-steps {
   list-style: none;
@@ -1419,7 +1539,7 @@ html {
   margin: 0.25rem 0 0.75rem;
   max-width: 72ch;
   font-size: 0.875rem;
-  line-height: 1.55;
+  line-height: 1.45;
   color: var(--cds-text-secondary);
 }
 
@@ -1453,11 +1573,18 @@ html {
 .t-toasts [data-sonner-toast][data-styled="true"] {
   border: 1px solid var(--tamga-ink);
   border-radius: 0;
-  background: #ffffff;
+  background: var(--tamga-sheet);
   color: var(--tamga-ink);
   box-shadow: none;
   font-family: var(--font-atkinson), "Segoe UI", sans-serif;
   font-size: 0.875rem;
+  line-height: 1.45;
+}
+/* The library's focus ring is a shadow, which is removed above. */
+.t-toasts [data-sonner-toast][data-styled="true"]:focus-visible {
+  box-shadow: none;
+  outline: 2px solid var(--tamga-ink);
+  outline-offset: 2px;
 }
 .t-toasts [data-sonner-toast][data-styled="true"] [data-description] {
   color: var(--tamga-ink-2);

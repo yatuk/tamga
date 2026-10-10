@@ -87,13 +87,14 @@ export function CostsBody({
           hasLimit ? (
             <>
               <div className="t-split" role="img" aria-label={`${Math.round(used * 100)}% of today's token budget used`}>
-                <Bar data-kind={left === 0 ? "blocked" : "ink"} share={used} />
+                <Bar data-kind="ink" share={used} />
               </div>
               <div className="t-splitkey">
-                <span data-kind={left === 0 ? "blocked" : "ink"}>
+                <span data-kind="ink">
                   Used today, {formatTokens(tokensToday)} of {formatTokens(limitTokens)} tokens
                 </span>
-                <span>{left === 0 ? "Nothing left: requests are being refused" : `Left, ${formatTokens(left)}`}</span>
+                {/* Said in words and weight, in ink: red is for a request the scan stopped. */}
+                <span>{left === 0 ? <b>Nothing left: requests are being refused</b> : `Left, ${formatTokens(left)}`}</span>
               </div>
             </>
           ) : undefined

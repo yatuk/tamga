@@ -142,14 +142,14 @@ test.describe("API keys", () => {
 
     // Backing out keeps the key.
     await row.getByRole("button", { name: "Revoke", exact: true }).click();
-    await expect(row.getByRole("button", { name: "Revoke for good" })).toBeVisible();
+    await expect(row.getByRole("button", { name: "Revoke the key for good" })).toBeVisible();
     await row.getByRole("button", { name: "Keep" }).click();
-    await expect(row.getByRole("button", { name: "Revoke for good" })).toHaveCount(0);
+    await expect(row.getByRole("button", { name: "Revoke the key for good" })).toHaveCount(0);
     await expect(row.getByRole("button", { name: "Revoke", exact: true })).toBeVisible();
     expect((await listKeys(request)).some((k) => k.label === name)).toBe(true);
 
     await row.getByRole("button", { name: "Revoke", exact: true }).click();
-    await row.getByRole("button", { name: "Revoke for good" }).click();
+    await row.getByRole("button", { name: "Revoke the key for good" }).click();
     await expect(toastWith(page, "API key revoked")).toBeVisible();
     await expect(rowOf(page, name)).toHaveCount(0);
     expect((await listKeys(request)).some((k) => k.label === name)).toBe(false);
@@ -171,7 +171,7 @@ test.describe("API keys", () => {
     await expectLede(page, request);
 
     await row.getByRole("button", { name: "Revoke", exact: true }).click();
-    await row.getByRole("button", { name: "Revoke for good" }).click();
+    await row.getByRole("button", { name: "Revoke the key for good" }).click();
     await expect(rowOf(page, name)).toHaveCount(0);
     await expectLede(page, request);
   });
@@ -203,7 +203,7 @@ test.describe("API keys", () => {
     await expect(visibleModal(page)).toHaveCount(0);
 
     await row.getByRole("button", { name: "Revoke", exact: true }).click();
-    await row.getByRole("button", { name: "Revoke for good" }).click();
+    await row.getByRole("button", { name: "Revoke the key for good" }).click();
     await expect(rowOf(page, name)).toHaveCount(0);
     const gone = await request.get(`${API}/api/v1/stats`, { headers: { "X-Tamga-Admin-Key": raw } });
     expect(gone.status()).toBe(401);
