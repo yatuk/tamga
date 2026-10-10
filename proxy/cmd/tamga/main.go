@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"sort"
@@ -199,12 +200,12 @@ func main() {
 	// everything keeps running on per-replica in-memory state.
 	rdx := redisx.NewFromURL(cfg.RedisURL)
 	if rdx.Enabled() {
-		log.Info().Str("url", cfg.RedisURL).Msg("redis enabled — distributed mode")
+		log.Info().Str("host", urlHost(cfg.RedisURL)).Msg("redis enabled — distributed mode")
 		budgetStore.SetRedis(rdx)
 		promptCache.SetRedis(rdx)
 		rateLimiter.SetRedis(rdx)
 	} else if cfg.RedisURL != "" {
-		log.Warn().Str("url", cfg.RedisURL).Msg("redis URL set but unreachable; running single-node")
+		log.Warn().Str("host", urlHost(cfg.RedisURL)).Msg("redis URL set but unreachable; running single-node")
 
 		// Tenant-scoped key namespacing (multi-tenant readiness).
 		if cfg.DefaultOrgID != "" {
@@ -434,7 +435,7 @@ func main() {
 			Stream: "TAMGA_EVENTS",
 		}, log.Logger)
 		if err != nil {
-			log.Warn().Err(err).Str("url", cfg.NATSURL).Msg("NATS unavailable — running without JetStream")
+			log.Warn().Err(err).Str("host", urlHost(cfg.NATSURL)).Msg("NATS unavailable — running without JetStream")
 		} else {
 			natsPub = np
 			defer np.Close()
@@ -981,6 +982,16 @@ func storeEventFromNATS(ctx context.Context, s store.Store, ev events.EventV2, d
 	if err := s.SaveRequestLog(ctx, rl); err != nil {
 		log.Warn().Err(err).Str("request_id", ev.RequestID).Msg("nats consumer: db write failed")
 	}
+}
+
+// urlHost is what of a connection URL may be written to a log: where it
+// points. The URL itself carries the password.
+func urlHost(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return "unparseable"
+	}
+	return u.Host
 }
 
 func retentionSchedulerEnabled() bool {

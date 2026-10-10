@@ -23,7 +23,9 @@ USER tamga
 
 EXPOSE 8443
 
+# Liveness only: the detailed health answers 503 when the database, Redis or the
+# analyzer is down, and a proxy that is up without one of them is not a dead container.
 HEALTHCHECK --interval=15s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget -qO- http://localhost:8443/api/v1/health/detailed || exit 1
+    CMD wget -qO- http://localhost:8443/health || exit 1
 
 ENTRYPOINT ["./tamga"]
