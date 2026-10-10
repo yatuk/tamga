@@ -7,6 +7,7 @@ import { counted } from "@/components/console/names";
 import { DataNotice, NoData, PageHead, Section } from "@/components/console/page";
 import { useAdminKey } from "@/hooks/useAdminKey";
 import { api, type TeamMember, type TeamRole } from "@/lib/api";
+import { ApiError } from "@/lib/api/fetch-core";
 import {
   accessRemovedText,
   assignedRole,
@@ -23,13 +24,29 @@ const LEDE = "Which accounts hold a role on this proxy, and what each of them ma
 /** Where the outcome of the form that names an account by id is said. No user id has a bracket in it. */
 const FORM = "(form)";
 
+/**
+ * How the last change on the page ended. There is one, so a sentence about an
+ * account is never left standing beside a later one that made it false.
+ */
+interface Said {
+  /** The row it is said at, or FORM. */
+  at: string;
+  account: string;
+  note: RowNote;
+  /** The role the sentence leaves the account with, and the number of admins where it speaks of them. */
+  role: TeamRole | "";
+  admins?: number;
+  /** The list the sentence was said over. */
+  asOf: number;
+}
+
 export default function TeamPage() {
   const qc = useQueryClient();
   const [adminKey] = useAdminKey();
-  // How the last change to each member ended, said at its row.
-  const [notes, setNotes] = useState<Record<string, RowNote>>({});
-  // Without a directory the proxy stops listing an account once its role is
-  // removed. The row stays until the page is left, so what happened can be read.
+  const [said, setSaid] = useState<Said | null>(null);
+  // An older proxy stops listing an account once its role is removed. The row
+  // stays until the page is left, so what happened can be read. Where the
+  // proxy lists the account itself, its row is the one shown.
   const [removed, setRemoved] = useState<TeamMember[]>([]);
 
   const team = useQuery({
@@ -45,15 +62,37 @@ export default function TeamPage() {
     [listed, removed],
   );
 
-  const say = (at: string, note: RowNote) => setNotes((all) => ({ ...all, [at]: note }));
+  const roleOf = (id: string) => {
+    const member = items.find((m) => m.user_id === id);
+    return member ? assignedRole(member, defaultRole) : "";
+  };
+  const roles = items.map((m) => assignedRole(m, defaultRole));
+  const count = (role: TeamRole | "") => roles.filter((r) => r === role).length;
+  const admins = count("admin");
+  const without = count("");
+  const holding = items.length - without;
+
+  const say = (at: string, account: string, note: RowNote, role: TeamRole | "", lastAdmin = false) =>
+    setSaid({ at, account, note, role, admins: lastAdmin ? admins : undefined, asOf: team.dataUpdatedAt });
   const refresh = () => qc.invalidateQueries({ queryKey: ["tamga-team", adminKey] });
-  const refused = (at: string, error: unknown, action: TeamAction) => say(at, { kind: "refused", text: explainTeamRefusal(error, action) });
+  const refused = (at: string, account: string, error: unknown, action: TeamAction) => {
+    const code = error instanceof ApiError ? error.code : undefined;
+    // "No role to remove" is about the account as the proxy has it, not as the list here had it.
+    const noRole = action === "remove" && error instanceof ApiError && error.status === 404;
+    say(at, account, { kind: "refused", text: explainTeamRefusal(error, action) }, noRole ? "" : roleOf(account), code === "last_admin");
+  };
+  // A sentence stands until the list is read again and no longer agrees with
+  // it: someone else, or another tab, has changed the account since.
+  const standing =
+    said && (team.dataUpdatedAt === said.asOf || (roleOf(said.account) === said.role && (said.admins === undefined || said.admins === admins)))
+      ? said
+      : null;
 
   const setRole = useMutation({
     mutationFn: ({ id, role }: { id: string; role: TeamRole; at: string }) => api.setTeamRole(adminKey, id, role),
+    onMutate: () => setSaid(null),
     onSuccess: (member, { id, role, at }) => {
-      const before = items.find((m) => m.user_id === id);
-      const was = before ? assignedRole(before, defaultRole) : "";
+      const was = roleOf(id);
       // The proxy leaves the sessions alone when the role is the one the account had.
       const text =
         was === role
@@ -61,40 +100,39 @@ export default function TeamPage() {
           : was === "" && defaultRole !== "viewer"
             ? `Now ${roleWord(role).toLowerCase()}. The account can sign in.`
             : roleChangedText(role, member.sessions_valid_from);
-      say(at, { kind: "done", text: at === FORM ? `${id}: ${text}` : text });
+      say(at, id, { kind: "done", text: at === FORM ? `${id}: ${text}` : text }, role);
       setRemoved((all) => all.filter((m) => m.user_id !== id));
       void refresh();
     },
-    onError: (e, { at }) => refused(at, e, "role"),
+    onError: (e, { id, at }) => refused(at, id, e, "role"),
   });
   const removeRole = useMutation({
     mutationFn: (member: TeamMember) => api.removeTeamRole(adminKey, member.user_id),
-    onSuccess: (_res, member) => {
-      say(member.user_id, { kind: "done", text: accessRemovedText(defaultRole) });
-      setRemoved((all) => [...all.filter((m) => m.user_id !== member.user_id), { ...member, role: "", updated_at: undefined, sessions_valid_from: undefined }]);
+    onMutate: () => setSaid(null),
+    onSuccess: (res, member) => {
+      say(member.user_id, member.user_id, { kind: "done", text: accessRemovedText(defaultRole) }, "");
+      setRemoved((all) => [
+        ...all.filter((m) => m.user_id !== member.user_id),
+        { ...member, role: "", assigned: false, role_removed: true, updated_at: undefined, sessions_valid_from: res.sessions_valid_from },
+      ]);
       void refresh();
     },
     onError: (e, member) => {
-      refused(member.user_id, e, "remove");
+      refused(member.user_id, member.user_id, e, "remove");
       // "No role to remove" means the list here is behind the proxy's.
       void refresh();
     },
   });
   const signOut = useMutation({
     mutationFn: (member: TeamMember) => api.revokeTeamSessions(adminKey, member.user_id),
+    onMutate: () => setSaid(null),
     onSuccess: (res, member) => {
-      say(member.user_id, { kind: "done", text: signedOutText(res.sessions_valid_from) });
+      say(member.user_id, member.user_id, { kind: "done", text: signedOutText(res.sessions_valid_from) }, roleOf(member.user_id));
       void refresh();
     },
-    onError: (e, member) => refused(member.user_id, e, "sign-out"),
+    onError: (e, member) => refused(member.user_id, member.user_id, e, "sign-out"),
   });
   const pending = setRole.isPending || removeRole.isPending || signOut.isPending;
-
-  const roles = items.map((m) => assignedRole(m, defaultRole));
-  const count = (role: TeamRole | "") => roles.filter((r) => r === role).length;
-  const admins = count("admin");
-  const without = count("");
-  const holding = items.length - without;
 
   if (!adminKey || (team.isError && !team.data)) {
     return <NoData title="Team" lede={LEDE} adminKey={adminKey} error={team.error} what="the team" />;
@@ -151,7 +189,7 @@ export default function TeamPage() {
               members={items}
               defaultRole={defaultRole}
               pending={pending}
-              notes={notes}
+              notes={standing && standing.at !== FORM ? { [standing.at]: standing.note } : {}}
               onRole={(m, role) => setRole.mutate({ id: m.user_id, role, at: m.user_id })}
               onRemove={(m) => removeRole.mutate(m)}
               onSignOut={(m) => signOut.mutate(m)}
@@ -167,7 +205,7 @@ export default function TeamPage() {
 
         <div>
           <Section id="give-role" title="Give an account a role">
-            <GiveRole pending={pending} note={notes[FORM]} onGive={(id, role) => setRole.mutate({ id, role, at: FORM })} />
+            <GiveRole pending={pending} note={standing?.at === FORM ? standing.note : undefined} onGive={(id, role) => setRole.mutate({ id, role, at: FORM })} />
           </Section>
 
           <Section id="roles" title="What each role can do" style={{ marginTop: "2.5rem" }}>

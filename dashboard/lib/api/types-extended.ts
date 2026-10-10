@@ -94,6 +94,16 @@ export interface TeamMember {
   image_url?: string;
   /** Empty for an account nobody gave a role: it has no access, unless the proxy admits such accounts as viewers. */
   role: TeamRole | "";
+  /**
+   * Whether an admin gave the account the role. False when the role is only the default for
+   * accounts without one, or the account has no access. Absent on an older proxy.
+   */
+  assigned?: boolean;
+  /**
+   * An admin took the account's role away. The proxy lists it for 30 days after, with the default
+   * role in place of its own and the time of the removal in updated_at.
+   */
+  role_removed?: boolean;
   updated_at?: string;
   /** Unix seconds. A session token issued at or before it is refused. Absent when the sessions were never ended. */
   sessions_valid_from?: number;

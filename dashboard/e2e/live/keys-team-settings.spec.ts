@@ -213,7 +213,7 @@ test.describe("API keys", () => {
 test.describe("Team", () => {
   test.beforeEach(() => liveOnly());
 
-  type Member = { user_id: string; name?: string; role: string };
+  type Member = { user_id: string; name?: string; role: string; assigned?: boolean };
   const team = (request: APIRequestContext) => getJSON<{ items: Member[] | null; clerk: boolean }>(request, "/api/v1/team");
 
   test("says what the proxy knows about the team and nothing more", async ({ page, request }) => {
@@ -244,9 +244,11 @@ test.describe("Team", () => {
 
   test("a member's role is changed and changed back", async ({ page, request }) => {
     const { items } = await team(request);
-    const member = (items ?? [])[0];
+    // An account whose role was removed is still listed, with the default role and nothing of its own to put back.
+    const member = (items ?? []).find((m) => m.assigned !== false && m.role !== "");
     // Setting a role is the only way to add a member, and the proxy has no call to remove one.
     test.skip(!member, "The proxy has no members, and a test member could not be removed again.");
+    if (!member) return;
 
     const other = member.role === "viewer" ? "analyst" : "viewer";
     try {

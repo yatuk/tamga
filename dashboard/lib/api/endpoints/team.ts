@@ -12,14 +12,14 @@ export const team = {
 
   /** Ends the account's sessions and leaves its role as it is. */
   revokeTeamSessions: (adminKey: string, userId: string) =>
-    fetchAPI<{ ok: boolean; user_id: string; sessions_valid_from?: number }>(
+    fetchAPI<{ ok: boolean; user_id: string; sessions_valid_from?: number; assigned?: boolean }>(
       `${member(userId)}/sessions/revoke`,
       { method: "POST", headers: authHeaders(adminKey) },
     ),
 
-  /** Takes the role away: the account's sessions end and it has no access. */
+  /** Takes the role away: the account's sessions end and it has no access. An older proxy does not say from when. */
   removeTeamRole: (adminKey: string, userId: string) =>
-    fetchAPI<{ ok: boolean; user_id: string }>(
+    fetchAPI<{ ok: boolean; user_id: string; sessions_valid_from?: number; assigned?: boolean }>(
       `${member(userId)}/role`,
       { method: "DELETE", headers: authHeaders(adminKey) },
     ),

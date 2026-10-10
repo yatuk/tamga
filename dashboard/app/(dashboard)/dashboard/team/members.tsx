@@ -18,7 +18,7 @@ import { Remove } from "@/components/console/page";
 import type { TeamMember, TeamRole } from "@/lib/api";
 import { assignedRole, ROLES, roleSetLabel, sessionsEndedLabel, unassignedWord, type DefaultRole } from "./access";
 
-/** How the last change to a member ended, said at the member's row until the next one. */
+/** How the last change to a member ended, said at the member's row until the next change anywhere on the page. */
 export type RowNote = { kind: "done" | "refused"; text: string };
 
 function Note({ note }: { note?: RowNote }) {
@@ -153,14 +153,21 @@ export function Members({
                   <Note note={notes[m.user_id]} />
                 </TableCell>
                 <TableCell>
-                  {roleSetLabel(m)}
+                  {roleSetLabel(m, defaultRole)}
                   {ended ? <span className="t-note t-under">{ended}</span> : null}
                 </TableCell>
                 <TableCell>
                   <span className="t-rowactions">
-                    <Button kind="ghost" size="sm" disabled={pending} onClick={() => onSignOut(m)}>
-                      Sign out everywhere
-                    </Button>
+                    {/* Asked twice like the removal, in ink: the person can sign in again. */}
+                    <Remove
+                      label={`Sign out ${who} everywhere`}
+                      text="Sign out everywhere"
+                      verb="Sign out"
+                      keep="Keep signed in"
+                      recoverable
+                      disabled={pending}
+                      onConfirm={() => onSignOut(m)}
+                    />
                     {assigned ? (
                       <Remove
                         label={`Remove access of ${who}`}

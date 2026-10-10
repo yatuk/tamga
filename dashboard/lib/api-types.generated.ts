@@ -3583,6 +3583,15 @@ export interface paths {
          *     Being listed by Clerk assigns nothing. An account nobody assigned a
          *     role is listed with `role` equal to `default_role`: empty (it has no
          *     access) unless the operator set `TAMGA_SSO_DEFAULT_ROLE=viewer`.
+         *     `assigned` tells the two apart: it is true only when an admin gave
+         *     the account the role shown.
+         *
+         *     An account whose role was removed stays in the list for 30 days,
+         *     with or without Clerk, as an unassigned one: `assigned: false`,
+         *     `role_removed: true`, `role` equal to `default_role`, and the
+         *     moment its sessions ended in `sessions_valid_from`. An account that
+         *     only signed out, or whose sessions an admin ended, without ever
+         *     having a role is listed only when Clerk lists it.
          */
         get: {
             parameters: {
@@ -3709,6 +3718,8 @@ export interface paths {
          *     operator set `TAMGA_SSO_DEFAULT_ROLE=viewer`, in which case it signs
          *     in as a viewer. A role assigned later does not bring back a token
          *     from before. Written to the audit log as `team.role.remove`.
+         *
+         *     The account stays in `GET /api/v1/team` for 30 days, without a role.
          */
         delete: {
             parameters: {
@@ -3730,6 +3741,13 @@ export interface paths {
                         "application/json": {
                             ok?: boolean;
                             user_id?: string;
+                            /** @description Always false. No admin-given role is left. */
+                            assigned?: boolean;
+                            /**
+                             * Format: int64
+                             * @description Unix seconds. The moment the account's sessions ended; a token issued at or before it is refused.
+                             */
+                            sessions_valid_from?: number;
                         };
                     };
                 };
@@ -3820,6 +3838,8 @@ export interface paths {
                         "application/json": {
                             ok?: boolean;
                             user_id?: string;
+                            /** @description Whether the account has a role an admin gave it. Revoking sessions does not change that. */
+                            assigned?: boolean;
                             /**
                              * Format: int64
                              * @description Unix seconds. A token issued at or before it is refused.
@@ -4968,9 +4988,16 @@ export interface components {
             email?: string;
             name?: string;
             image_url?: string;
-            /** @description Empty for an account listed by Clerk that nobody assigned a role and that gets none by default. */
+            /** @description The role the account has now. Empty for an account that nobody assigned a role, or whose role was removed, and that gets none by default. */
             role?: components["schemas"]["TeamRole"] | "";
-            /** Format: date-time */
+            /** @description True when an admin gave this account the role shown. False when the role is only `default_role`, the one of accounts without an assignment, or when the account has no access. Always present. */
+            assigned?: boolean;
+            /** @description True when the account had a role and an admin removed it. Absent otherwise. */
+            role_removed?: boolean;
+            /**
+             * Format: date-time
+             * @description When the role was last assigned or removed. The zero time (`0001-01-01T00:00:00Z`) for an account without a record.
+             */
             updated_at?: string;
             /**
              * Format: int64

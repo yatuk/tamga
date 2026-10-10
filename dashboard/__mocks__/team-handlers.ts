@@ -18,8 +18,16 @@ const API = "/api/v1";
  *   anything else           the static admin key: actor "admin-key".
  *
  * As in the proxy: a role that differs from the one before ends the account's
- * sessions, an account whose role was removed is no longer listed (unless the
- * directory lists it), and the only admin keeps the role (409 "last_admin").
+ * sessions, the only admin keeps the role (409 "last_admin"), and every member
+ * says with "assigned" whether an admin gave it the role it is listed with.
+ * An account whose role was removed stays listed with "role_removed", the
+ * default role in place of its own, and the time of the removal. An account
+ * that never had a role is listed only by the directory.
+ *
+ * teamMock.reset({ older: true }) answers as a proxy from before "assigned":
+ * the field is absent, an account whose role was removed is no longer listed
+ * (unless the directory lists it), and removing a role does not say from when
+ * the sessions ended.
  *
  * State is kept between requests so that a write shows in the next read.
  * Tests start from a known state with teamMock.reset().
@@ -32,6 +40,8 @@ export interface MockMember {
   role: string;
   updated_at: string;
   sessions_valid_from?: number;
+  /** An admin took the role away. The record then has no role. */
+  role_removed?: boolean;
 }
 
 /** What Go writes for a time that was never set. */
@@ -52,17 +62,21 @@ const state = {
   directory: [] as { user_id: string; name?: string; email?: string }[],
   clerk: false,
   defaultRole: "" as "" | "viewer",
+  older: false,
   /** The proxy's clock, in unix seconds. */
   now: 1791633720,
 };
 
 export const teamMock = {
   /** Back to three members with a role each, no directory and no default role. */
-  reset(options: { members?: MockMember[]; directory?: typeof state.directory; defaultRole?: "" | "viewer"; now?: number } = {}) {
+  reset(
+    options: { members?: MockMember[]; directory?: typeof state.directory; defaultRole?: "" | "viewer"; now?: number; older?: boolean } = {},
+  ) {
     state.members = clone(options.members ?? BASE_MEMBERS);
     state.directory = clone(options.directory ?? []);
     state.clerk = options.directory !== undefined;
     state.defaultRole = options.defaultRole ?? "";
+    state.older = options.older ?? false;
     state.now = options.now ?? 1791633720;
   },
   /** The record the proxy holds for a user, or nothing. */
@@ -70,8 +84,18 @@ export const teamMock = {
     const found = state.members.find((m) => m.user_id === id);
     return found ? clone(found) : undefined;
   },
+  /** Moves the proxy's clock, as time passing between two changes does. */
+  set now(unix: number) {
+    state.now = unix;
+  },
   get now() {
     return state.now;
+  },
+  /** A change made by someone else: nothing in the page asked for it. */
+  setElsewhere(id: string, role: string) {
+    const found = state.members.find((m) => m.user_id === id);
+    if (found) found.role = role;
+    else state.members.push({ user_id: id, role, updated_at: new Date(state.now * 1000).toISOString() });
   },
 };
 
@@ -105,14 +129,27 @@ const isLastAdmin = (id: string) =>
 const revokedNow = (m: MockMember) => Math.max(state.now, (m.sessions_valid_from ?? 0) + 1);
 const nowISO = () => new Date(state.now * 1000).toISOString();
 
+/** A member as the proxy answers with it: an older one does not say whether the role was assigned, or that it was removed. */
+function answered(m: MockMember) {
+  const { role_removed: removed, ...record } = m;
+  if (state.older) return record;
+  if (record.role !== "") return { ...record, assigned: true };
+  // Without a role of its own the account has the default one.
+  return { ...record, role: state.defaultRole, assigned: false, ...(removed ? { role_removed: true } : {}) };
+}
+
 function listed() {
-  const stored = state.members.filter((m) => m.role !== "");
-  if (!state.clerk) return stored;
+  // The roles, and the accounts whose role was removed. An older proxy lists only the roles.
+  const stored = state.members.filter((m) => m.role !== "" || (m.role_removed && !state.older));
+  if (!state.clerk) return stored.map(answered);
   const fromDirectory = state.directory.map((d) => {
     const held = stored.find((m) => m.user_id === d.user_id);
-    return held ? { ...d, ...held } : { ...d, role: state.defaultRole, updated_at: NEVER };
+    if (held) return { ...d, ...answered(held) };
+    // Being in the directory assigns nothing: the role is the default, and no admin gave it.
+    const unassigned = { ...d, role: state.defaultRole, updated_at: NEVER };
+    return state.older ? unassigned : { ...unassigned, assigned: false };
   });
-  return [...fromDirectory, ...stored.filter((m) => !state.directory.some((d) => d.user_id === m.user_id))];
+  return [...fromDirectory, ...stored.filter((m) => !state.directory.some((d) => d.user_id === m.user_id)).map(answered)];
 }
 
 export const teamHandlers = [
@@ -143,8 +180,9 @@ export const teamHandlers = [
     }
     if (member.role !== role) member.sessions_valid_from = revokedNow(member);
     member.role = role;
+    delete member.role_removed;
     member.updated_at = nowISO();
-    return HttpResponse.json(member);
+    return HttpResponse.json(answered(member));
   }),
 
   http.delete(`${API}/team/:id/role`, ({ request, params }) => {
@@ -160,8 +198,10 @@ export const teamHandlers = [
     if (!member || member.role === "") return HttpResponse.json({ error: "this account has no role" }, { status: 404 });
     member.role = "";
     member.sessions_valid_from = revokedNow(member);
+    member.role_removed = true;
     member.updated_at = nowISO();
-    return HttpResponse.json({ ok: true, user_id: id });
+    if (state.older) return HttpResponse.json({ ok: true, user_id: id });
+    return HttpResponse.json({ ok: true, user_id: id, assigned: false, sessions_valid_from: member.sessions_valid_from });
   }),
 
   // The user need not have a role, and an admin may end their own sessions.
@@ -176,6 +216,7 @@ export const teamHandlers = [
       state.members.push(member);
     }
     member.sessions_valid_from = revokedNow(member);
-    return HttpResponse.json({ ok: true, user_id: id, sessions_valid_from: member.sessions_valid_from });
+    const body = { ok: true, user_id: id, sessions_valid_from: member.sessions_valid_from };
+    return HttpResponse.json(state.older ? body : { ...body, assigned: member.role !== "" });
   }),
 ];

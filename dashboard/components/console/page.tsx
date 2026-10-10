@@ -269,16 +269,24 @@ export function Shares({
  * Delete, asked twice in place: the bin turns into the question. No dialog
  * to read for something this small. The question opens with the focus on the
  * way out, so a second Enter keeps the thing; Escape does the same.
+ *
+ * The answer that does it is red. Something that can be undone says so by
+ * passing recoverable, and is asked in ink.
  */
 export function Remove({
   label,
   verb = "Delete",
   text,
+  keep = "Keep",
+  recoverable,
   onConfirm,
   disabled,
 }: {
   label: string;
   verb?: string;
+  /** The way out, where "Keep" alone would not say what is kept. */
+  keep?: string;
+  recoverable?: boolean;
   /** A worded button in place of the bin, for something other than deleting a row. */
   text?: string;
   onConfirm: () => void;
@@ -314,7 +322,7 @@ export function Remove({
     // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <span className="t-confirm" onKeyDown={(e) => e.key === "Escape" && setAsking(false)}>
       <Button
-        kind="danger"
+        kind={recoverable ? "primary" : "danger"}
         size="sm"
         onClick={() => {
           setAsking(false);
@@ -324,7 +332,7 @@ export function Remove({
         {verb}
       </Button>
       <Button kind="ghost" size="sm" autoFocus onClick={() => setAsking(false)}>
-        Keep
+        {keep}
       </Button>
     </span>
   );

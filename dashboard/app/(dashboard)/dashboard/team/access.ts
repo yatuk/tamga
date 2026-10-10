@@ -18,19 +18,30 @@ const neverSet = (iso?: string) => !iso || iso.startsWith("0001-");
 /**
  * The role an admin gave the account, or "" when nobody gave it one.
  *
- * Where accounts without a role are admitted as viewers, the proxy lists such
- * an account with "viewer" in place of nothing. It holds no record of the
- * account then, so there is no time at which a role was set.
+ * The proxy says which it is with "assigned". An older proxy does not, and
+ * there it is read from the time the role was set: where accounts without a
+ * role are admitted as viewers, such a proxy lists the account with "viewer"
+ * in place of nothing and holds no record of it, so no time either.
  */
 export function assignedRole(member: TeamMember, defaultRole: DefaultRole): TeamRole | "" {
-  if (member.role && member.role === defaultRole && neverSet(member.updated_at)) return "";
+  if (member.assigned === false) return "";
+  if (member.assigned === undefined && member.role && member.role === defaultRole && neverSet(member.updated_at)) return "";
   return member.role;
 }
 
 /** What an account without a role has. */
 export const unassignedWord = (defaultRole: DefaultRole) => (defaultRole === "viewer" ? "Viewer by default" : "No access");
 
-export const roleSetLabel = (member: TeamMember) => (neverSet(member.updated_at) ? "" : dayLabel(member.updated_at as string));
+/**
+ * When the role was given, or that it was taken away and when. Nothing for an
+ * account that never had one.
+ */
+export function roleSetLabel(member: TeamMember, defaultRole: DefaultRole): string {
+  const when = neverSet(member.updated_at) ? "" : dayLabel(member.updated_at as string);
+  if (assignedRole(member, defaultRole) !== "") return when;
+  if (!member.role_removed) return "";
+  return when ? `Role removed ${when}` : "Role removed";
+}
 
 const iso = (unixSeconds: number) => new Date(unixSeconds * 1000).toISOString();
 
