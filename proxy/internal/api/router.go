@@ -266,10 +266,9 @@ func adminAuth(cfg Config) func(http.Handler) http.Handler {
 				next.ServeHTTP(w, withIdentity(r, ActorDevMode, "admin"))
 				return
 			}
+			// The key is read from the header and nowhere else: a URL ends
+			// up in access logs and in browser history.
 			key := r.Header.Get("X-Tamga-Admin-Key")
-			if key == "" && keyInQueryAllowed(r) {
-				key = r.URL.Query().Get("key")
-			}
 			// 1. Primary admin key (full access, all scopes).
 			if cfg.AdminKey != "" && subtle.ConstantTimeCompare([]byte(key), []byte(cfg.AdminKey)) == 1 {
 				next.ServeHTTP(w, withIdentity(r, ActorAdminKey, "admin"))
@@ -316,13 +315,6 @@ func adminAuth(cfg Config) func(http.Handler) http.Handler {
 	}
 }
 
-// keyInQueryAllowed reports whether a request may carry its key as ?key=.
-// A URL ends up in access logs and browser history, so a key belongs in a
-// header. The live stream is the one exception: EventSource cannot send
-// one.
-func keyInQueryAllowed(r *http.Request) bool {
-	return r.Method == http.MethodGet && r.URL.Path == "/live/events"
-}
 
 // sessionRole returns the role a session token acts with now. The token says
 // which role its user had at sign-in, up to a day ago; the user store says

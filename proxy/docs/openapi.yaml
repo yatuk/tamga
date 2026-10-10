@@ -25,9 +25,9 @@ info:
     401; with one whose role lacks the permission it is 403
     (`PermissionDenied`), before the body is read.
 
-    The key is sent in the `X-Tamga-Admin-Key` header. `?key=` is read on
-    `GET /api/v1/live/events` only, because EventSource cannot send a
-    header; on every other route a key in the query string is ignored.
+    The key is sent in the `X-Tamga-Admin-Key` header. A key in the query
+    string is not read on any route: a URL ends up in access logs and in
+    browser history.
   contact:
     name: Tamga Security
     email: security@tamga.io
@@ -892,15 +892,12 @@ paths:
         text/event-stream yanıt; `request_scanned` ve `request_blocked`
         event tiplerini yayınlar. Bağlantı client kapatana kadar açık kalır.
 
-        Only events of the deployment's organisation are sent. This is the
-        one route that reads the key from `?key=` when the
-        `X-Tamga-Admin-Key` header is absent: a browser EventSource cannot
-        set a header. A server-side caller should send the header.
-      parameters:
-        - in: query
-          name: key
-          description: The admin key or a scoped API key, for EventSource only. Prefer the header.
-          schema: { type: string }
+        Only events of the deployment's organisation are sent. The key is
+        sent in the header, as everywhere else; a browser reads the stream
+        with `fetch`, since EventSource cannot set one. While there is
+        nothing to send the stream carries a comment line, `: ping`, every
+        15 seconds, so that a client can tell a quiet proxy from a
+        connection whose other end is gone.
       responses:
         "200":
           description: SSE stream

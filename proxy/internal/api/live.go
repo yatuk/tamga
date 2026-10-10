@@ -4,9 +4,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/yatuk/tamga/internal/events"
 )
+
+// liveHeartbeat is how often the live stream sends a comment when it has
+// nothing else to say. A stream that carries no traffic looks, to the client
+// and to every proxy in between, exactly like one whose other end is gone;
+// the comment lets the client tell them apart and keeps idle timeouts away.
+// A variable so that a test can shorten it.
+var liveHeartbeat = 15 * time.Second
 
 // ownEvent reports whether an event held in memory belongs to the
 // deployment's organisation, which is the one the database is read for. An
@@ -39,10 +47,17 @@ func (cfg Config) handleLiveEvents(w http.ResponseWriter, r *http.Request) {
 	ch, unsub := cfg.Broker.Subscribe()
 	defer unsub()
 	ctx := r.Context()
+	beat := time.NewTicker(liveHeartbeat)
+	defer beat.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-beat.C:
+			if _, err := fmt.Fprint(w, ": ping\n\n"); err != nil {
+				return
+			}
+			flusher.Flush()
 		case e, open := <-ch:
 			if !open {
 				return

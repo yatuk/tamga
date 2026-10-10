@@ -287,8 +287,8 @@ func TestHealth_OtherCredentialsGetThePublicBody(t *testing.T) {
 				assertPublic(t, f, path, resp, err)
 			})
 		}
-		// The management API takes a key in the query string for
-		// EventSource. Health does not: only a header opens the full body.
+		// A key in the query string is not a credential anywhere: only a
+		// header opens the full body.
 		for name, key := range map[string]string{
 			"admin key in ?key=":      healthTestKey,
 			"read-scope key in ?key=": f.keys[apikeys.ScopeRead],

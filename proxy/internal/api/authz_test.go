@@ -519,15 +519,13 @@ func TestPathVariantsDoNotBypass(t *testing.T) {
 
 // --- credentials ---
 
-// ?key= is read for the live stream, which cannot send a header, and for
-// nothing else.
-func TestKeyInQueryOnlyForLiveStream(t *testing.T) {
+// A key in the query string is read nowhere, the live stream included: a URL
+// ends up in access logs and browser history.
+func TestKeyInQueryIsNotACredential(t *testing.T) {
 	f := newAuthzFixture(t, Config{})
 	for _, key := range []string{authzAdminKey, f.keys[apikeys.ScopeRead]} {
-		if status, reached, _ := f.do("GET", "/api/v1/live/events?key="+key, nil); reached != "GET /live/events" {
-			t.Errorf("live stream with ?key=: %d", status)
-		}
 		for _, c := range []struct{ method, path string }{
+			{"GET", "/api/v1/live/events"},
 			{"GET", "/api/v1/stats"}, {"GET", "/api/v1/events/export"}, {"POST", "/api/v1/live/events"},
 			{"POST", "/api/v1/maintenance/retention"}, {"GET", "/api/v1/live/events/x"},
 		} {

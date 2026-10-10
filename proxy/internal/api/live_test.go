@@ -1,6 +1,8 @@
 package api
 
 import (
+	"bufio"
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -40,8 +42,8 @@ func TestLiveEvents_BrokerAvailable(t *testing.T) {
 	ts := httptest.NewServer(testMux(cfg))
 	defer ts.Close()
 
-	req, _ := http.NewRequest("GET", ts.URL+"/api/v1/live/events?key=test-key", nil)
-	// Use query param auth because EventSource can't send custom headers
+	req, _ := http.NewRequest("GET", ts.URL+"/api/v1/live/events", nil)
+	req.Header.Set("X-Tamga-Admin-Key", "test-key")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
@@ -81,4 +83,37 @@ func TestLiveEvents_Unauthorized(t *testing.T) {
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("expected 401, got %d", resp.StatusCode)
 	}
+}
+
+// A stream with no traffic still says something at an interval, so that the
+// client can tell a quiet proxy from a connection whose other end is gone.
+func TestLiveEvents_SendsAHeartbeatWhenQuiet(t *testing.T) {
+	old := liveHeartbeat
+	liveHeartbeat = 20 * time.Millisecond
+	defer func() { liveHeartbeat = old }()
+
+	cfg := Config{AdminKey: "test-key", Broker: events.NewBroker(8), DefaultOrgID: "org-1", Started: time.Now()}
+	ts := httptest.NewServer(testMux(cfg))
+	defer ts.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, "GET", ts.URL+"/api/v1/live/events", nil)
+	req.Header.Set("X-Tamga-Admin-Key", "test-key")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	seen := 0
+	sc := bufio.NewScanner(resp.Body)
+	for sc.Scan() {
+		if sc.Text() == ": ping" {
+			if seen++; seen == 2 {
+				return
+			}
+		}
+	}
+	t.Fatalf("the stream ended after %d heartbeats, want 2: %v", seen, sc.Err())
 }
