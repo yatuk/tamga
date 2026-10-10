@@ -48,6 +48,15 @@
   under `proxy/cmd/tamga/` was left out of a commit without a word. The
   pattern is tied to the repository root; the built binaries are still
   ignored (`bin/`, `proxy/tamga`, `proxy/cmd/tamga/tamga`, `*.exe`).
+- **`npm run lint` in `dashboard/` stopped with the build guard's error on a
+  machine with a development key.** `next lint` loads `next.config.js` as a
+  production build does, so `NEXT_PUBLIC_ADMIN_KEY` in `.env.local` or the
+  environment tripped the guard that keeps the key out of a production
+  bundle. The script is now `eslint app components lib`: the same
+  configuration (`eslint.config.mjs`) over the directories `next lint`
+  checked, without loading `next.config.js`, and `next lint` is deprecated
+  in any case. CI runs `npm run lint`. The guard is unchanged: `next build`
+  with the variable set still stops.
 
 ### Security
 - **A rule that said REDACT could forward the value unmasked.** On a request
@@ -130,7 +139,35 @@
   source for a reason is written; the others within the minute are counted
   in one `auth.refused.repeated` entry, and 32 sources are followed at a
   time, so refusals cannot fill the log. A request with no credential at all
-  is not recorded. **The audit log gains these two kinds of entry.**
+  is not recorded. **The audit log gains these two kinds of entry.** Both
+  are described, with their detail fields, the seven reasons and what is
+  never recorded, in `proxy/docs/openapi.yaml` (`AuditEntry`) and in
+  `docs/operations.md` ("Refused requests in the audit log"). The console's
+  audit page shows the reason, the source and the count in words above the
+  recorded detail.
+- **The id of an API key was the first 12 characters of the key.** The id is
+  the actor of audit entries (`apikey:<id>`) and `key_id` in the proxy's log
+  and traces, so a quarter of every key (48 of its 192 random bits) was
+  written where no part of a credential belongs. A new key's id
+  is `key_` and 16 random hex characters, drawn apart from the key. A
+  presented key was already found by its SHA-256 hash and never by its id;
+  the stored hash is now also compared in constant time. The list still
+  returns the first 8 characters of a key (`tk_` and five hex characters,
+  20 bits), so that a key in hand can be matched to its row; that prefix
+  goes nowhere but the key list. **Keys that exist keep working and keep
+  their ids, which are still the start of the key: revoke such a key and
+  create another to get an id that says nothing about it. An id that does
+  not start with `key_` is one of these.** **The API keys page has an ID
+  column**, the id the audit log names a key by. No change to the database.
+- **A system-prompt leak finding carried the canary token.** The
+  `output_scanned` event of a leak was handed to every subscriber of the
+  event stream (NATS, the live feed, alerts, the analyzer) with the whole
+  token as its match, and the request's event held its first two and last
+  two characters. The token is a secret of the
+  deployment: whoever knows it can have a model leave it out. The finding's
+  match is now the fixed text `[canary token]` on every path. **Events
+  already stored are not rewritten**; the token changes when
+  `TAMGA_VAULT_KEY` does, or at a restart where that is not set.
 - **The rate limiter kept a request count for every key it had ever seen**,
   one per client address for callers without a key, and every past day's
   token totals, until the process ended. A count is dropped after 24 hours
@@ -138,6 +175,21 @@
   holds at most 50,000 keys of each kind, dropping the ones used longest
   ago. **`top_keys` of `/api/v1/ratelimit/stats` counts a key from its
   first request after such a drop, not from the start of the process.**
+- **A failing scanner's error text was written to the process log**, at
+  warn level, on every path: the proxy, `POST /api/v1/scan` and the LiteLLM
+  route. A scanner, or the service that runs the scanners, the inline
+  classifier or the analyzer, can quote what it was sent in the error it
+  returns, and what it was sent is the request. The log now names the
+  scanner, the reason and the kind of error (`timeout`, `cancelled`,
+  `panic`, `grpc_unavailable`, or a Go type such as `*net.OpError`) and
+  never the text; a panic's value is kept out the same way. The error the
+  pipeline hands on carries the cause in its chain and not in its message,
+  so `POST /api/v1/policies/simulate`, which answers with that message, no
+  longer repeats it either, and a scanner's trace span records the kind in
+  `error.type` instead of the message. **A log search or an alert on the
+  `error` field of `scanner did not report`, `scanner error`, `gRPC scanner
+  failed`, `classifier unavailable` or the analyzer's `deep scan failed`
+  lines finds nothing now: the field is `error_kind`.**
 
 ### LiteLLM
 - **Tamga can be added to a LiteLLM proxy as a guardrail**, without Tamga's
@@ -150,8 +202,8 @@
   `GUARDRAIL_INTERVENED` with the texts masked by the proxy's own markers;
   WARN, LOG and PASS as `NONE`. Answers (`post_call`) are judged by
   `output_rules`. A scan that did not finish is a 503
-  (`tamga_scan_unavailable`), never a verdict. Nothing is stored and nothing
-  is put in the vault, so nothing masked over the bridge is restored.
+  (`tamga_scan_unavailable`), never a verdict. Nothing is put in the vault,
+  so nothing masked over the bridge is restored.
   Written against LiteLLM v1.104.2. **Tested against a fake caller that
   speaks the contract; the end-to-end test with a real LiteLLM container
   (`deploy/e2e/litellm/`, CI job `litellm-e2e`) is written and has not been
@@ -159,6 +211,34 @@
 - A Tamga key is also read from `x-api-key` on that route, because that is
   where LiteLLM sends it. Nowhere else: the header is no credential on any
   other route, and the admin key is not read from it.
+- **The bridge read only `texts`: a poisoned tool description, or a
+  national id in a tool call's arguments, passed unread.** It now scans a
+  request's `tools` in the role `tool_definition` and the arguments of
+  `tool_calls` in the role `assistant`, as the proxy reads the same request,
+  and an answer's tool calls under `output_rules`. A value masked or
+  stripped in a tool definition goes back to LiteLLM in `tools`. The
+  contract has nothing to return tool calls in, so **a value the policy
+  would mask or strip in a tool call's arguments blocks the call**
+  (`REDACT could not be carried out (tool_call)`), as does one in a tool's
+  name. **Tools and tool calls now count toward the 256 KiB that is scanned
+  per call, with at most 256 of each, so a request with very large tool
+  definitions that passed before can be a 413**, and the message of that
+  413 changed. Images stay unread, as on the proxy path.
+- **Bridge calls are recorded.** A call was one log line and a count, so a
+  team using Tamga only as a LiteLLM guardrail saw an empty console. Each
+  request call is now a row in the request log and the live feed, with the
+  provider `litellm` (shown as "LiteLLM bridge", and not counted as a
+  shadow provider), the route and direction as its endpoint, the verdict,
+  the findings with their masked matches and their place (`texts[1]`,
+  `tools[0].function.description`), the key's organisation and the model
+  LiteLLM named; an answer call is a row when something was found or done.
+  **Blocks, redactions and warnings over the bridge now fire the alert
+  destinations and the rules' `notify` URLs, and bridge calls count in the
+  console's totals and in `tamga_requests_total` and
+  `tamga_blocked_total`.**
+  No text is stored, and no tokens or cost, which Tamga does not see here.
+  `litellm_call_id` stays in the log line: the request log has no column
+  for it. `POST /api/v1/scan` is unchanged and stores nothing. No migration.
 
 ### Licences and packaging
 - `NOTICE` gives the attributions the bundled material asks for, and

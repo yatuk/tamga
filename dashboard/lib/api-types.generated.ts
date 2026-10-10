@@ -2088,19 +2088,28 @@ export interface paths {
         /**
          * The scan path, in the shape LiteLLM's Generic Guardrail API calls
          * @description A LiteLLM proxy with a `generic_guardrail_api` guardrail whose
-         *     `api_base` is `https://<tamga>/api/v1` posts here: the texts of a
-         *     request before it calls the model (`input_type: request`), and the
-         *     texts of the answer afterwards (`input_type: response`). The path is
-         *     LiteLLM's, which appends it to the `api_base`. Written against
-         *     LiteLLM v1.104.2. See `docs/litellm.md`.
+         *     `api_base` is `https://<tamga>/api/v1` posts here: the texts, tool
+         *     definitions and tool calls of a request before it calls the model
+         *     (`input_type: request`), and the texts and tool calls of the answer
+         *     afterwards (`input_type: response`). The path is LiteLLM's, which
+         *     appends it to the `api_base`. Written against LiteLLM v1.104.2. See
+         *     `docs/litellm.md`.
          *
          *     It is an adapter over the scan path and decides nothing of its own.
-         *     A request's texts are scanned and judged as `POST /api/v1/scan`
-         *     judges a text. An answer's texts are judged by `output_rules`, as
-         *     the proxy judges an answer, and pass when `output_rules` is off.
-         *     Nothing is forwarded and nothing is stored: no event, no audit log
-         *     entry, no request record, no vault entry. The call is counted and
-         *     logged without the texts.
+         *     A request is scanned and judged as `POST /api/v1/scan` judges a
+         *     text: its texts in their roles, its `tools` in the role
+         *     `tool_definition`, and the arguments of its `tool_calls` in the role
+         *     `assistant`, as the proxy reads the same request. An answer's texts
+         *     and tool calls are judged by `output_rules`, as the proxy judges an
+         *     answer, and pass when `output_rules` is off.
+         *
+         *     Nothing is forwarded, and no text is stored or logged. Unlike a
+         *     scan, a call is recorded as a request is: it appears in the request
+         *     log and the live feed with the provider `litellm`, this path and
+         *     the direction as its endpoint, the verdict, and the findings with
+         *     their masked matches, and a block or a redaction fires the alerts.
+         *     Every request call is recorded; an answer call is recorded when
+         *     something was found or done. The vault is not used.
          *
          *     The reply uses the three actions of the contract:
          *     - BLOCK, or a REDACT or STRIP that cannot be carried out:
@@ -2109,9 +2118,18 @@ export interface paths {
          *     - REDACT and STRIP: `GUARDRAIL_INTERVENED`, with `texts` holding
          *       one text for each one received, in the same order, masked with
          *       the proxy's `[category_REDACTED]` markers or replaced by its
-         *       strip placeholder.
+         *       strip placeholder. When a tool definition was masked or stripped,
+         *       `tools` holds every tool received, in the same order.
          *     - WARN, LOG and PASS: `NONE`.
          *     The policy's own action is in the `X-Tamga-Action` header.
+         *
+         *     A value to mask or strip in a tool call's arguments cannot be
+         *     returned (the contract's reply has no field for tool calls), and
+         *     neither can a change to a tool's name: the reply is then `BLOCKED`,
+         *     the reason says `REDACT could not be carried out (tool_call)` or
+         *     `(tool_name)`, and `X-Tamga-Redact-Fallback` or
+         *     `X-Tamga-Strip-Fallback` says `block:tool_call` or
+         *     `block:tool_name`.
          *
          *     A scan that did not run to the end is a 503 with the code
          *     `tamga_scan_unavailable`, never a reply with an action, whatever
@@ -2129,13 +2147,15 @@ export interface paths {
          *     Limits: 600 calls a minute per key unless the policy sets
          *     `rate_limit.max_requests_per_minute`, counted apart from the key's
          *     scans and proxy requests; a body of at most 1048576 bytes; at most
-         *     256 texts and 262144 bytes of text; the scan route's slots, shared
-         *     with it.
+         *     256 texts, 256 tools and 256 tool calls; at most 262144 bytes of
+         *     what is scanned (the texts, and the tools and tool calls as sent);
+         *     the scan route's slots, shared with it.
          *
-         *     Only `texts` is scanned. `structured_messages` is read for the role
-         *     of each text and for nothing else; without it every text is scanned
-         *     as the user's. `images`, `tools` and `tool_calls` are not read.
-         *     Nothing masked here can be restored: the vault is not used.
+         *     `structured_messages` is read for the role of each text and for
+         *     nothing else; without it every text is scanned as the user's.
+         *     `images` are not read, as on the proxy path. `tools` are read on a
+         *     request only. Nothing masked here can be restored: the vault is not
+         *     used.
          */
         post: {
             parameters: {
@@ -2161,7 +2181,7 @@ export interface paths {
                         "application/json": components["schemas"]["LiteLLMGuardrailResponse"];
                     };
                 };
-                /** @description Body is not unambiguous UTF-8 JSON, input_type is missing or not one of the two, or texts is not a list of strings */
+                /** @description Body is not unambiguous UTF-8 JSON, input_type is missing or not one of the two, or texts, tools or tool_calls is not a list */
                 400: {
                     headers: {
                         [name: string]: unknown;
@@ -2186,7 +2206,7 @@ export interface paths {
                     };
                     content?: never;
                 };
-                /** @description Body over 1048576 bytes, more than 256 texts, or more than 262144 bytes of text */
+                /** @description Body over 1048576 bytes, more than 256 texts, tools or tool calls, or more than 262144 bytes of texts, tools and tool calls together */
                 413: {
                     headers: {
                         [name: string]: unknown;
@@ -5128,11 +5148,64 @@ export interface components {
              *     `policy.rollback`, `policy.proposal.approve`,
              *     `policy.custom_entity.add`, `policy.custom_entity.delete` or
              *     `policy.file_change` (the file was changed on disk; no actor).
+             *
+             *     A management request that presented a credential and was refused
+             *     is `auth.refused`. It is written for the first refusal of a
+             *     source address for a reason; the refusals of that source for
+             *     that reason in the 60 seconds that follow are counted, and one
+             *     `auth.refused.repeated` entry says how many there were. 32
+             *     pairs of source and reason are followed at a time, and the
+             *     refusals of any further source are counted together in one
+             *     `auth.refused.repeated` entry, so refusals add at most 65
+             *     entries a minute. A request with no credential at all is not
+             *     recorded, nor is the check `GET /api/v1/health/detailed` makes
+             *     of a key.
+             * @example auth.refused
              */
             kind?: string;
+            /**
+             * @description What the entry is about. For `auth.refused`: the route that
+             *     matched, as `METHOD /path/{id}`, or the method and path as sent
+             *     when the request was refused before a route was chosen (at most
+             *     160 characters, anything but printable ASCII replaced by `?`).
+             *     Absent on `auth.refused.repeated`.
+             * @example GET /api/v1/apikeys
+             */
             target?: string;
             /**
-             * @description For a change of the policy: `source` (`api_put`, `reload`,
+             * @description For `auth.refused`: `reason`, `source` (the address the request
+             *     came from, by the rules of `TAMGA_TRUSTED_PROXIES`), `status`
+             *     (the HTTP status answered) and, for `permission_denied`, `role`
+             *     and `required_permission` (absent when the route declares
+             *     none). `reason` is one of:
+             *
+             *     - `invalid_key`: `X-Tamga-Admin-Key` was sent and is neither the
+             *       admin key nor a live API key (401)
+             *     - `invalid_token`: a bearer token that is malformed or not
+             *       signed by this deployment (401)
+             *     - `token_expired`: a bearer token of this deployment, past its
+             *       expiry (401)
+             *     - `session_revoked`: a valid token whose sessions were ended
+             *       (401)
+             *     - `account_not_assigned`: a valid token of an account without a
+             *       role (403)
+             *     - `proxy_key`: a live key of scope `proxy`, which opens nothing
+             *       on the management API (403)
+             *     - `permission_denied`: a role without the permission the route
+             *       asks for (403)
+             *
+             *     The actor is `anonymous` for the first three, and the key or
+             *     the user that was verified for the others.
+             *
+             *     For `auth.refused.repeated`: `repeats` (how many further
+             *     refusals), `window_seconds`, and the `reason` and `source` they
+             *     share; or, for the sources that were not followed one by one,
+             *     `sources: "not followed individually"` in place of both.
+             *
+             *     The credential that was presented is never recorded: not the
+             *     key or the token, not a part, a hash or the length of it.
+             *
+             *     For a change of the policy: `source` (`api_put`, `reload`,
              *     `rollback`, `proposal_approve`, `custom_entity_add`,
              *     `custom_entity_delete`, `file_watcher`), `changed`
              *     (`PolicyChangedPaths`), `sections` (the top-level sections
@@ -5240,9 +5313,8 @@ export interface components {
         };
         /**
          * @description LiteLLM's GenericGuardrailAPIRequest. The fields listed are the
-         *     ones read; the others LiteLLM sends (`images`, `tools`,
-         *     `tool_calls`, `request_data`, `request_headers`, `model`,
-         *     `litellm_trace_id`, `litellm_version`,
+         *     ones read; the others LiteLLM sends (`images`, `request_data`,
+         *     `request_headers`, `litellm_trace_id`, `litellm_version`,
          *     `additional_provider_specific_params`) are accepted and ignored.
          */
         LiteLLMGuardrailRequest: {
@@ -5251,8 +5323,26 @@ export interface components {
              * @enum {string}
              */
             input_type: "request" | "response";
-            /** @description The texts to scan, 262144 bytes at most in total. Empty ones are skipped. */
+            /** @description The texts to scan. Empty ones are skipped. Texts, tools and tool calls are 262144 bytes at most in total. */
             texts?: string[] | null;
+            /**
+             * @description The request's tool definitions, in OpenAI's shape. Every string
+             *     in one but its `type` is scanned in the role `tool_definition`.
+             *     Not read when `input_type` is `response`.
+             */
+            tools?: {
+                [key: string]: unknown;
+            }[] | null;
+            /**
+             * @description The tool calls of the conversation or of the answer, in OpenAI's
+             *     shape. The strings in their arguments are scanned in the role
+             *     `assistant`. They are never rewritten.
+             */
+            tool_calls?: {
+                [key: string]: unknown;
+            }[] | null;
+            /** @description Recorded with the call when it is made of the characters model names are made of (letters, digits and `._:/@+-`, 128 at most). Decides nothing. */
+            model?: string | null;
             /**
              * @description The conversation in OpenAI's shape. When its texts, in order,
              *     are exactly `texts`, each text is scanned in the role of its
@@ -5266,7 +5356,7 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** @description LiteLLM's GenericGuardrailAPIResponse. No other field is sent. */
+        /** @description Fields of LiteLLM's GenericGuardrailAPIResponse. No other field is sent. */
         LiteLLMGuardrailResponse: {
             /** @enum {string} */
             action: "NONE" | "BLOCKED" | "GUARDRAIL_INTERVENED";
@@ -5274,6 +5364,14 @@ export interface components {
             blocked_reason?: string;
             /** @description Present only with GUARDRAIL_INTERVENED. One text for each one received, in the same order. */
             texts?: string[];
+            /**
+             * @description Present only with GUARDRAIL_INTERVENED, and only when a tool
+             *     definition was masked or stripped: every tool received, in the
+             *     same order. LiteLLM keeps its own tools when it is absent.
+             */
+            tools?: {
+                [key: string]: unknown;
+            }[];
         };
         LiteLLMGuardrailError: {
             error: {
@@ -5336,9 +5434,11 @@ export interface components {
          *     - `user:<subject>`: a signed-in user, by the subject of the verified
          *       session token.
          *     - `dev-mode`: dev mode, where no credential is asked for.
+         *     - `anonymous`: `auth.refused` entries only, for a request whose
+         *       credential matched nothing.
          *     - `policy-file`: history revisions only, for a change of the policy
          *       file on disk. Its audit entry has no actor.
-         * @example apikey:0198c1e2-7b1a-7d3e-9a55-3f0c2d1e4b6a
+         * @example apikey:key_3f0c2d1e4b6a9a55
          */
         VerifiedActor: string;
         /**
@@ -5440,10 +5540,25 @@ export interface components {
             privileged_sections: string[];
         };
         ApiKey: {
+            /**
+             * @description The id of the record: `key_` and 16 random hex characters, drawn
+             *     apart from the key. It names the key in audit entries
+             *     (`apikey:<id>`) and in the proxy's log. A key created before
+             *     ids were drawn this way keeps the id it had, 12 hex characters
+             *     that are the start of the key itself; revoke it and create
+             *     another to get an id that says nothing about the key.
+             * @example key_3f0c2d1e4b6a9a55
+             */
             id?: string;
             label?: string;
             /** @enum {string} */
             scope?: "read" | "write" | "admin" | "proxy";
+            /**
+             * @description The first 8 characters of the key (`tk_` and five hex
+             *     characters, 20 of its 192 random bits), for telling which key a
+             *     row is. It is returned here and nowhere else.
+             * @example tk_a8f2c
+             */
             prefix?: string;
             org_id?: string;
             role?: string;

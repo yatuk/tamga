@@ -287,6 +287,8 @@ Injection happens before the request is signed, so Bedrock/SigV4 is unaffected.
 A leak in a non-streamed response sets `X-Tamga-System-Prompt-Leak: true`. In
 a streamed response the token is looked for as the text goes by, and with
 `block_on_leak` the stream ends with an error event before the token is sent.
+The finding's match is the fixed text `[canary token]`: no part of the token
+is written to an event, the database, an alert or the console.
 
 The token is the same for every request from one organisation and key, so
 adding it does not make each request body unique: the response cache and the
@@ -464,6 +466,17 @@ Once every application has a key, set `TAMGA_REQUIRE_KEY=true` and requests
 without one get 401. Keys need the database: without `TAMGA_DB_URL` they are
 kept in memory and lost on restart.
 
+A key is 192 random bits and is stored as its SHA-256 hash; a presented key
+is found by that hash. Its record has an `id` (`key_` and 16 random hex
+characters), which is what the audit log (`apikey:<id>`), the proxy's log
+(`key_id`) and the **ID** column of the API keys page show, and which says
+nothing about the key. The list also shows the first 8 characters of the key
+(`tk_` and five hex characters), so that a key in hand can be matched to its
+row; that is 20 of the 192 bits and appears nowhere else. A key created
+before ids were drawn at random keeps its old id, which is 12 hex characters
+from the start of the key itself: it goes on working, and revoking it and
+creating another gets an id of the new kind.
+
 ## Checking a text without sending it
 
 `POST /api/v1/scan` runs the active policy over one piece of text and returns
@@ -522,6 +535,11 @@ The text is not kept. A scan publishes no event, so nothing reaches the
 request store, the audit log or the live feed, and nothing is written to the
 vault. One log line per call records the key, the size, the verdict and the
 count of findings by type.
+
+The [LiteLLM route](litellm.md) runs the same scan and is the exception: its
+calls are real traffic, not questions about a text, so each is recorded as a
+request is, with the provider `litellm`, and its blocks fire the alerts. Its
+texts are not kept either.
 
 Limits:
 
@@ -1072,7 +1090,7 @@ Things that follow from this:
 | `GET` | `/api/v1/policies` | Viewer | Active policy as JSON |
 | `POST` | `/api/v1/policies/reload` | Admin | Hot-reload policy from disk |
 | `POST` | `/api/v1/scan` | Any Tamga key, or admin | Policy verdict for a text, nothing forwarded |
-| `POST` | `/api/v1/beta/litellm_basic_guardrail_api` | Any Tamga key, or admin | The same verdict, in the shape LiteLLM calls as a guardrail ([LiteLLM](litellm.md)) |
+| `POST` | `/api/v1/beta/litellm_basic_guardrail_api` | Any Tamga key, or admin | The same verdict, in the shape LiteLLM calls as a guardrail, recorded as a request ([LiteLLM](litellm.md)) |
 
 ```bash
 # Health check. Without a key the answer says only whether the proxy is up.
@@ -1090,3 +1108,55 @@ curl -s -H "X-Tamga-Admin-Key: $TAMGA_ADMIN_KEY" \
 
 Full API docs: [proxy/README.md](../proxy/README.md#rest-api-apiv1). OpenAPI
 spec: `proxy/docs/openapi.yaml`.
+
+### Refused requests in the audit log
+
+A management request that presents a credential and is refused leaves an
+audit entry of kind `auth.refused`:
+
+| Field | Holds |
+|---|---|
+| `actor` | `anonymous` when the credential matched nothing; `apikey:<id>` or `user:<id>` when it was verified and opens nothing here |
+| `target` | The route that matched (`GET /api/v1/apikeys`), or the method and path as sent when no route was chosen yet, cut at 160 characters with anything but printable ASCII replaced by `?` |
+| `detail.reason` | One of the reasons below |
+| `detail.source` | The address the request came from, by the rules of `TAMGA_TRUSTED_PROXIES` |
+| `detail.status` | The HTTP status answered |
+| `detail.role`, `detail.required_permission` | For `permission_denied`: the caller's role and what the route asks for (absent when the route declares nothing) |
+
+| Reason | Status | Meaning |
+|---|---|---|
+| `invalid_key` | 401 | `X-Tamga-Admin-Key` was sent and is neither the admin key nor a live API key: wrong, mistyped, expired or revoked |
+| `invalid_token` | 401 | A bearer token that is malformed or not signed by this deployment |
+| `token_expired` | 401 | A bearer token of this deployment, past its expiry |
+| `session_revoked` | 401 | A valid token whose sessions were ended |
+| `account_not_assigned` | 403 | A valid token of an account without a role |
+| `proxy_key` | 403 | A live key of scope `proxy` on the management API |
+| `permission_denied` | 403 | A role without the permission the route asks for |
+
+Refusals cost their sender nothing, so they are counted, not listed. The
+first refusal of a source address for a reason is written at once. Those
+that follow from the same source for the same reason within 60 seconds are
+counted, and when the 60 seconds end one `auth.refused.repeated` entry says
+how many there were: `detail.repeats`, `detail.window_seconds`,
+`detail.reason` and `detail.source`, the actor of the first, no target. At
+most 32 pairs of source and reason are followed at a time. The refusals of
+any further source are counted together in one `auth.refused.repeated` entry
+whose detail has `sources: "not followed individually"` in place of a reason
+and a source. Refusals therefore add at most 65 entries a minute, however
+many arrive. Many `auth.refused.repeated` entries from one source, or that
+last kind at all, are what a guessing attempt looks like.
+
+Never recorded:
+
+- the credential: not the key or the token, not a part, a hash or the length
+  of it;
+- a request with no credential at all, which is answered 401 and was refused
+  nothing;
+- the look `GET /api/v1/health/detailed` takes at a key, whose answer to a
+  wrong key is the short one, with 200;
+- anything on the proxy path: an unknown `X-Tamga-Key` there is a 401
+  `tamga_key_invalid` and no audit entry.
+
+The entries are queued and written behind the answer, so a slow database
+delays them and not the 401. If 256 are waiting, further ones are dropped
+and the proxy's log says so (`refusal not written to the audit log`).
