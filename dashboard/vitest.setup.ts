@@ -82,12 +82,13 @@ global.IntersectionObserver = vi.fn().mockImplementation(() => ({
   disconnect: vi.fn(),
 }));
 
-// ── ResizeObserver mock (Radix UI) ──────────────────────────────────────
-global.ResizeObserver = vi.fn().mockImplementation(() => ({
-  observe: vi.fn(),
-  unobserve: vi.fn(),
-  disconnect: vi.fn(),
-}));
+// ── ResizeObserver stand-in ─────────────────────────────────────────────
+// A class, because Carbon's tabs and the charts call it with `new`.
+global.ResizeObserver = class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+};
 
 // ── scrollTo mock (virtual scroller) ────────────────────────────────────
 Element.prototype.scrollTo = vi.fn();

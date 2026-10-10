@@ -57,7 +57,7 @@ export function strengthenInjection(draft: string): string {
   } else {
     (inj as Record<string, unknown>).action = "BLOCK";
   }
-  toast.success("Injection rule set to BLOCK");
+  toast.success("Prompt injection rule set to stop the request", "In the draft, not yet in force.");
   return stringifyPolicy(o);
 }
 
@@ -69,7 +69,7 @@ export function appendRateLimitTemplate(draft: string): string {
     return draft;
   }
   if (o.rate_limit) {
-    toast.error("rate_limit is already defined");
+    toast.error("The draft already has a rate limit", "Nothing was added: rate_limit is defined.");
     return draft;
   }
   o.rate_limit = {
@@ -77,6 +77,6 @@ export function appendRateLimitTemplate(draft: string): string {
     max_tokens_per_day: 500000,
     action_on_exceed: "BLOCK",
   };
-  toast.success("rate_limit template added");
+  toast.success("Rate limit template added", "In the draft under rate_limit, not yet in force.");
   return stringifyPolicy(o);
 }

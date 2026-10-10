@@ -563,8 +563,9 @@ test.describe("Reports", () => {
     await expect(button).toBeEnabled();
   });
 
-  // The proxy hands both PDFs to its analyzer. Where the analyzer is not
-  // reachable it answers 503, and the console has to say so and stay usable.
+  // The proxy hands both PDFs to its analyzer, and says with a code why when
+  // that fails: not set up or not reachable (503), too slow (504), failed
+  // (502). The console has to say which, beside the buttons, and stay usable.
   for (const [name, path, file] of [
     ["OWASP report", "/api/v1/reports/owasp/pdf", "tamga-owasp-report-7d.pdf"],
     ["Incident report", "/api/v1/reports/incident/pdf", "tamga-incident-report-7d.pdf"],
@@ -585,7 +586,13 @@ test.describe("Reports", () => {
         expect(readFileSync(await saved!.path()).subarray(0, 5).toString("latin1")).toBe("%PDF-");
         await expect(page.getByText(`${name} downloaded`)).toBeVisible();
       } else {
-        await expect(page.getByText("Could not generate the PDF", { exact: true })).toBeVisible();
+        const said = page.locator(".t-pagehead .t-refused");
+        await expect(said).toContainText(`${name}: `);
+        await expect(said).toContainText(
+          /no report service set up|report service is not reachable|did not answer the proxy in time|report service failed|could not read the counts|The report was not made/,
+        );
+        // The query names the window and carries no counts of the console's own.
+        expect(new URL(res.url()).search).toBe("?range=7d");
         await expect(page.getByText(`${name} downloaded`)).toHaveCount(0);
       }
       await expect(button).toBeEnabled();

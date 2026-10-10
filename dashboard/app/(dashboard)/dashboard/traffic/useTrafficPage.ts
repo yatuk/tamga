@@ -102,6 +102,10 @@ export function useTrafficPage() {
     setRange,
     isLoading,
     hasError,
+    /** What the page's main read threw. */
+    error: statsError,
+    /** The main read failed with nothing loaded before it: there are no figures to draw. */
+    failedFirst: !!statsError && !stats,
     totalRequests,
     chartData,
     points: ts?.points ?? [],

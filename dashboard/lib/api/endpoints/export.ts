@@ -47,17 +47,21 @@ export const exportEndpoints = {
   },
 
   /** The OWASP compliance report as a PDF, made by the analyzer. */
-  getOwaspPdfReport: (adminKey: string, queryParams?: Record<string, string>): Promise<Blob> =>
-    fetchPdf("/api/v1/reports/owasp/pdf", adminKey, queryParams),
+  getOwaspPdfReport: (adminKey: string, range: ReportRange): Promise<Blob> => fetchPdf("/api/v1/reports/owasp/pdf", adminKey, range),
 
-  /** The incident summary as a PDF, made by the analyzer. */
-  getIncidentPdfReport: (adminKey: string, queryParams?: Record<string, string>): Promise<Blob> =>
-    fetchPdf("/api/v1/reports/incident/pdf", adminKey, queryParams),
+  /**
+   * The incident summary as a PDF, made by the analyzer. The proxy counts the
+   * requests of the window itself: the caller names the window and nothing else.
+   */
+  getIncidentPdfReport: (adminKey: string, range: ReportRange): Promise<Blob> => fetchPdf("/api/v1/reports/incident/pdf", adminKey, range),
 };
 
+/** The windows a PDF report can cover. */
+export type ReportRange = "24h" | "7d" | "30d";
+
 /** A PDF report as a Blob, or an ApiError carrying the proxy's own message and code. */
-async function fetchPdf(path: string, adminKey: string, queryParams?: Record<string, string>): Promise<Blob> {
-  const qs = queryParams ? "?" + new URLSearchParams(queryParams).toString() : "";
+async function fetchPdf(path: string, adminKey: string, range: ReportRange): Promise<Blob> {
+  const qs = "?" + new URLSearchParams({ range }).toString();
   const resp = await fetch(`${API_BASE}${path}${qs}`, { headers: authHeaders(adminKey) });
   if (!resp.ok) throw await errorFromResponse(resp);
   return resp.blob();

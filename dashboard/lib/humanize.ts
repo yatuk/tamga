@@ -20,6 +20,7 @@ const AUDIT_KIND_MAP: Record<string, string> = {
   "pattern.delete": "Pattern deleted",
   "team.role": "Role changed",
   "privacy.subject_erase": "Personal data erased",
+  "privacy.subject_access": "Personal data read",
   genesis: "Log started",
 };
 

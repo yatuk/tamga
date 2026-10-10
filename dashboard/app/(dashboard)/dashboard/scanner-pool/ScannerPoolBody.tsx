@@ -1,6 +1,7 @@
 "use client";
 
 import { Bar } from "@/components/console/motion";
+import { AsOf, held } from "@/components/console/health";
 import { counted } from "@/components/console/names";
 import { DataNotice, PageHead, Section, Shares, Statement } from "@/components/console/page";
 import { useAdminKey } from "@/hooks/useAdminKey";
@@ -30,7 +31,7 @@ function Meter({ name, used, of }: { name: string; used: number; of: number }) {
   );
 }
 
-export function ScannerPoolBody({ poolEnabled, pool, scannerCount, pipelineMode, loading, error }: ScannerPoolPageData) {
+export function ScannerPoolBody({ poolEnabled, pool, scannerCount, reading, pipelineMode, loading, error }: ScannerPoolPageData) {
   const [adminKey] = useAdminKey();
   const lede = "The fixed set of workers that runs the scanners, when the proxy is set to use one. Read every 10 seconds.";
 
@@ -41,7 +42,8 @@ export function ScannerPoolBody({ poolEnabled, pool, scannerCount, pipelineMode,
         <DataNotice adminKey={adminKey} failed={!!error} />
         {adminKey && !error && !loading ? (
           <p className="t-empty" style={{ maxWidth: "52rem" }}>
-            The worker pool is not switched on. The proxy is scanning in its default mode ({pipelineMode}), with {counted(scannerCount, "scanner")}. To
+            The worker pool is not switched on. The proxy is scanning in its default mode ({pipelineMode})
+            {scannerCount === null ? "" : `, with ${counted(scannerCount, "scanner")}`}. To
             bound how many scans run at once and see the numbers here, set <code>TAMGA_SCANNER_WORKER_POOL_SIZE</code> to a positive number
             and <code>TAMGA_SCANNER_PIPELINE_MODE</code> to <code>workerpool</code>.
           </p>
@@ -91,8 +93,9 @@ export function ScannerPoolBody({ poolEnabled, pool, scannerCount, pipelineMode,
           ["Completed", pool.jobsCompleted.toLocaleString("en")],
           ["Dropped, queue full", pool.jobsShed.toLocaleString("en")],
           ["Failed", pool.jobsFailed.toLocaleString("en")],
-          ["Scanners", scannerCount],
+          ["Scanners", held(reading, scannerCount)],
         ]}
+        factsNote={scannerCount === null ? undefined : <AsOf reading={reading} />}
       />
 
       <Section id="timings" title="Mean scan time by scanner" note="Slowest first">

@@ -9,8 +9,8 @@ export function useProxyPage() {
 
   // `up` is what the proxy tells anyone. `health` and `detail` are there only
   // when it accepted the admin key; `detailState` says why when they are not.
-  const { data: up, detail: health, detailState, isLoading: healthLoading, error: healthError } = useHealth();
-  const { data: detail, isLoading: detailLoading } = useHealthDetail();
+  const { data: up, detail: health, detailState, reading, isLoading: healthLoading, error: healthError } = useHealth();
+  const { data: detail, reading: detailReading, isLoading: detailLoading } = useHealthDetail();
 
   const isLoading = healthLoading || detailLoading;
   const hasError = !!healthError;
@@ -19,7 +19,14 @@ export function useProxyPage() {
   const isOnline = !healthError && (up?.proxy === "up" || up?.proxy_status?.up === true);
 
   const componentRows = useMemo(() => {
-    const rows: { component: string; status: "ok" | "warning" | "error" | "disabled"; detail: string; dependsOn?: string }[] = [];
+    const rows: {
+      component: string;
+      status: "ok" | "warning" | "error" | "disabled";
+      detail: string;
+      dependsOn?: string;
+      /** The row is the proxy's last answer, from before its check began to fail. */
+      stale?: boolean;
+    }[] = [];
     // Without the detail nothing is known about the parts, and a row made
     // of defaults would read as their state.
     if (!health) return rows;
@@ -95,8 +102,10 @@ export function useProxyPage() {
       dependsOn: "database, cron scheduler",
     });
 
-    return rows;
-  }, [health, detail, isOnline]);
+    // Whether the HTTP server answers is known now. Every other row is what
+    // the proxy last said of itself, which is old once its check fails.
+    return rows.map((r) => (r.component === "HTTP Server" ? r : { ...r, stale: reading.stale }));
+  }, [health, detail, isOnline, reading.stale]);
 
   return {
     adminKey,
@@ -104,6 +113,9 @@ export function useProxyPage() {
     hasError,
     isOnline,
     detailState,
+    /** How the health answer, and the runtime detail, may be shown: see readHealth. */
+    reading,
+    detailReading,
     health,
     detail,
     componentRows,

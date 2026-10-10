@@ -29,8 +29,8 @@ export function useSettingsPage() {
   }, [adminKey]);
 
   // `up` is what the proxy tells anyone; `health` and `runtime` need the admin key.
-  const { data: up, detail: health, detailState } = useHealth();
-  const { data: runtime } = useHealthDetail(tab === "runtime");
+  const { data: up, detail: health, detailState, reading } = useHealth();
+  const { data: runtime, reading: runtimeReading } = useHealthDetail(tab === "runtime");
 
   const {
     data: ssoConfig,
@@ -73,6 +73,9 @@ export function useSettingsPage() {
     up,
     health,
     detailState,
+    /** How the health answer, and the runtime detail, may be shown: see readHealth. */
+    reading,
+    runtimeReading,
     runtime,
     ssoConfig,
     ssoLoading,

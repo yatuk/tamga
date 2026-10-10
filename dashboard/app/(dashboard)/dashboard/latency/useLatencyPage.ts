@@ -2,9 +2,9 @@
 
 import { useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { permissionDenied } from "@/lib/api/fetch-core";
+import { toast } from "@/lib/toast";
 import { useAdminKey } from "@/hooks/useAdminKey";
 import { useHealth } from "@/hooks/useHealth";
 import { useRangeParam } from "@/hooks/useRangeParam";
@@ -15,7 +15,7 @@ export function useLatencyPage() {
 
   // The scan times are public. `detail` (scanners, uptime, upstreams) is
   // there only when the proxy accepted the admin key.
-  const { data: health, detail, detailState, isLoading: healthLoading, error: healthError } = useHealth();
+  const { data: health, detail, detailState, reading, isLoading: healthLoading, error: healthError } = useHealth();
 
   const { data: ts, isLoading: tsLoading } = useQuery({
     queryKey: ["tamga-timeseries", adminKey, range],
@@ -57,11 +57,11 @@ export function useLatencyPage() {
     mutationFn: ({ pool, endpoint }: { pool: string; endpoint: string }) =>
       api.resetUpstreamCircuit(adminKey, pool, endpoint),
     onSuccess: (data) => {
-      toast.success(`Circuit reset for ${data.endpoint} in pool ${data.pool}`);
+      toast.success("Sending traffic again", `${data.pool}, ${data.endpoint}`);
     },
     // A refusal for the key's role is shown beside the button that asked: see LatencyBody.
     onError: (e: Error) => {
-      if (!permissionDenied(e)) toast.error("Could not reset the endpoint", { description: e.message });
+      if (!permissionDenied(e)) toast.error("Could not reset the endpoint", e.message);
     },
   });
 
@@ -76,8 +76,12 @@ export function useLatencyPage() {
     p99,
     scannerCount,
     /** True when the proxy answered but kept the detail back: no key, or one it did not accept. */
-    detailLocked: detailState === "no-key" || detailState === "rejected",
+    detailLocked: reading.standing === "no-key" || reading.standing === "rejected",
     detailState,
+    /** How the health answer may be shown: see readHealth. */
+    reading,
+    /** The proxy's detail is held, from this check or the last one that was answered. */
+    hasDetail: !!detail,
     points: ts?.points ?? [],
     hourly: ts?.bucket === "hour",
     providerPools,

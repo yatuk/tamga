@@ -62,7 +62,7 @@ const BASE_POLICY: Doc = {
   version: "v1",
   name: "default",
   rules: {
-    pii_detection: { action: "redact", severity: "high", notify: ["slack-security"] },
+    pii_detection: { action: "redact", severity: "high", notify: [{ channel: "slack", webhook: "${SLACK_SECURITY_WEBHOOK}" }] },
     prompt_injection: { action: "warn", severity: "medium" },
   },
   output_rules: null,

@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import type { ReportRange } from "@/lib/api/endpoints/export";
 import { permissionDenied } from "@/lib/api/fetch-core";
 import { toast } from "@/lib/toast";
 import { toUpperEn, toLowerEn } from "@/lib/utils/case";
@@ -16,10 +17,14 @@ export function useReportsPage() {
   const [adminKey] = useAdminKey();
   const [range, setRange] = useRangeParam("7d");
   const [isExporting, setIsExporting] = useState(false);
-  // The last export the proxy refused, kept so the page can say why beside its button.
+  // The last export that was refused or failed, kept so the page can say why beside its button.
   const [exportRefusal, setExportRefusal] = useState<{ what: "events" | "owasp" | "incident"; error: unknown } | null>(null);
 
-  const { data: stats, error: statsError } = useQuery({
+  const {
+    data: stats,
+    error: statsError,
+    isLoading: statsLoading,
+  } = useQuery({
     queryKey: ["tamga-stats", adminKey, range],
     queryFn: () => api.getStats(adminKey, range),
     enabled: !!adminKey,
@@ -43,7 +48,7 @@ export function useReportsPage() {
     staleTime: 60 * 1000,
   });
 
-  const { data: breakdown } = useQuery({
+  const { data: breakdown, isLoading: breakdownLoading } = useQuery({
     queryKey: ["tamga-breakdown", adminKey, range],
     queryFn: () => api.getBreakdown(adminKey, range),
     enabled: !!adminKey,
@@ -51,7 +56,11 @@ export function useReportsPage() {
     staleTime: 60 * 1000,
   });
 
-  const { data: mttrData } = useQuery({
+  const {
+    data: mttrData,
+    isLoading: mttrLoading,
+    isError: mttrFailed,
+  } = useQuery({
     queryKey: ["tamga-mttr", adminKey, range],
     queryFn: () => api.getMttr(adminKey, range),
     enabled: !!adminKey,
@@ -156,6 +165,8 @@ export function useReportsPage() {
   };
 
   const downloadBlob = useDownload();
+  // The PDF reports cover one of three windows.
+  const reportRange: ReportRange = range === "24h" || range === "30d" ? range : "7d";
 
   const exportEventsCsv = useCallback(async () => {
     if (!adminKey) return;
@@ -177,45 +188,32 @@ export function useReportsPage() {
     setIsExporting(true);
     setExportRefusal(null);
     try {
-      const blob = await api.getOwaspPdfReport(adminKey, { range });
+      const blob = await api.getOwaspPdfReport(adminKey, reportRange);
       downloadBlob(blob, `tamga-owasp-report-${range}.pdf`);
       toast.success("OWASP report downloaded");
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Could not generate the PDF";
-      if (permissionDenied(err)) setExportRefusal({ what: "owasp", error: err });
-      else toast.error("Could not generate the PDF", message);
+      // Said beside the button, in the proxy's own terms: see reportFailure.
+      setExportRefusal({ what: "owasp", error: err });
     } finally {
       setIsExporting(false);
     }
-  }, [adminKey, range, downloadBlob]);
+  }, [adminKey, range, reportRange, downloadBlob]);
 
   const exportIncidentPdf = useCallback(async () => {
     if (!adminKey) return;
     setIsExporting(true);
     setExportRefusal(null);
     try {
-      const totalRequests = stats?.total_requests ?? 0;
-      const blocked = stats?.blocked_requests ?? 0;
-      const redacted = stats?.redacted_requests ?? 0;
-      const warned = stats?.warned_requests ?? 0;
-      const periodHours = range === "24h" ? 24 : range === "7d" ? 168 : 720;
-      const blob = await api.getIncidentPdfReport(adminKey, {
-        total_requests: String(totalRequests),
-        blocked: String(blocked),
-        redacted: String(redacted),
-        warned: String(warned),
-        period_hours: String(periodHours),
-      });
+      // The proxy counts the window's requests itself; figures sent from here would be ignored.
+      const blob = await api.getIncidentPdfReport(adminKey, reportRange);
       downloadBlob(blob, `tamga-incident-report-${range}.pdf`);
       toast.success("Incident report downloaded");
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Could not generate the PDF";
-      if (permissionDenied(err)) setExportRefusal({ what: "incident", error: err });
-      else toast.error("Could not generate the PDF", message);
+      setExportRefusal({ what: "incident", error: err });
     } finally {
       setIsExporting(false);
     }
-  }, [adminKey, range, stats, downloadBlob]);
+  }, [adminKey, range, reportRange, downloadBlob]);
 
   return {
     adminKey,
@@ -234,6 +232,9 @@ export function useReportsPage() {
     isExporting,
     exportRefusal,
     statsError,
+    /** The figures are on their way: nothing is drawn in their place meanwhile. */
+    isLoading: statsLoading || breakdownLoading || mttrLoading,
+    mttrFailed,
     mttrData,
     comparisonDelta,
     executiveSummary,

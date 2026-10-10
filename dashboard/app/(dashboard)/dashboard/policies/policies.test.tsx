@@ -14,22 +14,12 @@ import { explainRefusal, sectionWords } from "./refusal";
 // CodeMirror needs a real layout. The draft comes from this browser's storage, as it does after a reload.
 vi.mock("./policy-code-editor", () => ({ default: () => null }));
 
-// Carbon's tabs construct a ResizeObserver; the stand-in in vitest.setup.ts cannot be called with `new`.
-vi.stubGlobal(
-  "ResizeObserver",
-  class {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  },
-);
-
 // See __mocks__/policy-handlers.ts for what each key stands for.
 const ADMIN_KEY = "test-key";
 const ANALYST_KEY = "analyst-key";
 
 const DUAL_CONTROL = { governance: { require_dual_control: true } };
-const STOP_PII = { rules: { ...(policyMock.policy.rules as object), pii_detection: { action: "block", severity: "high", notify: ["slack-security"] } } };
+const STOP_PII = { rules: { ...(policyMock.policy.rules as object), pii_detection: { action: "block", severity: "high", notify: [{ channel: "slack", webhook: "${SLACK_SECURITY_WEBHOOK}" }] } } };
 
 function show({ key = ADMIN_KEY, draft }: { key?: string; draft?: string } = {}) {
   localStorage.setItem(ADMIN_KEY_STORAGE, key);

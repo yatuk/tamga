@@ -25,12 +25,12 @@ const LEDE = "Which accounts hold a role on this proxy, and what each of them ma
 const FORM = "(form)";
 
 /**
- * How the last change on the page ended. There is one, so a sentence about an
- * account is never left standing beside a later one that made it false.
+ * How the last change to an account ended. There is one per place it is said
+ * (the account's row, or the form), so acting on one account leaves what is
+ * still true of another where it was. It goes when the next action on that
+ * account begins, or when the list is read again and no longer agrees with it.
  */
 interface Said {
-  /** The row it is said at, or FORM. */
-  at: string;
   account: string;
   note: RowNote;
   /** The role the sentence leaves the account with, and the number of admins where it speaks of them. */
@@ -43,7 +43,8 @@ interface Said {
 export default function TeamPage() {
   const qc = useQueryClient();
   const [adminKey] = useAdminKey();
-  const [said, setSaid] = useState<Said | null>(null);
+  // Keyed by where it is said: a user id, or FORM.
+  const [said, setSaid] = useState<Record<string, Said>>({});
   // An older proxy stops listing an account once its role is removed. The row
   // stays until the page is left, so what happened can be read. Where the
   // proxy lists the account itself, its row is the one shown.
@@ -73,7 +74,10 @@ export default function TeamPage() {
   const holding = items.length - without;
 
   const say = (at: string, account: string, note: RowNote, role: TeamRole | "", lastAdmin = false) =>
-    setSaid({ at, account, note, role, admins: lastAdmin ? admins : undefined, asOf: team.dataUpdatedAt });
+    setSaid((all) => ({ ...all, [at]: { account, note, role, admins: lastAdmin ? admins : undefined, asOf: team.dataUpdatedAt } }));
+  // The next action on an account replaces what was said of it, wherever that was said.
+  const forget = (at: string, account: string) =>
+    setSaid((all) => Object.fromEntries(Object.entries(all).filter(([key, s]) => key !== at && s.account !== account)));
   const refresh = () => qc.invalidateQueries({ queryKey: ["tamga-team", adminKey] });
   const refused = (at: string, account: string, error: unknown, action: TeamAction) => {
     const code = error instanceof ApiError ? error.code : undefined;
@@ -82,15 +86,20 @@ export default function TeamPage() {
     say(at, account, { kind: "refused", text: explainTeamRefusal(error, action) }, noRole ? "" : roleOf(account), code === "last_admin");
   };
   // A sentence stands until the list is read again and no longer agrees with
-  // it: someone else, or another tab, has changed the account since.
-  const standing =
-    said && (team.dataUpdatedAt === said.asOf || (roleOf(said.account) === said.role && (said.admins === undefined || said.admins === admins)))
-      ? said
-      : null;
+  // it: someone else, another tab, or a later action here has changed the
+  // account, or the number of admins it speaks of, since.
+  const stands = (s: Said) =>
+    team.dataUpdatedAt === s.asOf || (roleOf(s.account) === s.role && (s.admins === undefined || s.admins === admins));
+  const standing = Object.fromEntries(Object.entries(said).filter(([, s]) => stands(s)));
+  const rowNotes = Object.fromEntries(
+    Object.entries(standing)
+      .filter(([at]) => at !== FORM)
+      .map(([at, s]) => [at, s.note]),
+  );
 
   const setRole = useMutation({
     mutationFn: ({ id, role }: { id: string; role: TeamRole; at: string }) => api.setTeamRole(adminKey, id, role),
-    onMutate: () => setSaid(null),
+    onMutate: ({ id, at }) => forget(at, id),
     onSuccess: (member, { id, role, at }) => {
       const was = roleOf(id);
       // The proxy leaves the sessions alone when the role is the one the account had.
@@ -108,7 +117,7 @@ export default function TeamPage() {
   });
   const removeRole = useMutation({
     mutationFn: (member: TeamMember) => api.removeTeamRole(adminKey, member.user_id),
-    onMutate: () => setSaid(null),
+    onMutate: (member) => forget(member.user_id, member.user_id),
     onSuccess: (res, member) => {
       say(member.user_id, member.user_id, { kind: "done", text: accessRemovedText(defaultRole) }, "");
       setRemoved((all) => [
@@ -125,7 +134,7 @@ export default function TeamPage() {
   });
   const signOut = useMutation({
     mutationFn: (member: TeamMember) => api.revokeTeamSessions(adminKey, member.user_id),
-    onMutate: () => setSaid(null),
+    onMutate: (member) => forget(member.user_id, member.user_id),
     onSuccess: (res, member) => {
       say(member.user_id, member.user_id, { kind: "done", text: signedOutText(res.sessions_valid_from) }, roleOf(member.user_id));
       void refresh();
@@ -189,7 +198,7 @@ export default function TeamPage() {
               members={items}
               defaultRole={defaultRole}
               pending={pending}
-              notes={standing && standing.at !== FORM ? { [standing.at]: standing.note } : {}}
+              notes={rowNotes}
               onRole={(m, role) => setRole.mutate({ id: m.user_id, role, at: m.user_id })}
               onRemove={(m) => removeRole.mutate(m)}
               onSignOut={(m) => signOut.mutate(m)}
@@ -205,7 +214,7 @@ export default function TeamPage() {
 
         <div>
           <Section id="give-role" title="Give an account a role">
-            <GiveRole pending={pending} note={standing?.at === FORM ? standing.note : undefined} onGive={(id, role) => setRole.mutate({ id, role, at: FORM })} />
+            <GiveRole pending={pending} note={standing[FORM]?.note} onGive={(id, role) => setRole.mutate({ id, role, at: FORM })} />
           </Section>
 
           <Section id="roles" title="What each role can do" style={{ marginTop: "2.5rem" }}>

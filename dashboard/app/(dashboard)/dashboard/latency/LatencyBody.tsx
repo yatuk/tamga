@@ -2,7 +2,7 @@
 
 import { Button, Table, TableBody, TableCell, TableContainer, TableHead, TableHeader, TableRow } from "@carbon/react";
 import { Scale, Trace } from "@/components/console/charts";
-import { failureWords, HealthDetailNotice, NEEDS_KEY } from "@/components/console/health";
+import { AsOf, asOfWords, failureWords, HealthDetailNotice, held } from "@/components/console/health";
 import { Count } from "@/components/console/motion";
 import { bucketName, RANGE_WORDS, uptimeText } from "@/components/console/names";
 import { DataNotice, PageHead, RangeSwitch, Refused, Section, Statement } from "@/components/console/page";
@@ -35,12 +35,16 @@ export function LatencyBody({
   hourly,
   scannerCount,
   detailLocked,
-  detailState,
+  reading,
+  hasDetail,
   providerPools,
   circuitReset,
   uptimeSeconds,
 }: Props) {
-  const measured = p95 > 0;
+  // The scan times are the proxy's own. When it does not answer they are not
+  // known, and the ones held from its last answer are not the figure of the page.
+  const answering = reading.standing !== "unreachable" && !reading.stale;
+  const measured = answering && p95 > 0;
   const slow = p95 > TARGET_MS;
   const unit = hourly ? "hour" : "day";
   const scanned = points.filter((p) => p.scan_p95 > 0);
@@ -55,18 +59,25 @@ export function LatencyBody({
 
       <DataNotice adminKey={adminKey} failed={hasError} />
       {/* Without a key the notice above has already said so. */}
-      {adminKey ? <HealthDetailNotice state={detailState} /> : null}
+      {adminKey ? <HealthDetailNotice state={reading.standing} /> : null}
 
       <Statement
         loading={isLoading}
-        figure={measured ? <Count value={p95} format={formatMs} /> : "No data"}
+        figure={measured ? <Count value={p95} format={formatMs} /> : answering ? "No data" : "Not known"}
         sentence={
           measured
             ? "or less is what scanning adds to 95 of every 100 requests."
-            : "No request has been scanned since the proxy started."
+            : answering
+              ? "No request has been scanned since the proxy started."
+              : "The proxy is not answering, so how long it holds a request is not known."
         }
         rest={
-          measured ? (
+          reading.stale && p95 > 0 ? (
+            <span className="t-asof">
+              {asOfWords(reading.answeredAt, true)}: scanning added {formatMs(p95)} or less to 95 of every 100 requests, and half were done within{" "}
+              {formatMs(p50)}.
+            </span>
+          ) : measured ? (
             <>
               Half are done within <b>{formatMs(p50)}</b>. The slowest 1 in 100 take <b>{formatMs(p99)}</b> or longer.
               {slow ? (
@@ -91,11 +102,15 @@ export function LatencyBody({
             />
           ) : undefined
         }
+        factsNote={<AsOf reading={reading} />}
         facts={[
-          ["Scanners on every request", detailLocked ? NEEDS_KEY : scannerCount || "None"],
-          ["Measured since", detailLocked ? NEEDS_KEY : uptimeSeconds > 0 ? `the proxy started, ${uptimeText(uptimeSeconds)} ago` : "Not known"],
+          ["Scanners on every request", held(reading, hasDetail ? scannerCount || "None" : undefined)],
+          [
+            "Measured since",
+            held(reading, !hasDetail ? undefined : uptimeSeconds > 0 ? `the proxy started, ${uptimeText(uptimeSeconds)} ago` : "Not known"),
+          ],
           ["Target, 95th percentile", formatMs(TARGET_MS)],
-          ["Upstream endpoints", detailLocked ? NEEDS_KEY : providerPools.length || "None defined"],
+          ["Upstream endpoints", held(reading, hasDetail ? providerPools.length || "None defined" : undefined)],
         ]}
       />
 
@@ -143,11 +158,21 @@ export function LatencyBody({
       <Section
         id="upstreams"
         title="Upstream endpoints"
-        note="An endpoint is cut off after repeated failures and tried again a little later."
+        note={
+          reading.stale && hasDetail
+            ? asOfWords(reading.answeredAt, true)
+            : "An endpoint is cut off after repeated failures and tried again a little later."
+        }
         style={{ marginTop: "3rem" }}
       >
         {detailLocked ? (
           <p className="t-empty">The upstream endpoints are shown once the proxy accepts an admin key from this browser.</p>
+        ) : !hasDetail ? (
+          <p className="t-empty">
+            {reading.standing === "checking"
+              ? "Reading the upstream endpoints."
+              : "The proxy did not answer, so the state of its upstream endpoints is not known."}
+          </p>
         ) : providerPools.length === 0 ? (
           <p className="t-empty">
             No provider pool is defined. Add <code>providers.pools</code> to the policy to see each upstream here.
@@ -173,10 +198,21 @@ export function LatencyBody({
                 {providerPools.map((p) => {
                   const state = CIRCUIT[(p.state || "").toLowerCase()] ?? { word: p.state || "Not known" };
                   return (
-                    <TableRow key={`${p.pool}-${p.name}`}>
+                    <TableRow key={`${p.pool}-${p.name}`} data-stale={reading.stale ? "true" : undefined}>
                       <TableCell className="t-data">{p.name}</TableCell>
                       <TableCell>{p.pool}</TableCell>
-                      <TableCell>{state.action ? <span className="t-action" data-action={state.action}>{state.word}</span> : state.word}</TableCell>
+                      <TableCell>
+                        {reading.stale ? (
+                          // No mark: a mark says what the endpoint is doing now.
+                          held(reading, state.word)
+                        ) : state.action ? (
+                          <span className="t-action" data-action={state.action}>
+                            {state.word}
+                          </span>
+                        ) : (
+                          state.word
+                        )}
+                      </TableCell>
                       <TableCell className="t-right">{formatMs(p.p95LatencyMs)}</TableCell>
                       <TableCell className="t-right">{formatRate(p.successRate)}</TableCell>
                       <TableCell className="t-right">{p.requestsInWindow ?? "None"}</TableCell>

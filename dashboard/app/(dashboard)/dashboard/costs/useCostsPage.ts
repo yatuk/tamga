@@ -142,6 +142,10 @@ export function useCostsPage() {
     setRange,
     isLoading,
     hasError,
+    /** What the page's reads threw, the first of them. */
+    error: breakdownError ?? budgetError,
+    /** A read the page is built on failed with nothing loaded before it: there are no figures to draw. */
+    failedFirst: (!!breakdownError && !costBreakdown) || (!!budgetError && !budget),
     tokensToday,
     costToday,
     limitTokens,

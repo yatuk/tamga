@@ -3,7 +3,7 @@
 import { Trace } from "@/components/console/charts";
 import { Count } from "@/components/console/motion";
 import { bucketName, RANGE_WORDS, typeName } from "@/components/console/names";
-import { DataNotice, NoData, PageHead, RangeSwitch, Section, Shares, Statement } from "@/components/console/page";
+import { DataNotice, NoData, PageHead, PageLoading, RangeSwitch, Section, Shares, Statement } from "@/components/console/page";
 import { useTrendsPage } from "./useTrendsPage";
 
 type Point = { total: number; blocked: number; redacted?: number; warned?: number };
@@ -24,14 +24,20 @@ function halves(points: Point[]) {
 }
 
 export default function TrendsPage() {
-  const { adminKey, error, range, setRange, isLoading, totals, points, hourly, byType } = useTrendsPage();
+  const { adminKey, error, failedFirst, range, setRange, isLoading, totals, points, hourly, byType } = useTrendsPage();
   const rate = totals.attempted > 0 ? (totals.caught / totals.attempted) * 100 : 0;
   const split = halves(points);
   const unit = hourly ? "hour" : "day";
 
-  if (!adminKey) {
+  // No key, or the read failed with nothing before it: the notice, and no figures made of defaults.
+  if (!adminKey || failedFirst) {
     return (
-      <NoData title="Detection trends" lede="How much of the traffic a policy acted on, and whether that share is moving." adminKey={adminKey} />
+      <NoData
+        title="Detection trends"
+        lede="How much of the traffic a policy acted on, and whether that share is moving."
+        adminKey={adminKey}
+        error={error}
+      />
     );
   }
 
@@ -46,6 +52,10 @@ export default function TrendsPage() {
 
       <DataNotice adminKey={adminKey} failed={!!error} />
 
+      {isLoading ? (
+        <PageLoading />
+      ) : (
+      <>
       <Statement
         loading={isLoading}
         figure={<Count value={rate} format={percent} />}
@@ -95,6 +105,8 @@ export default function TrendsPage() {
           />
         </Section>
       </div>
+      </>
+      )}
     </>
   );
 }

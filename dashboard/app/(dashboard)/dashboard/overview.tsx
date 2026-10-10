@@ -10,8 +10,8 @@ import { useAdminKey } from "@/hooks/useAdminKey";
 import { useHealth } from "@/hooks/useHealth";
 import { useRangeParam } from "@/hooks/useRangeParam";
 import { Columns } from "@/components/console/charts";
-import { NEEDS_KEY } from "@/components/console/health";
-import { DataNotice, NoData, PageHead, RangeSwitch, Section, Shares, Statement } from "@/components/console/page";
+import { AsOf, held } from "@/components/console/health";
+import { DataNotice, NoData, PageHead, PageLoading, RangeSwitch, Section, Shares, Statement } from "@/components/console/page";
 import { Arrive, Arriving, Bar, Count } from "@/components/console/motion";
 import {
   bucketLabel,
@@ -31,9 +31,9 @@ export function Overview() {
   const [adminKey] = useAdminKey();
   const [range, setRange] = useRangeParam("7d");
   // `health` is what the proxy tells anyone. `detail` needs the admin key.
-  const { data: health, isError: unreachable, detail, detailState } = useHealth();
-  // Shown in place of a value the proxy keeps back; before it has answered, nothing is known.
-  const unknown = detailState === "no-key" || detailState === "rejected" ? NEEDS_KEY : "Not known";
+  const { data: health, isError: unreachable, detail, reading } = useHealth();
+  // The scan times are public: they are there whenever the proxy has answered.
+  const scanTime = (ms?: number) => held(reading, health ? formatMs(ms) : undefined);
 
   const stats = useQuery({
     queryKey: ["tamga-stats", adminKey, range],
@@ -71,12 +71,14 @@ export function Overview() {
   const facts: [string, ReactNode][] = [
     // The last answer is kept while a check fails; it must not be read as the proxy being up now.
     ["Proxy", unreachable ? "Unreachable" : health ? (health.proxy === "up" ? "Up" : "Unreachable") : "Checking"],
-    ["Uptime", detail ? uptimeText(detail.uptime_seconds) : unknown],
-    ["Scan time, median", formatMs(health?.scan_latency_ms_p50)],
-    ["Scan time, 95th percentile", formatMs(health?.scan_latency_ms_p95)],
-    ["Scanners running", detail?.scanner_count ?? unknown],
-    ["Database", detail?.database === "connected" ? "Connected" : (detail?.database ?? unknown)],
+    ["Uptime", held(reading, detail ? uptimeText(detail.uptime_seconds) : undefined)],
+    ["Scan time, median", scanTime(health?.scan_latency_ms_p50)],
+    ["Scan time, 95th percentile", scanTime(health?.scan_latency_ms_p95)],
+    ["Scanners running", held(reading, detail?.scanner_count)],
+    ["Database", held(reading, detail?.database === "connected" ? "Connected" : detail?.database)],
   ];
+  // Everything but the first row is the proxy's last answer once its check fails.
+  const factsNote = <AsOf reading={reading} />;
 
   if (!adminKey || (stats.isError && !s)) {
     return <NoData title="Overview" lede="What the proxy scanned, and what it did about it." adminKey={adminKey} error={stats.error} />;
@@ -90,12 +92,17 @@ export function Overview() {
 
       <DataNotice adminKey={adminKey} failed={stats.isError} />
 
+      {stats.isLoading ? (
+        <PageLoading />
+      ) : (
+      <>
       {total === 0 ? (
         <Statement
           loading={stats.isLoading}
           figure="0"
           sentence={`requests went through the proxy in ${RANGE_WORDS[range]}.`}
           facts={facts}
+          factsNote={factsNote}
         />
       ) : (
         <Statement
@@ -127,6 +134,7 @@ export function Overview() {
             </>
           }
           facts={facts}
+          factsNote={factsNote}
         />
       )}
 
@@ -205,6 +213,8 @@ export function Overview() {
           />
         )}
       </Section>
+      </>
+      )}
     </>
   );
 }

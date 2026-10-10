@@ -153,7 +153,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Redirect to GitHub OAuth login */
+        /**
+         * Redirect to GitHub OAuth login
+         * @description Starts a sign-in: sets the `tamga_oauth_state` cookie (HttpOnly,
+         *     Secure, SameSite=Lax, 10 minutes) and redirects to GitHub with the
+         *     same value as `state`.
+         */
         get: {
             parameters: {
                 query?: never;
@@ -170,6 +175,7 @@ export interface paths {
                     };
                     content?: never;
                 };
+                503: components["responses"]["SessionsUnavailable"];
             };
         };
         put?: never;
@@ -187,68 +193,47 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** GitHub OAuth callback */
+        /**
+         * GitHub OAuth callback
+         * @description Exchanges the code for a session token, and only for the browser
+         *     that started the sign-in: `state` must equal the `tamga_oauth_state`
+         *     cookie `GET /api/v1/auth/github/login` set. This is the only route
+         *     that takes a code. `POST /api/v1/auth/github/exchange`, which took
+         *     one without a state, was removed.
+         */
         get: {
             parameters: {
-                query?: never;
+                query: {
+                    code: string;
+                    state: string;
+                };
                 header?: never;
                 path?: never;
                 cookie?: never;
             };
             requestBody?: never;
             responses: {
-                /** @description OK */
+                /** @description The session token and the user it is for */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": {
+                            token?: string;
+                            user?: {
+                                id?: string;
+                                email?: string;
+                                name?: string;
+                                avatar?: string;
+                                /** @enum {string} */
+                                role?: "viewer" | "analyst" | "admin";
+                            };
+                        };
+                    };
                 };
-                /** @description OAuth error */
+                /** @description The state cookie is missing, `state` does not match it, or there is no `code` */
                 400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                /** @description `account_not_assigned`: see `POST /api/v1/auth/github/exchange`. */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/github/exchange": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Exchange GitHub code for JWT session */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -270,8 +255,18 @@ export interface paths {
                         "application/json": components["schemas"]["AccountNotAssigned"];
                     };
                 };
+                /** @description GitHub refused the code or did not answer */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                503: components["responses"]["SessionsUnavailable"];
             };
         };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -335,6 +330,7 @@ export interface paths {
                         "application/json": components["schemas"]["AccountNotAssigned"];
                     };
                 };
+                503: components["responses"]["SessionsUnavailable"];
             };
         };
         put?: never;
@@ -397,12 +393,18 @@ export interface paths {
                     };
                     content?: never;
                 };
-                /** @description Sessions are not configured, or the revocation could not be stored */
+                /**
+                 * @description `sessions_unavailable`: no signing secret is configured. This is
+                 *     the answer whatever was sent, a token or none. Without a `code`:
+                 *     the revocation could not be stored.
+                 */
                 503: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["SessionsUnavailable"];
+                    };
                 };
             };
         };
@@ -845,6 +847,8 @@ export interface paths {
          *     Prefer `POST /api/v1/events/subject`: here the selector, which names
          *     a person, is in the query string, and URLs are kept in access logs,
          *     proxies and browser history. GET stays for existing callers.
+         *
+         *     Audited like the POST, with the same rule for `tckn_hash`.
          */
         get: {
             parameters: {
@@ -892,6 +896,17 @@ export interface paths {
          * @description Return request_log rows for a data subject. The preferred form: the
          *     selector is in the body and nothing is read from the query string.
          *     The answer is that of the GET.
+         *
+         *     One selector is used: the first that is given of `user_id`, `email`
+         *     and `tckn_hash`. `tckn_hash` must be a SHA-256 in lower-case hex (64
+         *     characters); anything else is 400.
+         *
+         *     Every call that names a subject is written to the audit log as
+         *     `privacy.subject_access`, with the verified actor and, in `detail`,
+         *     `selector` (which of the three was used: `user_id`, `email` or
+         *     `tckn_hash`), `rows` (how many were returned) and `result` (`ok`,
+         *     `error` or `store_unavailable`). The selector's value is not
+         *     written, in any form.
          */
         post: {
             parameters: {
@@ -938,7 +953,19 @@ export interface paths {
                 403: components["responses"]["PermissionDenied"];
             };
         };
-        /** KVKK/GDPR subject erase */
+        /**
+         * KVKK/GDPR subject erase
+         * @description Deletes the stored request logs of a data subject. The rows are
+         *     deleted, not marked. One selector is used, as on the POST, and
+         *     `tckn_hash` must be a SHA-256 in lower-case hex (64 characters).
+         *
+         *     Written to the audit log as `privacy.subject_erase`, with the
+         *     verified actor and, in `detail`, `selector` (`user_id`, `email` or
+         *     `tckn_hash`), `deleted` and `result` (`ok`, `error` or
+         *     `store_unavailable`). The selector's value is not written: the
+         *     entry used to carry `user_id`, `email` and `tckn_hash`, and entries
+         *     written by earlier versions still do.
+         */
         delete: {
             parameters: {
                 query?: never;
@@ -3158,7 +3185,17 @@ export interface paths {
                             total_requests?: number;
                             limited_requests?: number;
                             max_requests_per_min?: number;
-                            top_keys?: Record<string, never>;
+                            /**
+                             * @description Requests since the process started, for the 20 buckets
+                             *     with the most. A bucket is named `tk:<id>` (a Tamga
+                             *     key, by the id of its record), `key:<16 hex>` (a
+                             *     provider key, by the start of its SHA-256) or
+                             *     `ip:<address>` (a caller with neither). No key, and no
+                             *     part of one, is in the name.
+                             */
+                            top_keys?: {
+                                [key: string]: number;
+                            };
                             /** Format: date-time */
                             snapshot_t?: string;
                         };
@@ -4118,6 +4155,326 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reports/owasp/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * OWASP LLM Top 10 coverage report as a PDF
+         * @description The analyzer generates the report and the proxy passes it on. It
+         *     describes which OWASP LLM Top 10 risks the deployed detections cover:
+         *     it prints no traffic figures and nothing from the caller's request.
+         *     `range` is accepted and has no effect on the content today.
+         *
+         *     The proxy asks the analyzer at `TAMGA_ANALYZER_HTTP_URL`. Nothing in
+         *     the request chooses the address or the path, and no header of the
+         *     request or of the analyzer's answer is passed on.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    range?: components["schemas"]["ReportRange"];
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The report, as an attachment named `tamga-owasp-report.pdf` */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/pdf": string;
+                    };
+                };
+                403: components["responses"]["PermissionDenied"];
+                /** @description The analyzer has no PDF library installed. The body is the analyzer's. */
+                501: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReportPdfUnavailable"];
+                    };
+                };
+                /** @description `analyzer_error`: the analyzer answered, and not with a report */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReportError"];
+                    };
+                };
+                /**
+                 * @description `analyzer_not_configured` (`TAMGA_ANALYZER_HTTP_URL` is not set or
+                 *     is not an http(s) address) or `analyzer_unavailable` (it did not
+                 *     answer).
+                 */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReportError"];
+                    };
+                };
+                /** @description `analyzer_timeout`: the analyzer did not answer in time */
+                504: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReportError"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/incident/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Incident summary for a range as a PDF
+         * @description The figures the report prints (requests, blocked, redacted, warned,
+         *     and the period in hours) are counted by the proxy for `range`, the
+         *     way `GET /api/v1/stats` counts them and for the same organisation:
+         *     the two agree for the same range. The analyzer lays the report out.
+         *
+         *     The caller chooses the range and nothing else. `total_requests`,
+         *     `blocked`, `redacted`, `warned` and `period_hours` in the query are
+         *     ignored: they are not an error, so a console that still sends them
+         *     keeps working, and they have no effect on the report.
+         *
+         *     With a database the counts are for the range and
+         *     `X-Tamga-Data-Source` is `database`. Without one, or when it does not
+         *     answer, they are the counters of the serving process, which count
+         *     since it started whatever the range: the header is then `memory` and
+         *     the period the report prints is the time the process has run, in
+         *     whole hours rounded up. When neither can be read the answer is 503
+         *     and no report.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    range?: components["schemas"]["ReportRange"];
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The report, as an attachment named `tamga-incident-report.pdf` */
+                200: {
+                    headers: {
+                        /** @description Where the counts came from */
+                        "X-Tamga-Data-Source"?: "database" | "memory";
+                        /** @description The range the report was asked for */
+                        "X-Tamga-Report-Range"?: components["schemas"]["ReportRange"];
+                        /** @description The period the report prints, in hours. 24, 168 or 720 from the database; the hours the process has run from memory. */
+                        "X-Tamga-Report-Period-Hours"?: number;
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/pdf": string;
+                    };
+                };
+                /** @description `invalid_range`: `range` is not one of `24h`, `7d`, `30d` */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReportError"];
+                    };
+                };
+                403: components["responses"]["PermissionDenied"];
+                /** @description The analyzer has no PDF library installed. The body is the analyzer's. */
+                501: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReportPdfUnavailable"];
+                    };
+                };
+                /** @description `analyzer_error`: the analyzer answered, and not with a report */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReportError"];
+                    };
+                };
+                /**
+                 * @description `report_counts_unavailable` (the database did not answer and the
+                 *     process keeps no counters: nothing was asked of the analyzer),
+                 *     `analyzer_not_configured` or `analyzer_unavailable`.
+                 */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReportError"];
+                    };
+                };
+                /** @description `analyzer_timeout`: the analyzer did not answer in time */
+                504: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReportError"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/sso": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The stored SSO settings
+         * @description The SAML/OIDC settings stored for the deployment's organisation. They
+         *     hold no secret. They are a record: the proxy has no SAML or OIDC
+         *     sign-in that reads them (see the two Clerk callbacks, which answer
+         *     501).
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SSOSettings"];
+                    };
+                };
+                403: components["responses"]["PermissionDenied"];
+            };
+        };
+        /**
+         * Replace the stored SSO settings
+         * @description Replaces the whole document. `provider_type` and `domain` are
+         *     lower-cased and trimmed; an `attribute_mapping` that is left out is
+         *     stored as `{"email": "email", "name": "displayName"}`. A change is
+         *     written to the audit log as `sso.update` with the names of the fields
+         *     that changed, not their values.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SSOSettings"];
+                };
+            };
+            responses: {
+                /** @description Stored */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {boolean} */
+                            ok?: true;
+                            config?: components["schemas"]["SSOSettings"];
+                        };
+                    };
+                };
+                /** @description The body is not JSON */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error?: string;
+                        };
+                    };
+                };
+                403: components["responses"]["PermissionDenied"];
+                /** @description A field is not valid. Nothing was stored. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @example validation failed */
+                            error?: string;
+                            details?: {
+                                /** @enum {string} */
+                                field?: "provider_type" | "metadata_url" | "domain";
+                                message?: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description The change could not be stored. Nothing was changed. */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error?: string;
+                        };
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/providers": {
         parameters: {
             query?: never;
@@ -4804,6 +5161,35 @@ export interface components {
              */
             status?: "approved" | "rejected";
         };
+        SessionsUnavailable: {
+            error: string;
+            /** @enum {string} */
+            code: "sessions_unavailable" | "github_oauth_not_configured";
+        };
+        ReportError: {
+            /** @description A sentence for the console to show. */
+            error: string;
+            /** @enum {string} */
+            code: "invalid_range" | "report_counts_unavailable" | "analyzer_not_configured" | "analyzer_unavailable" | "analyzer_timeout" | "analyzer_error";
+        };
+        ReportPdfUnavailable: {
+            /** @example PDF generation unavailable: ReportLab not installed */
+            error?: string;
+            /** @enum {boolean} */
+            available?: false;
+        };
+        SSOSettings: {
+            /** @enum {string} */
+            provider_type?: "" | "saml" | "oidc";
+            /** @description Empty, or an http(s) URL with a host. */
+            metadata_url?: string;
+            attribute_mapping?: {
+                [key: string]: string;
+            };
+            enabled?: boolean;
+            /** @description Empty, or a domain such as example.com, without scheme or path. */
+            domain?: string;
+        };
         PermissionDenied: {
             /** @example role viewer lacks incidents:write */
             error: string;
@@ -5077,6 +5463,21 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["PermissionDenied"];
+            };
+        };
+        /**
+         * @description `sessions_unavailable`: the proxy has no signing secret
+         *     (`TAMGA_JWT_SECRET`), so it issues, reads and ends no session. Every
+         *     session route answers this, whatever it was sent. On the two GitHub
+         *     routes also `github_oauth_not_configured`: there is a secret and no
+         *     GitHub OAuth app.
+         */
+        SessionsUnavailable: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["SessionsUnavailable"];
             };
         };
     };

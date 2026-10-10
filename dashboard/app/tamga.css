@@ -61,6 +61,17 @@
   background: var(--cds-background);
   color: var(--cds-text-primary);
   font-family: var(--tamga-font-text);
+  /* The body step. Carbon sets the document solid (body { line-height: 1 });
+     every block of text in the console inherits this instead, so it reads
+     when it wraps. A row whose height is the row's, not the text's, sets its
+     own below, and is marked "row". Carbon's parts set theirs themselves. */
+  line-height: 1.45;
+}
+/* Two of Carbon's wrappers have no line height of their own and are sized by
+   the line they stand on: they keep Carbon's, so a field is as tall as before. */
+.tamga .cds--toggle,
+.tamga .cds--list-box__wrapper {
+  line-height: 1;
 }
 
 /* Ink in place of IBM blue. */
@@ -121,6 +132,11 @@
   background: var(--tamga-ink);
   color: var(--tamga-sheet);
 }
+/* The policy editor draws its own selection, in `rule`, behind the text. The
+   text keeps the ink it has: white, from the rule above, would be 1.7:1 there. */
+.tamga .cm-editor ::selection {
+  color: currentColor;
+}
 .tamga input,
 .tamga textarea {
   caret-color: var(--tamga-ink);
@@ -171,6 +187,7 @@ html {
   gap: 0.5rem;
   padding: 0 1rem;
   font-size: 0.8125rem;
+  line-height: 1rem; /* row: one line in the 3rem header */
   color: var(--tamga-rule);
   white-space: nowrap;
 }
@@ -222,6 +239,7 @@ html {
   display: block;
   padding: 0.75rem 1rem 0.375rem;
   font-size: 0.75rem;
+  line-height: 1rem; /* row: a label, the label step */
   color: var(--cds-text-helper);
 }
 .tamga .t-navitem {
@@ -407,6 +425,15 @@ html {
   font-size: 0.8125rem;
   color: var(--cds-text-secondary);
 }
+/* What is shown from the proxy's last answer, once it has stopped answering:
+   in the second ink, with the time of that answer said beside or above it. */
+.tamga .t-asof {
+  color: var(--cds-text-secondary);
+}
+.tamga .t-asofline {
+  margin-bottom: 0.5rem;
+  font-size: 0.8125rem;
+}
 
 /* ── Overview: the statement ───────────────────────────────────────── */
 .tamga .t-statement {
@@ -507,7 +534,9 @@ html {
   display: flex;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.625rem 0;
+  /* The text is at the body line height, because a value can wrap; the
+     padding is a step tighter than it was, so a one-line row stays near 2.25rem. */
+  padding: 0.5rem 0;
   border-bottom: 1px solid var(--tamga-rule);
   font-size: 0.875rem;
 }
@@ -579,6 +608,10 @@ html {
 .tamga .t-work .cds--data-table tbody tr:hover td {
   background: var(--tamga-hover);
 }
+/* A row that is the proxy's last answer, from before it stopped answering. */
+.tamga .cds--data-table tbody tr[data-stale="true"] td {
+  color: var(--cds-text-secondary);
+}
 .tamga .cds--data-table th:first-child,
 .tamga .cds--data-table td:first-child {
   padding-left: 0.5rem;
@@ -615,7 +648,7 @@ html {
   grid-template-columns: 4.5rem minmax(0, 1fr) auto;
   gap: 1rem;
   align-items: baseline;
-  padding: 0.625rem 0;
+  padding: 0.5rem 0; /* as .t-facts: body line height, tighter padding */
   border-bottom: 1px solid var(--tamga-rule);
   font-size: 0.875rem;
 }
@@ -661,6 +694,7 @@ html {
   gap: 0.5rem;
   margin-top: 0.5rem;
   font-size: 0.75rem;
+  line-height: 1rem; /* row: axis labels, the label step */
   color: var(--cds-text-secondary);
   font-variant-numeric: tabular-nums;
 }
@@ -807,7 +841,9 @@ html {
 }
 .tamga .t-count {
   margin-left: auto;
-  padding-bottom: 0.5rem;
+  /* row: one line that sits on the foot of the filters beside it */
+  padding-bottom: 0.375rem;
+  line-height: 1rem;
 }
 .tamga .t-filters .cds--content-switcher {
   width: auto;
@@ -1005,8 +1041,11 @@ html {
 .tamga .t-trace .t-scale {
   position: absolute;
   right: 0;
-  padding: 0.125rem 0 0 0.25rem;
+  /* row: a label hung from a grid line. The 2px above the text that was
+     padding is now the leading of the label step. */
+  padding: 0 0 0 0.25rem;
   font-size: 0.75rem;
+  line-height: 1rem;
   color: var(--cds-text-secondary);
   font-variant-numeric: tabular-nums;
   pointer-events: none;
@@ -1022,6 +1061,7 @@ html {
   justify-content: space-between;
   margin-top: 0.5rem;
   font-size: 0.75rem;
+  line-height: 1rem; /* row: axis labels, the label step */
   color: var(--cds-text-secondary);
   font-variant-numeric: tabular-nums;
 }
@@ -1182,7 +1222,8 @@ html {
 .tamga .t-hunts button.t-huntname {
   flex: 1;
   min-width: 0;
-  padding: 0.5rem 0;
+  /* Two lines at the body line height inside the row's 3rem. */
+  padding: 0.25rem 0;
   border: 0;
   background: none;
   text-align: left;
@@ -1495,7 +1536,7 @@ html {
   grid-template-columns: minmax(0, 1fr) 7rem auto auto;
   align-items: center;
   gap: 1.5rem;
-  padding: 0.75rem 0;
+  padding: 0.5rem 0; /* a name over a note, both at the body line height */
   border-bottom: 1px solid var(--tamga-rule);
   font-size: 0.875rem;
 }
@@ -1609,6 +1650,7 @@ html {
   padding: 0.5rem 0.75rem;
   border-bottom: 1px solid var(--tamga-rule);
   font-size: 0.875rem;
+  line-height: 1.2857; /* row: one line, as a compact table row */
   cursor: pointer;
 }
 .tamga .t-palette li[aria-selected="true"] {

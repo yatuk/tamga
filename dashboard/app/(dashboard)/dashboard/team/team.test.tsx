@@ -311,18 +311,41 @@ describe("Team page: what is said about an account is the last thing that happen
     expect(screen.queryByText(/^Now viewer/)).toBeNull();
   });
 
-  it("says nothing at one row once something is done at another", async () => {
+  it("keeps what is still true of one account when something is done to another", async () => {
     const user = show();
     const row = await rowOf("Mehmet Demir");
     await pickRole(user, row, "viewer");
     await user.click(within(row).getByRole("button", { name: "Save role" }));
-    expect(await within(await rowOf("Mehmet Demir")).findByRole("status")).toBeInTheDocument();
+    expect(await within(await rowOf("Mehmet Demir")).findByRole("status")).toHaveTextContent(/^Now viewer/);
 
     const other = await rowOf("1003");
     await user.click(within(other).getByRole("button", { name: "Sign out everywhere" }));
     await user.click(within(other).getByRole("button", { name: "Sign out" }));
     expect(await within(await rowOf("1003")).findByRole("status")).toHaveTextContent(/^Signed out\./);
+    // Each account has its own sentence, and each row has one.
+    const first = screen.getByRole("row", { name: /Mehmet Demir/ });
+    expect(within(first).getByRole("status")).toHaveTextContent(/^Now viewer/);
+    expect(within(first).getAllByRole("status")).toHaveLength(1);
+    expect(within(screen.getByRole("row", { name: /1003/ })).getAllByRole("status")).toHaveLength(1);
+
+    // It still goes when the list shows it is no longer true, whatever was said elsewhere.
+    teamMock.setElsewhere("1002", "admin");
+    await reload();
+    await waitFor(() => expect(within(screen.getByRole("row", { name: /Mehmet Demir/ })).getByRole("combobox")).toHaveValue("admin"));
     expect(within(screen.getByRole("row", { name: /Mehmet Demir/ })).queryByRole("status")).toBeNull();
+    expect(within(screen.getByRole("row", { name: /1003/ })).getByRole("status")).toHaveTextContent(/^Signed out\./);
+  });
+
+  it("keeps a row's sentence while the form gives another account a role", async () => {
+    const user = show();
+    const row = await rowOf("Mehmet Demir");
+    await pickRole(user, row, "viewer");
+    await user.click(within(row).getByRole("button", { name: "Save role" }));
+    expect(await within(await rowOf("Mehmet Demir")).findByRole("status")).toHaveTextContent(/^Now viewer/);
+
+    const form = await giveByForm(user, "900000001");
+    expect(within(form).getByRole("status")).toBeInTheDocument();
+    expect(within(screen.getByRole("row", { name: /Mehmet Demir/ })).getByRole("status")).toHaveTextContent(/^Now viewer/);
   });
 
   it("keeps a row's sentence over a reload that agrees with it, and drops it when someone else has changed the account", async () => {

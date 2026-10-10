@@ -54,6 +54,67 @@ function detailOf<T extends DashboardHealthDetailed>(
   return { detail: undefined, detailState: adminKey ? "rejected" : "no-key" };
 }
 
+/** What stands in for a value the proxy keeps back without an admin key. */
+export const NEEDS_KEY = "Needs an admin key";
+
+/**
+ * Where a page that shows the proxy's health stands, in the one order that
+ * matters to a reader:
+ *
+ *   "checking"     no check has come back yet;
+ *   "unreachable"  the proxy has never answered: nothing is known;
+ *   "stale"        it answered, and the check has failed since: what is held
+ *                  is the last answer, not the state of the proxy;
+ *   "no-key"       it is answering, and keeps the detail back for want of a key;
+ *   "rejected"     it is answering, and did not accept the key;
+ *   "full"         it is answering, with the detail.
+ */
+export type HealthStanding = "checking" | "unreachable" | "stale" | Exclude<HealthDetailState, "pending">;
+
+export interface HealthReading {
+  standing: HealthStanding;
+  /** What is held is an earlier answer: the check has failed since. */
+  stale: boolean;
+  /** When the answer that is held was given, in ms. 0 when there is none. */
+  answeredAt: number;
+  /**
+   * What to write for a value that is not there. "Needs an admin key" only
+   * while the proxy is answering and keeping the detail back; "Checking"
+   * before the first check is back; when the proxy is not answering, nothing
+   * is known, a key or not.
+   */
+  missing: string;
+}
+
+/**
+ * The one place that decides how an answer from the health check may be
+ * shown. Every page that reads the health goes through it, so that a figure
+ * from an earlier answer is never shown as the state of the proxy now, and
+ * "Needs an admin key" is never said of a proxy that did not answer.
+ */
+export function readHealth(q: {
+  /** An answer is held, from this check or an earlier one. */
+  answered: boolean;
+  /** The last check failed. */
+  failed: boolean;
+  detailState: HealthDetailState;
+  dataUpdatedAt: number;
+}): HealthReading {
+  const standing: HealthStanding = q.failed
+    ? q.answered
+      ? "stale"
+      : "unreachable"
+    : !q.answered || q.detailState === "pending"
+      ? "checking"
+      : q.detailState;
+  return {
+    standing,
+    stale: standing === "stale",
+    answeredAt: q.answered ? q.dataUpdatedAt : 0,
+    missing: standing === "no-key" || standing === "rejected" ? NEEDS_KEY : standing === "checking" ? "Checking" : "Not known",
+  };
+}
+
 /**
  * The proxy's health, polled once for the whole app. The shell, the overview
  * and the status pages all read the same cached answer instead of each
@@ -82,16 +143,21 @@ export function useHealth() {
   });
   const body = hydrated ? query.data : undefined;
   const data: DashboardHealthPublic | undefined = body;
+  const detail = detailOf<DashboardHealthDetailed>(body, !query.isPlaceholderData, adminKey);
+  const isError = hydrated && query.isError;
+  const dataUpdatedAt = hydrated ? query.dataUpdatedAt : 0;
   return {
     data,
-    ...detailOf<DashboardHealthDetailed>(body, !query.isPlaceholderData, adminKey),
+    ...detail,
+    /** How what is held may be shown: see readHealth. */
+    reading: readHealth({ answered: !!body, failed: isError, detailState: detail.detailState, dataUpdatedAt }),
     error: hydrated ? query.error : null,
-    isError: hydrated && query.isError,
+    isError,
     // An answer kept from another key is still being replaced.
     isLoading: !hydrated || query.isLoading || query.isPlaceholderData,
     isPending: !hydrated || query.isPending,
     /** When the proxy last answered, in ms; 0 before it has. */
-    dataUpdatedAt: hydrated ? query.dataUpdatedAt : 0,
+    dataUpdatedAt,
   };
 }
 
@@ -111,10 +177,18 @@ export function useHealthDetail(enabled = true) {
     retry: 0,
     enabled: enabled && hydrated,
   });
-  const { detail, detailState } = detailOf<DashboardHealthDetail>(hydrated ? query.data : undefined, true, adminKey);
+  const body = hydrated ? query.data : undefined;
+  const { detail, detailState } = detailOf<DashboardHealthDetail>(body, true, adminKey);
   return {
     data: detail,
     detailState,
+    /** The same reading as useHealth gives, for this query's own answer. */
+    reading: readHealth({
+      answered: !!body,
+      failed: hydrated && query.isError,
+      detailState,
+      dataUpdatedAt: hydrated ? query.dataUpdatedAt : 0,
+    }),
     isLoading: !hydrated || query.isLoading,
   };
 }

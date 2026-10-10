@@ -246,8 +246,10 @@ test.describe("Team", () => {
     const { items } = await team(request);
     // An account whose role was removed is still listed, with the default role and nothing of its own to put back.
     const member = (items ?? []).find((m) => m.assigned !== false && m.role !== "");
-    // Setting a role is the only way to add a member, and the proxy has no call to remove one.
-    test.skip(!member, "The proxy has no members, and a test member could not be removed again.");
+    // Setting a role is the only way to add a member. The proxy can take a role away again
+    // (DELETE /team/{id}/role), but the account stays listed, so this test borrows a member
+    // that is already there and puts its role back.
+    test.skip(!member, "The proxy has no member with a role of its own to change and put back.");
     if (!member) return;
 
     const other = member.role === "viewer" ? "analyst" : "viewer";

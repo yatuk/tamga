@@ -8,12 +8,14 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { CostsBody } from "@/app/(dashboard)/dashboard/costs/CostsBody";
 import { LatencyBody } from "@/app/(dashboard)/dashboard/latency/LatencyBody";
 import { ProxyBody } from "@/app/(dashboard)/dashboard/proxy/ProxyBody";
-import { highlight, theme } from "@/app/(dashboard)/dashboard/policies/policy-code-editor";
+import { cursorLines, highlight, SELECTION, theme } from "@/app/(dashboard)/dashboard/policies/policy-code-editor";
+import { toast } from "@/lib/toast";
 import { Scale } from "./charts";
 import { EventTable } from "./events";
 import { Bar, Count } from "./motion";
 import { Remove } from "./page";
 import { useSwap } from "./rows";
+import { NO_ICONS, Toaster } from "./toaster";
 
 /**
  * The rules DESIGN.md states, held against the code: red is a stopped
@@ -127,6 +129,109 @@ describe("colour", () => {
   });
 });
 
+describe("the policy editor's selection", () => {
+  // Lines of ten characters: a position's line starts at the ten below it.
+  const lineStart = (pos: number) => Math.floor(pos / 10) * 10;
+  const cursor = (pos: number) => ({ from: pos, to: pos, head: pos });
+
+  it("the line being typed on has its ground while nothing is selected", () => {
+    expect(cursorLines([cursor(23)], lineStart)).toEqual([20]);
+  });
+
+  it("no line has the ground once anything is selected, so the selection shows on every line it covers", () => {
+    // The head of the selection is on the third line: the line that used to hide it.
+    expect(cursorLines([{ from: 4, to: 27, head: 27 }], lineStart)).toEqual([]);
+    expect(cursorLines([{ from: 4, to: 27, head: 4 }], lineStart)).toEqual([]);
+    // One selection among several cursors is enough.
+    expect(cursorLines([cursor(3), { from: 12, to: 15, head: 15 }], lineStart)).toEqual([]);
+  });
+
+  it("several cursors mark each of their lines once, in order", () => {
+    expect(cursorLines([cursor(41), cursor(3), cursor(7)], lineStart)).toEqual([0, 40]);
+  });
+
+  it("the selection and the active line are tokens with AA contrast for the text on them", () => {
+    expect(theme[SELECTION].backgroundColor).toBe("var(--tamga-rule)");
+    // As specific as the library's own rule for a focused editor, or the library's colour is drawn.
+    expect(SELECTION).toContain("&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground");
+    // The page's own selection is white on ink. In the editor the text keeps the ink it has.
+    expect(rules(CSS).find(([s]) => s === ".tamga .cm-editor ::selection")?.[1]).toMatch(/color:\s*currentColor/);
+    expect(theme[".cm-activeLine, .cm-activeLineGutter"].backgroundColor).toBe("var(--tamga-hover)");
+    const token = (name: string) => new RegExp(`--tamga-${name}:\\s*(#[0-9a-f]{6})`).exec(CSS)![1];
+    const lum = (hex: string) => {
+      const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const ratio = (a: string, b: string) => {
+      const [hi, lo] = [lum(token(a)), lum(token(b))].sort((x, y) => y - x);
+      return (hi + 0.05) / (lo + 0.05);
+    };
+    // Every colour the highlighter uses, on the ground of a selection.
+    for (const ink of ["ink", "ink-2"]) expect(ratio(ink, "rule")).toBeGreaterThanOrEqual(4.5);
+    expect(ratio("ink", "rule").toFixed(2)).toBe("10.59");
+    expect(ratio("ink-2", "rule").toFixed(2)).toBe("4.57");
+  });
+});
+
+describe("toasts", () => {
+  it("carry no icon, of any kind: an icon sits only inside a button", async () => {
+    expect(NO_ICONS).toEqual({ success: null, error: null, info: null, warning: null, loading: null });
+    render(<Toaster />);
+    toast.success("Hunt saved", "Leaked keys");
+    toast.error("Could not save the hunt", "The proxy refused the change.");
+    toast.info("Samples loaded");
+    toast.warning("Check the draft");
+    expect(await screen.findByText("Hunt saved")).toBeInTheDocument();
+    expect(await screen.findByText("Could not save the hunt")).toBeInTheDocument();
+    const toasts = document.querySelectorAll("[data-sonner-toast]");
+    expect(toasts.length).toBe(4);
+    expect(document.querySelector("[data-sonner-toast] [data-icon]")).toBeNull();
+    expect(document.querySelector("[data-sonner-toast] svg")).toBeNull();
+    // Drawn as the console's own, in the one light theme.
+    expect(document.querySelector("[data-sonner-toaster]")).toHaveClass("t-toasts");
+    toast.dismiss();
+  });
+
+  it("keep their outline, square corners and ink, set by token", () => {
+    const body = (selector: string) => rules(CSS).find(([s]) => s === selector)?.[1] ?? "";
+    const base = body('.t-toasts [data-sonner-toast][data-styled="true"]');
+    expect(base).toMatch(/border-radius:\s*0/);
+    expect(base).toMatch(/border:\s*1px solid var\(--tamga-ink\)/);
+    expect(base).toMatch(/box-shadow:\s*none/);
+    expect(body('.t-toasts [data-sonner-toast][data-styled="true"]:focus-visible')).toMatch(/outline:\s*2px solid var\(--tamga-ink\)/);
+  });
+});
+
+describe("line height", () => {
+  const body = (selector: string) => rules(CSS).find(([s]) => s === selector)?.[1] ?? "";
+  const lineHeight = (selector: string) => /line-height:\s*([^;]+)/.exec(body(selector))?.[1].trim();
+
+  it("the console root sets the body step, so no text block is set solid", () => {
+    expect(rules(CSS).find(([s, b]) => s === ".tamga" && /line-height/.test(b))?.[1]).toMatch(/line-height:\s*1\.45/);
+  });
+
+  it("a row whose height is the row's sets its own, on purpose", () => {
+    expect(lineHeight(".tamga .t-shellstate")).toBe("1rem");
+    expect(lineHeight(".tamga .t-navlabel")).toBe("1rem");
+    expect(lineHeight(".tamga .t-daylabels")).toBe("1rem");
+    expect(lineHeight(".tamga .t-tracelabels")).toBe("1rem");
+    expect(lineHeight(".tamga .t-trace .t-scale")).toBe("1rem");
+    expect(lineHeight(".tamga .t-count")).toBe("1rem");
+    expect(lineHeight(".tamga .t-palette li")).toBe("1.2857");
+    expect(lineHeight(".tamga .t-kinds td")).toBe("1rem");
+    expect(lineHeight(".tamga .t-mark")).toBe("1.2");
+    // Carbon's wrappers that are sized by the line they stand on keep Carbon's.
+    expect(lineHeight(".tamga .cds--toggle, .tamga .cds--list-box__wrapper")).toBe("1");
+  });
+
+  it("no rule sets text solid except those wrappers and the step number", () => {
+    const solid = rules(CSS)
+      .filter(([, b]) => /line-height:\s*1\s*(;|$)/.test(b))
+      .map(([s]) => s);
+    expect(solid).toEqual([".tamga .cds--toggle, .tamga .cds--list-box__wrapper", ".tamga .t-stepnumber"]);
+  });
+});
+
 describe("shape and depth", () => {
   it("no corner is rounded but the status dot's, and no shadow is dropped", () => {
     for (const [selector, body] of rules(CSS)) {
@@ -164,7 +269,9 @@ describe("what is not a stopped request is not red", () => {
           hourly: false,
           scannerCount: 4,
           detailLocked: false,
-          detailState: "ok",
+          detailState: "full",
+          reading: { standing: "full", stale: false, answeredAt: 1, missing: "Not known" },
+          hasDetail: true,
           providerPools: [],
           circuitReset: { mutate: noop, isPending: false },
           uptimeSeconds: 120,
@@ -185,6 +292,8 @@ describe("what is not a stopped request is not red", () => {
           hasError: true,
           isOnline: false,
           detailState: "pending",
+          reading: { standing: "unreachable", stale: false, answeredAt: 0, missing: "Not known" },
+          detailReading: { standing: "unreachable", stale: false, answeredAt: 0, missing: "Not known" },
           health: undefined,
           detail: undefined,
           componentRows: [],

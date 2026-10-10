@@ -2,7 +2,7 @@
 
 import { Link, Table, TableBody, TableCell, TableContainer, TableHead, TableHeader, TableRow } from "@carbon/react";
 import { counted, uptimeText } from "@/components/console/names";
-import { HealthDetailNotice, NEEDS_KEY } from "@/components/console/health";
+import { AsOf, asOfWords, HealthDetailNotice, held } from "@/components/console/health";
 import { DataNotice, PageHead, Section, Statement } from "@/components/console/page";
 import type { useProxyPage } from "./useProxyPage";
 
@@ -26,21 +26,22 @@ const NAMES: Record<string, string> = {
   "Data Retention": "Data retention",
 };
 
-export function ProxyBody({ adminKey, isLoading, hasError, isOnline, detailState, health, detail, componentRows }: Props) {
+export function ProxyBody({ adminKey, isLoading, hasError, isOnline, reading, detailReading, health, detail, componentRows }: Props) {
   // The proxy answers anyone with up or down. The rest it gives to an admin key.
   const locked = !health && !hasError && !isLoading;
   const failing = componentRows.filter((r) => r.status === "error");
   const degraded = componentRows.filter((r) => r.status === "warning");
   const inUse = componentRows.filter((r) => r.status !== "disabled").length;
   const database = health?.database;
-  const dropped = health?.events_dropped ?? 0;
+  // The facts come from two reads. Either may be an earlier answer.
+  const old = reading.stale ? reading : detailReading;
 
   return (
     <>
       <PageHead title="Proxy status" lede="Whether the proxy is up, and the state of each thing it depends on. Checked every 15 seconds." />
 
       <DataNotice adminKey={adminKey || "none"} failed={hasError} />
-      <HealthDetailNotice state={detailState} />
+      <HealthDetailNotice state={reading.standing} />
 
       <Statement
         loading={isLoading}
@@ -57,31 +58,46 @@ export function ProxyBody({ adminKey, isLoading, hasError, isOnline, detailState
                   : `and all ${inUse} parts in use are working.`
         }
         rest={
-          health?.uptime_seconds ? (
+          // How long it has run is not known of a proxy that does not answer.
+          health?.uptime_seconds && !reading.stale ? (
             <>
               It has been running for <b>{uptimeText(health.uptime_seconds)}</b>.
             </>
           ) : undefined
         }
+        factsNote={<AsOf reading={old} />}
         facts={[
-          ["Version", detail ? detail.version || "Not known" : NEEDS_KEY],
-          ["Scanners on every request", health ? health.scanner_count : NEEDS_KEY],
+          ["Version", held(detailReading, detail ? detail.version || "Not known" : undefined)],
+          ["Scanners on every request", held(reading, health?.scanner_count)],
           [
             "Database",
-            !health
-              ? NEEDS_KEY
-              : database === "connected"
-                ? "Connected"
-                : database === "not_configured"
-                  ? "None: events are kept in memory"
-                  : (database ?? "Not known"),
+            held(
+              reading,
+              !health
+                ? undefined
+                : database === "connected"
+                  ? "Connected"
+                  : database === "not_configured"
+                    ? "None: events are kept in memory"
+                    : (database ?? "Not known"),
+            ),
           ],
-          ["TLS", !detail ? NEEDS_KEY : detail.tls_enabled ? "On" : "Off: terminate it in front of the proxy"],
-          ["Events the bus dropped", health ? dropped.toLocaleString("en") : NEEDS_KEY],
+          ["TLS", held(detailReading, !detail ? undefined : detail.tls_enabled ? "On" : "Off: terminate it in front of the proxy")],
+          ["Events the bus dropped", held(reading, health ? (health.events_dropped ?? 0).toLocaleString("en") : undefined)],
         ]}
       />
 
-      <Section id="parts" title="Parts" note={health ? `${inUse} in use, ${componentRows.length - inUse} not set up` : undefined}>
+      <Section
+        id="parts"
+        title="Parts"
+        note={
+          !health
+            ? undefined
+            : reading.stale
+              ? `All but the HTTP server ${asOfWords(reading.answeredAt)}`
+              : `${inUse} in use, ${componentRows.length - inUse} not set up`
+        }
+      >
         {!health ? (
           <p className="t-empty">
             {hasError
@@ -105,10 +121,13 @@ export function ProxyBody({ adminKey, isLoading, hasError, isOnline, detailState
                 {componentRows.map((r) => {
                   const state = STATES[r.status];
                   return (
-                    <TableRow key={r.component}>
+                    <TableRow key={r.component} data-stale={r.stale ? "true" : undefined}>
                       <TableCell>{NAMES[r.component] ?? r.component}</TableCell>
                       <TableCell>
-                        {state.action ? (
+                        {r.stale ? (
+                          // No mark: a mark says what the part is doing now.
+                          held(reading, state.word)
+                        ) : state.action ? (
                           <span className="t-action" data-action={state.action}>
                             {state.word}
                           </span>

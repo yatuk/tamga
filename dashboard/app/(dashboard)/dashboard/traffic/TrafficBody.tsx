@@ -5,7 +5,7 @@ import { Download } from "@carbon/icons-react";
 import { Columns } from "@/components/console/charts";
 import { Count } from "@/components/console/motion";
 import { bucketLabel, bucketName, counted, providerName, RANGE_WORDS } from "@/components/console/names";
-import { DataNotice, NoData, PageHead, RangeSwitch, Section, Shares, Statement } from "@/components/console/page";
+import { DataNotice, NoData, PageHead, PageLoading, RangeSwitch, Section, Shares, Statement } from "@/components/console/page";
 import type { useTrafficPage } from "./useTrafficPage";
 
 type Props = ReturnType<typeof useTrafficPage>;
@@ -16,6 +16,8 @@ export function TrafficBody({
   setRange,
   isLoading,
   hasError,
+  error,
+  failedFirst,
   totalRequests,
   points,
   hourly,
@@ -30,8 +32,9 @@ export function TrafficBody({
   const busiest = points.reduce<(typeof points)[number] | undefined>((top, p) => (!top || p.total > top.total ? p : top), undefined);
   const quiet = points.filter((p) => p.total === 0).length;
 
-  if (!adminKey) {
-    return <NoData title="Traffic" lede="How much went through the proxy, and where it was headed." adminKey={adminKey} />;
+  // No key, or the read failed with nothing before it: the notice, and no figures made of defaults.
+  if (!adminKey || failedFirst) {
+    return <NoData title="Traffic" lede="How much went through the proxy, and where it was headed." adminKey={adminKey} error={error} />;
   }
 
   return (
@@ -45,6 +48,10 @@ export function TrafficBody({
 
       <DataNotice adminKey={adminKey} failed={hasError} />
 
+      {isLoading ? (
+        <PageLoading />
+      ) : (
+      <>
       <Statement
         loading={isLoading}
         figure={<Count value={totalRequests} />}
@@ -108,6 +115,8 @@ export function TrafficBody({
           />
         </Section>
       ) : null}
+      </>
+      )}
     </>
   );
 }

@@ -8,7 +8,7 @@ import { HealthDetailNotice } from "@/components/console/health";
 import { DataNotice } from "@/components/console/page";
 import { useProxyHealth } from "@/components/console/use-proxy-health";
 import { ADMIN_KEY_STORAGE } from "@/hooks/useAdminKey";
-import { useHealth, useHealthDetail } from "./useHealth";
+import { NEEDS_KEY, readHealth, useHealth, useHealthDetail } from "./useHealth";
 
 let qc: QueryClient;
 
@@ -26,6 +26,85 @@ function setKey(key: string) {
 beforeEach(() => {
   qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   localStorage.removeItem(ADMIN_KEY_STORAGE);
+});
+
+describe("readHealth", () => {
+  const at = 1_760_000_000_000;
+  const read = (answered: boolean, failed: boolean, detailState: "pending" | "full" | "no-key" | "rejected") =>
+    readHealth({ answered, failed, detailState, dataUpdatedAt: answered ? at : 0 });
+
+  it("before the first check is back, is checking", () => {
+    expect(read(false, false, "pending")).toEqual({ standing: "checking", stale: false, answeredAt: 0, missing: "Checking" });
+  });
+
+  it("never answered: nothing is known, and no key is asked for", () => {
+    expect(read(false, true, "pending")).toEqual({ standing: "unreachable", stale: false, answeredAt: 0, missing: "Not known" });
+  });
+
+  it("answered, then failing: what is held is old, whatever the last answer was", () => {
+    for (const detailState of ["full", "no-key", "rejected"] as const) {
+      expect(read(true, true, detailState)).toEqual({ standing: "stale", stale: true, answeredAt: at, missing: "Not known" });
+    }
+  });
+
+  it("answering without a key, or with one it refuses: a key is what is missing", () => {
+    expect(read(true, false, "no-key")).toEqual({ standing: "no-key", stale: false, answeredAt: at, missing: NEEDS_KEY });
+    expect(read(true, false, "rejected")).toEqual({ standing: "rejected", stale: false, answeredAt: at, missing: NEEDS_KEY });
+  });
+
+  it("answering with the detail", () => {
+    expect(read(true, false, "full")).toEqual({ standing: "full", stale: false, answeredAt: at, missing: "Not known" });
+  });
+
+  it("an answer kept from another key is still being checked for this one", () => {
+    expect(read(true, false, "pending").standing).toBe("checking");
+  });
+});
+
+describe("the reading the hooks give", () => {
+  const down = () =>
+    server.use(
+      http.get("*/api/v1/health/detailed", () => HttpResponse.error()),
+      http.get("*/api/v1/health/detail", () => HttpResponse.error()),
+    );
+
+  it("goes from checking to the proxy's answer, and to stale when the next check fails", async () => {
+    setKey("test-key");
+    const { result } = renderHook(() => ({ health: useHealth(), detail: useHealthDetail() }), { wrapper: Wrapper });
+    expect(result.current.health.reading.standing).toBe("checking");
+    await waitFor(() => expect(result.current.health.reading.standing).toBe("full"));
+    await waitFor(() => expect(result.current.detail.reading.standing).toBe("full"));
+    const answeredAt = result.current.health.reading.answeredAt;
+    expect(answeredAt).toBeGreaterThan(0);
+
+    down();
+    await act(() => qc.refetchQueries());
+    await waitFor(() => expect(result.current.health.reading.standing).toBe("stale"));
+    // The last answer is kept, with the time it was given, and the detail's own read says the same.
+    expect(result.current.health.detail?.scanner_count).toBe(6);
+    expect(result.current.health.reading.answeredAt).toBe(answeredAt);
+    expect(result.current.health.reading.missing).toBe("Not known");
+    await waitFor(() => expect(result.current.detail.reading.standing).toBe("stale"));
+    expect(result.current.detail.data?.version).toBe("v1.1.0");
+  });
+
+  it("is unreachable when the proxy has never answered, with a key or without", async () => {
+    down();
+    const { result } = renderHook(() => ({ health: useHealth(), detail: useHealthDetail() }), { wrapper: Wrapper });
+    await waitFor(() => expect(result.current.health.reading.standing).toBe("unreachable"));
+    await waitFor(() => expect(result.current.detail.reading.standing).toBe("unreachable"));
+    expect(result.current.health.reading.missing).toBe("Not known");
+  });
+
+  it("asks for a key only of a proxy that is answering", async () => {
+    const { result } = renderHook(() => useHealth(), { wrapper: Wrapper });
+    await waitFor(() => expect(result.current.reading.standing).toBe("no-key"));
+    expect(result.current.reading.missing).toBe(NEEDS_KEY);
+    down();
+    await act(() => qc.refetchQueries());
+    await waitFor(() => expect(result.current.reading.standing).toBe("stale"));
+    expect(result.current.reading.missing).toBe("Not known");
+  });
 });
 
 describe("useHealth without an admin key", () => {
@@ -170,7 +249,12 @@ describe("HealthDetailNotice", () => {
   it("says nothing while the detail is there or on its way", () => {
     const { container, rerender } = render(createElement(HealthDetailNotice, { state: "full" }));
     expect(container).toBeEmptyDOMElement();
-    rerender(createElement(HealthDetailNotice, { state: "pending" }));
+    rerender(createElement(HealthDetailNotice, { state: "checking" }));
+    expect(container).toBeEmptyDOMElement();
+    // "It is up" would be false of a proxy that has stopped answering, or never did.
+    rerender(createElement(HealthDetailNotice, { state: "stale" }));
+    expect(container).toBeEmptyDOMElement();
+    rerender(createElement(HealthDetailNotice, { state: "unreachable" }));
     expect(container).toBeEmptyDOMElement();
   });
 });
@@ -201,6 +285,16 @@ describe("useHealth when a part of the proxy is down", () => {
 
 describe("DataNotice", () => {
   const show = (adminKey: string) => render(createElement(DataNotice, { adminKey, failed: true }), { wrapper: Wrapper });
+
+  it("stops saying the key was refused, and that the proxy is up, once the proxy stops answering", async () => {
+    setKey("wrong-key");
+    show("wrong-key");
+    expect(await screen.findByText("The proxy did not accept the admin key.")).toBeTruthy();
+    server.use(http.get("*/api/v1/health/detailed", () => HttpResponse.error()));
+    await act(() => qc.refetchQueries());
+    expect(await screen.findByText("The proxy did not answer.")).toBeTruthy();
+    expect(screen.queryByText("The proxy did not accept the admin key.")).toBeNull();
+  });
 
   it("says the key was refused when the proxy is up and did not accept it", async () => {
     setKey("wrong-key");

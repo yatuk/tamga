@@ -206,10 +206,10 @@ test.describe("Policies", () => {
     await button(page, "A rate limit").click();
     if (before.policy.rate_limit) {
       // The running policy has one already, and the page says so and adds nothing.
-      await expect(toast(page, "rate_limit is already defined")).toBeVisible();
+      await expect(toast(page, "The draft already has a rate limit")).toBeVisible();
       expect(await draftOf(page)).toBe(withEntity);
     } else {
-      await expect(toast(page, "rate_limit template added")).toBeVisible();
+      await expect(toast(page, "Rate limit template added")).toBeVisible();
       await expect.poll(async () => JSON.parse(await draftOf(page)).rate_limit?.action_on_exceed).toBe("BLOCK");
     }
 
@@ -218,7 +218,7 @@ test.describe("Policies", () => {
     loose.rules = { ...loose.rules, injection: { ...loose.rules?.injection, action: "WARN" } };
     await setEditor(page, text(loose));
     await button(page, "Stop prompt injection").click();
-    await expect(toast(page, "Injection rule set to BLOCK")).toBeVisible();
+    await expect(toast(page, "Prompt injection rule set to stop the request")).toBeVisible();
     await expect.poll(async () => JSON.parse(await draftOf(page)).rules.injection.action).toBe("BLOCK");
 
     const verdict = await api.post("/api/v1/policies/validate", { data: { yaml: await draftOf(page) } });

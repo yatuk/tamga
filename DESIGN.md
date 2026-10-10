@@ -200,7 +200,7 @@ Tokens are custom properties on `:root` in `tamga.css`, named `--tamga-*`. The f
 | `black` | A link under the pointer | `--cds-link-primary-hover` only |
 | `paper` | The page | `body`, the side list |
 | `sheet` | A surface raised off the page by a border, not a shadow | The detail panel, notices, code samples, the diff, the editor, toasts |
-| `hover` | A row under the pointer, selected, or just arrived; the line being edited | Rows that open a panel, the palette, modal secondary button, `t-arrived`, the editor's active line |
+| `hover` | A row under the pointer, selected, or just arrived; the line being edited, while nothing is selected | Rows that open a panel, the palette, modal secondary button, `t-arrived`, the editor's active line |
 | `track` | The empty part of a bar; the column being read in a chart; text a pattern caught | `.t-split`, `.t-splitkey`, `.t-day[data-at]`, `.t-sample mark` |
 | `rule` | Hairlines between rows; the passed part of a column chart; the proxy state in the header; selected text in the editor | Borders, `.t-day span` |
 | `mark-checking` | The status dot before the first answer | `.t-dot` only |
@@ -260,7 +260,7 @@ Computed with the WCAG 2.1 formula from the token values. AA is 4.5:1 for text a
 | `paper`, `rule` | `ink` (header) | 16.45 / 10.59 |
 | `stamp-on-ink` | `ink` (the wordmark's full stop in the header) | 4.78 |
 | `ink` | `track` (text a pattern caught) | 13.71 |
-| `ink` / `ink-2` | `rule` (selected text in the editor) | 10.59 / 4.57 |
+| `ink` / `ink-2` | `rule` (selected text in the editor, on every line) | 10.59 / 4.57 |
 | `diff-added-text` | `diff-added-tint` | 8.82 |
 | `diff-removed-text` | `diff-removed-tint` | 7.36 |
 
@@ -270,7 +270,7 @@ No text is under AA in any state:
 - The full stop of the wordmark in the header is `stamp-on-ink`, 4.78 on `ink`. Before, it was `stamp-fill`, 4.48. On the sign-in frame it is `stamp-fill` on `paper`, 3.67, at 1.25rem and 700, which is large text.
 - `ink-3` on `hover` is 4.10, so helper text is never placed on a hovered row or on the editor's active line. The editor's line numbers are `ink-2` for that reason (6.38 on the active line).
 
-In the policy editor, on `sheet` / on the active line (`hover`) / inside a selection (`rule`): keys and numbers in `ink` are 18.10 / 14.77 / 10.59; strings, comments and punctuation in `ink-2` are 7.81 / 6.38 / 4.57.
+In the policy editor, on `sheet` / on the active line (`hover`) / inside a selection (`rule`): keys and numbers in `ink` are 18.10 / 14.77 / 10.59; strings, comments and punctuation in `ink-2` are 7.81 / 6.38 / 4.57. A selection is `rule` on every line it covers, the line of the cursor included: the active line's ground is drawn only while nothing is selected (`cursorLines` in `policies/policy-code-editor.tsx`), so no text ever sits on both and the two grounds are never mixed. The line number in the gutter keeps its `hover` mark either way. Selected text in the editor keeps the ink it has; the page's own selection, `sheet` on `ink`, is not used there, where `sheet` on `rule` would be 1.71.
 
 Fills are not asked to reach 3:1 against the page or each other; a 1px `ink` hairline is, and does:
 
@@ -307,11 +307,33 @@ Numbers in table cells use tabular figures. Times and dates are formatted `en-GB
 | `heading` | 1.125rem | 600 | 1.3 | `h2`; the wordmark in the header (700) |
 | `lede` | 1rem | 400 | 1.5 | The sentence under the title; the line under a statement; a step's title (600) |
 | `body` | 0.875rem | 400 | 1.45 | Lists, navigation, guide steps, toasts. Carbon's own body size |
-| `note` | 0.8125rem | 400, or 600 for a state | 1.5 where set | Notes, footnotes, readouts, action marks, the proxy state |
-| `data` | 0.8125rem | 400 | 1.5 where set | Mono: samples, the diff, IDs in rows, the policy editor |
-| `label` | 0.75rem | 400 | 1rem where set | Column heads, navigation group labels, axis labels, `h3` in the detail panel |
+| `note` | 0.8125rem | 400, or 600 for a state | 1.5 in a footnote or a paragraph, 1.45 elsewhere | Notes, footnotes, readouts, action marks, the proxy state |
+| `data` | 0.8125rem | 400 | 1.5 in a sample and the diff; 1.4, CodeMirror's own, in the editor; the row's in a table | Mono: samples, the diff, IDs in rows, the policy editor |
+| `label` | 0.75rem | 400 | 1rem where the console sets it; Carbon's in a table head | Column heads, navigation group labels, axis labels, `h3` in the detail panel |
 
-Body text that runs to more than one line is set at 1.45: the navigation, the role list, plain lists, the steps of a guide and toasts. Two roles at 0.875rem keep another value because they are a single line whose height comes from the row, not from the text: a table row (Carbon's compact 1.2857, and 1rem in `.t-kinds`) and the value on a `Scale` mark (1.2, stacked over its label). Rows that set no line height of their own (`.t-facts`, `.t-queue`, `.t-hunts`, `.t-destinations`, the palette) inherit Carbon's `body { line-height: 1 }`; see [known gaps](#known-gaps).
+### Line height
+
+Carbon sets the document solid (`body { line-height: 1 }`). The console root, `.tamga`, sets the body step, 1.45, and every block of text inherits it: the facts beside a statement, the queue, a key under a bar, a note, a list. Nothing is set solid because it forgot to say otherwise, so text reads when it wraps.
+
+Three things do not inherit it:
+
+- **A step with its own value.** The figure, the title, headings, the statement, the lede, prose, footnotes, samples and the diff set the value in the scale above. Carbon gives `p` 1.5 and `h3` 1.2857, and those stand where the console sets nothing else (an empty state is a `p`).
+- **Carbon's parts.** A button, a tag, a table cell, a field, a tab, a notice, a dialog set their own line height, and are as tall as Carbon draws them. A `t-` class inside a table cell (`t-note`, `t-action`, `t-refused`, `t-rownote`) inherits the cell's 1.2857, so a table row is as tall as before. Two of Carbon's wrappers set none and are sized by the line they stand on, so they are given Carbon's 1 back: `.cds--toggle` and `.cds--list-box__wrapper`.
+- **A row whose height is the row's, not the text's.** One line that must not grow with the text sets its own, and says so in the stylesheet with the word "row":
+
+| Class | Line height | Why |
+| --- | --- | --- |
+| `.t-shellstate` | 1rem | One line in the 3rem header |
+| `.t-navlabel` | 1rem | A group label: the label step |
+| `.t-daylabels`, `.t-tracelabels` | 1rem | Axis labels under a chart: the label step |
+| `.t-trace .t-scale` | 1rem | A label hung from a grid line; its 2px of top padding became leading |
+| `.t-count` | 1rem | The count that sits on the foot of the filters beside it |
+| `.t-palette li` | 1.2857 | One line per entry, as a compact table row |
+| `.t-kinds th`, `.t-kinds td` | 1rem | A ranked row with a bar in it |
+| `.t-mark` | 1.2 | The value on a `Scale` mark, stacked over its label |
+| `.t-stepnumber` | 1 | A numeral |
+
+Where a list's rows are text that can wrap, the text is at 1.45 and the row's padding is a step tighter than it was, so a one-line row is within a few pixels of its old height: `.t-facts` and `.t-queue` at 0.5rem (2.3rem a row, from 2.2rem), `.t-destinations` at 0.5rem, and the two lines of a saved search inside its 3rem row.
 
 Weights in use are 400, 600 and 700. 600 is for a heading, the current section, a state said in words and a value inside a sentence. 700 is for figures, the wordmark and the diff gutter. There is no uppercase and no letter-spacing on labels.
 
@@ -363,7 +385,7 @@ Space is written as rem literals on Carbon's spacing steps, in the stylesheet an
 | `4xl` | 4rem | Between two columns; the foot of the page |
 | `5xl` | 5rem | The top of the page, to clear the header |
 
-Also in use between steps: 0.375rem and 0.625rem for tight rows, 1.25rem and 1.75rem around the statement and its bar. Buttons that belong together are 1px apart (`.t-buttons`, `.t-confirm`), and columns of a time chart 2px.
+Also in use between steps: 0.375rem for tight rows, 1.25rem and 1.75rem around the statement and its bar. Buttons that belong together are 1px apart (`.t-buttons`, `.t-confirm`), and columns of a time chart 2px.
 
 Text measures: a lede is at most 68ch, a footnote 76ch, a step 72ch, prose 38rem.
 
@@ -446,7 +468,8 @@ All in `dashboard/components/console`.
 - **`Bar`**. A bar as long as its share, which moves from where it was when the data changes. Every bar in the console is this. With reduced motion it is a plain element at its share.
 - **`Arriving` / `Arrive`**. A short list whose rows may join while it is on screen. Rows present at first draw do not move.
 - **`EventTable`, `ActionMark`, `Pager`** (`events.tsx`). Requests as rows with the open one in a panel beside them; the mark for what was done to a request; previous and next.
-- **`DataNotice`, `NoData`, `Refused`, `HealthDetailNotice`**. See states below.
+- **`DataNotice`, `NoData`, `PageLoading`, `Refused`, `HealthDetailNotice`**. See states below.
+- **`held`, `AsOf`** (`health.tsx`) and **`readHealth`** (`hooks/useHealth.ts`). How a value from the health check may be shown. See [the last answer](#the-last-answer).
 - **`Remove`**. See the two-step confirm below.
 - **`Verdict`** (`verdict.tsx`) and **`Diff`** (`diff.tsx`). The playground's answer; a unified line diff for policy changes.
 - **`CommandPalette`** (`palette.tsx`). Ctrl K or the header's search button. Pages, a few filtered views and common actions; `incident <id>` and `provider <name>` jump straight there.
@@ -454,14 +477,29 @@ All in `dashboard/components/console`.
 
 ### States
 
-- **Loading.** A route shows `SkeletonText` where the title, lede and body will be (`loading.tsx`). A `Statement` takes `loading`. A table shows `DataTableSkeleton` with no head and no toolbar. There are no spinners; the playground shows Carbon's `ProgressBar` with a count while a batch of prompts runs.
+- **Loading.** A route shows `SkeletonText` where the title, lede and body will be (`loading.tsx`). A page whose figures are on their way draws `PageLoading` in their place, under its head: never a 0, and never "nothing in this window". A `Statement` takes `loading`, and draws neither its figure nor its facts until it is over. A table shows `DataTableSkeleton` with no head and no toolbar. There are no spinners; the playground shows Carbon's `ProgressBar` with a count while a batch of prompts runs.
 - **Empty.** One sentence in `<p className="t-empty">` that says what is absent in this window, and what to do if something can be done: "No keys yet. Create one for each application that sends requests through the proxy." No illustration, no icon.
-- **No admin key.** `NoData` replaces the body: the page's head, then an info notice, "No admin key in this browser. Add one under Settings to read the proxy's data." The page never draws empty figures in this state. A single value the proxy keeps back reads `Needs an admin key`.
-- **Read failed.** `DataNotice` under the page head. It tells apart a proxy that did not answer, one that is up and refused the key, one that is up and did not return this page's data, a role too low to read the page, and a session that has ended, and words each differently.
+- **No admin key.** `NoData` replaces the body: the page's head, then an info notice, "No admin key in this browser. Add one under Settings to read the proxy's data." The page never draws empty figures in this state. A single value the proxy keeps back reads `Needs an admin key`, and only while the proxy is answering: see [the last answer](#the-last-answer).
+- **Read failed.** `DataNotice` under the page head. It tells apart a proxy that did not answer, one that is up and refused the key, one that is up and did not return this page's data, a role too low to read the page, and a session that has ended, and words each differently. When the read a page is built on fails with nothing loaded before it, `NoData` replaces the body, with a key present as without one: the notice, and no figures.
 - **Refused.** The console cannot know a key's role beforehand, so the button is there for everyone. When the proxy refuses an action, `Refused` puts what it said beside the button that asked, in ink, as `role="alert"`.
-- **Action failed.** A sentence in `.t-failed` under the control ("That did not save. The proxy refused the change. Try again."), or a toast.
+- **Action failed.** A sentence in `.t-failed` under the control ("That did not save. The proxy refused the change. Try again."), or a toast. Where the proxy says why with a code, the sentence is beside the button and says that: a PDF report that was not made reads "Incident report: The report service is not reachable from the proxy." (`reports/reportFailure.ts`).
+- **Said of one thing.** What an action did to a row is said at that row (`.t-rownote`, or `.t-refused` when it was refused), one sentence per row. It is replaced by the next action on that row and dropped when the list no longer agrees with it; acting on another row leaves it alone (Team).
 - **Page threw.** `error.tsx` keeps the shell and says the page failed, not the proxy, with a "Try again" button.
 - **Not known.** `Not known`, `Not recorded`, `Not reported`, `Not measured`, `No data`. Never 0 and never a dash.
+
+### The last answer
+
+The proxy's health is polled every 15 seconds and read by the header, Overview, Proxy status, Latency, Scanner pool and Settings. `readHealth` (`hooks/useHealth.ts`) is the one place that decides how what is held may be shown, and every one of those pages goes through it:
+
+| The check | What a page shows |
+| --- | --- |
+| Not back yet | `Checking`, or the loading state |
+| Has never been answered | The proxy is down or unreachable, and every value is `Not known`. Never `Needs an admin key`: nothing is known, a key or not |
+| Was answered, and fails now | The proxy is down or unreachable. What is held is the last answer: either it is not shown (how long the proxy has been running; the figure of Latency), or it is shown in `ink-2` under the line "As of 14:02, the last answer", which is `AsOf`. `held` sets each such value in `ink-2` and repeats the time for a screen reader. A table row from the last answer is `ink-2` (`data-stale`) and carries no failing or struggling mark, because a mark says what a part is doing now |
+| Is answered, without the detail | The public values, and `Needs an admin key` for the rest, with the notice that says whether a key is missing or was refused |
+| Is answered, with the detail | Every value, unmarked |
+
+What is known now is never marked old: that the proxy is unreachable, the HTTP server row of Proxy status, the latency target.
 
 ### Notices and toasts
 
@@ -469,7 +507,7 @@ A notice is Carbon's `InlineNotification` or `ActionableNotification`, always `l
 
 One notice is heavier than the rest: `t-proxydown`, which the shell puts above every page while the proxy is not answering. It is not red, because nothing was stopped. It is the same ink box on `sheet` with a 3px ink rule across its top, its title ("The proxy is not answering.") in the `heading` step, its second line ("Requests may be going out unscanned.") in 600, and a button to Proxy status. Nothing else in the console uses that rule or that size in a notice.
 
-A toast (`lib/toast.ts`, Sonner, bottom right) reports a save, a failure or a copy: an ink box on `sheet`, 0.875rem, no colour. Use a toast for the result of an action the user just took; use a notice for a state of the page.
+A toast (`lib/toast.ts`, Sonner, bottom right) reports a save, a failure or a copy: an ink box on `sheet`, 0.875rem, no colour and no icon. The library's status glyphs are switched off in `components/console/toaster.tsx`, so the title has to say what kind of news it is: "Hunt saved", "Could not save the hunt". Use a toast for the result of an action the user just took; use a notice for a state of the page. A result that is already said in place, beside the control or at the row, is not said again in a toast.
 
 ### Tables
 
@@ -581,10 +619,7 @@ Before, from the previous console, and after, from this one:
 - **No dark theme**, by decision.
 - **No phone layout.** Below 56rem the page reflows for a zoomed desk window; it is not designed for touch.
 - **Fills under 3:1.** The meaning colours of a bar do not reach 3:1 against the page or each other; ink hairlines close them instead. What is still under 3:1 is listed at the end of [Contrast](#contrast).
-- **Rows with no line height of their own.** Carbon sets `body { line-height: 1 }` and `.tamga` does not replace it, so text in `.t-facts`, `.t-queue`, `.t-hunts`, `.t-destinations`, `.t-issues`, `.t-empty`, `.t-note` and the palette is set solid. It reads as intended while it stays on one line and is cramped where it wraps (a long note, an empty state in a narrow column). Setting 1.45 on `.tamga` would fix it and would also make every such row about 6px taller, which is a change to every page and has not been made.
 - **Space is not tokenised.** Values are rem literals, in the stylesheet and in about 110 inline `style` props, most of them a `marginTop` on a `Section` or a notice. All are on the scale; none is checked by a tool.
-- **Toasts carry the library's icon.** A success or failure toast shows Sonner's small glyph before its text, in ink. The rule is that icons sit only inside buttons.
-- **The editor's selection hides on the active line.** CodeMirror draws the selection behind the text, and the active line's `hover` ground is opaque, so a selection is not visible on the line the cursor is on. It is visible on every other line.
-- **Proxy status keeps the last answer while a check fails.** The figure says "Down" and the HTTP server row says "Failing", but the uptime line, the facts and the other rows are the last ones the proxy gave, and are not marked as old.
-- **Native menus.** `Select` opens the operating system's own menu, which this stylesheet cannot draw.
+- **Native menus.** `Select` is the browser's own `<select>`, and its open menu is drawn by the operating system: this stylesheet cannot reach it, so the list of options is in the system's face, colours and corners. Nothing can be done about it short of replacing `Select` with `Dropdown`, which is not planned.
+- **Sections below a loading statement.** Latency and Proxy status hold back the figure and the facts while a read is on its way, but a section under them can still say "Nothing was scanned in this window." for the moment before the series arrives. Overview, Traffic, Detection trends, Token costs and Reports draw nothing until their reads are back.
 - **Carbon's warning colour is not mapped.** No field or notice in the console uses `warn` or `kind="warning"`; one that did would arrive in Carbon's yellow.

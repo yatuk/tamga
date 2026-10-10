@@ -6,7 +6,8 @@ import { Download, DocumentPdf } from "@carbon/icons-react";
 import { Columns } from "@/components/console/charts";
 import { Arrive, Arriving } from "@/components/console/motion";
 import { bucketLabel, bucketName, clockTime, dayLabel, providerName, RANGE_WORDS, typeName } from "@/components/console/names";
-import { DataNotice, PageHead, RangeSwitch, Refused, Section, Shares } from "@/components/console/page";
+import { DataNotice, PageHead, PageLoading, RangeSwitch, Refused, Section, Shares } from "@/components/console/page";
+import { reportFailure } from "./reportFailure";
 import type { useReportsPage } from "./useReportsPage";
 
 type Props = ReturnType<typeof useReportsPage>;
@@ -31,6 +32,8 @@ export function ReportsBody({
   isExporting,
   exportRefusal,
   statsError,
+  isLoading,
+  mttrFailed,
   mttrData,
   comparisonDelta,
   executiveSummary: s,
@@ -44,7 +47,13 @@ export function ReportsBody({
     <>
       <PageHead title="Reports" lede={`${RANGE_WORDS[range][0].toUpperCase()}${RANGE_WORDS[range].slice(1)} in words and figures, with the exports an auditor asks for.`}>
         <RangeSwitch value={range} onChange={setRange} />
-        {exportRefusal && exportRefusal.what !== "events" ? <Refused error={exportRefusal.error} /> : null}
+        {/* Why the last PDF was not made, in the proxy's own terms, beside the buttons that ask. */}
+        {exportRefusal && exportRefusal.what !== "events" ? (
+          <span className="t-refused" role="alert">
+            {exportRefusal.what === "owasp" ? "OWASP report: " : "Incident report: "}
+            {reportFailure(exportRefusal.error)}
+          </span>
+        ) : null}
         <Button kind="tertiary" size="sm" renderIcon={DocumentPdf} disabled={isExporting || !adminKey} onClick={exportOwaspPdf}>
           OWASP report
         </Button>
@@ -56,7 +65,9 @@ export function ReportsBody({
       <DataNotice adminKey={adminKey} error={statsError} what="the figures of this report" />
 
       {/* Without the figures there is no report: zeros would read as a quiet week. */}
-      {!adminKey || statsError ? null : (
+      {!adminKey || statsError ? null : isLoading || !stats ? (
+        <PageLoading />
+      ) : (
       <>
       {/* The report opens as a report does: with what happened, in sentences. */}
       <div className="t-statement">
@@ -81,15 +92,17 @@ export function ReportsBody({
             ) : null}
           </p>
           <p>
-            {resolved
-              ? `Incidents took ${s.mttrMinutes.toFixed(1)} minutes to resolve on average, and that is ${s.mttrTrend}.`
-              : "No incident was resolved in this window, so there is no resolution time to report."}
+            {mttrFailed
+              ? "How long incidents took to resolve could not be read."
+              : resolved
+                ? `Incidents took ${s.mttrMinutes.toFixed(1)} minutes to resolve on average, and that is ${s.mttrTrend}.`
+                : "No incident was resolved in this window, so there is no resolution time to report."}
           </p>
         </div>
         <dl className="t-facts">
-          <div><dt>Mean input risk, 0 to 100</dt><dd>{stats?.avg_input_risk_pct ?? 0}</dd></div>
-          <div><dt>Mean time to resolve</dt><dd>{resolved ? `${mttrData.overall_mttr_minutes.toFixed(1)} min` : "Nothing resolved yet"}</dd></div>
-          <div><dt>Resolved within 60 minutes</dt><dd>{resolved ? `${mttrData.sla_compliance.toFixed(1)}%` : "Nothing resolved yet"}</dd></div>
+          <div><dt>Mean input risk, 0 to 100</dt><dd>{stats.avg_input_risk_pct ?? "Not reported"}</dd></div>
+          <div><dt>Mean time to resolve</dt><dd>{mttrFailed ? "Not known" : resolved ? `${mttrData.overall_mttr_minutes.toFixed(1)} min` : "Nothing resolved yet"}</dd></div>
+          <div><dt>Resolved within 60 minutes</dt><dd>{mttrFailed ? "Not known" : resolved ? `${mttrData.sla_compliance.toFixed(1)}%` : "Nothing resolved yet"}</dd></div>
           <div><dt>Requests, second half against first</dt><dd>{signed(comparisonDelta?.reqDelta)}</dd></div>
           <div><dt>Stopped, second half against first</dt><dd>{signed(comparisonDelta?.blockedDelta)}</dd></div>
         </dl>

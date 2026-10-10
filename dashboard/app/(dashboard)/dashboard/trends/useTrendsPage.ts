@@ -53,6 +53,8 @@ export function useTrendsPage() {
   return {
     adminKey,
     error: tsError,
+    /** The main read failed with nothing loaded before it: there are no figures to draw. */
+    failedFirst: !!tsError && !ts,
     range,
     setRange,
     isLoading: tsLoading || bLoading,

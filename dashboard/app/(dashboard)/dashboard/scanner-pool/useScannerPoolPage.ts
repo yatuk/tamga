@@ -4,15 +4,17 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api/client";
 import { parsePoolMetrics, type PoolMetrics } from "@/lib/parse-metrics";
 import { useAdminKey } from "@/hooks/useAdminKey";
-import { useHealth } from "@/hooks/useHealth";
+import { useHealth, type HealthReading } from "@/hooks/useHealth";
 
 export interface ScannerPoolPageData {
   /** Whether the pool is enabled (metrics came back non-empty). */
   poolEnabled: boolean;
   /** Pool metrics parsed from Prometheus text. */
   pool: PoolMetrics | null;
-  /** Scanner count from health endpoint. */
-  scannerCount: number;
+  /** Scanner count from the health check; null when the proxy has not given it. */
+  scannerCount: number | null;
+  /** How the health answer may be shown: see readHealth. */
+  reading: HealthReading;
   /** Pipeline mode from health or env. */
   pipelineMode: string;
   /** Whether data is currently loading. */
@@ -44,7 +46,8 @@ export function useScannerPoolPage(): ScannerPoolPageData {
     poolEnabled,
     pool,
     // Part of the health detail, which the proxy gives only to an admin key.
-    scannerCount: health.detail?.scanner_count ?? 0,
+    scannerCount: health.detail?.scanner_count ?? null,
+    reading: health.reading,
     pipelineMode: poolEnabled ? "workerpool" : "adaptive",
     loading: metrics.isLoading || health.isLoading,
     error: metrics.error?.message ?? health.error?.message ?? null,

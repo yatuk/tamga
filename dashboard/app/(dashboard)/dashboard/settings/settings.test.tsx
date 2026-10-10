@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createElement } from "react";
@@ -6,16 +6,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ssoMock } from "@/__mocks__/handlers";
 import { ADMIN_KEY_STORAGE } from "@/hooks/useAdminKey";
 import SettingsPage from "./page";
-
-// Carbon's tabs construct a ResizeObserver; the stand-in in vitest.setup.ts cannot be called with `new`.
-vi.stubGlobal(
-  "ResizeObserver",
-  class {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  },
-);
 
 async function showSSO() {
   localStorage.setItem(ADMIN_KEY_STORAGE, "test-key");

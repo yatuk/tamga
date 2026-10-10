@@ -6,7 +6,7 @@ import { Download } from "@carbon/icons-react";
 import { Columns } from "@/components/console/charts";
 import { Bar, Count } from "@/components/console/motion";
 import { dayLabel, providerName, RANGE_WORDS, weekdayLabel } from "@/components/console/names";
-import { DataNotice, NoData, PageHead, RangeSwitch, Section, Shares, Statement } from "@/components/console/page";
+import { DataNotice, NoData, PageHead, PageLoading, RangeSwitch, Section, Shares, Statement } from "@/components/console/page";
 import { formatInt } from "@/lib/utils/format";
 import type { useCostsPage } from "./useCostsPage";
 
@@ -33,6 +33,8 @@ export function CostsBody({
   setRange,
   isLoading,
   hasError,
+  error,
+  failedFirst,
   tokensToday,
   costToday,
   limitTokens,
@@ -59,8 +61,9 @@ export function CostsBody({
   const used = hasLimit ? Math.min(1, tokensToday / limitTokens) : 0;
   const left = Math.max(0, limitTokens - tokensToday);
 
-  if (!adminKey) {
-    return <NoData title="Token costs" lede="What the traffic is estimated to have cost, by model." adminKey={adminKey} />;
+  // No key, or a read failed with nothing before it: the notice, and no figures made of defaults.
+  if (!adminKey || failedFirst) {
+    return <NoData title="Token costs" lede="What the traffic is estimated to have cost, by model." adminKey={adminKey} error={error} />;
   }
 
   return (
@@ -74,6 +77,10 @@ export function CostsBody({
 
       <DataNotice adminKey={adminKey} failed={hasError} />
 
+      {isLoading ? (
+        <PageLoading />
+      ) : (
+      <>
       <Statement
         loading={isLoading}
         figure={<Count value={totalCostEstimate} format={formatCost} />}
@@ -210,6 +217,8 @@ export function CostsBody({
           </TableContainer>
         </Section>
       ) : null}
+      </>
+      )}
     </>
   );
 }

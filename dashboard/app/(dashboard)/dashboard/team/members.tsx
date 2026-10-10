@@ -18,7 +18,7 @@ import { Remove } from "@/components/console/page";
 import type { TeamMember, TeamRole } from "@/lib/api";
 import { assignedRole, ROLES, roleSetLabel, sessionsEndedLabel, unassignedWord, type DefaultRole } from "./access";
 
-/** How the last change to a member ended, said at the member's row until the next change anywhere on the page. */
+/** How the last change to a member ended, said at the member's row until the next change to that member. */
 export type RowNote = { kind: "done" | "refused"; text: string };
 
 function Note({ note }: { note?: RowNote }) {

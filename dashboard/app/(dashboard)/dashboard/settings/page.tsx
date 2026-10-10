@@ -27,7 +27,7 @@ import {
   TextInput,
   Toggle,
 } from "@carbon/react";
-import { failureWords, HealthDetailNotice, NEEDS_KEY } from "@/components/console/health";
+import { AsOf, asOfWords, failureWords, HealthDetailNotice, held } from "@/components/console/health";
 import { uptimeText } from "@/components/console/names";
 import { PageHead, Refused, Section } from "@/components/console/page";
 import { ADMIN_KEY_STORAGE } from "@/hooks/useAdminKey";
@@ -207,12 +207,15 @@ function Providers({ m }: { m: Page }) {
     }
   }
 
+  const { reading } = m;
   if (!m.health) {
-    return m.detailState === "pending" ? (
+    return reading.standing === "checking" ? (
       <p className="t-empty">The proxy has not answered yet.</p>
+    ) : reading.standing === "unreachable" || reading.stale ? (
+      <p className="t-empty">The proxy did not answer, so the state of its provider pools is not known.</p>
     ) : (
       <>
-        <HealthDetailNotice state={m.detailState} />
+        <HealthDetailNotice state={reading.standing} />
         <p className="t-empty">The provider pools are shown once the proxy accepts an admin key from this browser.</p>
       </>
     );
@@ -233,7 +236,7 @@ function Providers({ m }: { m: Page }) {
           key={pl.pool}
           id={`pool-${pl.pool}`}
           title={`${pl.pool} pool`}
-          note={`${pl.healthy_count} of ${pl.total_count} taking traffic`}
+          note={reading.stale ? asOfWords(reading.answeredAt, true) : `${pl.healthy_count} of ${pl.total_count} taking traffic`}
           style={i > 0 ? { marginTop: "2.5rem" } : undefined}
         >
           <TableContainer className="t-table">
@@ -255,10 +258,13 @@ function Providers({ m }: { m: Page }) {
                   const state = CIRCUIT[(p.state || "").toLowerCase()] ?? { word: p.state || "Not known" };
                   const busy = pending === `${pl.pool}:${p.name}`;
                   return (
-                    <TableRow key={p.name}>
+                    <TableRow key={p.name} data-stale={reading.stale ? "true" : undefined}>
                       <TableCell className="t-data">{p.name}</TableCell>
                       <TableCell>
-                        {state.action ? (
+                        {reading.stale ? (
+                          // No mark: a mark says what the endpoint is doing now.
+                          held(reading, state.word)
+                        ) : state.action ? (
                           <span className="t-action" data-action={state.action}>
                             {state.word}
                           </span>
@@ -294,13 +300,13 @@ function Providers({ m }: { m: Page }) {
 }
 
 function Runtime({ m }: { m: Page }) {
-  const { up, health, runtime } = m;
+  const { up, health, runtime, reading } = m;
+  // Two reads feed this tab. A value is shown by the reading of the one it came from.
+  const rt = runtime || m.runtimeReading.standing === "checking" ? m.runtimeReading : reading;
   const proxy = up?.proxy;
   const database = runtime?.database ?? health?.database;
   const uptime = runtime?.uptime_seconds ?? health?.uptime_seconds;
-  // Shown in place of a value the proxy keeps back. Before it has answered at all, nothing is known.
-  const locked = m.detailState === "no-key" || m.detailState === "rejected";
-  const unknown = locked ? NEEDS_KEY : "Not known";
+  const locked = reading.standing === "no-key" || reading.standing === "rejected";
   const list = (rows: [string, React.ReactNode][]) => (
     <dl className="t-facts" style={{ borderTop: 0 }}>
       {rows.map(([label, value]) => (
@@ -314,24 +320,35 @@ function Runtime({ m }: { m: Page }) {
 
   return (
     <>
-      <HealthDetailNotice state={m.detailState} />
+      <HealthDetailNotice state={reading.standing} />
+      <AsOf reading={reading.stale ? reading : rt} />
       <div className="t-columns" data-even="true" style={{ marginTop: locked ? "1.5rem" : 0 }}>
         <Section id="transport" title="Transport and storage">
           {list([
-            ["Proxy", proxy === "up" ? "Up" : (proxy ?? "Not known")],
-            ["TLS", !runtime ? unknown : runtime.tls_enabled ? "On" : "Off, plain HTTP"],
-            ["Mutual TLS", !runtime ? unknown : runtime.mtls_enabled ? "Required" : "Off"],
-            ["Rate limit state", !runtime ? unknown : runtime.redis_enabled ? "In Redis, shared between nodes" : "In memory, this node only"],
-            ["Database", database === "connected" ? "Connected" : (database ?? unknown).replace(/_/g, " ")],
+            // Known now, whatever else is old: the check either came back or it did not.
+            [
+              "Proxy",
+              reading.stale || reading.standing === "unreachable"
+                ? "Unreachable"
+                : reading.standing === "checking"
+                  ? "Checking"
+                  : proxy === "up"
+                    ? "Up"
+                    : (proxy ?? "Not known"),
+            ],
+            ["TLS", held(rt, !runtime ? undefined : runtime.tls_enabled ? "On" : "Off, plain HTTP")],
+            ["Mutual TLS", held(rt, !runtime ? undefined : runtime.mtls_enabled ? "Required" : "Off")],
+            ["Rate limit state", held(rt, !runtime ? undefined : runtime.redis_enabled ? "In Redis, shared between nodes" : "In memory, this node only")],
+            ["Database", held(rt, database === "connected" ? "Connected" : database?.replace(/_/g, " "))],
           ])}
         </Section>
         <Section id="build" title="Build and policy">
           {list([
-            ["Version", runtime?.version || unknown],
-            ["Policy", runtime?.policy_name || unknown],
-            ["Policy file", <span key="p" className="t-data">{runtime?.policy_path ?? health?.policy_path ?? unknown}</span>],
-            ["Scanners", runtime?.scanner_count ?? health?.scanner_count ?? unknown],
-            ["Running for", typeof uptime === "number" ? uptimeText(uptime) : unknown],
+            ["Version", held(rt, runtime?.version)],
+            ["Policy", held(rt, runtime?.policy_name)],
+            ["Policy file", <span key="p" className="t-data">{held(rt, runtime?.policy_path ?? health?.policy_path)}</span>],
+            ["Scanners", held(rt, runtime?.scanner_count ?? health?.scanner_count)],
+            ["Running for", held(rt, typeof uptime === "number" ? uptimeText(uptime) : undefined)],
           ])}
         </Section>
       </div>

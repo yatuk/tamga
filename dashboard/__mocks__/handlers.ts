@@ -50,12 +50,23 @@ const MOCK_WEBHOOKS = {
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────
-function paginate<T>(items: T[], page = 1, limit = 50) {
-  const start = (page - 1) * limit;
-  return {
-    items: items.slice(start, start + limit),
-    total: items.length,
-  };
+/** The query string of every PDF report asked for, so a test can see what the console sent. */
+export const reportMock = { queries: [] as string[] };
+
+/**
+ * GET /reports/{owasp,incident}/pdf, as the proxy answers: it takes the
+ * window and nothing else, and counts the requests of that window itself.
+ */
+function pdfReport(request: Request) {
+  const refused = refusedForRole(request, "reports:read");
+  if (refused) return refused;
+  const url = new URL(request.url);
+  reportMock.queries.push(url.searchParams.toString());
+  const range = url.searchParams.get("range") ?? "24h";
+  if (!["24h", "7d", "30d"].includes(range)) {
+    return HttpResponse.json({ error: "range must be 24h, 7d or 30d", code: "invalid_range" }, { status: 400 });
+  }
+  return new HttpResponse(`%PDF-1.4 report for ${range}`, { headers: { "Content-Type": "application/pdf" } });
 }
 
 function eventsResponse(actionFilter: string[], page = 1, limit = 50) {
@@ -438,6 +449,9 @@ export const handlers = [
   // Findings breakdown
   http.get(`${API}/findings/breakdown`, () => HttpResponse.json(MOCK_BREAKDOWN)),
 
+  // Time to resolve. Nothing has been resolved in the mock's window.
+  http.get(`${API}/mttr`, () => HttpResponse.json({ overall_mttr_minutes: 0, by_severity: {}, trend: "stable", sla_compliance: 0 })),
+
   // Model stats
   http.get(`${API}/stats/models`, () => HttpResponse.json(MOCK_MODEL_STATS)),
 
@@ -481,6 +495,10 @@ export const handlers = [
     ssoMock.config = { ...ssoMock.config, ...((await request.json()) as Partial<typeof ssoMock.config>) };
     return HttpResponse.json({ ok: true, config: ssoMock.config });
   }),
+
+  // The PDF reports
+  http.get(`${API}/reports/owasp/pdf`, ({ request }) => pdfReport(request)),
+  http.get(`${API}/reports/incident/pdf`, ({ request }) => pdfReport(request)),
 
   // Budget
   http.get(`${API}/budget/stats`, () => HttpResponse.json(MOCK_BUDGET)),

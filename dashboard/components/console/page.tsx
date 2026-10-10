@@ -69,7 +69,8 @@ export function DataNotice({
       ? [`This key's role cannot read ${what}.`, `${denied.needs} Use a key with a higher role under Settings.`]
       : session
         ? [session.title, session.detail]
-        : health.detailState === "rejected"
+        : // Only while it is answering: a key refused before an outage says nothing of the proxy now.
+          health.reading.standing === "rejected"
           ? ["The proxy did not accept the admin key.", "It is up. Check the key under Settings."]
           : health.data && !health.isError
             ? ["The proxy is up, but it did not return this page's data.", "Proxy status shows whether one of its parts is down."]
@@ -114,6 +115,19 @@ export function NoData({
       </PageHead>
       <DataNotice adminKey={adminKey} failed error={error} what={what} />
     </>
+  );
+}
+
+/**
+ * Where a page's figures will be, while its first read is on its way. A page
+ * draws this in place of its figures, never a 0 or "nothing in this window".
+ */
+export function PageLoading() {
+  return (
+    <div role="status" aria-label="Loading" style={{ marginTop: "2.5rem" }}>
+      <SkeletonText heading width="40%" />
+      <SkeletonText paragraph lineCount={6} />
+    </div>
   );
 }
 
@@ -170,6 +184,7 @@ export function Statement({
   rest,
   below,
   facts,
+  factsNote,
 }: {
   loading?: boolean;
   figure: ReactNode;
@@ -183,7 +198,19 @@ export function Statement({
   rest?: ReactNode;
   below?: ReactNode;
   facts: [label: string, value: ReactNode][];
+  /** A line over the facts, for what has to be said of all of them: that they are an earlier answer. */
+  factsNote?: ReactNode;
 }) {
+  const list = (
+    <dl className="t-facts">
+      {facts.map(([label, value]) => (
+        <div key={label}>
+          <dt>{label}</dt>
+          <dd>{value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
   return (
     <div className="t-statement">
       <div>
@@ -202,14 +229,17 @@ export function Statement({
           </>
         )}
       </div>
-      <dl className="t-facts">
-        {facts.map(([label, value]) => (
-          <div key={label}>
-            <dt>{label}</dt>
-            <dd>{value}</dd>
-          </div>
-        ))}
-      </dl>
+      {/* While the figure is on its way so are the facts: none is drawn from a default. */}
+      {loading ? (
+        <div />
+      ) : factsNote ? (
+        <div>
+          {factsNote}
+          {list}
+        </div>
+      ) : (
+        list
+      )}
     </div>
   );
 }
