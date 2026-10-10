@@ -2,14 +2,18 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/yatuk/tamga/internal/events"
 )
 
 // reportGet asks the management API on a test server for a report, with the
@@ -143,54 +147,227 @@ func TestReports_OwaspPdf_ProxiesToAnalyzer(t *testing.T) {
 	}
 }
 
-func TestReports_IncidentPdf_ProxiesToAnalyzer(t *testing.T) {
-	fakeAnalyzer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// incidentAnalyzer stands in for the analyzer's incident report and hands
+// each query it is asked with to the test.
+func incidentAnalyzer(t *testing.T) (*httptest.Server, chan url.Values) {
+	t.Helper()
+	asked := make(chan url.Values, 16)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/reports/incident/pdf" {
 			http.NotFound(w, r)
 			return
 		}
-		want := url.Values{
-			"total_requests": {"100"}, "blocked": {"10"}, "redacted": {"5"},
-			"warned": {"2"}, "period_hours": {"24"},
-		}
-		if got := r.URL.Query().Encode(); got != want.Encode() {
-			t.Errorf("query = %q, want %q", got, want.Encode())
-		}
+		asked <- r.URL.Query()
 		w.Header().Set("Content-Type", "application/pdf")
 		_, _ = w.Write([]byte("%PDF-1.4 incident summary"))
 	}))
-	defer fakeAnalyzer.Close()
+	t.Cleanup(srv.Close)
+	return srv, asked
+}
 
-	resp, body := reportGet(t, Config{AnalyzerHTTPURL: fakeAnalyzer.URL},
-		"/api/v1/reports/incident/pdf?total_requests=100&blocked=10&redacted=5&warned=2&period_hours=24", nil)
+// incidentHistory is a request history with rows inside and outside each of
+// the three ranges.
+func incidentHistory() *fakeHistory {
+	h := newFakeHistory()
+	now := time.Now().UTC()
+	n := 0
+	add := func(age time.Duration, count int, action string) {
+		for i := 0; i < count; i++ {
+			n++
+			h.add(histOrg, "req-"+strconv.Itoa(n), "openai", "gpt-4o", action, now.Add(-age), 3)
+		}
+	}
+	add(time.Hour, 4, "PASS")
+	add(2*time.Hour, 3, "BLOCK")
+	add(3*time.Hour, 2, "REDACT")
+	add(4*time.Hour, 1, "WARN")
+	add(3*24*time.Hour, 5, "BLOCK")
+	add(3*24*time.Hour, 6, "PASS")
+	add(20*24*time.Hour, 7, "REDACT")
+	// Another organisation's requests are not this deployment's.
+	h.add(histOtherOrg, "other-1", "openai", "gpt-4o", "BLOCK", now.Add(-time.Hour), 3)
+	return h
+}
 
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", resp.StatusCode, body)
-	}
-	if cd := resp.Header.Get("Content-Disposition"); cd != "attachment; filename=tamga-incident-report.pdf" {
-		t.Fatalf("Content-Disposition = %q", cd)
-	}
-	if !strings.HasPrefix(string(body), "%PDF-1.4") {
-		t.Fatalf("expected PDF content, got %s", body)
+// The figures the report prints are the ones GET /stats gives for the same
+// range, whatever the caller writes in the query.
+func TestReports_IncidentPdf_CountsComeFromTheProxy(t *testing.T) {
+	analyzer, asked := incidentAnalyzer(t)
+	cfg := histConfig(incidentHistory(), nil)
+	cfg.AnalyzerHTTPURL = analyzer.URL
+
+	invented := "&total_requests=999999&blocked=0&redacted=0&warned=0&period_hours=1"
+	for rng, hours := range map[string]string{"24h": "24", "7d": "168", "30d": "720"} {
+		status, _, statsBody := histGet(t, cfg, "/stats?range="+rng)
+		if status != http.StatusOK {
+			t.Fatalf("%s: /stats answered %d", rng, status)
+		}
+		var stats struct {
+			Total    int64 `json:"total_requests"`
+			Blocked  int64 `json:"blocked_requests"`
+			Redacted int64 `json:"redacted_requests"`
+			Warned   int64 `json:"warned_requests"`
+		}
+		if err := json.Unmarshal(statsBody, &stats); err != nil {
+			t.Fatal(err)
+		}
+		if stats.Total == 0 || stats.Blocked == 0 {
+			t.Fatalf("%s: the fixture counts nothing: %s", rng, statsBody)
+		}
+		want := url.Values{
+			"range":          {rng},
+			"total_requests": {strconv.FormatInt(stats.Total, 10)},
+			"blocked":        {strconv.FormatInt(stats.Blocked, 10)},
+			"redacted":       {strconv.FormatInt(stats.Redacted, 10)},
+			"warned":         {strconv.FormatInt(stats.Warned, 10)},
+			"period_hours":   {hours},
+		}
+
+		for name, query := range map[string]string{"plain": "range=" + rng, "with invented counts": "range=" + rng + invented} {
+			resp, body := reportGet(t, cfg, "/api/v1/reports/incident/pdf?"+query, nil)
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("%s %s: expected 200, got %d: %s", rng, name, resp.StatusCode, body)
+			}
+			if got := <-asked; got.Encode() != want.Encode() {
+				t.Fatalf("%s %s: the analyzer was asked with %q, want %q", rng, name, got.Encode(), want.Encode())
+			}
+			if cd := resp.Header.Get("Content-Disposition"); cd != "attachment; filename=tamga-incident-report.pdf" {
+				t.Fatalf("Content-Disposition = %q", cd)
+			}
+			if !strings.HasPrefix(string(body), "%PDF-1.4") {
+				t.Fatalf("expected PDF content, got %s", body)
+			}
+			if got := resp.Header.Get(dataSourceHeader); got != sourceDatabase {
+				t.Fatalf("%s %s: %s = %q", rng, name, dataSourceHeader, got)
+			}
+			if got := resp.Header.Get(reportRangeHeader); got != rng {
+				t.Fatalf("%s %s: %s = %q", rng, name, reportRangeHeader, got)
+			}
+			if got := resp.Header.Get(reportPeriodHoursHeader); got != hours {
+				t.Fatalf("%s %s: %s = %q", rng, name, reportPeriodHoursHeader, got)
+			}
+		}
 	}
 }
 
-func TestReports_IncidentPdf_RejectsBadCounts(t *testing.T) {
-	var hits atomic.Int32
-	fakeAnalyzer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		hits.Add(1)
-	}))
-	defer fakeAnalyzer.Close()
+// Counts in the query are not read at all: one that is not a number is no
+// more an error than one that is.
+func TestReports_IncidentPdf_CallerCountsAreIgnored(t *testing.T) {
+	analyzer, asked := incidentAnalyzer(t)
+	cfg := histConfig(incidentHistory(), nil)
+	cfg.AnalyzerHTTPURL = analyzer.URL
 
-	for _, q := range []string{"total_requests=abc", "blocked=-1", "period_hours=1.5", "warned=99999999999999999999"} {
-		resp, body := reportGet(t, Config{AnalyzerHTTPURL: fakeAnalyzer.URL}, "/api/v1/reports/incident/pdf?"+q, nil)
-		if resp.StatusCode != http.StatusBadRequest {
-			t.Fatalf("%s: expected 400, got %d", q, resp.StatusCode)
-		}
-		reportErrorBody(t, resp, body)
+	resp, body := reportGet(t, cfg, "/api/v1/reports/incident/pdf", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", resp.StatusCode, body)
 	}
-	if hits.Load() != 0 {
-		t.Fatalf("the analyzer was asked %d times for requests that are refused here", hits.Load())
+	want := <-asked
+	if want.Get("range") != "7d" || want.Get("period_hours") != "168" {
+		t.Fatalf("the default range is 7d, the analyzer was asked with %q", want.Encode())
+	}
+
+	for _, q := range []string{
+		"total_requests=abc", "blocked=-1", "period_hours=1.5", "warned=99999999999999999999",
+		"total_requests=1&total_requests=2", "redacted=7&org_id=" + histOtherOrg,
+	} {
+		resp, body := reportGet(t, cfg, "/api/v1/reports/incident/pdf?"+q, nil)
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("%s: expected 200, got %d: %s", q, resp.StatusCode, body)
+		}
+		if got := <-asked; got.Encode() != want.Encode() {
+			t.Fatalf("%s: the analyzer was asked with %q, want %q", q, got.Encode(), want.Encode())
+		}
+	}
+}
+
+func TestReports_IncidentPdf_RangeIsOneOfThree(t *testing.T) {
+	analyzer, asked := incidentAnalyzer(t)
+	cfg := histConfig(incidentHistory(), nil)
+	cfg.AnalyzerHTTPURL = analyzer.URL
+
+	for _, rng := range []string{"1h", "90d", "all", "7d&blocked=1", "-1"} {
+		resp, body := reportGet(t, cfg, "/api/v1/reports/incident/pdf?range="+url.QueryEscape(rng), nil)
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("%s: expected 400, got %d", rng, resp.StatusCode)
+		}
+		if m := reportErrorBody(t, resp, body); m["code"] != codeInvalidRange {
+			t.Fatalf("%s: code = %q", rng, m["code"])
+		}
+	}
+	if len(asked) != 0 {
+		t.Fatalf("the analyzer was asked %d times for requests that are refused here", len(asked))
+	}
+}
+
+// Counts that cannot be read are an error, not a report of zeros.
+func TestReports_IncidentPdf_NoCountsNoReport(t *testing.T) {
+	analyzer, asked := incidentAnalyzer(t)
+
+	failing := newFakeHistory()
+	failing.err = errors.New("connection refused to 10.0.0.5:5432")
+	cases := map[string]Config{
+		"database does not answer": histConfig(failing, nil),
+		"no database":              {},
+	}
+	for name, cfg := range cases {
+		cfg.Metrics = nil
+		cfg.AnalyzerHTTPURL = analyzer.URL
+		resp, body := reportGet(t, cfg, "/api/v1/reports/incident/pdf?range=24h&total_requests=5", nil)
+		if resp.StatusCode != http.StatusServiceUnavailable {
+			t.Fatalf("%s: expected 503, got %d: %s", name, resp.StatusCode, body)
+		}
+		if m := reportErrorBody(t, resp, body); m["code"] != codeReportCountsUnavailable {
+			t.Fatalf("%s: code = %q", name, m["code"])
+		}
+		if strings.Contains(string(body), "10.0.0.5") {
+			t.Fatalf("%s: the body gives away the database error: %s", name, body)
+		}
+		if resp.Header.Get(dataSourceHeader) != "" {
+			t.Fatalf("%s: an error names a data source", name)
+		}
+	}
+	if len(asked) != 0 {
+		t.Fatalf("the analyzer was asked %d times with no counts to print", len(asked))
+	}
+}
+
+// Without a database, or with one that does not answer, the report is
+// counted as GET /stats is: from the process counters. Its period is then the
+// time the process has run, not the range.
+func TestReports_IncidentPdf_ProcessCounters(t *testing.T) {
+	analyzer, asked := incidentAnalyzer(t)
+
+	failing := newFakeHistory()
+	failing.err = errors.New("database is down")
+	for name, cfg := range map[string]Config{
+		"database does not answer": histConfig(failing, nil),
+		"no database":              {},
+	} {
+		m := &events.Metrics{}
+		m.TotalRequests.Store(40)
+		m.Blocked.Store(4)
+		m.Redacted.Store(3)
+		m.Warned.Store(2)
+		cfg.Metrics = m
+		cfg.AnalyzerHTTPURL = analyzer.URL
+
+		resp, body := reportGet(t, cfg, "/api/v1/reports/incident/pdf?range=30d&total_requests=1", nil)
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("%s: expected 200, got %d: %s", name, resp.StatusCode, body)
+		}
+		want := url.Values{
+			"range": {"30d"}, "total_requests": {"40"}, "blocked": {"4"},
+			"redacted": {"3"}, "warned": {"2"}, "period_hours": {"1"},
+		}
+		if got := <-asked; got.Encode() != want.Encode() {
+			t.Fatalf("%s: the analyzer was asked with %q, want %q", name, got.Encode(), want.Encode())
+		}
+		if got := resp.Header.Get(dataSourceHeader); got != sourceMemory {
+			t.Fatalf("%s: %s = %q", name, dataSourceHeader, got)
+		}
+		if got := resp.Header.Get(reportPeriodHoursHeader); got != "1" {
+			t.Fatalf("%s: %s = %q", name, reportPeriodHoursHeader, got)
+		}
 	}
 }
 
@@ -309,7 +486,7 @@ func TestReports_AnalyzerReturns501(t *testing.T) {
 	defer fakeAnalyzer.Close()
 
 	for _, path := range []string{"/api/v1/reports/owasp/pdf", "/api/v1/reports/incident/pdf"} {
-		resp, body := reportGet(t, Config{AnalyzerHTTPURL: fakeAnalyzer.URL}, path, nil)
+		resp, body := reportGet(t, Config{AnalyzerHTTPURL: fakeAnalyzer.URL, Metrics: &events.Metrics{}}, path, nil)
 		if resp.StatusCode != http.StatusNotImplemented {
 			t.Fatalf("%s: expected 501, got %d", path, resp.StatusCode)
 		}
@@ -412,7 +589,7 @@ func TestReports_AnalyzerSlow(t *testing.T) {
 	for name, afterHeaders := range map[string]bool{"no answer": false, "stalled body": true} {
 		fakeAnalyzer := httptest.NewServer(slow(afterHeaders))
 		start := time.Now()
-		resp, body := reportGet(t, Config{AnalyzerHTTPURL: fakeAnalyzer.URL}, "/api/v1/reports/incident/pdf", nil)
+		resp, body := reportGet(t, Config{AnalyzerHTTPURL: fakeAnalyzer.URL, Metrics: &events.Metrics{}}, "/api/v1/reports/incident/pdf", nil)
 		took := time.Since(start)
 		fakeAnalyzer.CloseClientConnections()
 		fakeAnalyzer.Close()

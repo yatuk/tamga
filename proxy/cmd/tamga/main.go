@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
@@ -23,6 +24,7 @@ import (
 	"github.com/yatuk/tamga/internal/apikeys"
 	"github.com/yatuk/tamga/internal/billing"
 	"github.com/yatuk/tamga/internal/budget"
+	"github.com/yatuk/tamga/internal/buildinfo"
 	"github.com/yatuk/tamga/internal/cache"
 	"github.com/yatuk/tamga/internal/classifier"
 	"github.com/yatuk/tamga/internal/config"
@@ -53,7 +55,7 @@ func main() {
 	started := time.Now()
 
 	// Initialise OpenTelemetry tracing (noop unless OTLP endpoint is configured).
-	tcfg := telemetry.ConfigFromEnv("tamga-proxy", "v0.1.1")
+	tcfg := telemetry.ConfigFromEnv("tamga-proxy", buildinfo.String())
 	telShutdown, telErr := telemetry.InitTracing(context.Background(), tcfg)
 	if telErr != nil {
 		log.Warn().Err(telErr).Msg("otlp exporter wiring failed; tracing disabled")
@@ -349,28 +351,13 @@ func main() {
 		log.Warn().Str("role", cfg.SSODefaultRole).
 			Msg("TAMGA_SSO_DEFAULT_ROLE is set: an account that signs in without an assigned role gets this role instead of being refused")
 	}
-	var policyHistory policyhistory.Store
+	var historyPool *pgxpool.Pool
 	if pgStore != nil {
-		pgHist, err := policyhistory.NewPostgresStore(pgStore.Pool())
-		if err != nil {
-			log.Warn().Err(err).Msg("policy history postgres init failed, falling back to file")
-		} else {
-			policyHistory = pgHist
-			log.Info().Msg("policy history backed by postgres")
-		}
-		log.Info().Msg("policy history backed by postgres")
-	} else {
-		historyDir := os.Getenv("TAMGA_POLICY_HISTORY_DIR")
-		if historyDir == "" {
-			historyDir = "./data/policy-history"
-		}
-		fs, err := policyhistory.NewFileStore(historyDir)
-		if err != nil {
-			log.Warn().Err(err).Str("dir", historyDir).Msg("policy history disabled")
-		} else {
-			policyHistory = fs
-		}
+		historyPool = pgStore.Pool()
 	}
+	// Postgres with a database; files without one, and when the Postgres
+	// store cannot be made.
+	policyHistory, _ := policyhistory.Open(pgStore != nil, historyPool, os.Getenv("TAMGA_POLICY_HISTORY_DIR"))
 	record := func(old, new *policy.Policy) {
 		api.RecordPolicyFileChange(auditRing, policyHistory, cfg.PolicyPath, old, new)
 	}
@@ -640,7 +627,7 @@ func main() {
 	if !pol.ProviderAllowed("anthropic") && pol.ProviderAllowed("openai") {
 		providerForBanner = "openai"
 	}
-	version := "v0.1.0"
+	version := buildinfo.String()
 	banner := fmt.Sprintf(
 		"╔══════════════════════════════════════╗\n"+
 			"║  TAMGA %s — AI Security Proxy        ║\n"+

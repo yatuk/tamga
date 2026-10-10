@@ -51,6 +51,7 @@ services:
       # provider. Scanning and policy still run. Off unless set in .env.
       - TAMGA_MOCK_UPSTREAM=${TAMGA_MOCK_UPSTREAM:-false}
       - TAMGA_ORG_ID=${TAMGA_ORG_ID:-}
+      - TAMGA_CLERK_SECRET_KEY=${TAMGA_CLERK_SECRET_KEY:-}
       - TAMGA_CORS_ORIGIN=${TAMGA_CORS_ORIGIN:-http://localhost:3000}
       # Exact-match allowlist. Browsers treat localhost and 127.0.0.1 as
       # different origins, so the dashboard default covers both.

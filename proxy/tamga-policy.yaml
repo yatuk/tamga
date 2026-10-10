@@ -50,9 +50,11 @@ rules:
       - channel: slack
         webhook: ${SLACK_WEBHOOK_URL}
 
-  code_leakage:
-    action: WARN
-    sensitivity: high
+  # There is no rule for source code in answers here, and one would do
+  # nothing. A rule key is matched to a finding as "<type>_detection" or
+  # "<type>", and these rules decide about findings in requests only. The
+  # code-leak scanner (finding type code_leak) reads responses only; what
+  # happens to a finding in a response is decided by output_rules, below.
 
   # Operator-state findings carry per-assertion actions via confidence scores
   # (block/warn/log per rule below) — confidence_based mode honours them.
@@ -170,6 +172,11 @@ providers:
 
 # Outbound scan: non-streaming responses use output_rules.buffer_bytes; for SSE/NDJSON
 # set streaming.enabled: true (FAZ1 Prompt 2 — fail-close on BLOCK).
+# Responses are scanned only when this section is enabled. block_on and
+# redact_on name finding types or categories, and a finding that neither
+# names is let through. code_leak marks any answer that contains source code
+# (a code block, import lines, a function): put it in block_on only where
+# the model must never answer with code.
 # output_rules:
 #   enabled: true
 #   buffer_bytes: 262144

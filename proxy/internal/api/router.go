@@ -215,7 +215,8 @@ func corsMiddleware(cfg Config) func(http.Handler) http.Handler {
 				"X-Tamga-Input-Risk, X-Tamga-Risk-Level, X-Tamga-Confidence-Score, "+
 					"X-Tamga-Request-Id, X-Tamga-Org-Id, X-Tamga-Action-Reason, "+
 					"X-Tamga-Upstream-Provider, X-Tamga-Upstream-Fallback, X-Tamga-Scan-Ms, X-Tamga-Scan-Latency-Ms, "+
-					dataSourceHeader+", "+exportTruncatedHeader+", "+maskedHeader)
+					dataSourceHeader+", "+exportTruncatedHeader+", "+maskedHeader+", "+
+					reportRangeHeader+", "+reportPeriodHoursHeader)
 
 			if cfg.CORSMaxAge > 0 {
 				w.Header().Set("Access-Control-Max-Age", strconv.Itoa(cfg.CORSMaxAge))
@@ -353,45 +354,34 @@ func (cfg Config) handleStats(w http.ResponseWriter, r *http.Request) {
 	// With a database, every figure is for the asked window and comes from
 	// request_logs: the counts and what is said about them (providers,
 	// findings, latency, risk) describe the same requests.
-	if h := cfg.history(); h != nil {
-		hctx, cancel := context.WithTimeout(ctx, historyTimeout)
-		st, err := loadRequestStats(hctx, h, cfg.DefaultOrgID, from, to)
-		cancel()
-		if err == nil {
-			passed := st.total - st.blocked - st.redacted - st.warned
-			if passed < 0 {
-				passed = 0
-			}
-			body := map[string]interface{}{
-				"total_requests":         st.total,
-				"blocked_requests":       st.blocked,
-				"redacted_requests":      st.redacted,
-				"warned_requests":        st.warned,
-				"passed_requests":        passed,
-				"top_providers":          st.providers,
-				"top_finding_types":      st.findingTypes,
-				"top_categories":         st.categories,
-				"uptime":                 uptime.String(),
-				"scanner_latency_avg_ms": st.scanAvgMs,
-			}
-			if st.avgRiskPct != nil {
-				body["avg_input_risk_pct"] = *st.avgRiskPct
-			}
-			writeSourced(w, sourceDatabase, body)
-			return
+	if st, ok := cfg.storedStats(ctx, "stats", from, to); ok {
+		passed := st.total - st.blocked - st.redacted - st.warned
+		if passed < 0 {
+			passed = 0
 		}
-		historyUnavailable("stats", err)
+		body := map[string]interface{}{
+			"total_requests":         st.total,
+			"blocked_requests":       st.blocked,
+			"redacted_requests":      st.redacted,
+			"warned_requests":        st.warned,
+			"passed_requests":        passed,
+			"top_providers":          st.providers,
+			"top_finding_types":      st.findingTypes,
+			"top_categories":         st.categories,
+			"uptime":                 uptime.String(),
+			"scanner_latency_avg_ms": st.scanAvgMs,
+		}
+		if st.avgRiskPct != nil {
+			body["avg_input_risk_pct"] = *st.avgRiskPct
+		}
+		writeSourced(w, sourceDatabase, body)
+		return
 	}
 
-	if cfg.Metrics != nil {
-		// Without a database (or with one that does not answer): the
-		// process-local counters, which count since this process started
-		// whatever the range.
-		totalRequests = cfg.Metrics.TotalRequests.Load()
-		blockedRequests = cfg.Metrics.Blocked.Load()
-		redactedRequests = cfg.Metrics.Redacted.Load()
-		warnedRequests = cfg.Metrics.Warned.Load()
-	}
+	// Without a database (or with one that does not answer): the
+	// process-local counters, which count since this process started
+	// whatever the range.
+	totalRequests, blockedRequests, redactedRequests, warnedRequests, _ = cfg.processCounts()
 
 	passedRequests := totalRequests - blockedRequests - redactedRequests - warnedRequests
 	if passedRequests < 0 {

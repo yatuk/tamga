@@ -161,6 +161,36 @@ func loadRequestStats(ctx context.Context, h requestHistory, orgID string, from,
 	return st, nil
 }
 
+// storedStats reads a window's statistics from the database. ok is false
+// when the proxy has none or it did not answer; the caller then decides what
+// to say from process memory. GET /stats and the incident report both count
+// through here, so the report prints the figures the console shows.
+func (cfg Config) storedStats(ctx context.Context, endpoint string, from, to time.Time) (st *requestStats, ok bool) {
+	h := cfg.history()
+	if h == nil {
+		return nil, false
+	}
+	hctx, cancel := context.WithTimeout(ctx, historyTimeout)
+	defer cancel()
+	st, err := loadRequestStats(hctx, h, cfg.DefaultOrgID, from, to)
+	if err != nil {
+		historyUnavailable(endpoint, err)
+		return nil, false
+	}
+	return st, true
+}
+
+// processCounts are the process-local counters: what was scanned since this
+// process started, whatever window was asked for. ok is false when the
+// process keeps none.
+func (cfg Config) processCounts() (total, blocked, redacted, warned int64, ok bool) {
+	if cfg.Metrics == nil {
+		return 0, 0, 0, 0, false
+	}
+	return cfg.Metrics.TotalRequests.Load(), cfg.Metrics.Blocked.Load(),
+		cfg.Metrics.Redacted.Load(), cfg.Metrics.Warned.Load(), true
+}
+
 // findingBreakdown turns grouped finding counts into the maps the breakdown
 // and stats responses carry.
 func findingBreakdown(rows []store.FindingCount) (byType, byCategory, bySeverity map[string]int64, typeByCategory map[string]map[string]int64) {

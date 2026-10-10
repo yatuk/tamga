@@ -23,27 +23,51 @@ type injectionPatternDef struct {
 // recall on adversarial inputs.
 //
 // ── Pattern Sources & Licenses ────────────────────────────────────────────
+// Sources are recorded per category, not per phrase. The licence column is
+// what the named upstream declared when it was read on 2026-10-10 (notes
+// below). "not verified" means no upstream, or no licence statement, could
+// be found; it does not mean the material is known to be unlicensed.
+// Attributions are in the NOTICE file at the repository root.
+//
 // Category              │ Source                                │ License
 // ───────────────────────┼───────────────────────────────────────┼──────────
-// instruction_override   │ OWASP LLM Top 10 (2025) examples      │ CC0
-//                        │ Lakera Gandalf public challenges       │ MIT
-//                        │ Community Turkish translations (Tamga) │ CC0
-// role_manipulation      │ OWASP LLM Top 10 (2025) examples      │ CC0
-//                        │ Tamga red-team (internal)              │ AGPL-3.0
-// delimiter_injection    │ OWASP LLM Top 10 (2025) examples      │ CC0
-// context_manipulation   │ OWASP LLM Top 10 (2025) examples      │ CC0
-// jailbreak              │ Lakera Gandalf public challenges       │ MIT
-//                        │ JailbreakChat.com public dataset (2024) │ CC-BY
-//                        │ Community Turkish translations (Tamga) │ CC0
-// tool_fetch             │ OWASP LLM Top 10 (2025) — Tool Abuse   │ CC0
-//                        │ Tamga red-team (internal)              │ AGPL-3.0
-// indirect_injection     │ OWASP LLM Top 10 (2025) — RAG Poison   │ CC0
-//                        │ Lakera indirect prompt injection set    │ MIT
-//                        │ Community Turkish translations (Tamga) │ CC0
+// instruction_override   │ OWASP LLM Top 10 (2025) examples      │ CC BY-SA 4.0 [1]
+//                        │ Lakera Gandalf public challenges       │ MIT [2]
+//                        │ Community Turkish translations (Tamga) │ not verified [5]
+// role_manipulation      │ OWASP LLM Top 10 (2025) examples      │ CC BY-SA 4.0 [1]
+//                        │ Tamga red-team (internal)              │ AGPL-3.0 [6]
+// delimiter_injection    │ OWASP LLM Top 10 (2025) examples      │ CC BY-SA 4.0 [1]
+// context_manipulation   │ OWASP LLM Top 10 (2025) examples      │ CC BY-SA 4.0 [1]
+// jailbreak              │ Lakera Gandalf public challenges       │ MIT [2]
+//                        │ JailbreakChat.com public dataset (2024) │ not verified [3]
+//                        │ Community Turkish translations (Tamga) │ not verified [5]
+// tool_fetch             │ OWASP LLM Top 10 (2025) — Tool Abuse   │ CC BY-SA 4.0 [1]
+//                        │ Tamga red-team (internal)              │ AGPL-3.0 [6]
+// indirect_injection     │ OWASP LLM Top 10 (2025) — RAG Poison   │ CC BY-SA 4.0 [1]
+//                        │ Lakera indirect prompt injection set    │ not verified [4]
+//                        │ Community Turkish translations (Tamga) │ not verified [5]
 // ─────────────────────────────────────────────────────────────────────────
+// [1] OWASP Top 10 for LLM Applications. The README of the project's
+//     repository states Creative Commons Attribution-ShareAlike 4.0
+//     International. This table said CC0 before 2026-10-10.
+//     https://github.com/OWASP/www-project-top-10-for-large-language-model-applications
+// [2] Verified for one dataset: the card of Lakera/gandalf_ignore_instructions
+//     states the MIT License. Which Lakera publication each phrase was taken
+//     from is not recorded.
+//     https://huggingface.co/datasets/Lakera/gandalf_ignore_instructions
+// [3] jailbreakchat.com is offline. No licence statement for its prompt
+//     collection was found. This table said CC-BY before 2026-10-10.
+// [4] No Lakera dataset of this name was found. This table said MIT before
+//     2026-10-10.
+// [5] No upstream. The repository has no record of who translated these
+//     phrases or of a CC0 dedication (this table said CC0 before 2026-10-10).
+// [6] Written for Tamga; the licence of the repository.
 //
 // Version: 1.2.0  |  Last updated: 2026-06-12  |  Maintainer: Tamga Engineering
-// Pattern count: 83 (55 EN, 16 TR, 12 language-agnostic structural)
+// How many phrases there are, per category and in all, is not written here:
+// a count in a comment is wrong after the next phrase. The one place it is
+// written is the table in patterns/README.md, which
+// TestPatternCatalogueMatchesTheCode holds to this list.
 
 var injectionPatterns []injectionPatternDef
 

@@ -111,10 +111,28 @@ func (f *sessFixture) call(method, path, token, body string) sessResponse {
 	return out
 }
 
-// signIn signs a GitHub account in through the exchange route.
+// signIn signs a GitHub account in the way a browser does: the login route
+// issues the state, and the callback is called with it and the code.
 func (f *sessFixture) signIn(githubID string) sessResponse {
 	f.t.Helper()
-	return f.call("POST", "/auth/github/exchange", "", `{"code":"`+githubID+`"}`)
+	login := httptest.NewRecorder()
+	f.h.ServeHTTP(login, httptest.NewRequest("GET", "/api/v1/auth/github/login", nil))
+	var state *http.Cookie
+	for _, c := range login.Result().Cookies() {
+		if c.Name == "tamga_oauth_state" {
+			state = c
+		}
+	}
+	if login.Code != http.StatusFound || state == nil {
+		f.t.Fatalf("login: %d %s", login.Code, login.Body.String())
+	}
+	req := httptest.NewRequest("GET", "/api/v1/auth/github/callback?code="+url.QueryEscape(githubID)+"&state="+state.Value, nil)
+	req.AddCookie(state)
+	rec := httptest.NewRecorder()
+	f.h.ServeHTTP(rec, req)
+	out := sessResponse{status: rec.Code, raw: rec.Body.String()}
+	_ = json.Unmarshal(rec.Body.Bytes(), &out.body)
+	return out
 }
 
 // token signs a GitHub account in and returns its session token.
@@ -688,5 +706,103 @@ func TestConcurrentDemotionsOverTheAPI(t *testing.T) {
 		if ok != 1 || refused != 1 || admins != 1 {
 			t.Fatalf("round %d: %d accepted, %d refused, %d admins left; want 1, 1 and 1", round, ok, refused, admins)
 		}
+	}
+}
+
+// Without a signing secret the deployment has no sessions, and every session
+// route says so the same way whatever it was sent: a token, none, a code.
+func TestSessionRoutesWithoutASigningSecret(t *testing.T) {
+	for name, change := range map[string]func(*Config){
+		"no secret":         func(c *Config) { c.JWTSecret = "" },
+		"blank secret":      func(c *Config) { c.JWTSecret = "  " },
+		"and no GitHub app": func(c *Config) { c.JWTSecret = ""; c.GitHubClientID = ""; c.GitHubClientSecret = "" },
+	} {
+		f := newSessFixture(t, change)
+		foreign, err := auth.CreateToken(auth.Claims{Sub: "1"}, []byte(sessSecret))
+		if err != nil {
+			t.Fatal(err)
+		}
+		calls := []struct{ method, path, token string }{
+			{"GET", "/auth/session", ""},
+			{"GET", "/auth/session", foreign},
+			{"POST", "/auth/logout", ""},
+			{"POST", "/auth/logout", foreign},
+			{"GET", "/auth/github/login", ""},
+			{"GET", "/auth/github/callback", ""},
+			{"GET", "/auth/github/callback?code=1&state=x", ""},
+		}
+		want := ""
+		for _, c := range calls {
+			res := f.call(c.method, c.path, c.token, "")
+			if res.status != http.StatusServiceUnavailable || res.code() != codeSessionsUnavailable {
+				t.Errorf("%s: %s %s: %d %s, want 503 %s", name, c.method, c.path, res.status, res.raw, codeSessionsUnavailable)
+			}
+			if want == "" {
+				want = res.raw
+			}
+			if res.raw != want {
+				t.Errorf("%s: %s %s answers %s, the others %s", name, c.method, c.path, res.raw, want)
+			}
+		}
+	}
+}
+
+// With sessions and no GitHub OAuth app, the two GitHub routes say which of
+// the two is missing.
+func TestGitHubRoutesWithoutAnOAuthApp(t *testing.T) {
+	f := newSessFixture(t, func(c *Config) { c.GitHubClientID = "" })
+	for _, path := range []string{"/auth/github/login", "/auth/github/callback?code=1&state=x"} {
+		res := f.call("GET", path, "", "")
+		if res.status != http.StatusServiceUnavailable || res.code() != codeGitHubOAuthNotConfigured {
+			t.Errorf("GET %s: %d %s", path, res.status, res.raw)
+		}
+	}
+}
+
+// A code is exchanged only by the callback, with the state the login issued
+// to the same browser. A code alone signs nobody in: the route that took one
+// in a POST body is gone, and the callback refuses one without the state.
+func TestCodeWithoutStateSignsNobodyIn(t *testing.T) {
+	f := newSessFixture(t, nil)
+	_, _ = f.users.Set("1001", users.RoleAdmin)
+
+	res := f.call("POST", "/auth/github/exchange", "", `{"code":"1001"}`)
+	if res.status != http.StatusUnauthorized || res.body["token"] != nil {
+		t.Fatalf("POST /auth/github/exchange without a credential: %d %s", res.status, res.raw)
+	}
+	res = f.call("POST", "/auth/github/exchange", "admin-key", `{"code":"1001"}`)
+	if res.status != http.StatusNotFound || res.body["token"] != nil {
+		t.Fatalf("POST /auth/github/exchange with the admin key: %d %s", res.status, res.raw)
+	}
+
+	state := "0123456789abcdef0123456789abcdef"
+	for name, build := range map[string]func() *http.Request{
+		"no state at all": func() *http.Request {
+			return httptest.NewRequest("GET", "/api/v1/auth/github/callback?code=1001", nil)
+		},
+		"state in the query only": func() *http.Request {
+			return httptest.NewRequest("GET", "/api/v1/auth/github/callback?code=1001&state="+state, nil)
+		},
+		"state in the cookie only": func() *http.Request {
+			r := httptest.NewRequest("GET", "/api/v1/auth/github/callback?code=1001", nil)
+			r.AddCookie(&http.Cookie{Name: "tamga_oauth_state", Value: state})
+			return r
+		},
+		"another browser's state": func() *http.Request {
+			r := httptest.NewRequest("GET", "/api/v1/auth/github/callback?code=1001&state="+state, nil)
+			r.AddCookie(&http.Cookie{Name: "tamga_oauth_state", Value: strings.Repeat("f", 32)})
+			return r
+		},
+	} {
+		rec := httptest.NewRecorder()
+		f.h.ServeHTTP(rec, build())
+		if rec.Code != http.StatusBadRequest || strings.Contains(rec.Body.String(), `"token"`) {
+			t.Errorf("%s: %d %s", name, rec.Code, rec.Body.String())
+		}
+	}
+
+	// The same code with the state the login issued does sign in.
+	if got := f.signIn("1001"); got.status != http.StatusOK || got.body["token"] == nil {
+		t.Fatalf("sign-in through login and callback: %d %s", got.status, got.raw)
 	}
 }

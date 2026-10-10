@@ -3,14 +3,18 @@
 The literal phrases the injection scanner matches. They are compiled into the proxy binary;
 this directory holds only this document. The source of truth is the code:
 
-- [`../injection.go`](../injection.go): `injectionPatterns`, the base set (62 phrases).
-- [`../injection_i18n.go`](../injection_i18n.go): 29 more phrases appended to `injectionPatterns` at init
-  (Turkish, German, Russian), and 14 regular expressions (`i18nRegexPatterns`) for the same
+- [`../injection.go`](../injection.go): `injectionPatterns`, the base set.
+- [`../injection_i18n.go`](../injection_i18n.go): more phrases appended to `injectionPatterns` at init
+  (Turkish, German, Russian), and regular expressions (`i18nRegexPatterns`) for the same
   phrases written with irregular whitespace.
 - [`../dfa.go`](../dfa.go): builds one Aho-Corasick automaton from these phrases plus secret
   prefixes and context keywords.
 
 If a table below disagrees with the code, the code is right; correct the table in the same change.
+`TestPatternCatalogueMatchesTheCode` (in [`../pattern_catalogue_test.go`](../pattern_catalogue_test.go))
+fails until they agree: the counts and confidence ranges under [Categories](#categories) and every
+row of the phrase tables are compared with `injectionPatterns`. The counts are written in that one
+table and nowhere else, so that there is one number to keep right.
 
 ## Categories
 
@@ -173,23 +177,44 @@ Markers found inside retrieved content (a document, an email, a web page) that a
 Sources are recorded per category, in the comment above `injectionPatterns` in `../injection.go`.
 The code does not record a source for each phrase.
 
+The licence column is what the named upstream declared when it was read on 2026-10-10.
+"not verified" means that no upstream, or no licence statement, could be found; it does not
+mean the material is known to be unlicensed. Before that date this table gave CC0 for the
+OWASP material, CC-BY for JailbreakChat, MIT for the "Lakera indirect prompt injection set"
+and CC0 for the Turkish translations; none of those four could be confirmed.
+
 | Category | Source | Licence |
 |---|---|---|
-| `instruction_override` | OWASP LLM Top 10 (2025) examples | CC0 |
-|  | Lakera Gandalf public challenges | MIT |
-|  | Community Turkish translations (Tamga) | CC0 |
-| `role_manipulation` | OWASP LLM Top 10 (2025) examples | CC0 |
+| `instruction_override` | OWASP LLM Top 10 (2025) examples | CC BY-SA 4.0 [1] |
+|  | Lakera Gandalf public challenges | MIT [2] |
+|  | Community Turkish translations (Tamga) | not verified [5] |
+| `role_manipulation` | OWASP LLM Top 10 (2025) examples | CC BY-SA 4.0 [1] |
 |  | Tamga red-team (written for Tamga) | AGPL-3.0 |
-| `delimiter_injection` | OWASP LLM Top 10 (2025) examples | CC0 |
-| `context_manipulation` | OWASP LLM Top 10 (2025) examples | CC0 |
-| `jailbreak` | Lakera Gandalf public challenges | MIT |
-|  | JailbreakChat.com public dataset (2024) | CC-BY |
-|  | Community Turkish translations (Tamga) | CC0 |
-| `tool_fetch` | OWASP LLM Top 10 (2025), tool abuse | CC0 |
+| `delimiter_injection` | OWASP LLM Top 10 (2025) examples | CC BY-SA 4.0 [1] |
+| `context_manipulation` | OWASP LLM Top 10 (2025) examples | CC BY-SA 4.0 [1] |
+| `jailbreak` | Lakera Gandalf public challenges | MIT [2] |
+|  | JailbreakChat.com public dataset (2024) | not verified [3] |
+|  | Community Turkish translations (Tamga) | not verified [5] |
+| `tool_fetch` | OWASP LLM Top 10 (2025), tool abuse | CC BY-SA 4.0 [1] |
 |  | Tamga red-team (written for Tamga) | AGPL-3.0 |
-| `indirect_injection` | OWASP LLM Top 10 (2025), RAG poisoning | CC0 |
-|  | Lakera indirect prompt injection set | MIT |
-|  | Community Turkish translations (Tamga) | CC0 |
+| `indirect_injection` | OWASP LLM Top 10 (2025), RAG poisoning | CC BY-SA 4.0 [1] |
+|  | Lakera indirect prompt injection set | not verified [4] |
+|  | Community Turkish translations (Tamga) | not verified [5] |
+
+1. OWASP Top 10 for LLM Applications. The README of the
+   [project repository](https://github.com/OWASP/www-project-top-10-for-large-language-model-applications)
+   states Creative Commons Attribution-ShareAlike 4.0 International.
+2. Verified for one dataset: the card of
+   [Lakera/gandalf_ignore_instructions](https://huggingface.co/datasets/Lakera/gandalf_ignore_instructions)
+   states the MIT License. Which Lakera publication each phrase was taken from is not recorded.
+3. jailbreakchat.com is offline. No licence statement for its prompt collection was found.
+4. No Lakera dataset of this name was found.
+5. No upstream. The repository has no record of who translated these phrases or of a CC0
+   dedication.
+
+The attributions these licences ask for are in [`NOTICE`](../../../../NOTICE) at the repository
+root. Whether phrases this short are protected at all, and whether CC BY-SA 4.0 material may be
+part of an AGPL-3.0 work, are legal questions this document does not answer.
 
 The German and Russian phrases in `../injection_i18n.go` carry no source note in the code.
 
@@ -227,7 +252,8 @@ go test ./internal/scanner/ -run '^$' -bench 'BenchmarkDFA_' -benchmem
 3. Add a case that must match and a benign case that must not. The evasion cases are in
    [`../injection_adversarial_test.go`](../injection_adversarial_test.go); the per-language cases are in
    [`../injection_i18n_test.go`](../injection_i18n_test.go).
-4. Update the tables in this file.
+4. Update the tables in this file: the phrase's row, and its category's count, range and the
+   total under [Categories](#categories). The test named at the top says what is missing.
 5. Run the tests:
 
    ```bash

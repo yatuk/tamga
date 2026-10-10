@@ -130,6 +130,8 @@ func ValidateSemantics(p *Policy) []ValidationIssue {
 		}
 	}
 
+	// How large a limit may be, and from where it is remarked on, is in
+	// bounds.go (bodyLimitIssue), with the other bounds.
 	if p.BodyLimits != nil {
 		if p.BodyLimits.Default.MaxBytes <= 0 {
 			issues = append(issues, ValidationIssue{
@@ -137,14 +139,6 @@ func ValidateSemantics(p *Policy) []ValidationIssue {
 				Rule:     "non_positive",
 				Message:  "max_bytes must be greater than 0",
 				Severity: "error",
-			})
-		}
-		if p.BodyLimits.Default.MaxBytes > 10*1024*1024 {
-			issues = append(issues, ValidationIssue{
-				Field:    "body_limits.default.max_bytes",
-				Rule:     "large_body",
-				Message:  "values above 10MB may cause memory pressure on the proxy",
-				Severity: "warning",
 			})
 		}
 		for prov, rule := range p.BodyLimits.PerProvider {
@@ -155,14 +149,6 @@ func ValidateSemantics(p *Policy) []ValidationIssue {
 					Rule:     "non_positive",
 					Message:  "max_bytes must be greater than 0",
 					Severity: "error",
-				})
-			}
-			if rule.MaxBytes > 10*1024*1024 {
-				issues = append(issues, ValidationIssue{
-					Field:    prefix + ".max_bytes",
-					Rule:     "large_body",
-					Message:  "values above 10MB may cause memory pressure on the proxy",
-					Severity: "warning",
 				})
 			}
 		}

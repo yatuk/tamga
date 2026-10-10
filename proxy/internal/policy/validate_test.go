@@ -137,7 +137,7 @@ func TestValidateSemantics_BodyLimitsLargeWarning(t *testing.T) {
 		Name:    "test",
 		Rules:   map[string]Rule{},
 		BodyLimits: &BodyLimitsConfig{
-			Default: BodyLimitRule{MaxBytes: 20 * 1024 * 1024},
+			Default: BodyLimitRule{MaxBytes: LargeBodyLimitBytes + 1},
 		},
 	}
 	issues := ValidateSemantics(p)
@@ -814,7 +814,7 @@ func TestValidateSemantics_BodyLimitsPerProviderLargeWarning(t *testing.T) {
 		BodyLimits: &BodyLimitsConfig{
 			Default: BodyLimitRule{MaxBytes: 1 * 1024 * 1024},
 			PerProvider: map[string]BodyLimitRule{
-				"anthropic": {MaxBytes: 20 * 1024 * 1024},
+				"anthropic": {MaxBytes: 48 * 1024 * 1024},
 			},
 		},
 	}

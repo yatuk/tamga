@@ -20,7 +20,8 @@ import "regexp"
 //   - German: instruction override + system prompt reveal
 //   - Russian: Cyrillic native + Latin transliteration (both common in attacks)
 //
-// Pattern count: 28 substring + 14 regex = 42 total new patterns
+// The phrases are counted, with the rest of injectionPatterns, in the table
+// of patterns/README.md (see the note above injectionPatterns).
 // ────────────────────────────────────────────────────────────────────────────
 
 // i18nRegexDef is a compiled regex with injection category and base confidence.

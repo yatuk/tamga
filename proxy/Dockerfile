@@ -5,9 +5,28 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o tamga ./cmd/tamga
+
+# What the binary reports as its version (banner, /api/v1/health/detail,
+# traces). A release passes the tag and the commit:
+#   docker build --build-arg VERSION=v0.9.0 --build-arg REVISION=$(git rev-parse HEAD) proxy
+# Without VERSION the binary says "dev", or "dev+<commit>" when REVISION is
+# given: the build context has no .git for the Go tool to read it from.
+ARG VERSION=""
+ARG REVISION=""
+RUN CGO_ENABLED=0 GOOS=linux go build \
+    -ldflags="-s -w -X github.com/yatuk/tamga/internal/buildinfo.Version=${VERSION} -X github.com/yatuk/tamga/internal/buildinfo.Revision=${REVISION}" \
+    -o tamga ./cmd/tamga
 
 FROM alpine:3.21
+
+ARG VERSION=""
+ARG REVISION=""
+LABEL org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${REVISION}"
+LABEL org.opencontainers.image.title="Tamga proxy" \
+      org.opencontainers.image.description="Self-hosted LLM security proxy: inline scanning, policy and audit for LLM traffic" \
+      org.opencontainers.image.source="https://github.com/yatuk/tamga" \
+      org.opencontainers.image.licenses="AGPL-3.0-only"
 
 RUN apk --no-cache add ca-certificates tzdata && \
     adduser -D -u 1001 -s /sbin/nologin tamga

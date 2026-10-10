@@ -16,7 +16,7 @@ func TestLoad_Defaults(t *testing.T) {
 		"TAMGA_UPSTREAM_MAX_RETRIES", "TAMGA_BREAKER_FAILURE_THRESHOLD",
 		"TAMGA_BREAKER_COOLDOWN_MS", "TAMGA_REGION",
 		"TAMGA_MTLS_CLIENT_CA_FILE", "TAMGA_MTLS_STRICT_VERIFY", "TAMGA_IP_ALLOWLIST",
-		"TAMGA_CLERK_SECRET_KEY", "TAMGA_CLERK_CALLBACK_URL",
+		"TAMGA_CLERK_SECRET_KEY",
 	} {
 		_ = os.Unsetenv(k)
 	}
@@ -94,9 +94,6 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.ClerkSecretKey != "" {
 		t.Errorf("default ClerkSecretKey should be empty: %q", cfg.ClerkSecretKey)
 	}
-	if cfg.ClerkCallbackURL != "" {
-		t.Errorf("default ClerkCallbackURL should be empty: %q", cfg.ClerkCallbackURL)
-	}
 }
 
 func TestLoad_AllEnvVars(t *testing.T) {
@@ -122,7 +119,6 @@ func TestLoad_AllEnvVars(t *testing.T) {
 	_ = os.Setenv("TAMGA_MTLS_STRICT_VERIFY", "true")
 	_ = os.Setenv("TAMGA_IP_ALLOWLIST", "10.0.0.0/8,192.168.1.0/24")
 	_ = os.Setenv("TAMGA_CLERK_SECRET_KEY", "sk_test_clerk_secret")
-	_ = os.Setenv("TAMGA_CLERK_CALLBACK_URL", "https://proxy.example.com/auth/clerk")
 	defer func() {
 		for _, k := range []string{
 			"TAMGA_PROXY_PORT", "TAMGA_POLICY_PATH", "TAMGA_ANALYZER_ADDR",
@@ -133,7 +129,7 @@ func TestLoad_AllEnvVars(t *testing.T) {
 			"TAMGA_UPSTREAM_MAX_RETRIES", "TAMGA_BREAKER_FAILURE_THRESHOLD",
 			"TAMGA_BREAKER_COOLDOWN_MS", "TAMGA_REGION",
 			"TAMGA_DEV_MODE", "TAMGA_MTLS_CLIENT_CA_FILE", "TAMGA_MTLS_STRICT_VERIFY", "TAMGA_IP_ALLOWLIST",
-			"TAMGA_CLERK_SECRET_KEY", "TAMGA_CLERK_CALLBACK_URL",
+			"TAMGA_CLERK_SECRET_KEY",
 		} {
 			_ = os.Unsetenv(k)
 		}
@@ -202,9 +198,6 @@ func TestLoad_AllEnvVars(t *testing.T) {
 	}
 	if cfg.ClerkSecretKey != "sk_test_clerk_secret" {
 		t.Errorf("ClerkSecretKey: want sk_test_clerk_secret, got %q", cfg.ClerkSecretKey)
-	}
-	if cfg.ClerkCallbackURL != "https://proxy.example.com/auth/clerk" {
-		t.Errorf("ClerkCallbackURL: want https://proxy.example.com/auth/clerk, got %q", cfg.ClerkCallbackURL)
 	}
 }
 
@@ -354,7 +347,6 @@ func TestConfig_AllFieldsAreSet(t *testing.T) {
 	_ = cfg.MTLSStrictVerify
 	_ = cfg.IPAllowlist
 	_ = cfg.ClerkSecretKey
-	_ = cfg.ClerkCallbackURL
 }
 
 func TestLoad_DevModeEnabled(t *testing.T) {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -25,9 +24,14 @@ func (cfg Config) gitHubOAuth() auth.GitHubOAuthConfig {
 
 // handleGitHubLogin redirects the user to GitHub's OAuth authorize page (step 1).
 func (cfg Config) handleGitHubLogin(w http.ResponseWriter, r *http.Request) {
+	// Asked before the user is sent to GitHub: a sign-in that could only
+	// end in an error at the callback is not started.
+	if _, ok := cfg.sessionSecret(w); !ok {
+		return
+	}
 	oauthCfg := cfg.gitHubOAuth()
 	if !oauthCfg.IsConfigured() {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "github oauth not configured"})
+		writeGitHubOAuthNotConfigured(w)
 		return
 	}
 
@@ -58,15 +62,13 @@ func (cfg Config) handleGitHubLogin(w http.ResponseWriter, r *http.Request) {
 // fetches the user's identity, and returns a Tamga JWT (step 2+3).
 // The JWT is returned as JSON so the dashboard can store it.
 func (cfg Config) handleGitHubCallback(w http.ResponseWriter, r *http.Request) {
-	oauthCfg := cfg.gitHubOAuth()
-	if !oauthCfg.IsConfigured() {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "github oauth not configured"})
+	jwtSecret, ok := cfg.sessionSecret(w)
+	if !ok {
 		return
 	}
-
-	jwtSecret := strings.TrimSpace(cfg.JWTSecret)
-	if jwtSecret == "" {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "JWT secret not configured"})
+	oauthCfg := cfg.gitHubOAuth()
+	if !oauthCfg.IsConfigured() {
+		writeGitHubOAuthNotConfigured(w)
 		return
 	}
 
@@ -150,9 +152,8 @@ func (cfg Config) gitHubRole(w http.ResponseWriter, id int64) (string, bool) {
 // handleSession validates the Bearer JWT and returns the current user session.
 // This is used by the dashboard to restore sessions on page refresh.
 func (cfg Config) handleSession(w http.ResponseWriter, r *http.Request) {
-	jwtSecret := strings.TrimSpace(cfg.JWTSecret)
-	if jwtSecret == "" {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "JWT not configured"})
+	jwtSecret, ok := cfg.sessionSecret(w)
+	if !ok {
 		return
 	}
 
@@ -189,60 +190,6 @@ func (cfg Config) handleSession(w http.ResponseWriter, r *http.Request) {
 			"avatar": claims.Avatar,
 			"role":   role,
 		},
-	})
-}
-
-// handleGitHubExchange accepts an OAuth authorization code and returns a Tamga JWT.
-// This is the POST variant used by SPAs where the redirect lands on the dashboard,
-// not the proxy. The dashboard sends the code here and receives a session token.
-func (cfg Config) handleGitHubExchange(w http.ResponseWriter, r *http.Request) {
-	oauthCfg := cfg.gitHubOAuth()
-	if !oauthCfg.IsConfigured() {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "github oauth not configured"})
-		return
-	}
-
-	jwtSecret := strings.TrimSpace(cfg.JWTSecret)
-	if jwtSecret == "" {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "JWT secret not configured"})
-		return
-	}
-
-	defer func() { _ = r.Body.Close() }()
-	var body struct {
-		Code string `json:"code"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Code == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "code required"})
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
-	defer cancel()
-
-	accessToken, err := oauthCfg.ExchangeCode(ctx, body.Code)
-	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": fmt.Sprintf("token exchange failed: %v", err)})
-		return
-	}
-
-	ghUser, err := oauthCfg.GetUser(ctx, accessToken)
-	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": fmt.Sprintf("failed to get user: %v", err)})
-		return
-	}
-
-	role, ok := cfg.gitHubRole(w, ghUser.ID)
-	if !ok {
-		return
-	}
-
-	cfg.issueSession(w, jwtSecret, auth.Claims{
-		Sub:    fmt.Sprintf("%d", ghUser.ID),
-		Email:  ghUser.Email,
-		Name:   ghUser.Name,
-		Avatar: ghUser.AvatarURL,
-		Role:   role,
 	})
 }
 

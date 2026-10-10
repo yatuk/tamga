@@ -491,6 +491,7 @@ func TestGitHubCallback_NotConfigured(t *testing.T) {
 	cfg := Config{
 		GitHubClientID:     "",
 		GitHubClientSecret: "",
+		JWTSecret:          "some-secret",
 	}
 	ts := httptest.NewServer(testMux(cfg))
 	defer ts.Close()
@@ -1264,7 +1265,7 @@ func TestSubjectErase_TCKNHashBody(t *testing.T) {
 	ts := httptest.NewServer(testMux(cfg))
 	defer ts.Close()
 
-	body := strings.NewReader(`{"tckn_hash":"abc123hash"}`)
+	body := strings.NewReader(`{"tckn_hash":"abababababababababababababababababababababababababababababababab"}`)
 	req, _ := http.NewRequest(http.MethodDelete, ts.URL+"/api/v1/events/subject", body)
 	req.Header.Set("X-Tamga-Admin-Key", "test-key")
 	req.Header.Set("Content-Type", "application/json")
@@ -1553,7 +1554,7 @@ func TestSubjectAccess_TCKNHashQuery(t *testing.T) {
 	ts := httptest.NewServer(testMux(cfg))
 	defer ts.Close()
 
-	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/api/v1/events/subject?tckn_hash=hashed_value", nil)
+	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/api/v1/events/subject?tckn_hash=abababababababababababababababababababababababababababababababab", nil)
 	req.Header.Set("X-Tamga-Admin-Key", "test-key")
 	resp, _ := http.DefaultClient.Do(req)
 	defer func() { _ = resp.Body.Close() }()
@@ -1564,8 +1565,8 @@ func TestSubjectAccess_TCKNHashQuery(t *testing.T) {
 	var body map[string]interface{}
 	_ = json.NewDecoder(resp.Body).Decode(&body)
 	subject, _ := body["subject"].(map[string]interface{})
-	if subject["tckn_hash"] != "hashed_value" {
-		t.Fatalf("expected tckn_hash hashed_value, got %v", subject["tckn_hash"])
+	if subject["tckn_hash"] != strings.Repeat("ab", 32) {
+		t.Fatalf("expected the tckn_hash that was sent, got %v", subject["tckn_hash"])
 	}
 }
 
@@ -2242,60 +2243,6 @@ func TestGitHubLogin_NotConfigured(t *testing.T) {
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusServiceUnavailable {
 		t.Fatalf("want 503, got %d", resp.StatusCode)
-	}
-}
-
-// ============================================================================
-// handleGitHubExchange — missing code
-// ============================================================================
-
-func TestGitHubExchange_NotConfigured(t *testing.T) {
-	cfg := Config{
-		GitHubClientID:     "",
-		GitHubClientSecret: "",
-	}
-	ts := httptest.NewServer(testMux(cfg))
-	defer ts.Close()
-
-	body := strings.NewReader(`{"code":"test-code"}`)
-	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/v1/auth/github/exchange", body)
-	req.Header.Set("Content-Type", "application/json")
-	resp, _ := http.DefaultClient.Do(req)
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusServiceUnavailable {
-		t.Fatalf("want 503, got %d", resp.StatusCode)
-	}
-}
-
-func TestGitHubExchange_CodeRequired(t *testing.T) {
-	cfg := Config{
-		GitHubClientID:         "client-id",
-		GitHubClientSecret:     "secret",
-		GitHubOAuthCallbackURL: "http://localhost/cb",
-		JWTSecret:              "jwt-secret",
-	}
-	ts := httptest.NewServer(testMux(cfg))
-	defer ts.Close()
-
-	// Empty body
-	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/v1/auth/github/exchange", strings.NewReader(`{}`))
-	req.Header.Set("Content-Type", "application/json")
-	resp, _ := http.DefaultClient.Do(req)
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("want 400 for missing code, got %d", resp.StatusCode)
-	}
-
-	// Empty code string
-	req2, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/v1/auth/github/exchange", strings.NewReader(`{"code":""}`))
-	req2.Header.Set("Content-Type", "application/json")
-	resp2, _ := http.DefaultClient.Do(req2)
-	defer func() { _ = resp2.Body.Close() }()
-
-	if resp2.StatusCode != http.StatusBadRequest {
-		t.Fatalf("want 400 for empty code, got %d", resp2.StatusCode)
 	}
 }
 

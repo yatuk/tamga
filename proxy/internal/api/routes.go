@@ -45,9 +45,11 @@ func routes(cfg *Config) []route {
 		// --- public ---
 		{method: "GET", path: "/health/detailed", public: publicHealth, handler: h(cfg.handleHealthDetailed)},
 		{method: "GET", path: "/health/detail", public: publicHealth, handler: h(cfg.handleHealthDetail)},
+		// GitHub sign-in is these two and no other: the callback takes a code
+		// only with the state the login issued to the same browser. There is
+		// no route that takes a bare code.
 		{method: "GET", path: "/auth/github/login", public: publicSignIn, handler: h(cfg.handleGitHubLogin)},
 		{method: "GET", path: "/auth/github/callback", public: publicSignIn, handler: h(cfg.handleGitHubCallback)},
-		{method: "POST", path: "/auth/github/exchange", public: publicSignIn, handler: h(cfg.handleGitHubExchange)},
 		{method: "GET", path: "/auth/session", public: publicToken, handler: h(cfg.handleSession)},
 		{method: "POST", path: "/auth/logout", public: publicToken, handler: h(cfg.handleLogout)},
 		// There is no Clerk sign-in: both answer 501 and issue nothing.

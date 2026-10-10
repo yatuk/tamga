@@ -31,6 +31,10 @@ const (
 	codeAnalyzerUnavailable   = "analyzer_unavailable"
 	codeAnalyzerTimeout       = "analyzer_timeout"
 	codeAnalyzerError         = "analyzer_error"
+	// The incident report: a range that is not one of the three, and counts
+	// that neither the database nor the process could give.
+	codeInvalidRange            = "invalid_range"
+	codeReportCountsUnavailable = "report_counts_unavailable"
 )
 
 // The paths of the two reports on the analyzer. They are constants: nothing
@@ -40,10 +44,17 @@ const (
 	analyzerIncidentPdfPath = "/api/v1/reports/incident/pdf"
 )
 
-// reportCountParams are the query parameters of the incident report that the
-// analyzer reads as integers. The console fills them from the statistics it
-// is showing.
-var reportCountParams = []string{"total_requests", "blocked", "redacted", "warned", "period_hours"}
+// incidentReportRanges are the windows the incident report is counted over.
+var incidentReportRanges = map[string]bool{"24h": true, "7d": true, "30d": true}
+
+// What the incident report was counted over, next to X-Tamga-Data-Source:
+// the range that was asked, and the hours the report prints as its period.
+// The two differ when the counts came from process memory, which counts
+// since the process started.
+const (
+	reportRangeHeader       = "X-Tamga-Report-Range"
+	reportPeriodHoursHeader = "X-Tamga-Report-Period-Hours"
+)
 
 // analyzerHTTPClient is the client for the analyzer's HTTP API.
 //
@@ -78,31 +89,72 @@ func (cfg Config) handleOwaspPdfReport(w http.ResponseWriter, r *http.Request) {
 	if v := q.Get("range"); v != "" {
 		out.Set("range", v)
 	}
-	cfg.proxyReportToAnalyzer(w, r, analyzerOwaspPdfPath, out)
+	cfg.proxyReportToAnalyzer(w, r, analyzerOwaspPdfPath, out, nil)
 }
 
 // handleIncidentPdfReport returns the incident summary the analyzer
-// generates as a PDF from the counts in the query.
+// generates as a PDF. The figures it prints are counted here, for the asked
+// range, the way GET /stats counts them. The caller chooses the range and
+// nothing else: total_requests, blocked, redacted, warned and period_hours in
+// its query are not read, so a report cannot be printed with invented
+// figures.
 func (cfg Config) handleIncidentPdfReport(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
-	out := url.Values{}
-	if v := q.Get("range"); v != "" {
-		out.Set("range", v)
+	rng := strings.ToLower(r.URL.Query().Get("range"))
+	if rng == "" {
+		rng = "7d"
 	}
-	for _, name := range reportCountParams {
-		v := q.Get(name)
-		if v == "" {
-			continue
-		}
-		if _, err := strconv.ParseUint(v, 10, 31); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{
-				"error": fmt.Sprintf("%s must be a whole number", name),
-			})
+	if !incidentReportRanges[rng] {
+		reportError(w, http.StatusBadRequest, codeInvalidRange, "range must be 24h, 7d or 30d")
+		return
+	}
+	// Asked before anything is counted: without an analyzer there is no
+	// report to count for.
+	if strings.TrimSpace(cfg.AnalyzerHTTPURL) == "" {
+		cfg.proxyReportToAnalyzer(w, r, analyzerIncidentPdfPath, nil, nil)
+		return
+	}
+
+	window := time.Duration(rangeMillis(rng)) * time.Millisecond
+	to := time.Now().UTC()
+	from := to.Add(-window)
+
+	var total, blocked, redacted, warned int64
+	source := sourceDatabase
+	periodHours := int64(window / time.Hour)
+	if st, ok := cfg.storedStats(r.Context(), "reports/incident/pdf", from, to); ok {
+		total, blocked, redacted, warned = st.total, st.blocked, st.redacted, st.warned
+	} else {
+		// As GET /stats does without a database, or with one that does not
+		// answer: the counters of this process. They count since it started
+		// whatever range was asked, and the report says that period, not the
+		// range.
+		var ok bool
+		if total, blocked, redacted, warned, ok = cfg.processCounts(); !ok {
+			reportError(w, http.StatusServiceUnavailable, codeReportCountsUnavailable,
+				"The report was not generated: the request counts could not be read")
 			return
 		}
-		out.Set(name, v)
+		source = sourceMemory
+		if !cfg.Started.IsZero() {
+			periodHours = int64((time.Since(cfg.Started) + time.Hour - 1) / time.Hour)
+			if periodHours < 1 {
+				periodHours = 1
+			}
+		}
 	}
-	cfg.proxyReportToAnalyzer(w, r, analyzerIncidentPdfPath, out)
+
+	out := url.Values{}
+	out.Set("range", rng)
+	out.Set("total_requests", strconv.FormatInt(total, 10))
+	out.Set("blocked", strconv.FormatInt(blocked, 10))
+	out.Set("redacted", strconv.FormatInt(redacted, 10))
+	out.Set("warned", strconv.FormatInt(warned, 10))
+	out.Set("period_hours", strconv.FormatInt(periodHours, 10))
+	cfg.proxyReportToAnalyzer(w, r, analyzerIncidentPdfPath, out, map[string]string{
+		dataSourceHeader:        source,
+		reportRangeHeader:       rng,
+		reportPeriodHoursHeader: strconv.FormatInt(periodHours, 10),
+	})
 }
 
 // reportError writes the body of a failed report: "error" is the sentence the
@@ -120,7 +172,9 @@ func reportError(w http.ResponseWriter, status int, code, msg string) {
 // time is 504, an answer that is not a report is 502. The analyzer's own 501
 // (its PDF library is missing) is passed through. The cause is logged, not
 // returned: it names an internal address.
-func (cfg Config) proxyReportToAnalyzer(w http.ResponseWriter, r *http.Request, path string, query url.Values) {
+//
+// headers are set on the answer that carries a report, and on no other.
+func (cfg Config) proxyReportToAnalyzer(w http.ResponseWriter, r *http.Request, path string, query url.Values, headers map[string]string) {
 	if strings.TrimSpace(cfg.AnalyzerHTTPURL) == "" {
 		reportError(w, http.StatusServiceUnavailable, codeAnalyzerNotConfigured,
 			"PDF reports are unavailable: the analyzer's HTTP address is not set (TAMGA_ANALYZER_HTTP_URL)")
@@ -189,6 +243,9 @@ func (cfg Config) proxyReportToAnalyzer(w http.ResponseWriter, r *http.Request, 
 	w.Header().Set("Content-Length", strconv.Itoa(len(pdf)))
 	w.Header().Set("Content-Disposition", "attachment; filename="+reportFilename(path))
 	w.Header().Set("X-Content-Type-Options", "nosniff")
+	for name, value := range headers {
+		w.Header().Set(name, value)
+	}
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(pdf)
 }

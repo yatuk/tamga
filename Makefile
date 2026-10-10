@@ -26,8 +26,14 @@ help:
 	@echo "  tidy              go mod tidy + npm install"
 	@echo "  clean             Remove build artefacts"
 
+# What the binary reports as its version. Empty here: a local build says
+# "dev+<commit>" (the Go tool reads the commit from the checkout). A release
+# names itself: make build VERSION=v0.9.0
+VERSION   ?=
+BUILDINFO := github.com/yatuk/tamga/internal/buildinfo
+
 build:
-	cd $(PROXY_DIR) && go build -o ../bin/tamga ./cmd/tamga
+	cd $(PROXY_DIR) && go build -ldflags "-X $(BUILDINFO).Version=$(VERSION)" -o ../bin/tamga ./cmd/tamga
 
 test:
 	cd $(PROXY_DIR) && go test -race ./...

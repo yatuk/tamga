@@ -27,6 +27,12 @@ const (
 	// 32 MB the shipped policy sets for Anthropic, the largest any provider
 	// accepts.
 	MaxBodyLimitBytes = 64 << 20
+	// LargeBodyLimitBytes is where a body limit earns a warning: 32 MiB is
+	// the most any provider accepts in one request (Anthropic) and what the
+	// shipped policy sets for it, so a limit above it lets through only
+	// requests the provider will refuse, and holds each in memory first. Up
+	// to it a limit is a choice the operator made and is not remarked on.
+	LargeBodyLimitBytes = 32 << 20
 
 	// MinOutputBufferBytes and MaxOutputBufferBytes bound
 	// output_rules.buffer_bytes and streaming.max_buffer_bytes. A response
@@ -274,6 +280,8 @@ func bodyLimitIssue(field string, v int) (ValidationIssue, bool) {
 		return boundWarning(field, "too_small", "max_bytes is %d: a limit below %d refuses nearly every request", v, MinBodyLimitBytes), true
 	case v > MaxBodyLimitBytes:
 		return boundError(field, "too_large", "max_bytes is %d, the maximum is %d: a request body is held in memory whole", v, MaxBodyLimitBytes), true
+	case v > LargeBodyLimitBytes:
+		return boundWarning(field, "large_body", "max_bytes is %d, above the %d any provider accepts: a request body is held in memory whole while it is scanned", v, LargeBodyLimitBytes), true
 	}
 	return ValidationIssue{}, false
 }

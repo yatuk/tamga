@@ -33,7 +33,6 @@ var wantAccess = map[string]string{
 	"GET /health/detail":             "public",
 	"GET /auth/github/login":         "public",
 	"GET /auth/github/callback":      "public",
-	"POST /auth/github/exchange":     "public",
 	"GET /auth/session":              "public",
 	"POST /auth/logout":              "public",
 	"POST /auth/clerk/saml/callback": "public",

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -81,6 +82,10 @@ type Limiter struct {
 	totalRequests   atomic.Int64
 	limitedRequests atomic.Int64
 	perKeyRequests  sync.Map // string -> *atomic.Int64
+	// dailyTokens are the local daily token totals, by "dtq:<key>:<date>".
+	// They are apart from perKeyRequests: a token total is not a request
+	// count, and the stats report request counts.
+	dailyTokens sync.Map // string -> *atomic.Int64
 
 	// orgID enables tenant-scoped Redis keys for multi-tenant isolation.
 	orgID string
@@ -319,7 +324,7 @@ func (l *Limiter) CheckDailyTokenQuota(apiKey string, estimatedTokens int) Daily
 	// Local in-memory counter (per-process only — not suitable for
 	// multi-replica deployments without Redis).
 	localKey := fmt.Sprintf("dtq:%s:%s", apiKey, today)
-	v, _ := l.perKeyRequests.LoadOrStore(localKey, &atomic.Int64{})
+	v, _ := l.dailyTokens.LoadOrStore(localKey, &atomic.Int64{})
 
 	used := v.(*atomic.Int64).Add(int64(estimatedTokens))
 
@@ -341,13 +346,41 @@ func (l *Limiter) CheckDailyTokenQuota(apiKey string, estimatedTokens int) Daily
 	}
 }
 
+// TopKeysLimit is how many keys a snapshot names: the ones with the most
+// requests. The limiter counts every key it has seen since the process
+// started, one per client address for callers without a key, and a snapshot
+// of all of them has no upper size.
+const TopKeysLimit = 20
+
 // GetStats returns a point-in-time snapshot of lifetime counters.
+//
+// A key in TopKeys is the bucket a caller is counted in, as the proxy names
+// it: "tk:<id>" for a Tamga key (the id of its record), "key:<16 hex>" for
+// a provider key (the start of its SHA-256, never the key or a part of it),
+// "ip:<address>" for a caller with neither. No credential is in it.
 func (l *Limiter) GetStats() StatsSnapshot {
-	topKeys := make(map[string]int64)
+	type keyCount struct {
+		key string
+		n   int64
+	}
+	var all []keyCount
 	l.perKeyRequests.Range(func(k, v any) bool {
-		topKeys[k.(string)] = v.(*atomic.Int64).Load()
+		all = append(all, keyCount{k.(string), v.(*atomic.Int64).Load()})
 		return true
 	})
+	sort.Slice(all, func(i, j int) bool {
+		if all[i].n != all[j].n {
+			return all[i].n > all[j].n
+		}
+		return all[i].key < all[j].key
+	})
+	if len(all) > TopKeysLimit {
+		all = all[:TopKeysLimit]
+	}
+	topKeys := make(map[string]int64, len(all))
+	for _, kc := range all {
+		topKeys[kc.key] = kc.n
+	}
 	return StatsSnapshot{
 		TotalRequests:     l.totalRequests.Load(),
 		LimitedRequests:   l.limitedRequests.Load(),

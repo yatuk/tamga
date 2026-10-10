@@ -79,9 +79,6 @@ type Config struct {
 	// names and email addresses on the Team page, not to sign anyone in.
 	// Set via TAMGA_CLERK_SECRET_KEY env var.
 	ClerkSecretKey string
-	// ClerkCallbackURL is read from TAMGA_CLERK_CALLBACK_URL and used by
-	// nothing: the proxy has no Clerk sign-in (see api.handleClerkCallback).
-	ClerkCallbackURL string
 	// SSODefaultRole is the role of a signed-in account that no admin has
 	// assigned one (GitHub or any other sign-in). Empty, the default, refuses
 	// such an account: it gets no session, and a session it already holds
@@ -275,7 +272,6 @@ func Load() (*Config, error) {
 		GitHubClientSecret:       envOrDefault("TAMGA_GITHUB_CLIENT_SECRET", ""),
 		GitHubOAuthCallbackURL:   envOrDefault("TAMGA_GITHUB_OAUTH_CALLBACK_URL", ""),
 		ClerkSecretKey:           envOrDefault("TAMGA_CLERK_SECRET_KEY", ""),
-		ClerkCallbackURL:         envOrDefault("TAMGA_CLERK_CALLBACK_URL", ""),
 		SSODefaultRole:           ssoDefaultRole,
 		ScannerPipelineMode:      envOrDefault("TAMGA_SCANNER_PIPELINE_MODE", "adaptive"),
 		ScannerPipelineTimeoutMs: envOrDefaultInt("TAMGA_SCANNER_PIPELINE_TIMEOUT_MS", 5000),

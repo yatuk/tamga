@@ -117,6 +117,37 @@ func refuseSession(w http.ResponseWriter, why sessionRefusal, claims *auth.Claim
 	writeAccountNotAssigned(w, "", claims.Sub)
 }
 
+// Codes of the 503 a session route answers when it cannot work at all.
+const (
+	codeSessionsUnavailable      = "sessions_unavailable"
+	codeGitHubOAuthNotConfigured = "github_oauth_not_configured"
+)
+
+// sessionSecret returns the secret session tokens are signed with. Without
+// one this deployment has no sessions: it answers 503 and returns false.
+// Every route that issues, reads or ends a session asks here before it looks
+// at the request, so they all say so the same way, whatever was sent.
+func (cfg Config) sessionSecret(w http.ResponseWriter) (string, bool) {
+	secret := strings.TrimSpace(cfg.JWTSecret)
+	if secret == "" {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
+			"error": "sessions are not available: no signing secret is configured (TAMGA_JWT_SECRET)",
+			"code":  codeSessionsUnavailable,
+		})
+		return "", false
+	}
+	return secret, true
+}
+
+// writeGitHubOAuthNotConfigured answers a GitHub sign-in route of a
+// deployment that has sessions and no GitHub OAuth app.
+func writeGitHubOAuthNotConfigured(w http.ResponseWriter) {
+	writeJSON(w, http.StatusServiceUnavailable, map[string]string{
+		"error": "github oauth not configured",
+		"code":  codeGitHubOAuthNotConfigured,
+	})
+}
+
 // issueSession signs a session token for an account that has role and
 // writes the sign-in answer.
 //
@@ -168,9 +199,8 @@ func (cfg Config) issueSession(w http.ResponseWriter, jwtSecret string, claims a
 // token's user only, so a token that no longer opens the management API
 // (its account lost its role) can still be signed out.
 func (cfg Config) handleLogout(w http.ResponseWriter, r *http.Request) {
-	jwtSecret := strings.TrimSpace(cfg.JWTSecret)
-	if jwtSecret == "" {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "JWT not configured"})
+	jwtSecret, ok := cfg.sessionSecret(w)
+	if !ok {
 		return
 	}
 	token := bearerToken(r)
