@@ -3,11 +3,17 @@ import { TamgaError } from './errors.js';
 const DEFAULT_TIMEOUT_MS = 30_000;
 
 /**
- * Lightweight TypeScript client for the Tamga AI Security Proxy REST API.
+ * Lightweight TypeScript client for the Tamga management API (`/api/v1/*`).
+ *
+ * The key is sent in the `X-Tamga-Admin-Key` header on every request; the
+ * proxy reads it from nowhere else. It is the proxy's `TAMGA_ADMIN_KEY` or an
+ * API key of scope read, write or admin. What a call may do follows the key's
+ * role (viewer, analyst, admin); a call the role does not allow throws a
+ * `TamgaError` with status 403.
  *
  * ```ts
  * import { TamgaClient } from '@tamga/client';
- * const client = new TamgaClient('http://localhost:8080', 'sk-abc123');
+ * const client = new TamgaClient('http://localhost:8443', process.env.TAMGA_ADMIN_KEY!);
  * ```
  */
 export class TamgaClient {
@@ -15,7 +21,7 @@ export class TamgaClient {
   private readonly adminKey: string;
 
   /**
-   * @param baseUrl - Root URL of the proxy (e.g. `http://localhost:8080`).
+   * @param baseUrl - Root URL of the proxy (e.g. `http://localhost:8443`).
    *                  Must include the scheme; trailing slash is optional.
    * @param adminKey - Value sent as the `X-Tamga-Admin-Key` header.
    */
@@ -35,25 +41,35 @@ export class TamgaClient {
   // ===========================================================================
 
   /**
-   * Basic health check (no auth required).
-   * @returns `{ status, service }`
+   * Liveness check (no auth required).
+   * @returns `{ status: "ok", service: "tamga-proxy" }`
    */
   async getHealth(): Promise<Record<string, unknown>> {
     return this.request('GET', '/health');
   }
 
   /**
-   * Detailed health status with provider pool snapshots.
-   * Returns 503 when a dependency is unhealthy.
-   * @returns `{ proxy, database, redis, analyzer, scanner_count, uptime_seconds, providers, ... }`
+   * Health of the proxy and what it depends on.
+   *
+   * With a valid key the body has `proxy`, `status`, the scan latency
+   * percentiles, `database`, `redis`, `analyzer`, `scanner_count`,
+   * `uptime_seconds`, `policy_path`, `events_dropped` and `providers`, and
+   * `authenticated` is true. With a key the proxy does not accept it has only
+   * `proxy`, `proxy_status`, `status` and the scan latency percentiles, and
+   * `authenticated` is false.
+   *
+   * The proxy answers 503 when the database, Redis or the analyzer is down,
+   * so this method then throws a `TamgaError` with `statusCode` 503; the JSON
+   * body is in `body`.
    */
   async getHealthDetailed(): Promise<Record<string, unknown>> {
     return this.request('GET', '/api/v1/health/detailed');
   }
 
   /**
-   * Runtime operational profile (TLS, mTLS, Redis, Postgres, tier info).
-   * @returns DashboardHealthDetail payload.
+   * Runtime profile (version, policy, TLS, mTLS, Redis, database, tier).
+   * With a key the proxy does not accept, the body is only
+   * `{ proxy: "up", authenticated: false }`.
    */
   async getHealthDetail(): Promise<Record<string, unknown>> {
     return this.request('GET', '/api/v1/health/detail');
@@ -144,10 +160,10 @@ export class TamgaClient {
   }
 
   /**
-   * Export filtered events as CSV or JSON.
-   * @param params - Filter options: `format` (`"csv"`|`"json"`), `action`,
-   *                 `provider`, `range`, `request_id`.
-   * @returns CSV or JSON attachment content.
+   * Export filtered events as CSV or JSON. Needs the analyst role.
+   * @param params - Filter options: `format` (`"csv"`, the default, or
+   *                 `"json"`), `action`, `provider`, `range`, `request_id`.
+   * @returns The file as text: CSV, or a JSON document `{ events, total }`.
    */
   async exportEvents(params?: {
     format?: 'csv' | 'json';
@@ -155,7 +171,37 @@ export class TamgaClient {
     provider?: string;
     range?: string;
     request_id?: string;
-  }): Promise<Record<string, unknown>> {
+  }): Promise<string> {
+    return this.fetchText('GET', `/api/v1/events/export${TamgaClient.exportQuery(params)}`, undefined, {
+      accept: 'text/csv, application/json',
+    });
+  }
+
+  /**
+   * The same export over POST. The proxy reads the filters from the query
+   * string for both methods, so they are sent there and the request has no body.
+   * @param params - As for {@link exportEvents}.
+   * @returns The file as text.
+   */
+  async exportEventsPost(params?: {
+    format?: 'csv' | 'json';
+    action?: string;
+    provider?: string;
+    range?: string;
+    request_id?: string;
+  }): Promise<string> {
+    return this.fetchText('POST', `/api/v1/events/export${TamgaClient.exportQuery(params)}`, undefined, {
+      accept: 'text/csv, application/json',
+    });
+  }
+
+  private static exportQuery(params?: {
+    format?: 'csv' | 'json';
+    action?: string;
+    provider?: string;
+    range?: string;
+    request_id?: string;
+  }): string {
     const qs = new URLSearchParams();
     if (params?.format) qs.set('format', params.format);
     if (params?.action) qs.set('action', params.action);
@@ -163,16 +209,7 @@ export class TamgaClient {
     if (params?.range) qs.set('range', params.range);
     if (params?.request_id) qs.set('request_id', params.request_id);
     const query = qs.toString();
-    return this.request('GET', `/api/v1/events/export${query ? `?${query}` : ''}`);
-  }
-
-  /**
-   * Export filtered events (POST variant for larger filters).
-   * @param body - Filter body: `format`, `action`, `provider`, `range`, `request_id`.
-   * @returns CSV or JSON attachment content.
-   */
-  async exportEventsPost(body?: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return this.request('POST', '/api/v1/events/export', body);
+    return query ? `?${query}` : '';
   }
 
   /**
@@ -329,18 +366,14 @@ export class TamgaClient {
   // ===========================================================================
 
   /**
-   * Mean Time to Resolution statistics.
+   * Mean Time to Resolution statistics for the deployment's organisation.
+   * The proxy reads no `org_id`.
    * @param range - Time window (`"24h"`, `"7d"`, `"30d"`).
-   * @param orgId - Optional organisation ID.
    * @returns MTTRStats: `{ overall_mttr_minutes, by_severity, trend, sla_compliance }`
    */
-  async getMttr(
-    range?: string,
-    orgId?: string,
-  ): Promise<Record<string, unknown>> {
+  async getMttr(range?: string): Promise<Record<string, unknown>> {
     const params = new URLSearchParams();
     if (range) params.set('range', range);
-    if (orgId) params.set('org_id', orgId);
     const qs = params.toString();
     return this.request('GET', `/api/v1/mttr${qs ? `?${qs}` : ''}`);
   }
@@ -374,22 +407,60 @@ export class TamgaClient {
   // ===========================================================================
 
   /**
-   * Open a Server-Sent Events stream of scanned/blocked requests.
+   * Open the Server-Sent Events stream of scanned and blocked requests and
+   * yield its lines as they arrive. The stream stays open until the caller
+   * stops iterating or aborts `signal`.
    *
-   * This method executes a GET request with `text/event-stream` accept header
-   * and returns the raw text body. For streaming consumption, consider using
-   * the native `EventSource` API directly:
+   * The browser `EventSource` API cannot be used for this endpoint: it cannot
+   * set the `X-Tamga-Admin-Key` header, and the proxy reads the key from
+   * nowhere else.
    *
    * ```ts
-   * const es = new EventSource(`${baseUrl}/api/v1/live/events`);
+   * for await (const line of client.openLiveEvents()) {
+   *   if (line.startsWith('data:')) console.log(line);
+   * }
    * ```
    *
-   * @returns Raw SSE text (first chunk).
+   * @param signal - Optional signal that closes the stream.
    */
-  async openLiveEvents(): Promise<string> {
-    return this.fetchText('GET', '/api/v1/live/events', undefined, {
-      accept: 'text/event-stream',
-    });
+  async *openLiveEvents(signal?: AbortSignal): AsyncGenerator<string> {
+    let res: Response;
+    try {
+      res = await fetch(`${this.baseUrl}/api/v1/live/events`, {
+        method: 'GET',
+        headers: {
+          'X-Tamga-Admin-Key': this.adminKey,
+          Accept: 'text/event-stream',
+        },
+        signal,
+      });
+    } catch (err) {
+      throw new TamgaError(0, `Network error: ${(err as Error).message}`);
+    }
+    if (!res.ok) {
+      throw new TamgaError(res.status, await res.text());
+    }
+    if (!res.body) return;
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let nl = buffer.indexOf('\n');
+        while (nl >= 0) {
+          yield buffer.slice(0, nl).replace(/\r$/, '');
+          buffer = buffer.slice(nl + 1);
+          nl = buffer.indexOf('\n');
+        }
+      }
+      if (buffer) yield buffer;
+    } finally {
+      await reader.cancel().catch(() => undefined);
+    }
   }
 
   // ===========================================================================
@@ -414,8 +485,8 @@ export class TamgaClient {
   }
 
   /**
-   * Trigger a policy reload from disk.
-   * @returns Confirmation payload: `{ ok, name }`.
+   * Reload the policy file from disk. Needs the admin role.
+   * @returns `{ ok, name, changed }`.
    */
   async reloadPolicy(): Promise<Record<string, unknown>> {
     return this.request('POST', '/api/v1/policies/reload');
@@ -561,12 +632,14 @@ export class TamgaClient {
   /**
    * Create a new scoped API key.
    * @param label - Human-readable label for the key.
-   * @param scope - Permission scope (`"read"`, `"write"`, `"admin"`). Defaults to `"read"`.
+   * @param scope - `"read"` (viewer), `"write"` (analyst), `"admin"`, or
+   *                `"proxy"` (identifies an application on the proxy path and
+   *                opens nothing in the management API). Defaults to `"read"`.
    * @returns ApiKeyCreated (includes `raw_key` — only returned at creation time).
    */
   async createApiKey(
     label: string,
-    scope?: 'read' | 'write' | 'admin',
+    scope?: 'read' | 'write' | 'admin' | 'proxy',
   ): Promise<Record<string, unknown>> {
     const body: Record<string, unknown> = { label };
     if (scope) body.scope = scope;
@@ -625,22 +698,7 @@ export class TamgaClient {
     return this.request('DELETE', `/api/v1/webhooks/${encodeURIComponent(id)}`);
   }
 
-  /**
-   * Update an existing webhook.
-   *
-   * Note: The handler exists server-side but is not yet registered in the
-   * public router. This method will return 405 if the route is unavailable.
-   *
-   * @param id - Webhook ID.
-   * @param webhook - Fields to update.
-   * @returns Updated Webhook.
-   */
-  async updateWebhook(
-    id: string,
-    webhook: Record<string, unknown>,
-  ): Promise<Record<string, unknown>> {
-    return this.request('PUT', `/api/v1/webhooks/${encodeURIComponent(id)}`, webhook);
-  }
+
 
   // ===========================================================================
   // Metrics
@@ -805,15 +863,12 @@ export class TamgaClient {
   }
 
   /**
-   * Daily token + cost counters for an organisation.
-   * @param org - Organisation ID (optional).
+   * Daily token and cost counters for the deployment's organisation. The
+   * proxy reads no organisation parameter.
    * @returns BudgetStats: `{ org_id, day, tokens_today, cost_today_usd, ... }`
    */
-  async getBudgetStats(org?: string): Promise<Record<string, unknown>> {
-    const params = new URLSearchParams();
-    if (org) params.set('org', org);
-    const qs = params.toString();
-    return this.request('GET', `/api/v1/budget/stats${qs ? `?${qs}` : ''}`);
+  async getBudgetStats(): Promise<Record<string, unknown>> {
+    return this.request('GET', '/api/v1/budget/stats');
   }
 
   // ===========================================================================
@@ -840,26 +895,8 @@ export class TamgaClient {
   }
 
   // ===========================================================================
-  // Reports / Export
+  // Reports
   // ===========================================================================
-
-  /**
-   * Build the events export URL (GET method). Use this to get a URL that
-   * can be opened in a browser or downloaded via a link.
-   *
-   * @param params - Filter options: `format` (`"csv"`|`"json"`), `action`,
-   *                 `provider`, `range`, `request_id`.
-   * @returns CSV or JSON attachment content.
-   */
-  async exportEventsUrl(params?: {
-    format?: 'csv' | 'json';
-    action?: string;
-    provider?: string;
-    range?: string;
-    request_id?: string;
-  }): Promise<Record<string, unknown>> {
-    return this.exportEvents(params);
-  }
 
   /**
    * OWASP PDF report (proxied to analyzer).
@@ -969,17 +1006,7 @@ export class TamgaClient {
     return this.request('DELETE', `/api/v1/scim/v2/Users/${encodeURIComponent(id)}`);
   }
 
-  // ===========================================================================
-  // Auth (public — no auth required by the proxy)
-  // ===========================================================================
 
-  /**
-   * Get current session info.
-   * @returns Session payload.
-   */
-  async getSession(): Promise<Record<string, unknown>> {
-    return this.request('GET', '/api/v1/auth/session');
-  }
 
   // ===========================================================================
   // Private helpers

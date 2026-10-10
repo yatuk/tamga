@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { TamgaClient } from '../client.js';
 import { TamgaError } from '../errors.js';
 
-const BASE_URL = 'http://localhost:8080';
+const BASE_URL = 'http://localhost:8443';
 const ADMIN_KEY = 'sk-test-key';
 
 afterEach(() => {
@@ -62,20 +62,42 @@ describe('TamgaClient constructor', () => {
 
 describe('Health endpoints', () => {
   it('getHealth returns parsed JSON', async () => {
-    mockFetch(200, { status: 'ok', service: 'tamga' });
+    mockFetch(200, { status: 'ok', service: 'tamga-proxy' });
     const client = new TamgaClient(BASE_URL, ADMIN_KEY);
     const result = await client.getHealth();
-    expect(result).toEqual({ status: 'ok', service: 'tamga' });
+    expect(result).toEqual({ status: 'ok', service: 'tamga-proxy' });
     expect(lastFetchUrl()).toContain('/health');
   });
 
   it('getHealthDetailed fetches detailed status', async () => {
-    const payload = { proxy: 'ok', database: 'ok', redis: 'ok', analyzer: 'ok' };
+    const payload = {
+      proxy: 'up',
+      status: 'ok',
+      authenticated: true,
+      database: 'connected',
+      redis: 'connected',
+      analyzer: 'reachable',
+    };
     mockFetch(200, payload);
     const client = new TamgaClient(BASE_URL, ADMIN_KEY);
     const result = await client.getHealthDetailed();
     expect(result).toEqual(payload);
     expect(lastFetchUrl()).toContain('/api/v1/health/detailed');
+  });
+
+  it('getHealthDetailed returns the reduced body for a key the proxy does not accept', async () => {
+    const payload = { proxy: 'up', proxy_status: { up: true }, status: 'ok', authenticated: false };
+    mockFetch(200, payload);
+    const client = new TamgaClient(BASE_URL, ADMIN_KEY);
+    const result = await client.getHealthDetailed();
+    expect(result.authenticated).toBe(false);
+    expect(result.database).toBeUndefined();
+  });
+
+  it('getHealthDetailed throws with status 503 when a dependency is down', async () => {
+    mockFetch(503, { proxy: 'up', status: 'degraded', authenticated: true, database: 'disconnected' });
+    const client = new TamgaClient(BASE_URL, ADMIN_KEY);
+    await expect(client.getHealthDetailed()).rejects.toMatchObject({ statusCode: 503 });
   });
 
   it('getHealthDetail fetches runtime profile', async () => {
@@ -160,24 +182,34 @@ describe('getEventDetail', () => {
 });
 
 describe('exportEvents', () => {
-  it('sends query params for GET export', async () => {
-    mockFetch(200, { events: [] });
+  it('sends query params for GET export and returns the CSV text', async () => {
+    const csv = 'request_id,timestamp,provider\nr1,2026-01-01T00:00:00Z,openai\n';
+    mockFetch(200, csv, 'text/csv');
     const client = new TamgaClient(BASE_URL, ADMIN_KEY);
-    await client.exportEvents({ format: 'csv', range: '7d' });
+    const result = await client.exportEvents({ format: 'csv', range: '7d' });
     const url = lastFetchUrl();
     expect(url).toContain('format=csv');
     expect(url).toContain('range=7d');
     expect(url).toContain('/api/v1/events/export');
+    expect(result).toBe(csv);
   });
 
-  it('exportEventsPost sends JSON body', async () => {
-    mockFetch(200, { events: [] });
+  it('returns the JSON export as text', async () => {
+    mockFetch(200, { events: [], total: 0 });
+    const client = new TamgaClient(BASE_URL, ADMIN_KEY);
+    const result = await client.exportEvents({ format: 'json' });
+    expect(JSON.parse(result)).toEqual({ events: [], total: 0 });
+  });
+
+  it('exportEventsPost sends the filters in the query string, with no body', async () => {
+    mockFetch(200, { events: [], total: 0 });
     const client = new TamgaClient(BASE_URL, ADMIN_KEY);
     await client.exportEventsPost({ format: 'json', action: 'BLOCK' });
     const init = lastFetchInit();
     expect(init?.method).toBe('POST');
-    const body = lastFetchBody();
-    expect(body).toEqual({ format: 'json', action: 'BLOCK' });
+    expect(init?.body).toBeUndefined();
+    expect(lastFetchUrl()).toContain('format=json');
+    expect(lastFetchUrl()).toContain('action=BLOCK');
   });
 });
 
@@ -290,13 +322,13 @@ describe('Incidents', () => {
 // ---------------------------------------------------------------------------
 
 describe('getMttr', () => {
-  it('sends range and org_id query params', async () => {
+  it('sends the range query param and no org_id', async () => {
     mockFetch(200, { overall_mttr_minutes: 45, trend: 'improving' });
     const client = new TamgaClient(BASE_URL, ADMIN_KEY);
-    await client.getMttr('7d', 'org-1');
+    await client.getMttr('7d');
     const url = lastFetchUrl();
     expect(url).toContain('range=7d');
-    expect(url).toContain('org_id=org-1');
+    expect(url).not.toContain('org_id');
   });
 });
 
@@ -521,13 +553,7 @@ describe('Webhooks', () => {
     expect(lastFetchUrl()).toContain('/api/v1/webhooks/wh1');
   });
 
-  it('updateWebhook sends PUT with webhook body', async () => {
-    mockFetch(200, { id: 'wh1', label: 'updated', kind: 'slack' });
-    const client = new TamgaClient(BASE_URL, ADMIN_KEY);
-    await client.updateWebhook('wh1', { label: 'updated' });
-    expect(lastFetchInit()?.method).toBe('PUT');
-    expect(lastFetchBody()).toEqual({ label: 'updated' });
-  });
+
 });
 
 // ---------------------------------------------------------------------------
@@ -642,11 +668,11 @@ describe('Billing', () => {
     expect(lastFetchUrl()).toContain('range=30d');
   });
 
-  it('getBudgetStats sends optional org', async () => {
+  it('getBudgetStats sends no organisation parameter', async () => {
     mockFetch(200, { org_id: 'org-1', tokens_today: 5000 });
     const client = new TamgaClient(BASE_URL, ADMIN_KEY);
-    await client.getBudgetStats('org-1');
-    expect(lastFetchUrl()).toContain('org=org-1');
+    await client.getBudgetStats();
+    expect(lastFetchUrl()).toBe(`${BASE_URL}/api/v1/budget/stats`);
   });
 });
 
@@ -786,15 +812,30 @@ describe('SCIM', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Auth
+// Live events
 // ---------------------------------------------------------------------------
 
-describe('Auth', () => {
-  it('getSession returns session info', async () => {
-    mockFetch(200, { user: 'admin', authenticated: true });
+describe('Live events', () => {
+  it('openLiveEvents sends the key in the header and yields the stream line by line', async () => {
+    const spy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('data: {"a":1}\n\ndata: {"a":2}\n', { status: 200 }));
     const client = new TamgaClient(BASE_URL, ADMIN_KEY);
-    await client.getSession();
-    expect(lastFetchUrl()).toContain('/api/v1/auth/session');
+    const lines: string[] = [];
+    for await (const line of client.openLiveEvents()) lines.push(line);
+    expect(lines).toEqual(['data: {"a":1}', '', 'data: {"a":2}']);
+    const [url, init] = spy.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`${BASE_URL}/api/v1/live/events`);
+    expect(url).not.toContain('key=');
+    expect((init.headers as Record<string, string>)['X-Tamga-Admin-Key']).toBe(ADMIN_KEY);
+  });
+
+  it('openLiveEvents throws TamgaError on a refusal', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('{"error":"unauthorized"}', { status: 401 }),
+    );
+    const client = new TamgaClient(BASE_URL, ADMIN_KEY);
+    await expect(client.openLiveEvents().next()).rejects.toMatchObject({ statusCode: 401 });
   });
 });
 
@@ -886,11 +927,11 @@ describe('error handling', () => {
 describe('backward compatibility', () => {
   it('trailing slash on baseUrl is stripped', async () => {
     mockFetch(200, { ok: true, name: 'default' });
-    const client = new TamgaClient('http://localhost:8080/', ADMIN_KEY);
+    const client = new TamgaClient('http://localhost:8443/', ADMIN_KEY);
     await client.reloadPolicy();
     const url = lastFetchUrl();
     expect(url).not.toContain('//api');
-    expect(url).toBe('http://localhost:8080/api/v1/policies/reload');
+    expect(url).toBe('http://localhost:8443/api/v1/policies/reload');
   });
 
   it('admin key is sent on every request', async () => {

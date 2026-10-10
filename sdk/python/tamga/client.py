@@ -10,17 +10,21 @@ _DEFAULT_TIMEOUT = 30.0
 class TamgaClient:
     """Thin wrapper around the Tamga proxy REST API.
 
-    Every request is authenticated with the ``X-Tamga-Admin-Key`` header.
-    Callers must supply the proxy base URL (e.g. ``http://localhost:8080``)
-    and a valid admin API key.
+    Every request carries the key in the ``X-Tamga-Admin-Key`` header; the
+    proxy reads it from nowhere else. Callers supply the proxy base URL
+    (e.g. ``http://localhost:8443``) and either the proxy's
+    ``TAMGA_ADMIN_KEY`` or an API key of scope read, write or admin. What a
+    call may do follows the key's role (viewer, analyst, admin); a call the
+    role does not allow raises ``TamgaError`` with status 403.
     """
 
     def __init__(self, base_url: str, admin_key: str) -> None:
         """Create a new Tamga API client.
 
         Args:
-            base_url: Root URL of the Tamga proxy (e.g. ``http://localhost:8080``).
-            admin_key: Admin API key for the proxy.
+            base_url: Root URL of the Tamga proxy (e.g. ``http://localhost:8443``).
+            admin_key: ``TAMGA_ADMIN_KEY``, or an API key of scope read,
+                write or admin.
 
         Raises:
             ValueError: If *base_url* or *admin_key* is empty or whitespace-only.
@@ -101,23 +105,38 @@ class TamgaClient:
     # ==================================================================
 
     def health(self) -> dict:
-        """Basic health check (no auth required).
+        """Liveness check (no auth required).
 
-        Corresponds to ``GET /health``.
+        Corresponds to ``GET /health``. Returns
+        ``{"status": "ok", "service": "tamga-proxy"}``.
         """
         return self._request("GET", "/health")
 
     def health_detailed(self) -> dict:
-        """Detailed health status with provider pool snapshots.
+        """Health of the proxy and what it depends on.
 
         Corresponds to ``GET /api/v1/health/detailed``.
+
+        With a valid key the body has ``proxy``, ``status``, the scan
+        latency percentiles, ``database``, ``redis``, ``analyzer``,
+        ``scanner_count``, ``uptime_seconds``, ``policy_path``,
+        ``events_dropped`` and ``providers``, and ``authenticated`` is true.
+        With a key the proxy does not accept it has only ``proxy``,
+        ``proxy_status``, ``status`` and the scan latency percentiles, and
+        ``authenticated`` is false.
+
+        The proxy answers 503 when the database, Redis or the analyzer is
+        down, so this method then raises ``TamgaError`` with
+        ``status_code`` 503; the JSON body is in ``body``.
         """
         return self._request("GET", "/api/v1/health/detailed")
 
     def health_detail(self) -> dict:
-        """Runtime operational profile (TLS, mTLS, Redis, Postgres, tier, etc.).
+        """Runtime profile (version, policy, TLS, mTLS, Redis, database, tier).
 
-        Corresponds to ``GET /api/v1/health/detail``.
+        Corresponds to ``GET /api/v1/health/detail``. With a key the proxy
+        does not accept, the body is only ``{"proxy": "up",
+        "authenticated": false}``.
         """
         return self._request("GET", "/api/v1/health/detail")
 
@@ -438,21 +457,15 @@ class TamgaClient:
     # MTTR
     # ==================================================================
 
-    def get_mttr(
-        self,
-        range: str = "7d",
-        org_id: Optional[str] = None,
-    ) -> dict:
-        """Mean Time to Resolution statistics.
+    def get_mttr(self, range: str = "7d") -> dict:
+        """Mean Time to Resolution statistics for the deployment's organisation.
 
-        Corresponds to ``GET /api/v1/mttr``.
+        Corresponds to ``GET /api/v1/mttr``. The proxy reads no ``org_id``.
 
         Args:
             range: Time window (``"24h"``, ``"7d"``, ``"30d"``).
-            org_id: Optional organisation ID filter.
         """
-        params = self._build_query(range=range, org_id=org_id)
-        return self._request("GET", "/api/v1/mttr", params=params)
+        return self._request("GET", "/api/v1/mttr", params={"range": range})
 
     # ==================================================================
     # Audit
@@ -488,9 +501,10 @@ class TamgaClient:
 
         Corresponds to ``GET /api/v1/live/events``.
 
-        Yields SSE event data lines as they arrive. The caller must iterate
-        to consume the stream and handle ``httpx.RemoteProtocolError`` on
-        disconnect.
+        Yields SSE lines as they arrive. The key is sent in the
+        ``X-Tamga-Admin-Key`` header like every other call. The caller must
+        iterate to consume the stream and handle
+        ``httpx.RemoteProtocolError`` on disconnect.
 
         Example::
 
@@ -529,9 +543,10 @@ class TamgaClient:
         return self._request("PUT", "/api/v1/policies", json={"yaml": yaml})
 
     def reload_policy(self) -> dict:
-        """Trigger a policy reload from disk without changing content.
+        """Reload the policy file from disk. Needs the admin role.
 
-        Corresponds to ``POST /api/v1/policies/reload``.
+        Corresponds to ``POST /api/v1/policies/reload``. Returns ``ok``,
+        ``name`` and ``changed``.
         """
         return self._request("POST", "/api/v1/policies/reload")
 
@@ -703,7 +718,10 @@ class TamgaClient:
 
         Args:
             label: Human-readable label for the key.
-            scope: ``"read"``, ``"write"``, or ``"admin"``. Defaults to ``"read"``.
+            scope: ``"read"`` (viewer), ``"write"`` (analyst), ``"admin"``
+                or ``"proxy"`` (identifies an application on the proxy path
+                and opens nothing in the management API). Defaults to
+                ``"read"``.
         """
         return self._request(
             "POST",
@@ -1029,16 +1047,13 @@ class TamgaClient:
     # Budget
     # ==================================================================
 
-    def get_budget_stats(self, org: Optional[str] = None) -> dict:
-        """Daily token and cost counters for an organisation.
+    def get_budget_stats(self) -> dict:
+        """Daily token and cost counters for the deployment's organisation.
 
-        Corresponds to ``GET /api/v1/budget/stats``.
-
-        Args:
-            org: Organisation ID.
+        Corresponds to ``GET /api/v1/budget/stats``. The proxy reads no
+        organisation parameter.
         """
-        params = self._build_query(org=org)
-        return self._request("GET", "/api/v1/budget/stats", params=params)
+        return self._request("GET", "/api/v1/budget/stats")
 
     # ==================================================================
     # Maintenance

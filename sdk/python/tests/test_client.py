@@ -21,7 +21,7 @@ def _mock_client(json_response: object, status: int = 200):
     )
     hc = httpx.Client(transport=transport)
     c = TamgaClient.__new__(TamgaClient)
-    c._base_url = "http://localhost:8080"
+    c._base_url = "http://localhost:8443"
     c._headers = {"X-Tamga-Admin-Key": "sk-test"}
     c._client = hc
     return c, hc
@@ -36,7 +36,7 @@ def _mock_client_raw(raw_body: str, status: int = 200, content_type: str = "text
     )
     hc = httpx.Client(transport=transport)
     c = TamgaClient.__new__(TamgaClient)
-    c._base_url = "http://localhost:8080"
+    c._base_url = "http://localhost:8443"
     c._headers = {"X-Tamga-Admin-Key": "sk-test"}
     c._client = hc
     return c, hc
@@ -49,7 +49,7 @@ def _mock_client_raw(raw_body: str, status: int = 200, content_type: str = "text
 
 @pytest.fixture
 def client() -> TamgaClient:
-    return TamgaClient(base_url="http://localhost:8080", admin_key="sk-test-1234")
+    return TamgaClient(base_url="http://localhost:8443", admin_key="sk-test-1234")
 
 
 # ---------------------------------------------------------------------------
@@ -64,14 +64,14 @@ def test_init_empty_base_url_raises_value_error():
 
 def test_init_empty_admin_key_raises_value_error():
     with pytest.raises(ValueError, match="admin_key"):
-        TamgaClient(base_url="http://localhost:8080", admin_key="")
+        TamgaClient(base_url="http://localhost:8443", admin_key="")
 
 
 def test_init_whitespace_only_raises_value_error():
     with pytest.raises(ValueError):
         TamgaClient(base_url="   ", admin_key="sk-123")
     with pytest.raises(ValueError):
-        TamgaClient(base_url="http://localhost:8080", admin_key="\t\n")
+        TamgaClient(base_url="http://localhost:8443", admin_key="\t\n")
 
 
 # ---------------------------------------------------------------------------
@@ -86,7 +86,7 @@ def test_get_stats_returns_parsed_json():
     )
     with httpx.Client(transport=transport) as hc:
         c = TamgaClient.__new__(TamgaClient)
-        c._base_url = "http://localhost:8080"
+        c._base_url = "http://localhost:8443"
         c._headers = {"X-Tamga-Admin-Key": "sk-test"}
         c._client = hc
 
@@ -101,7 +101,7 @@ def test_get_events_with_pagination():
     )
     with httpx.Client(transport=transport) as hc:
         c = TamgaClient.__new__(TamgaClient)
-        c._base_url = "http://localhost:8080"
+        c._base_url = "http://localhost:8443"
         c._headers = {"X-Tamga-Admin-Key": "sk-test"}
         c._client = hc
 
@@ -121,7 +121,7 @@ def test_get_events_with_filters():
     transport = httpx.MockTransport(capture)
     with httpx.Client(transport=transport) as hc:
         c = TamgaClient.__new__(TamgaClient)
-        c._base_url = "http://localhost:8080"
+        c._base_url = "http://localhost:8443"
         c._headers = {"X-Tamga-Admin-Key": "sk-test"}
         c._client = hc
 
@@ -146,7 +146,7 @@ def test_get_findings_breakdown():
     )
     with httpx.Client(transport=transport) as hc:
         c = TamgaClient.__new__(TamgaClient)
-        c._base_url = "http://localhost:8080"
+        c._base_url = "http://localhost:8443"
         c._headers = {"X-Tamga-Admin-Key": "sk-test"}
         c._client = hc
 
@@ -155,13 +155,13 @@ def test_get_findings_breakdown():
 
 
 def test_reload_policy():
-    fake_response = {"ok": True, "name": "default"}
+    fake_response = {"ok": True, "name": "default", "changed": False}
     transport = httpx.MockTransport(
         lambda request: httpx.Response(200, json=fake_response)
     )
     with httpx.Client(transport=transport) as hc:
         c = TamgaClient.__new__(TamgaClient)
-        c._base_url = "http://localhost:8080"
+        c._base_url = "http://localhost:8443"
         c._headers = {"X-Tamga-Admin-Key": "sk-test"}
         c._client = hc
 
@@ -175,7 +175,7 @@ def test_client_context_manager():
         lambda request: httpx.Response(200, json={"ok": True})
     )
     c = TamgaClient.__new__(TamgaClient)
-    c._base_url = "http://localhost:8080"
+    c._base_url = "http://localhost:8443"
     c._headers = {"X-Tamga-Admin-Key": "sk-test"}
     c._client = httpx.Client(transport=transport)
     with c:
@@ -194,7 +194,7 @@ def test_http_error_raises_tamga_error():
     )
     with httpx.Client(transport=transport) as hc:
         c = TamgaClient.__new__(TamgaClient)
-        c._base_url = "http://localhost:8080"
+        c._base_url = "http://localhost:8443"
         c._headers = {"X-Tamga-Admin-Key": "sk-test"}
         c._client = hc
 
@@ -215,7 +215,7 @@ def test_non_json_response_raises_tamga_error():
     )
     with httpx.Client(transport=transport) as hc:
         c = TamgaClient.__new__(TamgaClient)
-        c._base_url = "http://localhost:8080"
+        c._base_url = "http://localhost:8443"
         c._headers = {"X-Tamga-Admin-Key": "sk-test"}
         c._client = hc
 
@@ -231,7 +231,7 @@ def test_http_404_error_raises_tamga_error():
     )
     with httpx.Client(transport=transport) as hc:
         c = TamgaClient.__new__(TamgaClient)
-        c._base_url = "http://localhost:8080"
+        c._base_url = "http://localhost:8443"
         c._headers = {"X-Tamga-Admin-Key": "sk-test"}
         c._client = hc
 
@@ -247,19 +247,45 @@ def test_http_404_error_raises_tamga_error():
 
 
 def test_health():
-    c, hc = _mock_client({"status": "ok", "service": "tamga"})
+    c, hc = _mock_client({"status": "ok", "service": "tamga-proxy"})
     with hc:
         result = c.health()
-        assert result == {"status": "ok", "service": "tamga"}
+        assert result == {"status": "ok", "service": "tamga-proxy"}
 
 
 def test_health_detailed():
-    fake = {"proxy": "ok", "database": "ok", "uptime_seconds": 3600}
+    fake = {
+        "proxy": "up",
+        "status": "ok",
+        "authenticated": True,
+        "database": "connected",
+        "uptime_seconds": 3600,
+    }
     c, hc = _mock_client(fake)
     with hc:
         result = c.health_detailed()
-        assert result["proxy"] == "ok"
+        assert result["proxy"] == "up"
         assert result["uptime_seconds"] == 3600
+
+
+def test_health_detailed_without_accepted_key():
+    """A key the proxy does not accept gets the reduced body, not an error."""
+    fake = {"proxy": "up", "proxy_status": {"up": True}, "status": "ok", "authenticated": False}
+    c, hc = _mock_client(fake)
+    with hc:
+        result = c.health_detailed()
+        assert result["authenticated"] is False
+        assert "database" not in result
+
+
+def test_health_detailed_degraded_raises_503():
+    fake = {"proxy": "up", "status": "degraded", "authenticated": True, "database": "disconnected"}
+    c, hc = _mock_client(fake, status=503)
+    with hc:
+        with pytest.raises(TamgaError) as exc_info:
+            c.health_detailed()
+        assert exc_info.value.status_code == 503
+        assert "disconnected" in exc_info.value.body
 
 
 def test_health_detail():
@@ -405,7 +431,7 @@ def test_get_mttr():
     fake = {"overall_mttr_minutes": 12.5, "trend": "improving"}
     c, hc = _mock_client(fake)
     with hc:
-        result = c.get_mttr(range="30d", org_id="org-1")
+        result = c.get_mttr(range="30d")
         assert result["overall_mttr_minutes"] == 12.5
 
 
@@ -813,7 +839,7 @@ def test_get_budget_stats():
     }
     c, hc = _mock_client(fake)
     with hc:
-        result = c.get_budget_stats(org="org-1")
+        result = c.get_budget_stats()
         assert result["org_id"] == "org-1"
 
 
