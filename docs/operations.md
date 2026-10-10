@@ -81,7 +81,6 @@ Access:
 | `TAMGA_GITHUB_CLIENT_ID`, `TAMGA_GITHUB_CLIENT_SECRET` | empty | Credentials of the GitHub OAuth app |
 | `TAMGA_GITHUB_OAUTH_CALLBACK_URL` | empty | Redirect URI registered with that app, ending in `/api/v1/auth/github/callback` |
 | `TAMGA_CLERK_SECRET_KEY` | empty | Clerk Backend API key. Used only to list names and email addresses on the Team page; nobody is signed in with it |
-| `TAMGA_CLERK_CALLBACK_URL` | empty | Read and used by nothing |
 | `TAMGA_IP_ALLOWLIST` | empty | Comma-separated CIDR ranges. When set, a proxy request from any other address gets 403 |
 | `TAMGA_CORS_ORIGINS` | empty | Comma-separated origins allowed to call the proxy from a browser, matched exactly. Empty: `Access-Control-Allow-Origin: *` |
 | `TAMGA_CORS_ORIGIN` | `*` | Deprecated single origin; use `TAMGA_CORS_ORIGINS` |
@@ -113,7 +112,7 @@ Storage and events:
 | Variable | Default | Description |
 |---|---|---|
 | `TAMGA_NATS_URL` | empty | NATS server for JetStream event streaming, for example `nats://localhost:4222`. Empty: off |
-| `TAMGA_POLICY_HISTORY_DIR` | `./data/policy-history` | Where policy history is kept when there is no database |
+| `TAMGA_POLICY_HISTORY_DIR` | `./data/policy-history` | Where policy history is kept when there is no database, and on a replica whose Postgres history store could not be created (it says so at start) |
 | `TAMGA_RETENTION_ENABLED` | off | `true` or `1` runs the retention job once a day. Needs a database |
 | `TAMGA_RETENTION_REQUEST_LOGS_DAYS` | `30` | Days request logs are kept |
 | `TAMGA_RETENTION_AUDIT_DAYS` | `365` | Days the audit log is kept |
@@ -152,7 +151,7 @@ rules:
     sensitivity: medium
     types: [iban, email, phone_tr, phone, vkn, ip_public, ip_private]
 
-  pii_critical:
+  pii:                      # a finding type has two rule keys: <type>_detection and <type>
     action: BLOCK
     sensitivity: medium
     types: [tc_kimlik, credit_card]

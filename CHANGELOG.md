@@ -36,6 +36,62 @@
   integration smoke test had never run.
 
 ### Security
+- **Erasing a person's data could erase everyone's.** The national-id hash
+  selector of `DELETE /api/v1/events/subject` was matched as a pattern, so a
+  selector of `%` deleted every stored request of the organisation. It must
+  now be 64 hexadecimal characters. The response also said rows were
+  soft-deleted; the delete is final, and it says so.
+- **Reading a person's data left no trace.** `GET` and `POST
+  /api/v1/events/subject` now write an audit entry with who asked, the kind
+  of selector and the number of rows. Neither it nor the erase entry holds
+  the selector's value any more; the erase entry used to.
+- **The incident report printed whatever figures the caller sent.** The
+  proxy computes them for the asked range, from the same source as the
+  summary. `GET /api/v1/reports/incident/pdf` takes `range` only; counts in
+  the query are ignored.
+- **`POST /api/v1/auth/github/exchange` is removed.** It exchanged any OAuth
+  code for a session with no state check, and nothing called it.
+- The session endpoints answer 503 `sessions_unavailable` when no session
+  secret is configured, instead of each failing in its own way.
+- `/api/v1/ratelimit/stats` returned every key it had ever seen and listed
+  daily token totals as request counts. It returns the top twenty.
+- **A rule in the shipped policy could never fire.** `rules.code_leakage`
+  named findings that only the scan of a response produces, which
+  `output_rules` decides. It is removed with a note; the operations guide's
+  sample had a `pii_critical` rule with the same fault, so a copied sample
+  did not stop national ids or cards. A test now fails on a shipped or
+  documented policy with a rule that cannot fire.
+- The binary reported `v0.1.0` whatever it was built from. The version is set
+  at build time (`VERSION`, `REVISION` build arguments); a build without one
+  reports `dev` and the commit.
+- `TAMGA_CLERK_CALLBACK_URL` is no longer read; nothing used it.
+
+### Licences and packaging
+- `NOTICE` gives the attributions the bundled material asks for, and
+  `THIRD_PARTY_LICENSES.md` lists dependency licences as read from disk, with
+  what could not be inspected said as such. The table of where
+  prompt-injection phrases came from named licences nobody had checked: the
+  OWASP material is CC BY-SA 4.0, not CC0, and three sources could not be
+  verified at all and now say so.
+- Both SDK packages carry the licence text. Container images are labelled
+  with their licence and source.
+- `SECURITY.md` and the disclosure document describe the project as it is:
+  one maintainer, no service, fixes on `main`. **Private vulnerability
+  reporting on GitHub is named as the first route and has to be enabled in
+  the repository's settings.**
+- Helm: the disruption budget is rendered only when it cannot block a node
+  drain; `analyzer.grpcAddr` and `analyzer.httpUrl` set where the analyzer
+  is. Terraform: the cluster version is a required variable, zones come from
+  the region, and provider versions are locked.
+
+### Console
+- A page no longer shows old answers as current when the proxy stops
+  answering: figures from the last answer are marked with its time or not
+  shown, and "Needs an admin key" appears only when the proxy answered and
+  withheld the detail.
+- Text that wraps is no longer set solid; a selection in the policy editor is
+  visible; toasts carry no icon; a report that could not be made says why
+  next to its button; figures are not drawn as 0 while they load.
 - The Redis and NATS URLs were written to the log at startup with their
   passwords. Only the host is logged.
 - **Helm chart 0.2.0.** The chart set variables the proxy does not read, so
