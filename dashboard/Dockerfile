@@ -5,6 +5,13 @@ COPY package.json package-lock.json* ./
 RUN npm ci --legacy-peer-deps
 
 COPY . .
+# A NEXT_PUBLIC_ value is written into the JavaScript at build time; setting
+# it on the running container changes nothing. So the address the browser
+# calls the proxy at, and the Clerk publishable key, are build arguments.
+ARG NEXT_PUBLIC_API_URL=http://localhost:8443
+ARG NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
+    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
 RUN npm run build
 
 FROM node:22-alpine

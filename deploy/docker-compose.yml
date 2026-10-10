@@ -119,12 +119,16 @@ services:
     build:
       context: ../dashboard
       dockerfile: Dockerfile
+      # Compiled into the page: the address the BROWSER reaches the proxy
+      # at, not the proxy's name on the compose network. Changing either
+      # needs a rebuild (docker compose build dashboard).
+      args:
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8443}
+        - NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8443}
       - CLERK_SECRET_KEY=${CLERK_SECRET_KEY}
-      - NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
     depends_on:
       - proxy
     networks:
