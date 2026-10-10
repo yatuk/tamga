@@ -19,8 +19,6 @@ import (
 // of what the proxy scanned. Every one of them names an organisation and a
 // time window, so it runs on idx_request_logs_org_time and prunes the monthly
 // partitions outside the window, and every one is bounded by a LIMIT.
-//
-// daily_stats is not read here: nothing writes it.
 
 const (
 	// historyGroupLimit bounds the rows an aggregate returns. An aggregate

@@ -62,8 +62,7 @@ func NewTestPostgres(t *testing.T) *pgxpool.Pool {
 
 	// Seed default org if not present (needed for FK references in other tables).
 	_, _ = pool.Exec(ctx, `INSERT INTO organizations (name, slug, plan) VALUES ('Default Org', 'default', 'trial') ON CONFLICT DO NOTHING`)
-	// Tests write rows under testOrgID; daily_stats and alerts reference
-	// organizations(id), so that org has to exist.
+	// Tests write rows under testOrgID.
 	if _, err := pool.Exec(ctx,
 		`INSERT INTO organizations (id, name, slug, plan) VALUES ($1, 'Test Org', 'test-org', 'trial') ON CONFLICT DO NOTHING`,
 		testOrgID); err != nil {

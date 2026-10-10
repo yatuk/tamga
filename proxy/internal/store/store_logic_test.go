@@ -13,12 +13,6 @@ func TestDefaultRetentionPolicy_AllFields(t *testing.T) {
 	if p.RequestLogsDays != 30 {
 		t.Errorf("expected 30 request_logs days, got %d", p.RequestLogsDays)
 	}
-	if p.AlertsDays != 90 {
-		t.Errorf("expected 90 alerts days, got %d", p.AlertsDays)
-	}
-	if p.DailyStatsDays != 365 {
-		t.Errorf("expected 365 daily_stats days, got %d", p.DailyStatsDays)
-	}
 	if p.AuditLogsDays != 365 {
 		t.Errorf("expected 365 audit_logs days, got %d", p.AuditLogsDays)
 	}
@@ -29,30 +23,23 @@ func TestDefaultRetentionPolicy_AllFields(t *testing.T) {
 
 func TestRetentionPolicyFromEnv_PartialOverride(t *testing.T) {
 	_ = os.Setenv("TAMGA_RETENTION_REQUEST_LOGS_DAYS", "14")
-	_ = os.Setenv("TAMGA_RETENTION_ALERTS_DAYS", "45")
 	defer func() {
 		_ = os.Unsetenv("TAMGA_RETENTION_REQUEST_LOGS_DAYS")
-		_ = os.Unsetenv("TAMGA_RETENTION_ALERTS_DAYS")
 	}()
 
 	p := RetentionPolicyFromEnv()
 	if p.RequestLogsDays != 14 {
 		t.Errorf("expected 14, got %d", p.RequestLogsDays)
 	}
-	if p.AlertsDays != 45 {
-		t.Errorf("expected 45, got %d", p.AlertsDays)
-	}
 	// Unset values should keep defaults
-	if p.DailyStatsDays != 365 {
-		t.Errorf("expected 365 default, got %d", p.DailyStatsDays)
+	if p.AuditLogsDays != 365 {
+		t.Errorf("expected 365 default, got %d", p.AuditLogsDays)
 	}
 }
 
 func TestRetentionPolicyFromEnv_AllDefaultsWhenUnset(t *testing.T) {
 	for _, k := range []string{
 		"TAMGA_RETENTION_REQUEST_LOGS_DAYS",
-		"TAMGA_RETENTION_ALERTS_DAYS",
-		"TAMGA_RETENTION_DAILY_STATS_DAYS",
 		"TAMGA_RETENTION_AUDIT_DAYS",
 	} {
 		_ = os.Unsetenv(k)

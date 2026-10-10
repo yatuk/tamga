@@ -25,10 +25,6 @@ func (n *NoopStore) SaveRequestLog(_ context.Context, _ RequestLog) error {
 	return nil
 }
 
-func (n *NoopStore) GetStats(_ context.Context, _ string, _, _ time.Time) (*Stats, error) {
-	return &Stats{}, nil
-}
-
 func (n *NoopStore) ListSecurityEvents(_ context.Context, _ string, _, _ int) ([]SecurityEvent, int, error) {
 	return nil, 0, nil
 }
@@ -42,10 +38,6 @@ func (n *NoopStore) GetModelTokenUsage(_ context.Context, _ string, _, _ time.Ti
 }
 
 func (n *NoopStore) GetDailyTokenUsage(_ context.Context, _ string, _, _ time.Time) ([]DailyTokenUsage, error) {
-	return nil, nil
-}
-
-func (n *NoopStore) GetDailyTimeseries(_ context.Context, _ string, _, _ time.Time) ([]DailyStatPoint, error) {
 	return nil, nil
 }
 

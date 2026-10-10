@@ -22,7 +22,7 @@ type SSOSettings struct {
 	Domain           string            `json:"domain"`
 }
 
-// SSOSettingsStore persists enterprise SSO configuration per organisation.
+// SSOSettingsStore persists SSO configuration per organisation.
 type SSOSettingsStore interface {
 	Get(orgID string) *SSOSettings
 	// Set fails when the change could not be stored, and then changes

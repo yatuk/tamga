@@ -100,64 +100,6 @@ func TestNoopStore_SaveRequestLog_Compliance(t *testing.T) {
 	})
 }
 
-func TestNoopStore_GetStats_Compliance(t *testing.T) {
-	t.Run("basic", func(t *testing.T) {
-		s := NewNoopStoreSilent()
-		ctx := context.Background()
-		now := time.Now().UTC()
-		st, err := s.GetStats(ctx, "00000000-0000-0000-0000-000000000001", now.Add(-24*time.Hour), now)
-		if err != nil {
-			t.Fatalf("GetStats should return nil error, got %v", err)
-		}
-		if st == nil {
-			t.Fatal("GetStats should return non-nil stats")
-		}
-		if st.TotalRequests != 0 {
-			t.Errorf("TotalRequests: want 0, got %d", st.TotalRequests)
-		}
-		if st.BlockedRequests != 0 {
-			t.Errorf("BlockedRequests: want 0, got %d", st.BlockedRequests)
-		}
-		if st.RedactedRequests != 0 {
-			t.Errorf("RedactedRequests: want 0, got %d", st.RedactedRequests)
-		}
-		if st.WarnedRequests != 0 {
-			t.Errorf("WarnedRequests: want 0, got %d", st.WarnedRequests)
-		}
-		if st.TotalInputTokens != 0 {
-			t.Errorf("TotalInputTokens: want 0, got %d", st.TotalInputTokens)
-		}
-		if st.TotalOutputTokens != 0 {
-			t.Errorf("TotalOutputTokens: want 0, got %d", st.TotalOutputTokens)
-		}
-	})
-
-	t.Run("zero_time_range", func(t *testing.T) {
-		s := NewNoopStoreSilent()
-		ctx := context.Background()
-		zero := time.Time{}
-		st, err := s.GetStats(ctx, "org-any", zero, zero)
-		if err != nil {
-			t.Fatalf("GetStats zero time should succeed: %v", err)
-		}
-		if st == nil {
-			t.Fatal("GetStats should return non-nil stats")
-		}
-	})
-
-	t.Run("empty_org", func(t *testing.T) {
-		s := NewNoopStoreSilent()
-		ctx := context.Background()
-		st, err := s.GetStats(ctx, "", time.Now(), time.Now())
-		if err != nil {
-			t.Fatalf("GetStats empty org should succeed: %v", err)
-		}
-		if st == nil {
-			t.Fatal("GetStats should return non-nil stats")
-		}
-	})
-}
-
 func TestNoopStore_ListSecurityEvents_Compliance(t *testing.T) {
 	t.Run("basic", func(t *testing.T) {
 		s := NewNoopStoreSilent()
@@ -374,10 +316,6 @@ func TestNoopStore_Close_Compliance(t *testing.T) {
 		if err := s.SaveRequestLog(context.Background(), RequestLog{RequestID: "r1"}); err != nil {
 			t.Errorf("SaveRequestLog after close: %v", err)
 		}
-		st, err := s.GetStats(context.Background(), "org", time.Now(), time.Now())
-		if err != nil || st == nil {
-			t.Errorf("GetStats after close: err=%v st=%v", err, st)
-		}
 	})
 }
 
@@ -401,32 +339,6 @@ func TestModelTokenUsage_ZeroValue(t *testing.T) {
 	}
 	if u.OutputTokens != 0 {
 		t.Errorf("OutputTokens: want 0, got %d", u.OutputTokens)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Stats zero-value checks
-// ---------------------------------------------------------------------------
-
-func TestStats_ZeroValue(t *testing.T) {
-	st := Stats{}
-	if st.TotalRequests != 0 {
-		t.Errorf("TotalRequests: want 0, got %d", st.TotalRequests)
-	}
-	if st.BlockedRequests != 0 {
-		t.Errorf("BlockedRequests: want 0, got %d", st.BlockedRequests)
-	}
-	if st.RedactedRequests != 0 {
-		t.Errorf("RedactedRequests: want 0, got %d", st.RedactedRequests)
-	}
-	if st.WarnedRequests != 0 {
-		t.Errorf("WarnedRequests: want 0, got %d", st.WarnedRequests)
-	}
-	if st.TotalInputTokens != 0 {
-		t.Errorf("TotalInputTokens: want 0, got %d", st.TotalInputTokens)
-	}
-	if st.TotalOutputTokens != 0 {
-		t.Errorf("TotalOutputTokens: want 0, got %d", st.TotalOutputTokens)
 	}
 }
 
@@ -569,34 +481,22 @@ func TestRetentionPolicyFromEnv_AllOverrides(t *testing.T) {
 	// Save and restore env.
 	restore := saveEnv(
 		"TAMGA_RETENTION_REQUEST_LOGS_DAYS",
-		"TAMGA_RETENTION_ALERTS_DAYS",
-		"TAMGA_RETENTION_DAILY_STATS_DAYS",
 		"TAMGA_RETENTION_AUDIT_DAYS",
 		"TAMGA_RETENTION_INCIDENT_CLOSED_DAYS",
 	)
 	defer restore()
 
 	_ = os.Unsetenv("TAMGA_RETENTION_REQUEST_LOGS_DAYS")
-	_ = os.Unsetenv("TAMGA_RETENTION_ALERTS_DAYS")
-	_ = os.Unsetenv("TAMGA_RETENTION_DAILY_STATS_DAYS")
 	_ = os.Unsetenv("TAMGA_RETENTION_AUDIT_DAYS")
 	_ = os.Unsetenv("TAMGA_RETENTION_INCIDENT_CLOSED_DAYS")
 
 	_ = os.Setenv("TAMGA_RETENTION_REQUEST_LOGS_DAYS", "14")
-	_ = os.Setenv("TAMGA_RETENTION_ALERTS_DAYS", "45")
-	_ = os.Setenv("TAMGA_RETENTION_DAILY_STATS_DAYS", "180")
 	_ = os.Setenv("TAMGA_RETENTION_AUDIT_DAYS", "730")
 	_ = os.Setenv("TAMGA_RETENTION_INCIDENT_CLOSED_DAYS", "60")
 
 	p := RetentionPolicyFromEnv()
 	if p.RequestLogsDays != 14 {
 		t.Errorf("RequestLogsDays: want 14, got %d", p.RequestLogsDays)
-	}
-	if p.AlertsDays != 45 {
-		t.Errorf("AlertsDays: want 45, got %d", p.AlertsDays)
-	}
-	if p.DailyStatsDays != 180 {
-		t.Errorf("DailyStatsDays: want 180, got %d", p.DailyStatsDays)
 	}
 	if p.AuditLogsDays != 730 {
 		t.Errorf("AuditLogsDays: want 730, got %d", p.AuditLogsDays)
@@ -1082,16 +982,6 @@ func TestPostgresStore_Pool_WithPool(t *testing.T) {
 	pool := s.Pool()
 	if pool == nil {
 		t.Fatal("Pool should return non-nil pool")
-	}
-}
-
-func TestPostgresStore_GetStats_WithPool(t *testing.T) {
-	s := newRejectingPostgresStore(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	st, err := s.GetStats(ctx, "00000000-0000-0000-0000-000000000001", time.Now().Add(-24*time.Hour), time.Now())
-	if err == nil {
-		t.Logf("GetStats unexpectedly succeeded: %+v", st)
 	}
 }
 

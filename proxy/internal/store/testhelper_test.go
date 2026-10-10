@@ -120,22 +120,6 @@ func newTestPostgresStore(t *testing.T) *PostgresStore {
 		t.Fatalf("failed to create default partition: %v", err)
 	}
 	if _, err := pool.Exec(ctx, `
-		CREATE TABLE IF NOT EXISTS daily_stats (
-			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-			org_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
-			stat_date DATE NOT NULL,
-			total_requests INT DEFAULT 0,
-			blocked_requests INT DEFAULT 0,
-			redacted_requests INT DEFAULT 0,
-			warned_requests INT DEFAULT 0,
-			total_input_tokens BIGINT DEFAULT 0,
-			total_output_tokens BIGINT DEFAULT 0
-		)
-	`); err != nil {
-		pool.Close()
-		t.Fatalf("failed to create daily_stats table: %v", err)
-	}
-	if _, err := pool.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS model_pricing (
 			id SERIAL PRIMARY KEY,
 			provider TEXT NOT NULL,
@@ -156,21 +140,8 @@ func newTestPostgresStore(t *testing.T) *PostgresStore {
 		t.Fatalf("failed to create model_pricing table: %v", err)
 	}
 	// Tables the retention job purges and logs to. Columns mirror
-	// deploy/migrations (001 alerts, 004 audit_log, 005 retention_run_log);
-	// the alerts FK to organizations is omitted because this minimal schema
-	// has no organizations table.
+	// deploy/migrations (004 audit_log, 005 retention_run_log).
 	for name, ddl := range map[string]string{
-		"alerts": `
-		CREATE TABLE IF NOT EXISTS alerts (
-			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-			org_id UUID NOT NULL,
-			request_id TEXT NOT NULL,
-			severity TEXT NOT NULL,
-			finding_type TEXT NOT NULL,
-			message TEXT NOT NULL,
-			is_read BOOLEAN NOT NULL DEFAULT false,
-			created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-		)`,
 		"audit_log": `
 		CREATE TABLE IF NOT EXISTS audit_log (
 			id BIGSERIAL PRIMARY KEY,

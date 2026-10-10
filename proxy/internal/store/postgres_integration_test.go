@@ -31,7 +31,7 @@ func skipIfNoDB(t *testing.T) {
 func pgCleanTruncate(t *testing.T, s *PostgresStore) {
 	t.Helper()
 	ctx := context.Background()
-	for _, table := range []string{"request_logs", "daily_stats", "model_pricing"} {
+	for _, table := range []string{"request_logs", "model_pricing"} {
 		if _, err := s.pool.Exec(ctx, "DELETE FROM "+table); err != nil {
 			t.Logf("cleanup %s: %v (may not exist)", table, err)
 		}
@@ -95,80 +95,6 @@ func TestPG_SaveRequestLog_Flushes(t *testing.T) {
 	}
 	if count != 1 {
 		t.Errorf("expected 1 row after flush, got %d", count)
-	}
-}
-
-func TestPG_GetDailyTimeseries(t *testing.T) {
-	skipIfNoDB(t)
-	s := newTestPostgresStore(t)
-	defer func() { _ = s.Close() }()
-	pgCleanTruncate(t, s)
-
-	ctx := context.Background()
-	now := time.Now().UTC()
-	d1 := now.Add(-48 * time.Hour).Format("2006-01-02")
-	d2 := now.Add(-24 * time.Hour).Format("2006-01-02")
-	for _, row := range []struct {
-		date                    string
-		total, blk, red, warned int
-	}{
-		{d1, 100, 20, 10, 5},
-		{d2, 200, 40, 15, 8},
-	} {
-		_, err := s.pool.Exec(ctx, `
-			INSERT INTO daily_stats (org_id, stat_date, total_requests, blocked_requests, redacted_requests, warned_requests)
-			VALUES ($1, $2, $3, $4, $5, $6)`, testOrgID, row.date, row.total, row.blk, row.red, row.warned)
-		if err != nil {
-			t.Fatalf("daily_stats insert: %v", err)
-		}
-	}
-
-	pts, err := s.GetDailyTimeseries(ctx, testOrgID, now.Add(-72*time.Hour), now)
-	if err != nil {
-		t.Fatalf("GetDailyTimeseries: %v", err)
-	}
-	if len(pts) != 2 {
-		t.Fatalf("expected 2 daily points, got %d", len(pts))
-	}
-	// Ascending by date.
-	if pts[0].TotalRequests != 100 || pts[0].BlockedRequests != 20 {
-		t.Errorf("day 1 = %+v", pts[0])
-	}
-	if pts[1].TotalRequests != 200 || pts[1].WarnedRequests != 8 {
-		t.Errorf("day 2 = %+v", pts[1])
-	}
-}
-
-func TestPG_GetStats(t *testing.T) {
-	skipIfNoDB(t)
-	s := newTestPostgresStore(t)
-	defer func() { _ = s.Close() }()
-	pgCleanTruncate(t, s)
-
-	ctx := context.Background()
-	// Populate daily_stats directly (GetStats queries daily_stats, not request_logs)
-	now := time.Now().UTC()
-	_, err := s.pool.Exec(ctx, `
-			INSERT INTO daily_stats (org_id, stat_date, total_requests, blocked_requests, redacted_requests, total_input_tokens, total_output_tokens)
-			VALUES ($1, $2, 10, 3, 2, 500, 250)`, testOrgID, now.Format("2006-01-02"))
-	if err != nil {
-		t.Fatalf("daily_stats insert: %v", err)
-	}
-
-	from := now.Add(-1 * time.Hour)
-	to := now.Add(1 * time.Hour)
-	stats, err := s.GetStats(ctx, testOrgID, from, to)
-	if err != nil {
-		t.Fatalf("GetStats: %v", err)
-	}
-	if stats.TotalRequests != 10 {
-		t.Errorf("expected 10 total, got %d", stats.TotalRequests)
-	}
-	if stats.BlockedRequests != 3 {
-		t.Errorf("expected 3 blocked, got %d", stats.BlockedRequests)
-	}
-	if stats.TotalInputTokens != 500 {
-		t.Errorf("expected 500 input tokens, got %d", stats.TotalInputTokens)
 	}
 }
 
@@ -498,14 +424,13 @@ func TestTC_NewPostgresStore(t *testing.T) {
 	}
 }
 
-func TestTC_SaveRequestLog_GetStats(t *testing.T) {
+func TestTC_SaveRequestLog_RequestCounts(t *testing.T) {
 	store := NewTestPostgresStore(t)
 	ctx := context.Background()
 	now := time.Now().UTC()
 
 	// Clean tables.
 	_, _ = store.pool.Exec(ctx, "DELETE FROM request_logs")
-	_, _ = store.pool.Exec(ctx, "DELETE FROM daily_stats")
 
 	// Save a request log via the buffered path.
 	rl := RequestLog{
@@ -550,28 +475,13 @@ func TestTC_SaveRequestLog_GetStats(t *testing.T) {
 		t.Errorf("expected 1 request_log row, got %d", count)
 	}
 
-	// Populate daily_stats so GetStats returns data.
-	_, err := store.pool.Exec(ctx, `
-			INSERT INTO daily_stats (org_id, stat_date, total_requests, blocked_requests,
-				redacted_requests, warned_requests, total_input_tokens, total_output_tokens)
-			VALUES ($1, $2, 5, 2, 1, 0, 500, 250)`,
-		testOrgID, now.Format("2006-01-02"))
+	// The counts the API shows are read from request_logs.
+	counts, err := store.RequestCounts(ctx, testOrgID, now.Add(-1*time.Hour), now.Add(1*time.Hour))
 	if err != nil {
-		t.Fatalf("insert daily_stats: %v", err)
+		t.Fatalf("RequestCounts: %v", err)
 	}
-
-	stats, err := store.GetStats(ctx, testOrgID, now.Add(-1*time.Hour), now.Add(1*time.Hour))
-	if err != nil {
-		t.Fatalf("GetStats: %v", err)
-	}
-	if stats.TotalRequests != 5 {
-		t.Errorf("TotalRequests: want 5, got %d", stats.TotalRequests)
-	}
-	if stats.BlockedRequests != 2 {
-		t.Errorf("BlockedRequests: want 2, got %d", stats.BlockedRequests)
-	}
-	if stats.TotalInputTokens != 500 {
-		t.Errorf("TotalInputTokens: want 500, got %d", stats.TotalInputTokens)
+	if len(counts) != 1 {
+		t.Errorf("expected the saved request in one group, got %+v", counts)
 	}
 }
 
@@ -1060,8 +970,6 @@ func TestTC_PartitionManager_RunMaintenanceCycle(t *testing.T) {
 
 	policy := RetentionPolicy{
 		RequestLogsDays:    0, // do not drop any partitions
-		AlertsDays:         0,
-		DailyStatsDays:     0,
 		AuditLogsDays:      0,
 		IncidentClosedDays: 0,
 	}
@@ -1148,8 +1056,6 @@ func TestTC_PartitionManager_CleanupOldPartitions(t *testing.T) {
 	// Run maintenance with RequestLogsDays=1 so anything older than the cutoff is dropped.
 	policy := RetentionPolicy{
 		RequestLogsDays:    1,
-		AlertsDays:         0,
-		DailyStatsDays:     0,
 		AuditLogsDays:      0,
 		IncidentClosedDays: 0,
 	}
@@ -1399,124 +1305,4 @@ func TestTC_ApplyRetention_CustomDays(t *testing.T) {
 			t.Errorf("30-day-old row should survive 60-day retention, got %d", count)
 		}
 	})
-}
-
-// ---------------------------------------------------------------------------
-// Stats edge cases — Testcontainers-based integration tests
-// ---------------------------------------------------------------------------
-
-// TestTC_GetStats_DateRange inserts daily_stats rows for a range of dates
-// and verifies date-based filtering works as expected.
-func TestTC_GetStats_DateRange(t *testing.T) {
-	store := NewTestPostgresStore(t)
-	ctx := context.Background()
-
-	_, _ = store.pool.Exec(ctx, "DELETE FROM daily_stats")
-
-	now := time.Now().UTC()
-	type entry struct {
-		date string
-		reqs int64
-	}
-	dates := []entry{
-		{now.AddDate(0, 0, -5).Format("2006-01-02"), 10},
-		{now.AddDate(0, 0, -3).Format("2006-01-02"), 20},
-		{now.AddDate(0, 0, -1).Format("2006-01-02"), 30},
-		{now.Format("2006-01-02"), 40},
-	}
-	for _, d := range dates {
-		_, err := store.pool.Exec(ctx, `
-			INSERT INTO daily_stats (org_id, stat_date, total_requests)
-			VALUES ($1, $2::date, $3)`, testOrgID, d.date, d.reqs)
-		if err != nil {
-			t.Fatalf("insert daily_stats for %s: %v", d.date, err)
-		}
-	}
-
-	t.Run("narrow_range", func(t *testing.T) {
-		// Only yesterday and today: 30 + 40 = 70.
-		from := now.AddDate(0, 0, -1)
-		to := now
-		stats, err := store.GetStats(ctx, testOrgID, from, to)
-		if err != nil {
-			t.Fatalf("GetStats narrow: %v", err)
-		}
-		if want := int64(70); stats.TotalRequests != want {
-			t.Errorf("narrow range: want %d, got %d", want, stats.TotalRequests)
-		}
-	})
-
-	t.Run("full_range", func(t *testing.T) {
-		// All four entries: 10 + 20 + 30 + 40 = 100.
-		from := now.AddDate(0, 0, -10)
-		to := now.AddDate(0, 0, 1)
-		stats, err := store.GetStats(ctx, testOrgID, from, to)
-		if err != nil {
-			t.Fatalf("GetStats full: %v", err)
-		}
-		if want := int64(100); stats.TotalRequests != want {
-			t.Errorf("full range: want %d, got %d", want, stats.TotalRequests)
-		}
-	})
-
-	t.Run("outside_range", func(t *testing.T) {
-		// Range far before any data.
-		from := now.AddDate(0, 0, -365)
-		to := now.AddDate(0, 0, -364)
-		stats, err := store.GetStats(ctx, testOrgID, from, to)
-		if err != nil {
-			t.Fatalf("GetStats outside: %v", err)
-		}
-		if stats.TotalRequests != 0 {
-			t.Errorf("outside range: want 0, got %d", stats.TotalRequests)
-		}
-	})
-
-	t.Run("single_day", func(t *testing.T) {
-		// Exactly today: 40.
-		from := now
-		to := now
-		stats, err := store.GetStats(ctx, testOrgID, from, to)
-		if err != nil {
-			t.Fatalf("GetStats single day: %v", err)
-		}
-		if want := int64(40); stats.TotalRequests != want {
-			t.Errorf("single day: want %d, got %d", want, stats.TotalRequests)
-		}
-	})
-}
-
-// TestTC_GetStats_NoData verifies GetStats returns all-zero Stats
-// when daily_stats is completely empty.
-func TestTC_GetStats_NoData(t *testing.T) {
-	store := NewTestPostgresStore(t)
-	ctx := context.Background()
-
-	_, _ = store.pool.Exec(ctx, "DELETE FROM daily_stats")
-
-	now := time.Now().UTC()
-	stats, err := store.GetStats(ctx, testOrgID,
-		now.Add(-30*24*time.Hour), now)
-	if err != nil {
-		t.Fatalf("GetStats on empty table: %v", err)
-	}
-
-	if stats.TotalRequests != 0 {
-		t.Errorf("TotalRequests: want 0, got %d", stats.TotalRequests)
-	}
-	if stats.BlockedRequests != 0 {
-		t.Errorf("BlockedRequests: want 0, got %d", stats.BlockedRequests)
-	}
-	if stats.RedactedRequests != 0 {
-		t.Errorf("RedactedRequests: want 0, got %d", stats.RedactedRequests)
-	}
-	if stats.WarnedRequests != 0 {
-		t.Errorf("WarnedRequests: want 0, got %d", stats.WarnedRequests)
-	}
-	if stats.TotalInputTokens != 0 {
-		t.Errorf("TotalInputTokens: want 0, got %d", stats.TotalInputTokens)
-	}
-	if stats.TotalOutputTokens != 0 {
-		t.Errorf("TotalOutputTokens: want 0, got %d", stats.TotalOutputTokens)
-	}
 }

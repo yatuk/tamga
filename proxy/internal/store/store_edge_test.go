@@ -246,40 +246,40 @@ func TestRetentionPolicyFromEnv_InvalidValues(t *testing.T) {
 	t.Run("negative_values_ignored", func(t *testing.T) {
 		restore := saveEnv(
 			"TAMGA_RETENTION_REQUEST_LOGS_DAYS",
-			"TAMGA_RETENTION_ALERTS_DAYS",
+			"TAMGA_RETENTION_AUDIT_DAYS",
 		)
 		defer restore()
 
 		_ = os.Setenv("TAMGA_RETENTION_REQUEST_LOGS_DAYS", "-10")
-		_ = os.Setenv("TAMGA_RETENTION_ALERTS_DAYS", "-5")
+		_ = os.Setenv("TAMGA_RETENTION_AUDIT_DAYS", "-5")
 
 		p := RetentionPolicyFromEnv()
 		def := DefaultRetentionPolicy()
 		if p.RequestLogsDays != def.RequestLogsDays {
 			t.Errorf("RequestLogsDays with negative env: want default %d, got %d", def.RequestLogsDays, p.RequestLogsDays)
 		}
-		if p.AlertsDays != def.AlertsDays {
-			t.Errorf("AlertsDays with negative env: want default %d, got %d", def.AlertsDays, p.AlertsDays)
+		if p.AuditLogsDays != def.AuditLogsDays {
+			t.Errorf("AuditLogsDays with negative env: want default %d, got %d", def.AuditLogsDays, p.AuditLogsDays)
 		}
 	})
 
 	t.Run("non_numeric_values_ignored", func(t *testing.T) {
 		restore := saveEnv(
 			"TAMGA_RETENTION_REQUEST_LOGS_DAYS",
-			"TAMGA_RETENTION_DAILY_STATS_DAYS",
+			"TAMGA_RETENTION_AUDIT_DAYS",
 		)
 		defer restore()
 
 		_ = os.Setenv("TAMGA_RETENTION_REQUEST_LOGS_DAYS", "abc")
-		_ = os.Setenv("TAMGA_RETENTION_DAILY_STATS_DAYS", "not-a-number")
+		_ = os.Setenv("TAMGA_RETENTION_AUDIT_DAYS", "not-a-number")
 
 		p := RetentionPolicyFromEnv()
 		def := DefaultRetentionPolicy()
 		if p.RequestLogsDays != def.RequestLogsDays {
 			t.Errorf("RequestLogsDays with non-numeric env: want default %d, got %d", def.RequestLogsDays, p.RequestLogsDays)
 		}
-		if p.DailyStatsDays != def.DailyStatsDays {
-			t.Errorf("DailyStatsDays with non-numeric env: want default %d, got %d", def.DailyStatsDays, p.DailyStatsDays)
+		if p.AuditLogsDays != def.AuditLogsDays {
+			t.Errorf("AuditLogsDays with non-numeric env: want default %d, got %d", def.AuditLogsDays, p.AuditLogsDays)
 		}
 	})
 
@@ -413,19 +413,6 @@ func TestPostgresStore_SubjectAccess_DefaultLimit(t *testing.T) {
 	// Expect error (connection rejected), the important thing is no hang.
 	if err == nil {
 		t.Log("SubjectAccess with zero limit unexpectedly succeeded (no pool connection)")
-	}
-}
-
-// =============================================================================
-// PostgresStore — GetStats invalid org UUID path
-// =============================================================================
-
-func TestPostgresStore_GetStats_InvalidUUID(t *testing.T) {
-	s := &PostgresStore{log: zerolog.Nop()}
-	ctx := context.Background()
-	_, err := s.GetStats(ctx, "not-a-uuid", time.Now().Add(-24*time.Hour), time.Now())
-	if err == nil {
-		t.Fatal("GetStats with invalid UUID should return error")
 	}
 }
 
@@ -835,7 +822,6 @@ func TestPostgresStore_Flush_WithExpiredContext(t *testing.T) {
 type errorStore struct {
 	*NoopStore
 	saveErr       error
-	statsErr      error
 	listErr       error
 	searchErr     error
 	modelUsageErr error
@@ -849,13 +835,6 @@ func (e *errorStore) SaveRequestLog(_ context.Context, _ RequestLog) error {
 		return e.saveErr
 	}
 	return nil
-}
-
-func (e *errorStore) GetStats(_ context.Context, _ string, _, _ time.Time) (*Stats, error) {
-	if e.statsErr != nil {
-		return nil, e.statsErr
-	}
-	return &Stats{}, nil
 }
 
 func (e *errorStore) ListSecurityEvents(_ context.Context, _ string, _, _ int) ([]SecurityEvent, int, error) {
@@ -912,18 +891,6 @@ func TestErrorStore_SaveRequestLog_Error(t *testing.T) {
 		OrgID:     "org-1",
 		Findings:  []scanner.Finding{{Type: "pii", Match: "test"}},
 	})
-}
-
-func TestErrorStore_GetStats_Error(t *testing.T) {
-	errStore := &errorStore{statsErr: errors.New("query timeout")}
-	ctx := context.Background()
-	_, err := errStore.GetStats(ctx, "org-1", time.Now().Add(-24*time.Hour), time.Now())
-	if err == nil {
-		t.Fatal("expected error from GetStats")
-	}
-	if err.Error() != "query timeout" {
-		t.Errorf("error message: want 'query timeout', got %q", err.Error())
-	}
 }
 
 func TestErrorStore_ListSecurityEvents_Error(t *testing.T) {
@@ -983,7 +950,6 @@ func TestErrorStore_AllMethods_WithErrors(t *testing.T) {
 	fakeErr := errors.New("universal error")
 	errStore := &errorStore{
 		saveErr:       fakeErr,
-		statsErr:      fakeErr,
 		listErr:       fakeErr,
 		searchErr:     fakeErr,
 		modelUsageErr: fakeErr,
@@ -995,11 +961,6 @@ func TestErrorStore_AllMethods_WithErrors(t *testing.T) {
 
 	t.Run("SaveRequestLog", func(t *testing.T) {
 		if err := errStore.SaveRequestLog(ctx, RequestLog{RequestID: "r1"}); err == nil {
-			t.Error("expected error")
-		}
-	})
-	t.Run("GetStats", func(t *testing.T) {
-		if _, err := errStore.GetStats(ctx, "org", time.Now(), time.Now()); err == nil {
 			t.Error("expected error")
 		}
 	})
@@ -1048,12 +1009,6 @@ func TestRetentionPolicy_ZeroValue(t *testing.T) {
 	p := RetentionPolicy{}
 	if p.RequestLogsDays != 0 {
 		t.Errorf("RequestLogsDays: want 0, got %d", p.RequestLogsDays)
-	}
-	if p.AlertsDays != 0 {
-		t.Errorf("AlertsDays: want 0, got %d", p.AlertsDays)
-	}
-	if p.DailyStatsDays != 0 {
-		t.Errorf("DailyStatsDays: want 0, got %d", p.DailyStatsDays)
 	}
 	if p.AuditLogsDays != 0 {
 		t.Errorf("AuditLogsDays: want 0, got %d", p.AuditLogsDays)

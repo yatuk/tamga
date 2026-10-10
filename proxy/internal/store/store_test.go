@@ -20,13 +20,6 @@ func TestNoopStore_SaveAndStats(t *testing.T) {
 	if err := s.SaveRequestLog(ctx, RequestLog{RequestID: "r1", OrgID: "00000000-0000-0000-0000-000000000001"}); err != nil {
 		t.Fatal(err)
 	}
-	st, err := s.GetStats(ctx, "00000000-0000-0000-0000-000000000001", time.Now().Add(-24*time.Hour), time.Now())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if st.TotalRequests != 0 {
-		t.Fatalf("noop stats: %+v", st)
-	}
 	if err := s.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -383,12 +376,6 @@ func TestDefaultRetentionPolicy(t *testing.T) {
 	if p.RequestLogsDays != 30 {
 		t.Errorf("RequestLogsDays: want 30, got %d", p.RequestLogsDays)
 	}
-	if p.AlertsDays != 90 {
-		t.Errorf("AlertsDays: want 90, got %d", p.AlertsDays)
-	}
-	if p.DailyStatsDays != 365 {
-		t.Errorf("DailyStatsDays: want 365, got %d", p.DailyStatsDays)
-	}
 	if p.AuditLogsDays != 365 {
 		t.Errorf("AuditLogsDays: want 365, got %d", p.AuditLogsDays)
 	}
@@ -429,8 +416,6 @@ func TestEnvIntPositive(t *testing.T) {
 func TestRetentionPolicyFromEnv(t *testing.T) {
 	for _, k := range []string{
 		"TAMGA_RETENTION_REQUEST_LOGS_DAYS",
-		"TAMGA_RETENTION_ALERTS_DAYS",
-		"TAMGA_RETENTION_DAILY_STATS_DAYS",
 		"TAMGA_RETENTION_AUDIT_DAYS",
 	} {
 		_ = os.Unsetenv(k)
@@ -438,17 +423,10 @@ func TestRetentionPolicyFromEnv(t *testing.T) {
 	}
 
 	_ = os.Setenv("TAMGA_RETENTION_REQUEST_LOGS_DAYS", "60")
-	_ = os.Setenv("TAMGA_RETENTION_ALERTS_DAYS", "180")
 
 	p := RetentionPolicyFromEnv()
 	if p.RequestLogsDays != 60 {
 		t.Errorf("RequestLogsDays: want 60, got %d", p.RequestLogsDays)
-	}
-	if p.AlertsDays != 180 {
-		t.Errorf("AlertsDays: want 180, got %d", p.AlertsDays)
-	}
-	if p.DailyStatsDays != 365 {
-		t.Errorf("DailyStatsDays: want 365 (default), got %d", p.DailyStatsDays)
 	}
 	if p.AuditLogsDays != 365 {
 		t.Errorf("AuditLogsDays: want 365 (default), got %d", p.AuditLogsDays)
@@ -531,14 +509,6 @@ func TestNoopStore_FullInterface(t *testing.T) {
 
 	if err := s.SaveRequestLog(ctx, RequestLog{RequestID: "r1", OrgID: org}); err != nil {
 		t.Fatal(err)
-	}
-
-	st, err := s.GetStats(ctx, org, time.Now().Add(-24*time.Hour), time.Now())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if st.TotalRequests != 0 {
-		t.Errorf("noop stats should be zero, got %d", st.TotalRequests)
 	}
 
 	evs, total, err := s.ListSecurityEvents(ctx, org, 1, 50)

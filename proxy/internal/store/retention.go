@@ -22,8 +22,6 @@ import (
 // RetentionPolicy configures how long different datasets are kept (days).
 type RetentionPolicy struct {
 	RequestLogsDays    int
-	AlertsDays         int
-	DailyStatsDays     int
 	AuditLogsDays      int
 	IncidentClosedDays int // how long closed incidents stay before purge
 }
@@ -32,8 +30,6 @@ type RetentionPolicy struct {
 func DefaultRetentionPolicy() RetentionPolicy {
 	return RetentionPolicy{
 		RequestLogsDays:    30,
-		AlertsDays:         90,
-		DailyStatsDays:     365,
 		AuditLogsDays:      365,
 		IncidentClosedDays: 0,
 	}
@@ -44,12 +40,6 @@ func RetentionPolicyFromEnv() RetentionPolicy {
 	p := DefaultRetentionPolicy()
 	if v := envIntPositive("TAMGA_RETENTION_REQUEST_LOGS_DAYS"); v > 0 {
 		p.RequestLogsDays = v
-	}
-	if v := envIntPositive("TAMGA_RETENTION_ALERTS_DAYS"); v > 0 {
-		p.AlertsDays = v
-	}
-	if v := envIntPositive("TAMGA_RETENTION_DAILY_STATS_DAYS"); v > 0 {
-		p.DailyStatsDays = v
 	}
 	if v := envIntPositive("TAMGA_RETENTION_AUDIT_DAYS"); v > 0 {
 		p.AuditLogsDays = v
@@ -378,24 +368,6 @@ func (pm *PartitionManager) detachDrop(ctx context.Context, partName string) err
 func (pm *PartitionManager) purgeOldRows(ctx context.Context) error {
 	ctx2, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
-
-	if pm.policy.AlertsDays > 0 {
-		cut := time.Now().UTC().AddDate(0, 0, -pm.policy.AlertsDays)
-		tag, err := pm.db.Exec(ctx2, `DELETE FROM alerts WHERE created_at < $1`, cut)
-		if err != nil {
-			return fmt.Errorf("alerts: %w", err)
-		}
-		pm.log.Info().Str("component", "store").Int64("rows", tag.RowsAffected()).Msg("purged alerts")
-	}
-
-	if pm.policy.DailyStatsDays > 0 {
-		cut := time.Now().UTC().AddDate(0, 0, -pm.policy.DailyStatsDays)
-		tag, err := pm.db.Exec(ctx2, `DELETE FROM daily_stats WHERE stat_date < $1::date`, cut)
-		if err != nil {
-			return fmt.Errorf("daily_stats: %w", err)
-		}
-		pm.log.Info().Str("component", "store").Int64("rows", tag.RowsAffected()).Msg("purged daily_stats")
-	}
 
 	if pm.policy.AuditLogsDays > 0 {
 		cut := time.Now().UTC().AddDate(0, 0, -pm.policy.AuditLogsDays)

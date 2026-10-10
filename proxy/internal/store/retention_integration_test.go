@@ -86,8 +86,6 @@ func TestPG_Retention_DropExpiredPartitions(t *testing.T) {
 	// Use a policy where request logs expire in 1 day
 	policy := RetentionPolicy{
 		RequestLogsDays:    1,
-		AlertsDays:         90,
-		DailyStatsDays:     365,
 		AuditLogsDays:      365,
 		IncidentClosedDays: 0,
 	}
@@ -125,52 +123,24 @@ func TestPG_Retention_PurgeOldRows(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Insert an old alert (100 days ago)
+	// Insert an old audit log (100 days ago)
 	oldTime := time.Now().UTC().Add(-100 * 24 * time.Hour)
 	_, err := s.pool.Exec(ctx,
-		"INSERT INTO alerts (org_id, request_id, severity, finding_type, message, created_at) VALUES ($1, $2, $3, $4, $5, $6)",
-		testOrgID, "req-old", "critical", "pii", "old-alert", oldTime)
-	if err != nil {
-		t.Fatalf("insert alert: %v", err)
-	}
-
-	// Insert an old audit log
-	_, err = s.pool.Exec(ctx,
 		"INSERT INTO audit_log (ts, kind, hash) VALUES ($1, $2, $3)",
 		oldTime, "test-action", "test-hash")
 	if err != nil {
 		t.Fatalf("insert audit_log: %v", err)
 	}
 
-	// Insert an old daily_stat
-	oldDateStr := oldTime.Format("2006-01-02")
-	_, err = s.pool.Exec(ctx,
-		"INSERT INTO daily_stats (org_id, stat_date) VALUES ($1, $2)",
-		testOrgID, oldDateStr)
-	if err != nil {
-		t.Fatalf("insert daily_stats: %v", err)
-	}
-
 	policy := RetentionPolicy{
 		RequestLogsDays:    30,
-		AlertsDays:         30, // Will purge anything older than 30 days
-		DailyStatsDays:     30, // Same
-		AuditLogsDays:      30, // Same
+		AuditLogsDays:      30, // Will purge anything older than 30 days
 		IncidentClosedDays: 0,
 	}
 	pm := NewPartitionManager(s.Pool(), policy, zerolog.Nop())
 
 	if err := pm.purgeOldRows(ctx); err != nil {
 		t.Fatalf("purgeOldRows: %v", err)
-	}
-
-	// Verify old alert was purged
-	var alertCount int
-	if err := s.pool.QueryRow(ctx, "SELECT COUNT(*) FROM alerts WHERE message = 'old-alert'").Scan(&alertCount); err != nil {
-		t.Fatalf("check alert: %v", err)
-	}
-	if alertCount != 0 {
-		t.Errorf("expected old alert to be purged, got %d", alertCount)
 	}
 
 	// Verify old audit_log was purged

@@ -47,16 +47,6 @@ type RequestLog struct {
 	PolicyVersion string
 }
 
-// Stats aggregates daily_stats rows for a window.
-type Stats struct {
-	TotalRequests     int64
-	BlockedRequests   int64
-	RedactedRequests  int64
-	WarnedRequests    int64
-	TotalInputTokens  int64
-	TotalOutputTokens int64
-}
-
 // SecurityEvent is a row from request_logs for dashboard listing.
 type SecurityEvent struct {
 	RequestID     string          `json:"request_id"`
@@ -109,25 +99,12 @@ type DailyTokenUsage struct {
 // Store persists request telemetry (PostgreSQL or no-op when disabled).
 type Store interface {
 	SaveRequestLog(ctx context.Context, log RequestLog) error
-	GetStats(ctx context.Context, orgID string, from, to time.Time) (*Stats, error)
 	ListSecurityEvents(ctx context.Context, orgID string, page, limit int) ([]SecurityEvent, int, error)
 	SearchSecurityEvents(ctx context.Context, orgID string, p EventSearchParams) ([]SecurityEvent, int, error)
 	// GetModelTokenUsage returns token sums grouped by provider+model for a time window.
 	GetModelTokenUsage(ctx context.Context, orgID string, from, to time.Time) ([]ModelTokenUsage, error)
 	// GetDailyTokenUsage returns daily token sums grouped by date+provider+model.
 	GetDailyTokenUsage(ctx context.Context, orgID string, from, to time.Time) ([]DailyTokenUsage, error)
-	// GetDailyTimeseries returns per-day request/action counts from daily_stats
-	// over [from, to], for long-window detection trends. Empty when no data.
-	GetDailyTimeseries(ctx context.Context, orgID string, from, to time.Time) ([]DailyStatPoint, error)
 	Ping(ctx context.Context) error
 	Close() error
-}
-
-// DailyStatPoint is one day of aggregated request counts (from daily_stats).
-type DailyStatPoint struct {
-	Date             time.Time `json:"date"`
-	TotalRequests    int64     `json:"total_requests"`
-	BlockedRequests  int64     `json:"blocked_requests"`
-	RedactedRequests int64     `json:"redacted_requests"`
-	WarnedRequests   int64     `json:"warned_requests"`
 }

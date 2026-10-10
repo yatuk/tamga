@@ -88,9 +88,6 @@ func (s *spyStore) SaveRequestLog(_ context.Context, rl RequestLog) error {
 	s.lastAt = rl.At
 	return nil
 }
-func (s *spyStore) GetStats(_ context.Context, _ string, _, _ time.Time) (*Stats, error) {
-	return nil, nil
-}
 func (s *spyStore) ListSecurityEvents(_ context.Context, _ string, _, _ int) ([]SecurityEvent, int, error) {
 	return nil, 0, nil
 }
@@ -101,9 +98,6 @@ func (s *spyStore) GetModelTokenUsage(_ context.Context, _ string, _, _ time.Tim
 	return nil, nil
 }
 func (s *spyStore) GetDailyTokenUsage(_ context.Context, _ string, _, _ time.Time) ([]DailyTokenUsage, error) {
-	return nil, nil
-}
-func (s *spyStore) GetDailyTimeseries(_ context.Context, _ string, _, _ time.Time) ([]DailyStatPoint, error) {
 	return nil, nil
 }
 func (s *spyStore) Ping(_ context.Context) error { return nil }
