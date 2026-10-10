@@ -154,8 +154,8 @@ paths:
       tags: [health]
       summary: Runtime operational profile
       description: |
-        Exposes TLS, mTLS, Redis, Postgres status plus policy identity and
-        tier information for the Settings / Runtime dashboard tab.
+        Exposes TLS, mTLS, Redis, Postgres status and policy identity for
+        the Settings / Runtime dashboard tab.
 
         All of it needs the admin key or a scoped key of read, write or
         admin scope in `X-Tamga-Admin-Key` (or a session token in
@@ -1274,7 +1274,7 @@ paths:
         `rate_limit.max_requests_per_minute`, counted apart from the key's
         proxy requests and always refused when exceeded; a body of at most
         262144 bytes; a small number of scans at a time, answered 503 when
-        all are in use. Calls do not count against the monthly request cap.
+        all are in use.
 
         A 200 is a complete verdict. If any scanner or the inline classifier
         did not finish, the answer is 503, whatever `scan.on_error` says.
@@ -1375,8 +1375,6 @@ paths:
                     $ref: "#/components/schemas/CustomEntity"
         "400":
           description: Missing name/pattern or invalid regex
-        "403":
-          description: Tier does not allow custom entities
         "409":
           description: |
             Entity with this name already exists, or `dual_control_required`:
@@ -2805,8 +2803,6 @@ components:
             trace_ui_url: { type: string }
             retention_enabled: { type: boolean }
             retention_last_run: { type: string, format: date-time }
-            tier: { type: string }
-            tier_custom_entities: { type: boolean }
 
     # ── Stats ─────────────────────────────────────────────────────────
 

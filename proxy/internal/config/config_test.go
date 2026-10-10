@@ -14,7 +14,7 @@ func TestLoad_Defaults(t *testing.T) {
 		"TAMGA_CORS_CREDENTIALS", "TAMGA_CORS_MAX_AGE",
 		"TAMGA_MAX_BODY_BYTES", "TAMGA_MOCK_UPSTREAM",
 		"TAMGA_UPSTREAM_MAX_RETRIES", "TAMGA_BREAKER_FAILURE_THRESHOLD",
-		"TAMGA_BREAKER_COOLDOWN_MS", "TAMGA_REGION", "TAMGA_TIER",
+		"TAMGA_BREAKER_COOLDOWN_MS", "TAMGA_REGION",
 		"TAMGA_MTLS_CLIENT_CA_FILE", "TAMGA_MTLS_STRICT_VERIFY", "TAMGA_IP_ALLOWLIST",
 		"TAMGA_CLERK_SECRET_KEY", "TAMGA_CLERK_CALLBACK_URL",
 	} {
@@ -67,9 +67,6 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.Region != "" {
 		t.Errorf("default region: %q", cfg.Region)
 	}
-	if cfg.Tier != "community" {
-		t.Errorf("default tier: %q", cfg.Tier)
-	}
 	if cfg.DevMode {
 		t.Error("default DevMode should be false")
 	}
@@ -121,7 +118,6 @@ func TestLoad_AllEnvVars(t *testing.T) {
 	_ = os.Setenv("TAMGA_BREAKER_FAILURE_THRESHOLD", "10")
 	_ = os.Setenv("TAMGA_BREAKER_COOLDOWN_MS", "30000")
 	_ = os.Setenv("TAMGA_REGION", "eu")
-	_ = os.Setenv("TAMGA_TIER", "business")
 	_ = os.Setenv("TAMGA_MTLS_CLIENT_CA_FILE", "/etc/tamga/ca-bundle.pem")
 	_ = os.Setenv("TAMGA_MTLS_STRICT_VERIFY", "true")
 	_ = os.Setenv("TAMGA_IP_ALLOWLIST", "10.0.0.0/8,192.168.1.0/24")
@@ -135,7 +131,7 @@ func TestLoad_AllEnvVars(t *testing.T) {
 			"TAMGA_CORS_CREDENTIALS", "TAMGA_CORS_MAX_AGE",
 			"TAMGA_MAX_BODY_BYTES", "TAMGA_MOCK_UPSTREAM",
 			"TAMGA_UPSTREAM_MAX_RETRIES", "TAMGA_BREAKER_FAILURE_THRESHOLD",
-			"TAMGA_BREAKER_COOLDOWN_MS", "TAMGA_REGION", "TAMGA_TIER",
+			"TAMGA_BREAKER_COOLDOWN_MS", "TAMGA_REGION",
 			"TAMGA_DEV_MODE", "TAMGA_MTLS_CLIENT_CA_FILE", "TAMGA_MTLS_STRICT_VERIFY", "TAMGA_IP_ALLOWLIST",
 			"TAMGA_CLERK_SECRET_KEY", "TAMGA_CLERK_CALLBACK_URL",
 		} {
@@ -176,9 +172,6 @@ func TestLoad_AllEnvVars(t *testing.T) {
 	}
 	if cfg.Region != "eu" {
 		t.Errorf("region: %q", cfg.Region)
-	}
-	if cfg.Tier != "business" {
-		t.Errorf("tier: %q", cfg.Tier)
 	}
 	if cfg.CORSOrigin != "https://dash.example.com" {
 		t.Errorf("CORS origin: %q", cfg.CORSOrigin)
@@ -356,7 +349,6 @@ func TestConfig_AllFieldsAreSet(t *testing.T) {
 	_ = cfg.BreakerFailureThreshold
 	_ = cfg.BreakerCooldownMs
 	_ = cfg.Region
-	_ = cfg.Tier
 	_ = cfg.DevMode
 	_ = cfg.MTLSClientCAFile
 	_ = cfg.MTLSStrictVerify

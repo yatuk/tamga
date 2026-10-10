@@ -65,12 +65,6 @@ type Config struct {
 	// When set, the proxy validates startup against policy.data.residency.
 	Region string
 
-	// Tier is the active subscription tier for enforcement (community|team|business|enterprise).
-	// Set via TAMGA_TIER env var, or defaults to "community".
-	// When policy.pricing is configured, the proxy validates tier limits at startup and
-	// enforces per-tier request caps via middleware.
-	Tier string
-
 	// --- SSO / OAuth ---
 	// JWTSecret is the HMAC-SHA256 signing key for Tamga-issued session tokens.
 	// Required for SSO. Generate with: openssl rand -hex 32
@@ -276,7 +270,6 @@ func Load() (*Config, error) {
 		BreakerFailureThreshold:  envOrDefaultInt("TAMGA_BREAKER_FAILURE_THRESHOLD", 3),
 		BreakerCooldownMs:        envOrDefaultInt("TAMGA_BREAKER_COOLDOWN_MS", 10000),
 		Region:                   envOrDefault("TAMGA_REGION", ""),
-		Tier:                     envOrDefault("TAMGA_TIER", "community"),
 		JWTSecret:                envOrDefault("TAMGA_JWT_SECRET", ""),
 		GitHubClientID:           envOrDefault("TAMGA_GITHUB_CLIENT_ID", ""),
 		GitHubClientSecret:       envOrDefault("TAMGA_GITHUB_CLIENT_SECRET", ""),

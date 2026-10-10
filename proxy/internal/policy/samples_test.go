@@ -15,7 +15,7 @@ import (
 var policyTopLevelKeys = map[string]bool{
 	"version": true, "name": true, "rules": true, "output_rules": true, "rate_limit": true,
 	"providers": true, "custom_entities": true, "competitors": true, "governance": true,
-	"data": true, "pricing": true, "cost": true, "cache": true, "body_limits": true,
+	"data": true, "cost": true, "cache": true, "body_limits": true,
 	"exceptions": true, "operator_state": true, "vault": true, "canary": true, "scan": true,
 }
 

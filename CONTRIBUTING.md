@@ -289,11 +289,12 @@ Open an issue using the **Feature Request** template. Describe:
 
 ## License
 
-Tamga is licensed under the [GNU AGPL v3.0](LICENSE).
+Tamga is licensed under the [GNU AGPL v3.0](LICENSE), and under nothing else.
 
-By contributing code, you agree that your contributions will be licensed under
-the same terms. A separate commercial licence is described in
-[LICENSE-COMMERCIAL.md](LICENSE-COMMERCIAL.md).
+Contributions come in under the licence the project goes out under: by
+contributing, you agree that your contribution is licensed under the AGPL-3.0.
+You keep the copyright in what you wrote. There is no contributor licence
+agreement and no copyright assignment.
 
 ---
 

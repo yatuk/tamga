@@ -93,7 +93,7 @@ type Config struct {
 	// AnalyzerPing checks analyzer gRPC reachability; nil means no analyzer.
 	AnalyzerPing func(context.Context) error
 	// AnalyzerHTTPURL is the HTTP base URL for the analyzer REST API
-	// (e.g. "http://analyzer:8000"). Used for PDF report reverse-proxying.
+	// (e.g. "http://analyzer:8444"). The PDF reports are fetched from it.
 	AnalyzerHTTPURL string
 	// CustomScanner is refreshed after policy reload (nil-safe).
 	CustomScanner *scanner.CustomScanner
@@ -101,8 +101,6 @@ type Config struct {
 	CompetitorScanner *scanner.CompetitorScanner
 	// SavedHunts persists threat-hunting queries server-side (nil when DB unavailable).
 	SavedHunts store.SavedHuntStore
-	// TierEnforcer validates subscription tier limits (nil = community, no enforcement).
-	TierEnforcer TierEnforcer
 	// ScannerPool provides access to WorkerPool metrics (nil when pool is disabled).
 	ScannerPool *scanner.WorkerPool
 	// DevMode bypasses admin auth (both AdminKey and JWTSecret empty) for
@@ -111,7 +109,7 @@ type Config struct {
 	DevMode bool
 	// IPAllowlist is an optional comma-separated list of trusted IPs/CIDRs.
 	IPAllowlist string
-	// SSOSettings persists SAML/OIDC enterprise SSO configuration (nil-safe).
+	// SSOSettings persists SAML/OIDC SSO configuration (nil-safe).
 	SSOSettings store.SSOSettingsStore
 	// --- SSO / OAuth ---
 	JWTSecret              string
@@ -130,12 +128,6 @@ type Config struct {
 	// gitHubHTTP is the client GitHub is asked with; nil is the default
 	// one. Tests point it at a stand-in for GitHub.
 	gitHubHTTP *http.Client
-}
-
-// TierEnforcer is the subset of tier.Enforcer needed by the API layer.
-type TierEnforcer interface {
-	CustomEntitiesAllowed() bool
-	TierName() string
 }
 
 // NewHandler serves /api/v1/* (mount with mux.Handle("/api/v1/", handler)).
@@ -911,10 +903,6 @@ func (cfg Config) handleHealthDetail(w http.ResponseWriter, r *http.Request) {
 		if t := cfg.Retention.LastRun(); !t.IsZero() {
 			payload["retention_last_run"] = t.UTC().Format(time.RFC3339)
 		}
-	}
-	if cfg.TierEnforcer != nil {
-		payload["tier"] = cfg.TierEnforcer.TierName()
-		payload["tier_custom_entities"] = cfg.TierEnforcer.CustomEntitiesAllowed()
 	}
 	writeHealth(w, http.StatusOK, true, payload)
 }

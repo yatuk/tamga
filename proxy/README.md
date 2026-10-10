@@ -100,7 +100,7 @@ curl -s -H "X-Tamga-Admin-Key: $TAMGA_ADMIN_KEY" http://localhost:8443/api/v1/st
 | `TAMGA_ADMIN_KEY` | Dashboard API admin anahtarı |
 | `TAMGA_CORS_ORIGIN` | CORS `Access-Control-Allow-Origin` |
 | `TAMGA_ANALYZER_ADDR` | Analyzer gRPC adresi (varsayılan `localhost:50051`) |
-| `TAMGA_ANALYZER_HTTP_URL` | Analyzer HTTP tabanı (varsayılan `http://localhost:8000`); PDF raporları buradan alınır |
+| `TAMGA_ANALYZER_HTTP_URL` | Analyzer HTTP tabanı (varsayılan `http://localhost:8444`); PDF raporları buradan alınır |
 | `REDIS_URL` | Redis (boş = her kopya kendi belleğindeki sayaçları kullanır) |
 
 Tam liste: [`docs/operations.md`](../docs/operations.md#configuration).

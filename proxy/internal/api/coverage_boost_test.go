@@ -269,24 +269,6 @@ func TestCustomEntityCreate_NilPolicyStore(t *testing.T) {
 	}
 }
 
-func TestCustomEntityCreate_TierBlocked(t *testing.T) {
-	pol := &policy.Policy{Name: "test", Version: "1.0"}
-	cfg := Config{
-		AdminKey:     "test-key",
-		PolicyStore:  policy.NewPolicyStore(pol),
-		TierEnforcer: &stubTierEnforcer{name: "community", customEntities: false},
-	}
-	body := strings.NewReader(`{"name":"test-entity","pattern":"test-pattern"}`)
-	r := httptest.NewRequest(http.MethodPost, "/policies/custom-entities", body)
-	r.Header.Set("X-Tamga-Admin-Key", "test-key")
-	w := httptest.NewRecorder()
-	cfg.handleCustomEntityCreate(w, r)
-
-	if w.Code != http.StatusForbidden {
-		t.Fatalf("want 403, got %d: %s", w.Code, w.Body.String())
-	}
-}
-
 func TestCustomEntityCreate_EmptyBody(t *testing.T) {
 	cfg := Config{
 		AdminKey:    "test-key",

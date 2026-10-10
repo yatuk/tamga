@@ -37,7 +37,7 @@ func mustLoad(t *testing.T, yamlText string) *Policy {
 // field of Policy must be in analystSections; a field in neither fails
 // TestEverySectionIsClassified, so adding one is a decision somebody makes.
 var ownerPrivileged = []string{
-	"providers", "exceptions", "governance", "data", "pricing", "vault", "cache",
+	"providers", "exceptions", "governance", "data", "vault", "cache",
 	"body_limits", "rate_limit", "cost", "scan", "operator_state", "canary",
 }
 
@@ -83,7 +83,6 @@ func TestPrivilegedChanges(t *testing.T) {
 		{"governance", replace("require_dual_control: false", "require_dual_control: true"), []string{"governance"}},
 		{"governance removed", replace("governance:\n  require_dual_control: false\n", ""), []string{"governance"}},
 		{"data", add("data:\n  retention_days: 30\n"), []string{"data"}},
-		{"pricing", add("pricing:\n  active_tier: team\n"), []string{"pricing"}},
 		{"vault", add("vault:\n  enabled: true\n"), []string{"vault"}},
 		{"cache", add("cache:\n  enabled: true\n"), []string{"cache"}},
 		{"body_limits", add("body_limits:\n  default:\n    max_bytes: 4096\n"), []string{"body_limits"}},

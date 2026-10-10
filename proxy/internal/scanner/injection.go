@@ -29,14 +29,14 @@ type injectionPatternDef struct {
 //                        │ Lakera Gandalf public challenges       │ MIT
 //                        │ Community Turkish translations (Tamga) │ CC0
 // role_manipulation      │ OWASP LLM Top 10 (2025) examples      │ CC0
-//                        │ Tamga red-team (internal)              │ Proprietary
+//                        │ Tamga red-team (internal)              │ AGPL-3.0
 // delimiter_injection    │ OWASP LLM Top 10 (2025) examples      │ CC0
 // context_manipulation   │ OWASP LLM Top 10 (2025) examples      │ CC0
 // jailbreak              │ Lakera Gandalf public challenges       │ MIT
 //                        │ JailbreakChat.com public dataset (2024) │ CC-BY
 //                        │ Community Turkish translations (Tamga) │ CC0
 // tool_fetch             │ OWASP LLM Top 10 (2025) — Tool Abuse   │ CC0
-//                        │ Tamga red-team (internal)              │ Proprietary
+//                        │ Tamga red-team (internal)              │ AGPL-3.0
 // indirect_injection     │ OWASP LLM Top 10 (2025) — RAG Poison   │ CC0
 //                        │ Lakera indirect prompt injection set    │ MIT
 //                        │ Community Turkish translations (Tamga) │ CC0

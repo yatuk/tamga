@@ -441,6 +441,9 @@ custom entity UI · the security fixes listed in the [changelog](CHANGELOG.md).
   second per core ([agents](docs/agents.md#speed)).
 - Traffic from a browser to a chat site, and between an agent and its MCP
   servers, does not pass through a proxy at all.
+- There is no multi-region replication, no SSO sign-in beyond GitHub OAuth
+  (SSO settings are stored and used by no sign-in; the SCIM routes have no
+  store behind them) and no custom roles.
 
 **Next:** a browser extension for chat sites · MCP inspection · an
 independent benchmark for the classifier.
@@ -466,12 +469,15 @@ vector as a pull request. For anything exploitable, follow
 
 ## License
 
-The proxy, scanners and dashboard are [AGPL-3.0](LICENSE). A separate
-[commercial license](LICENSE-COMMERCIAL.md) can be agreed with the author. The
-items it names are not in this repository: there is no multi-region
-replication, no SSO sign-in beyond GitHub OAuth (SSO settings are stored and
-used by no sign-in; the SCIM routes have no store behind them) and no custom
-roles. They and SLA-backed support are what such an agreement would cover.
+Tamga is free software under the
+[GNU Affero General Public License, version 3](LICENSE) (AGPL-3.0). That is
+the only licence and this repository is the only edition: nothing is held
+back for a paid one.
+
+You may run, study, change and share it under that licence. If you change it
+and let people use your version over a network, section 13 requires you to
+offer those users the source code of your version, at no charge. The
+[licence text](LICENSE) is what applies; this paragraph only points at it.
 
 <div align="center">
 <br/>

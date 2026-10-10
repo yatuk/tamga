@@ -371,13 +371,6 @@ func (cfg Config) handleCustomEntityCreate(w http.ResponseWriter, r *http.Reques
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "policy store unavailable"})
 		return
 	}
-	// Tier enforcement: higher tiers may disable custom entities.
-	if cfg.TierEnforcer != nil && !cfg.TierEnforcer.CustomEntitiesAllowed() {
-		writeJSON(w, http.StatusForbidden, map[string]string{
-			"error": "custom entities not available on " + cfg.TierEnforcer.TierName() + " tier",
-		})
-		return
-	}
 	defer func() { _ = r.Body.Close() }()
 	var entity policy.CustomEntity
 	r.Body = http.MaxBytesReader(w, r.Body, maxEntityBodyBytes)

@@ -50,7 +50,7 @@ Where did this pattern come from?
 - Community contribution (GitHub user)
 
 ### License
-[ ] CC0  [ ] MIT  [ ] CC-BY  [ ] Apache 2.0  [ ] Proprietary (Tamga internal)
+[ ] CC0  [ ] MIT  [ ] CC-BY  [ ] Apache 2.0  [ ] AGPL-3.0 (written for Tamga)
 
 ### Proposed Confidence
 0.00 – 1.00 (see confidence ranges in Section 3)
@@ -83,13 +83,14 @@ Before any pattern is merged, a Tamga engineer must verify:
 
 ### 2.1 License Compatibility
 
-| License | Allowed in open-source build? | Notes |
+| License | Allowed? | Notes |
 |---------|:---:|-------|
 | CC0 | ✅ | Public domain, no restrictions |
 | MIT | ✅ | Attribution in source comments |
 | CC-BY | ✅ | Attribution in source comments |
 | Apache 2.0 | ✅ | Attribution in source comments |
-| Proprietary | ❌ | Must be extracted to private module before public release |
+| AGPL-3.0 (written for Tamga) | ✅ | The licence of the repository |
+| Proprietary | ❌ | Reject — everything in the repository is AGPL-3.0; there is no private module |
 | Unknown / Unlicensed | ❌ | Reject — cannot accept patterns without clear license |
 
 ### 2.2 False-Positive Risk Assessment

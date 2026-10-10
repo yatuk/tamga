@@ -176,37 +176,6 @@ type DataControl struct {
 	Residency     string `yaml:"residency" json:"residency"` // eu|tr|us
 }
 
-// PricingTier defines limits and feature flags for a subscription tier.
-// Mirrors the public pricing page: Community (free), Team, Business, Enterprise.
-type PricingTier struct {
-	Name            string `yaml:"name" json:"name"`                                     // community | team | business | enterprise
-	MaxRequestsMo   int    `yaml:"max_requests_per_month" json:"max_requests_per_month"` // 0 = unlimited
-	SSOEnabled      bool   `yaml:"sso_enabled" json:"sso_enabled"`                       // SAML/OIDC
-	RetentionDays   int    `yaml:"retention_days" json:"retention_days"`                 // audit log retention
-	SupportSLAHours int    `yaml:"support_sla_hours" json:"support_sla_hours"`           // 0 = community/best-effort
-	CustomEntities  bool   `yaml:"custom_entities" json:"custom_entities"`               // custom regex patterns
-	AirGapped       bool   `yaml:"air_gapped" json:"air_gapped"`                         // on-prem / self-hosted
-}
-
-// Pricing holds the active tier configuration for enforcement.
-type Pricing struct {
-	ActiveTier string        `yaml:"active_tier" json:"active_tier"` // tier name to enforce
-	Tiers      []PricingTier `yaml:"tiers" json:"tiers"`
-}
-
-// activeTier returns the PricingTier matching the active_tier name, or nil.
-func (p *Pricing) ActiveTierDef() *PricingTier {
-	if p == nil || p.ActiveTier == "" {
-		return nil
-	}
-	for i := range p.Tiers {
-		if p.Tiers[i].Name == p.ActiveTier {
-			return &p.Tiers[i]
-		}
-	}
-	return nil
-}
-
 // CostControl — daily token / USD caps (Faz 3B).
 type CostControl struct {
 	MaxTokensPerDay  int     `yaml:"max_tokens_per_day" json:"max_tokens_per_day"`
@@ -399,7 +368,6 @@ type Policy struct {
 	Competitors    []Competitor         `yaml:"competitors" json:"competitors"`
 	Governance     *Governance          `yaml:"governance" json:"governance"`
 	Data           *DataControl         `yaml:"data" json:"data"`
-	Pricing        *Pricing             `yaml:"pricing" json:"pricing"`
 	Cost           *CostControl         `yaml:"cost" json:"cost"`
 	Cache          *CacheConfig         `yaml:"cache" json:"cache"`
 	BodyLimits     *BodyLimitsConfig    `yaml:"body_limits" json:"body_limits"`
@@ -685,6 +653,12 @@ func LoadFromBytes(data []byte) (*Policy, error) {
 	dec.KnownFields(true)
 	// io.EOF means an empty document, which yaml.Unmarshal also accepted.
 	if err := dec.Decode(&p); err != nil && !errors.Is(err, io.EOF) {
+		// The section was removed with the plans it described. It is refused
+		// like any other unknown key, with the reason, so that a request cap
+		// somebody relied on does not stop applying without a word.
+		if strings.Contains(err.Error(), "field pricing not found") {
+			return nil, fmt.Errorf("parsing policy YAML: the \"pricing\" section is no longer part of the policy: Tamga has no plans or tiers. Remove it; request and spend limits are set under rate_limit and cost: %w", err)
+		}
 		return nil, fmt.Errorf("parsing policy YAML: %w", err)
 	}
 	// Only the first document is the policy. A second one would be dropped

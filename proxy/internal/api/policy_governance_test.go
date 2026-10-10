@@ -759,7 +759,6 @@ func TestPrivilegeSplitOnPut(t *testing.T) {
 		{"exceptions", govBasePolicy + "exceptions:\n  - rule: pii_detection\n    roles: [admin]\n    reason: test\n", []string{"exceptions"}},
 		{"governance", govBasePolicy + govDualControl, []string{"governance"}},
 		{"data", govBasePolicy + "data:\n  retention_days: 30\n", []string{"data"}},
-		{"pricing", govBasePolicy + "pricing:\n  active_tier: team\n", []string{"pricing"}},
 		{"vault", govBasePolicy + "vault:\n  enabled: true\n", []string{"vault"}},
 		{"cache", govBasePolicy + "cache:\n  enabled: true\n", []string{"cache"}},
 		{"body_limits", govBasePolicy + "body_limits:\n  default:\n    max_bytes: 4096\n", []string{"body_limits"}},

@@ -799,7 +799,6 @@ func TestHealthDetail_FullFeatures(t *testing.T) {
 		MTLSEnabled:  true,
 		RedisEnabled: true,
 		DatabaseURL:  "postgres://localhost:5432/testdb",
-		TierEnforcer: &stubTierEnforcer{name: "enterprise", customEntities: true},
 	}
 	ts := httptest.NewServer(testMux(cfg))
 	defer ts.Close()
@@ -826,21 +825,13 @@ func TestHealthDetail_FullFeatures(t *testing.T) {
 	if body["database"] != "connected" {
 		t.Errorf("database: %v", body["database"])
 	}
-	if body["tier"] != "enterprise" {
-		t.Errorf("tier: %v", body["tier"])
-	}
-	if body["tier_custom_entities"] != true {
-		t.Errorf("tier_custom_entities: %v", body["tier_custom_entities"])
+	// There are no plans: the profile names none.
+	for _, k := range []string{"tier", "tier_custom_entities"} {
+		if _, ok := body[k]; ok {
+			t.Errorf("health detail still reports %q", k)
+		}
 	}
 }
-
-type stubTierEnforcer struct {
-	name           string
-	customEntities bool
-}
-
-func (s *stubTierEnforcer) CustomEntitiesAllowed() bool { return s.customEntities }
-func (s *stubTierEnforcer) TierName() string            { return s.name }
 
 func TestHealthDetail_RetentionEnabled(t *testing.T) {
 	cfg := Config{

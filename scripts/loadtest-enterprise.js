@@ -1,4 +1,4 @@
-// Tamga Enterprise Load Test — validates critical refactoring:
+// Tamga Load Test — validates critical refactoring:
 //   - Shared HTTP transport (connection reuse under load)
 //   - Scanner panic recovery (zero crashes under adversarial input)
 //   - Event bus backpressure (dropped events counter)
@@ -212,7 +212,7 @@ export default function () {
 
 export function setup() {
   console.log(`╔══════════════════════════════════════════════╗`);
-  console.log(`║  Tamga Enterprise Load Test                  ║`);
+  console.log(`║  Tamga Load Test                             ║`);
   console.log(`╠══════════════════════════════════════════════╣`);
   console.log(`║  Target:      ${URL.padEnd(36)}║`);
   console.log(`║  VUs:         ${String(STAGES ? "ramping" : VUS).padEnd(36)}║`);

@@ -39,7 +39,6 @@ import (
 	"github.com/yatuk/tamga/internal/scanner/operator_state"
 	"github.com/yatuk/tamga/internal/store"
 	"github.com/yatuk/tamga/internal/telemetry"
-	"github.com/yatuk/tamga/internal/tier"
 	"github.com/yatuk/tamga/internal/upstream"
 	"github.com/yatuk/tamga/internal/users"
 	"github.com/yatuk/tamga/internal/vault"
@@ -122,7 +121,6 @@ func main() {
 	// assigned later when getCustomSpecs + patternStore are ready.
 	var customScanner *scanner.CustomScanner
 	var competitorScanner *scanner.CompetitorScanner
-	var tierEnforcer *tier.Enforcer
 	var opScanner *operator_state.OperatorStateScanner
 
 	// Set once the audit log and the policy history exist, further down. A
@@ -137,9 +135,6 @@ func main() {
 		}
 		if competitorScanner != nil {
 			competitorScanner.Refresh()
-		}
-		if tierEnforcer != nil {
-			tierEnforcer.Refresh()
 		}
 		if opScanner != nil {
 			if p := policyStore.GetPolicy(); p != nil {
@@ -163,7 +158,6 @@ func main() {
 	}
 
 	getPolicy := func() *policy.Policy { return policyStore.GetPolicy() }
-	tierEnforcer = tier.New(getPolicy)
 	budgetStore := budget.New(getPolicy)
 	promptCache := cache.New(2048)
 	rateLimiter := ratelimit.NewLimiter(getPolicy)
@@ -267,12 +261,6 @@ func main() {
 		log.Info().Msg("model pricing store + cost calculator + saved hunts wired")
 	}
 
-	// Air-gapped deployment validation — warn when policy requires air-gapped
-	// but the deployment may not be (on-prem flag is set via TAMGA_AIR_GAPPED env).
-	if tierEnforcer != nil && tierEnforcer.AirGappedAllowed() {
-		log.Info().Msg("tier permits air-gapped / on-prem deployment")
-	}
-
 	// Data residency validation — warn when deployment region doesn't match policy.
 	if cfg.Region != "" && pol.Data != nil && pol.Data.Residency != "" {
 		if !strings.EqualFold(cfg.Region, pol.Data.Residency) {
@@ -284,24 +272,6 @@ func main() {
 			log.Info().
 				Str("region", cfg.Region).
 				Msg("data residency validated")
-		}
-	}
-
-	// Pricing tier validation — warn when deployment tier doesn't match policy active tier.
-	if pol.Pricing != nil {
-		if cfg.Tier != "" && pol.Pricing.ActiveTier != "" && !strings.EqualFold(cfg.Tier, pol.Pricing.ActiveTier) {
-			log.Warn().
-				Str("config_tier", cfg.Tier).
-				Str("policy_active_tier", pol.Pricing.ActiveTier).
-				Msg("pricing tier mismatch — policy expects " + pol.Pricing.ActiveTier + " but running as " + cfg.Tier)
-		}
-		if td := pol.Pricing.ActiveTierDef(); td != nil {
-			log.Info().
-				Str("tier", td.Name).
-				Int("max_requests_mo", td.MaxRequestsMo).
-				Bool("sso", td.SSOEnabled).
-				Int("retention_days", td.RetentionDays).
-				Msg("pricing tier enforced")
 		}
 	}
 
@@ -776,7 +746,6 @@ func main() {
 		UpstreamRegistry:   upstreamReg,
 		UpstreamTransport:  upstreamTransport,
 		PricingResolver:    costCalculator,
-		TierEnforcer:       tierEnforcer, // nil-safe — falls back to hardcoded map
 		ScannerPool:        scannerPool,
 		ScannerClient:      scannerClient,
 		ProxyBoundRegistry: proxyBoundRegistry,
@@ -827,7 +796,6 @@ func main() {
 		CostCalculator:         costCalculator,
 		CustomScanner:          customScanner,
 		CompetitorScanner:      competitorScanner,
-		TierEnforcer:           tierEnforcer,
 		ScannerPool:            scannerPool,
 		JWTSecret:              cfg.JWTSecret,
 		GitHubClientID:         cfg.GitHubClientID,

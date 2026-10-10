@@ -111,19 +111,6 @@ func mustParseURL(raw string) *url.URL {
 	return u
 }
 
-// TierEnforcer validates subscription tier limits and feature flags.
-// Defined as interface to avoid import cycles with the tier package.
-type TierEnforcer interface {
-	SSOAllowed() bool
-	CustomEntitiesAllowed() bool
-	AirGappedAllowed() bool
-	TierName() string
-	MaxRequestsPerMonth() int
-	MonthlyRequests() int64
-	RecordRequest()
-	CheckMonthlyLimit() bool
-}
-
 type HandlerConfig struct {
 	Registry *scanner.Registry
 	// Keys verifies X-Tamga-Key on the proxy path (optional; without it no
@@ -167,9 +154,6 @@ type HandlerConfig struct {
 	// PricingResolver provides DB-backed USD-per-1M rates (5-min cache).
 	// When nil, the proxy falls back to the hardcoded pricePer1MTokens map.
 	PricingResolver PricingResolver
-	// TierEnforcer validates subscription tier limits and feature flags.
-	// When nil, tier enforcement is skipped (community default — everything allowed).
-	TierEnforcer TierEnforcer
 	// ScannerPool is the bounded WorkerPool used when ScannerPipelineMode is "workerpool".
 	// May be nil for other modes.
 	ScannerPool *scanner.WorkerPool
@@ -384,26 +368,6 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 			}
 		}
 		rlSpan.End()
-	}
-	// Tier-based request limit enforcement (monthly cap).
-	if cfg.TierEnforcer != nil {
-		cfg.TierEnforcer.RecordRequest()
-		w.Header().Set("X-Tamga-Tier", cfg.TierEnforcer.TierName())
-		if cfg.TierEnforcer.CheckMonthlyLimit() {
-			w.Header().Set("X-Tamga-Tier-Limit", "exceeded")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusTooManyRequests)
-			if err := json.NewEncoder(w).Encode(map[string]interface{}{
-				"error":       "monthly_request_limit_exceeded",
-				"tier":        cfg.TierEnforcer.TierName(),
-				"limit":       cfg.TierEnforcer.MaxRequestsPerMonth(),
-				"used":        cfg.TierEnforcer.MonthlyRequests(),
-				"retry_after": "next billing period",
-			}); err != nil {
-				log.Warn().Err(err).Str("component", "proxy").Msg("failed to encode tier limit error response")
-			}
-			return
-		}
 	}
 
 	// Daily token quota check (pre-flight).
