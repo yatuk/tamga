@@ -822,8 +822,17 @@ The role each operation needs is in `proxy/docs/openapi.yaml` as
 Things that follow from this:
 
 - A key in the query string (`?key=`) is accepted only by
-  `GET /api/v1/live/events`, where a browser's event stream cannot send a
-  header. Everywhere else send `X-Tamga-Admin-Key`.
+  `GET /api/v1/live/events`, for clients that use a browser `EventSource`,
+  which cannot send a header. The console does not use it: it reads the
+  stream with `fetch` and sends the header. Everywhere else send
+  `X-Tamga-Admin-Key`.
+- The console holds no key. Each person enters the admin key or an API key of
+  scope `read`, `write` or `admin` under Settings; it is kept in that browser
+  and sent with every call. The browser calls the proxy directly, so
+  `TAMGA_CORS_ORIGINS` must list the console's origin.
+  `NEXT_PUBLIC_ADMIN_KEY` is for `next dev` only: a value under that name is
+  written into the JavaScript every visitor downloads, and a production
+  build of the dashboard stops when it is set.
 - `GET /api/v1/webhooks` is for admins and never returns a destination's
   token, its header values or the path of its URL.
 - The organisation is the install's own. `X-Tamga-Org-Id` on saved hunts,

@@ -84,7 +84,9 @@ cp .env.example .env    # set TAMGA_MOCK_UPSTREAM=true to try it without provide
 docker compose --env-file .env -f deploy/docker-compose.yml up -d
 ```
 
-Proxy on `http://localhost:8443`, dashboard on `http://localhost:3000`.
+Proxy on `http://localhost:8443`, dashboard on `http://localhost:3000`. The dashboard
+holds no key: on first use it asks for the admin key (`TAMGA_ADMIN_KEY` from
+`.env`) under Settings and keeps it in that browser.
 
 > `--env-file .env` is required. Compose only auto-loads a `.env` next to the
 > compose file, so without it the database password is empty and Postgres will

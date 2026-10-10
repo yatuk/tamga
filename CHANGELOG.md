@@ -3,6 +3,17 @@
 ## v0.9.0 (unreleased)
 
 ### Security
+- **The console's live feed asked for no credential.** A route of the
+  dashboard opened the proxy's event stream with a key held on the server, so
+  anyone who could reach the console saw scanned and stopped requests with
+  their findings. The route is gone: the browser reads the stream from the
+  proxy with the key the person entered, in a header.
+- **A dashboard built with `NEXT_PUBLIC_ADMIN_KEY` handed the admin key to
+  every visitor**, and the image build copied `.env.local` into the builder.
+  A production build now stops when the variable is set, the code that reads
+  it is dead in production, and the image no longer takes `.env` files. **A
+  production console starts with no key; each person enters one under
+  Settings.** `next dev` keeps the built-in key and says so.
 - **The management API allowed whatever it had not thought about.** A route
   with no declared permission was open to every authenticated caller, and
   the check that a read-only caller cannot write ran for API keys only. A
