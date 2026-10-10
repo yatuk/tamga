@@ -10,7 +10,7 @@ LOADTEST_VUS  ?= 25
 LOADTEST_DUR  ?= 30s
 
 .PHONY: help build test redteam redteam-report redteam-classifier-report dashboard-build dashboard-test \
-        test-load vuln lint clean tidy sidecar-test
+        test-load vuln lint clean tidy classifier-test
 
 help:
 	@echo "Tamga Makefile targets:"
@@ -18,7 +18,8 @@ help:
 	@echo "  test              Run all Go unit tests with race detector"
 	@echo "  redteam           Run the red-team prompt runner"
 	@echo "  dashboard-build   Build the Next.js dashboard"
-	@echo "  dashboard-test    Lint + typecheck the dashboard"
+	@echo "  dashboard-test    Lint, typecheck and unit-test the dashboard"
+	@echo "  classifier-test   Run the classifier service's tests (stand-in model)"
 	@echo "  test-load         Run k6 load test against LOADTEST_URL"
 	@echo "  vuln              govulncheck + npm audit (production deps)"
 	@echo "  lint              go vet + eslint"
@@ -58,16 +59,21 @@ redteam-classifier-report:
 		-in ./testdata/redteam/holdout.csv -classifier $(CLASSIFIER_ADDR) \
 		-json ../docs/benchmarks/redteam_classifier_holdout.json
 
-# Run the Shadow ML sidecar test suite in stub mode (no transformers,
-# no torch). Mirrors what .github/workflows/sidecar-ci.yml runs.
-sidecar-test:
-	cd sidecar && TAMGA_SIDECAR_STUB=1 python -m pytest -q
+# The classifier service's tests. They use a stand-in for the model, so no
+# model is downloaded. Mirrors .github/workflows/classifier-ci.yml; needs
+# classifier/requirements.txt and pytest installed.
+classifier-test:
+	cd classifier && python -m pytest -q tests
 
 dashboard-build:
 	cd $(DASHBOARD_DIR) && npm run build
 
+# The checks of the unit-tests job in .github/workflows/dashboard-tests.yml,
+# short of the build.
 dashboard-test:
 	cd $(DASHBOARD_DIR) && npm run lint
+	cd $(DASHBOARD_DIR) && npm run type-check
+	cd $(DASHBOARD_DIR) && npm run test:run
 
 test-load:
 	@echo "Running k6 against $(LOADTEST_URL) ($(LOADTEST_VUS) VUs for $(LOADTEST_DUR))"

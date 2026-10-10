@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - 'docs/architecture/**.d2'
+  workflow_dispatch:
 
 jobs:
   render:

@@ -2,17 +2,19 @@ name: Integration Smoke Test (Docker)
 
 on:
   push:
-    branches: [dev]
+    branches: [main]
     paths:
       - "proxy/**"
       - "deploy/**"
       - "scripts/smoke-test.sh"
+      - ".github/workflows/integration-smoke.yml"
   pull_request:
-    branches: [dev]
+    branches: [main]
     paths:
       - "proxy/**"
       - "deploy/**"
       - "scripts/smoke-test.sh"
+      - ".github/workflows/integration-smoke.yml"
   workflow_dispatch:
 
 jobs:
@@ -55,6 +57,17 @@ jobs:
       - name: Build proxy image
         run: docker build -t tamga-proxy ./proxy
 
+      # The service database starts empty. Every migration is applied in
+      # order, the way deploy/README.md says to for a new database, so a
+      # migration that does not apply fails here.
+      - name: Apply migrations
+        run: |
+          for f in deploy/migrations/*.up.sql; do
+            echo "applying $f"
+            docker exec -i "${{ job.services.postgres.id }}" \
+              psql -U tamga -d tamga -v ON_ERROR_STOP=1 -q < "$f"
+          done
+
       - name: Start proxy (mock upstream, no analyzer)
         run: |
           docker run -d --name tamga-proxy \
@@ -65,6 +78,7 @@ jobs:
             -e TAMGA_DB_URL="postgresql://tamga:smoke-pg-pass@localhost:5432/tamga" \
             -e REDIS_URL="redis://localhost:6379" \
             -e TAMGA_ANALYZER_ADDR="" \
+            -e TAMGA_RETENTION_ENABLED=true \
             -v ${{ github.workspace }}/proxy/tamga-policy.yaml:/app/tamga-policy.yaml:ro \
             tamga-proxy
 
@@ -83,8 +97,11 @@ jobs:
 
       - name: Health check
         run: |
-          curl -s http://localhost:8443/health | grep '"status":"ok"'
-          curl -s -H "X-Tamga-Admin-Key: smoke-test-admin-key" http://localhost:8443/api/v1/health/detailed | jq '{proxy,scanner_count,database,redis}'
+          curl -fsS http://localhost:8443/health | grep '"status":"ok"'
+          # The detail needs the admin key; without it the body is only up or down.
+          curl -fsS -H "X-Tamga-Admin-Key: smoke-test-admin-key" http://localhost:8443/api/v1/health/detailed \
+            | tee /dev/stderr \
+            | jq -e '.status == "ok" and .database == "connected" and .redis == "connected" and .scanner_count > 0'
 
       - name: Clean request (PASS)
         run: |
@@ -111,6 +128,37 @@ jobs:
           # With key → 200
           AUTH=$(curl -s -o /dev/null -w "%{http_code}" -H "X-Tamga-Admin-Key: smoke-test-admin-key" http://localhost:8443/api/v1/stats)
           [ "$AUTH" = "200" ] || { echo "Expected 200, got $AUTH"; exit 1; }
+
+      - name: Request log reaches the database
+        run: |
+          # Rows are written in batches; give the writer a moment.
+          for i in $(seq 1 15); do
+            ROWS=$(docker exec "${{ job.services.postgres.id }}" psql -U tamga -d tamga -At -c "SELECT count(*) FROM request_logs")
+            [ "$ROWS" -ge 1 ] && { echo "request_logs has $ROWS rows"; exit 0; }
+            sleep 2
+          done
+          echo "No row reached request_logs"; exit 1
+
+      - name: Retention job ran on the migrated schema
+        run: |
+          # The job runs once at startup and writes one row per step; a step
+          # that failed has the error as its message.
+          Q() { docker exec "${{ job.services.postgres.id }}" psql -U tamga -d tamga -At -c "$1"; }
+          for i in $(seq 1 15); do
+            RAN=$(Q "SELECT count(*) FROM retention_run_log WHERE phase = 'purge_rows'")
+            [ "$RAN" -ge 1 ] && break
+            sleep 2
+          done
+          Q "SELECT phase, message FROM retention_run_log"
+          BAD=$(Q "SELECT count(*) FROM retention_run_log WHERE message IS DISTINCT FROM 'ok'")
+          [ "$BAD" = "0" ] && [ "$RAN" -ge 1 ] || { echo "retention: $RAN purge runs, $BAD failed steps"; exit 1; }
+
+      - name: PDF report without an analyzer (503 with a body)
+        run: |
+          CODE=$(curl -s -o report.json -w "%{http_code}" -H "X-Tamga-Admin-Key: smoke-test-admin-key" "http://localhost:8443/api/v1/reports/owasp/pdf?range=7d")
+          cat report.json
+          [ "$CODE" = "503" ] || { echo "Expected 503, got $CODE"; exit 1; }
+          jq -e '.code == "analyzer_unavailable" and (.error | length > 0)' report.json
 
       - name: Collect logs on failure
         if: failure()

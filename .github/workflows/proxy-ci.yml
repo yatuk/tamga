@@ -2,14 +2,14 @@ name: Security (govulncheck + SBOM)
 
 on:
   push:
-    branches: [dev, main]
+    branches: [main]
     paths:
       - "proxy/**"
-      - "!proxy/**/*_test.go"
       - "deploy/migrations/**"
+      - "scripts/verify-bin-data.sh"
       - ".github/workflows/proxy-ci.yml"
   pull_request:
-    branches: [dev, main]
+    branches: [main]
   schedule:
     - cron: "0 8 * * 1" # Every Monday at 08:00 UTC
   workflow_dispatch:

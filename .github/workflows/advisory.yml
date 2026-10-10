@@ -7,7 +7,7 @@ name: Security Advisory
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main]
     paths:
       - "proxy/**"
       - "analyzer/**"
@@ -32,11 +32,16 @@ jobs:
 
       - name: Check for security impact markers
         id: check
+        # The pull request body is text anyone can write. It reaches the
+        # script as an environment variable, never as part of the script.
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          RANGE_FROM: ${{ github.event.before }}
+          RANGE_TO: ${{ github.event.after }}
         run: |
           # Look for security impact in PR body or commit messages.
           # This is advisory — it flags PRs that should have a GHSA.
-          COMMITS=$(git log --format=%B ${{ github.event.before }}..${{ github.event.after }} 2>/dev/null || git log --format=%B -1 || echo "")
-          PR_BODY="${{ github.event.pull_request.body }}"
+          COMMITS=$(git log --format=%B "${RANGE_FROM}..${RANGE_TO}" 2>/dev/null || git log --format=%B -1 || echo "")
 
           HAS_SECURITY="false"
           if echo "$COMMITS" | grep -qiE "(security|vuln|CVE|exploit|injection|bypass|leak|advisory)"; then

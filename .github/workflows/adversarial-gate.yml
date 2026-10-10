@@ -2,7 +2,7 @@ name: Adversarial Regression Gate
 
 on:
   pull_request:
-    branches: [dev, main]
+    branches: [main]
     paths:
       - "proxy/**"
       - "analyzer/**"

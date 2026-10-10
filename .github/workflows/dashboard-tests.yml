@@ -4,10 +4,16 @@ on:
   pull_request:
     paths:
       - "dashboard/**"
+      # The generated API types are checked against this file.
+      - "proxy/docs/openapi.yaml"
+      - ".github/workflows/dashboard-tests.yml"
   push:
-    branches: [main, dev]
+    branches: [main]
     paths:
       - "dashboard/**"
+      - "proxy/docs/openapi.yaml"
+      - ".github/workflows/dashboard-tests.yml"
+  workflow_dispatch:
 
 jobs:
   api-types-drift:
@@ -21,7 +27,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "npm"
           cache-dependency-path: dashboard/package-lock.json
 
@@ -51,7 +57,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "npm"
           cache-dependency-path: dashboard/package-lock.json
 
@@ -83,7 +89,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "npm"
           cache-dependency-path: dashboard/package-lock.json
 
@@ -112,10 +118,12 @@ jobs:
       - name: Wait for server
         run: |
           for i in $(seq 1 30); do
-            curl -s http://localhost:3000 > /dev/null && echo "Server ready" && break
+            curl -s http://localhost:3000 > /dev/null && echo "Server ready" && exit 0
             echo "Waiting for server... ($i)"
             sleep 2
           done
+          echo "Server did not start"
+          exit 1
 
       - name: Run E2E tests
         run: npx playwright test
