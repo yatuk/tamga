@@ -107,7 +107,7 @@ export function KeysBody({
 
       {!adminKey || hasError ? null : isLoading ? (
         <div style={{ marginTop: "1.5rem" }}>
-          <DataTableSkeleton columnCount={5} rowCount={5} showHeader={false} showToolbar={false} />
+          <DataTableSkeleton columnCount={7} rowCount={5} showHeader={false} showToolbar={false} />
         </div>
       ) : apiKeys.length === 0 ? (
         <p className="t-empty">No keys yet. Create one for each application that sends requests through the proxy.</p>
@@ -119,6 +119,8 @@ export function KeysBody({
                 <TableHeader>Name</TableHeader>
                 <TableHeader>What it can do</TableHeader>
                 <TableHeader>Starts with</TableHeader>
+                {/* The audit log names a key by this id, as apikey:<id>. */}
+                <TableHeader>ID</TableHeader>
                 <TableHeader>Created</TableHeader>
                 <TableHeader>Last used</TableHeader>
                 <TableHeader>
@@ -135,6 +137,7 @@ export function KeysBody({
                   </TableCell>
                   <TableCell>{SCOPE_WORDS[key.scope] ?? key.scope}</TableCell>
                   <TableCell className="t-data">{key.prefix}</TableCell>
+                  <TableCell className="t-data">{key.id}</TableCell>
                   <TableCell title={key.created_at}>{dayLabel(key.created_at)}</TableCell>
                   <TableCell title={key.last_used ?? undefined}>
                     {key.last_used ? formatSince(key.last_used) : "Never"}

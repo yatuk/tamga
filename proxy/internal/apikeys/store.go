@@ -6,11 +6,16 @@
 // is nothing to brute-force, and the check runs on every request. The raw
 // value is returned once, at creation; only the hash and a short prefix for
 // recognising the key are kept.
+//
+// A presented key is found by its hash, never by its id. The id names the
+// record in audit entries, log lines and the console, so it is drawn
+// separately and says nothing about the key.
 package apikeys
 
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -40,8 +45,20 @@ func IsValidScope(s string) bool {
 	return false
 }
 
+// idPrefix starts the id of every key created since ids stopped being taken
+// from the key. An id without it belongs to an older key and is the first 12
+// hex characters of that key's random part.
+const idPrefix = "key_"
+
+// prefixLen is how much of a key is kept for recognising it: "tk_" and five
+// hex characters, 20 of the key's 192 bits. That is enough to match a key in
+// hand to its row and leaves 172 bits unknown. It is shown in the key list
+// only; audit entries and log lines carry the id.
+const prefixLen = 8
+
 // Key is the sanitized view of a stored API key record.
 type Key struct {
+	// ID is random and independent of the key. See idPrefix for older keys.
 	ID     string `json:"id"`
 	Label  string `json:"label"`
 	Scope  string `json:"scope"`
@@ -97,6 +114,22 @@ func hashKey(raw string) string {
 	return hex.EncodeToString(h[:])
 }
 
+// sameHash compares two key hashes in constant time. The stores find a record
+// by its hash through a map or an index, which is not constant time; this is
+// the comparison that decides.
+func sameHash(a, b string) bool {
+	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
+}
+
+// newID draws a record id. It shares no bytes with the key.
+func newID() (string, error) {
+	buf := make([]byte, 8)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return idPrefix + hex.EncodeToString(buf), nil
+}
+
 // newKey draws a key and fills in the record for it.
 func newKey(p Params) (CreatedKey, string, error) {
 	scope := strings.ToLower(strings.TrimSpace(p.Scope))
@@ -111,11 +144,15 @@ func newKey(p Params) (CreatedKey, string, error) {
 		return CreatedKey{}, "", err
 	}
 	raw := "tk_" + hex.EncodeToString(buf)
+	id, err := newID()
+	if err != nil {
+		return CreatedKey{}, "", err
+	}
 	meta := Key{
-		ID:        hex.EncodeToString(buf[:6]),
+		ID:        id,
 		Label:     strings.TrimSpace(p.Label),
 		Scope:     scope,
-		Prefix:    raw[:8],
+		Prefix:    raw[:prefixLen],
 		OrgID:     strings.TrimSpace(p.OrgID),
 		Role:      strings.TrimSpace(p.Role),
 		UserID:    strings.TrimSpace(p.UserID),
@@ -132,13 +169,18 @@ func newKey(p Params) (CreatedKey, string, error) {
 // survive a restart; it is what runs when no database is configured.
 type MemoryStore struct {
 	mu     sync.RWMutex
-	data   map[string]*Key   // by id
-	byHash map[string]string // hash -> id
+	data   map[string]*memKey // by id
+	byHash map[string]string  // hash -> id
+}
+
+type memKey struct {
+	Key
+	hash string
 }
 
 // NewMemoryStore creates an in-memory API key store.
 func NewMemoryStore() *MemoryStore {
-	return &MemoryStore{data: make(map[string]*Key), byHash: make(map[string]string)}
+	return &MemoryStore{data: make(map[string]*memKey), byHash: make(map[string]string)}
 }
 
 func (s *MemoryStore) List() []Key {
@@ -146,7 +188,7 @@ func (s *MemoryStore) List() []Key {
 	defer s.mu.RUnlock()
 	out := make([]Key, 0, len(s.data))
 	for _, k := range s.data {
-		out = append(out, *k)
+		out = append(out, k.Key)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.After(out[j].CreatedAt) })
 	return out
@@ -161,26 +203,25 @@ func (s *MemoryStore) CreateWith(p Params) (CreatedKey, error) {
 	if err != nil {
 		return CreatedKey{}, err
 	}
-	meta := ck.Key
 	s.mu.Lock()
-	s.data[meta.ID] = &meta
-	s.byHash[hash] = meta.ID
-	s.mu.Unlock()
+	defer s.mu.Unlock()
+	if _, taken := s.data[ck.ID]; taken {
+		return CreatedKey{}, errors.New("apikeys: id collision, try again")
+	}
+	s.data[ck.ID] = &memKey{Key: ck.Key, hash: hash}
+	s.byHash[hash] = ck.ID
 	return ck, nil
 }
 
 func (s *MemoryStore) Delete(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if _, ok := s.data[id]; !ok {
+	k, ok := s.data[id]
+	if !ok {
 		return ErrNotFound
 	}
 	delete(s.data, id)
-	for h, kid := range s.byHash {
-		if kid == id {
-			delete(s.byHash, h)
-		}
-	}
+	delete(s.byHash, k.hash)
 	return nil
 }
 
@@ -192,9 +233,9 @@ func (s *MemoryStore) Verify(raw string) (Key, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	k, ok := s.data[s.byHash[h]]
-	if !ok || k.Expired(time.Now()) {
+	if !ok || !sameHash(k.hash, h) || k.Expired(time.Now()) {
 		return Key{}, false
 	}
 	k.LastUsed = time.Now().UTC()
-	return *k, true
+	return k.Key, true
 }

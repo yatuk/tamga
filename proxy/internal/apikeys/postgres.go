@@ -83,10 +83,12 @@ func NewPostgresStore(ctx context.Context, pool *pgxpool.Pool) (*PostgresStore, 
 
 const keyColumns = `id, label, scope, prefix, org_id, role, user_id, created_at, expires_at, last_used_at`
 
-func scanKey(row pgx.Row) (Key, error) {
+// scanKey reads keyColumns, and after them whatever extra points at.
+func scanKey(row pgx.Row, extra ...any) (Key, error) {
 	var k Key
 	var expires, lastUsed *time.Time
-	if err := row.Scan(&k.ID, &k.Label, &k.Scope, &k.Prefix, &k.OrgID, &k.Role, &k.UserID, &k.CreatedAt, &expires, &lastUsed); err != nil {
+	dest := append([]any{&k.ID, &k.Label, &k.Scope, &k.Prefix, &k.OrgID, &k.Role, &k.UserID, &k.CreatedAt, &expires, &lastUsed}, extra...)
+	if err := row.Scan(dest...); err != nil {
 		return Key{}, err
 	}
 	if expires != nil {
@@ -190,10 +192,15 @@ func (s *PostgresStore) Verify(raw string) (Key, bool) {
 	// and is at most verifyTTL behind.
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
+	// The row is found by the hash of what was presented, whatever its id.
+	var stored string
 	k, err := scanKey(s.pool.QueryRow(ctx, `
 		UPDATE virtual_keys SET last_used_at = now()
 		WHERE key_hash = $1 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > now())
-		RETURNING `+keyColumns, hash))
+		RETURNING `+keyColumns+`, key_hash`, hash), &stored)
+	if err == nil && !sameHash(stored, hash) {
+		err = pgx.ErrNoRows
+	}
 	switch {
 	case err == nil:
 		s.remember(hash, cached{key: k, ok: true, seen: now})

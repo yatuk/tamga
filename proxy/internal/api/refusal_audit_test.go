@@ -120,9 +120,12 @@ func holdsNoPartOf(t *testing.T, e incidents.AuditEntry, credential string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; i+4 <= len(credential); i++ {
-		if strings.Contains(string(raw), credential[i:i+4]) {
-			t.Fatalf("the entry holds %q of the credential: %s", credential[i:i+4], raw)
+	// Six characters, not fewer: the entry carries the hex of its chain
+	// hashes, and a shorter run of a hex key turns up in those by chance.
+	const run = 6
+	for i := 0; i+run <= len(credential); i++ {
+		if strings.Contains(string(raw), credential[i:i+run]) {
+			t.Fatalf("the entry holds %q of the credential: %s", credential[i:i+run], raw)
 		}
 	}
 }
@@ -269,9 +272,9 @@ func TestRefusalAudit_ProxyKey(t *testing.T) {
 		t.Fatalf("entries = %+v", es)
 	}
 	// The actor is the id of the key's record, as in every other entry the
-	// key leaves. The store makes that id from the first six bytes of the
-	// key; nothing of the 18 bytes that are secret is in the entry.
-	holdsNoPartOf(t, es[0], ck.RawKey[len("tk_")+len(ck.ID):])
+	// key leaves. The id is drawn apart from the key, so nothing of the key
+	// is in the entry.
+	holdsNoPartOf(t, es[0], ck.RawKey[len("tk_"):])
 }
 
 // One source that keeps trying adds two entries per window, not one per

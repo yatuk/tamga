@@ -124,4 +124,42 @@ func TestPG_VirtualKeys(t *testing.T) {
 			t.Fatalf("revoked row: %v %v", revoked, err)
 		}
 	})
+
+	t.Run("the id is not part of the key", func(t *testing.T) {
+		k, err := s.CreateWith(apikeys.Params{Label: "fresh", Scope: apikeys.ScopeRead})
+		if err != nil {
+			t.Fatal(err)
+		}
+		random := strings.TrimPrefix(k.ID, "key_")
+		if random == k.ID || strings.Contains(k.RawKey, random) || strings.Contains(k.RawKey, random[:8]) {
+			t.Fatalf("id %q is taken from the key", k.ID)
+		}
+		if got, ok := s.Verify(k.RawKey); !ok || got.ID != k.ID {
+			t.Fatalf("verify: ok=%v key=%+v", ok, got)
+		}
+	})
+
+	t.Run("a key with an old id still verifies", func(t *testing.T) {
+		// What a row written before ids were random looks like: the id is the
+		// first 12 hex characters of the key.
+		const raw = "tk_00112233445566778899aabbccddeeff0011223344556677"
+		var sum string
+		if err := pool.QueryRow(ctx, `SELECT encode(sha256(convert_to($1, 'UTF8')), 'hex')`, raw).Scan(&sum); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `INSERT INTO virtual_keys (id, key_hash, prefix, label, scope) VALUES ($1, $2, $3, 'old', 'read')`,
+			raw[3:15], sum, raw[:8]); err != nil {
+			t.Fatal(err)
+		}
+		got, ok := s.Verify(raw)
+		if !ok || got.ID != raw[3:15] {
+			t.Fatalf("verify: ok=%v key=%+v", ok, got)
+		}
+		if _, ok := s.Verify(raw[:15] + strings.Repeat("f", 36)); ok {
+			t.Fatal("a key that only starts like the id verified")
+		}
+		if err := s.Delete(raw[3:15]); err != nil {
+			t.Fatal(err)
+		}
+	})
 }

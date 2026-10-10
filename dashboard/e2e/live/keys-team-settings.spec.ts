@@ -130,7 +130,7 @@ test.describe("API keys", () => {
     const prefix = ((await row.getByRole("cell").nth(2).textContent()) ?? "").replace(/[….*]+$/, "").trim();
     expect(prefix.length).toBeGreaterThan(3);
     expect(raw.startsWith(prefix)).toBe(true);
-    await expect(row.getByRole("cell").nth(4)).toContainText("Never");
+    await expect(row.getByRole("cell").nth(5)).toContainText("Never");
     await expectLede(page, request);
 
     const stored = (await listKeys(request)).find((k) => k.label === name);
