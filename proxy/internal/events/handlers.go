@@ -12,6 +12,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 
+	"github.com/yatuk/tamga/internal/errkind"
 	"github.com/yatuk/tamga/internal/scanner/operator_state"
 	"github.com/yatuk/tamga/internal/telemetry"
 	pb "github.com/yatuk/tamga/proto/analyzer/v1"
@@ -183,7 +184,9 @@ func AnalyzerHandler(client AnalyzerClient) func(Event) {
 		}
 		resp, err := client.Analyze(ctx, req)
 		if err != nil {
-			log.Warn().Err(err).Str("component", "analyzer_handler").Str("request_id", e.RequestID).Msg("analyzer: deep scan failed (fail-open)")
+			// By kind only: the analyzer was sent the request, and its error
+			// can quote it.
+			log.Warn().Str("error_kind", errkind.Of(err)).Str("component", "analyzer_handler").Str("request_id", e.RequestID).Msg("analyzer: deep scan failed (fail-open)")
 			return
 		}
 		if resp != nil && len(resp.Findings) > 0 {
@@ -255,7 +258,7 @@ func OperatorStateAnalyzerHandler(client AnalyzerClient) func(Event) {
 			PreScanned: true,
 		})
 		if err != nil {
-			log.Warn().Err(err).Str("component", "operator_state_handler").Str("request_id", req.RequestID).Msg("analyzer: operator-state semantic scan failed (fail-open)")
+			log.Warn().Str("error_kind", errkind.Of(err)).Str("component", "operator_state_handler").Str("request_id", req.RequestID).Msg("analyzer: operator-state semantic scan failed (fail-open)")
 			return
 		}
 		logAdvisory(operatorStateAdvisory(req, resp))

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"sync"
 	"sync/atomic"
+
+	"github.com/yatuk/tamga/internal/errkind"
 )
 
 // Reasons a scan ran with less coverage than configured. Exported as the
@@ -67,6 +69,15 @@ type stopError struct {
 }
 
 func (e *stopError) Error() string   { return ErrScanDegraded.Error() + ": " + e.msg }
+
+// ErrorKind names the stop for a log line: the cap or the budget, or how
+// the context ended.
+func (e *stopError) ErrorKind() string {
+	if errors.Is(e.reason, ErrFindingsCap) || errors.Is(e.reason, ErrTimeBudget) {
+		return IncompleteReason(e.reason)
+	}
+	return errkind.Of(e.reason)
+}
 func (e *stopError) Unwrap() []error { return []error{ErrScanDegraded, e.reason} }
 
 // scanDegradedCounts tracks how often a scan lost coverage, keyed by reason.

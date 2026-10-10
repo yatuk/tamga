@@ -2,10 +2,10 @@ package proxy
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/yatuk/tamga/internal/classifier"
+	"github.com/yatuk/tamga/internal/errkind"
 	"github.com/yatuk/tamga/internal/extract"
 	"github.com/yatuk/tamga/internal/policy"
 	"github.com/yatuk/tamga/internal/scanner"
@@ -25,7 +25,7 @@ type classifyOutcome struct {
 
 // errClassifierNotConfigured is the failure when the policy turns the
 // classifier on and the proxy was started without one.
-var errClassifierNotConfigured = errors.New("scan.classifier is enabled but TAMGA_CLASSIFIER_ADDR is not set")
+var errClassifierNotConfigured = errkind.New("not_configured", "scan.classifier is enabled but TAMGA_CLASSIFIER_ADDR is not set")
 
 // classifySegments asks the classifier about the segments the rules left
 // open. It is called only when the request is not already blocked.

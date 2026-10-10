@@ -21,6 +21,7 @@ import (
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/status"
 
+	"github.com/yatuk/tamga/internal/errkind"
 	"github.com/yatuk/tamga/internal/scanner"
 	"github.com/yatuk/tamga/internal/telemetry"
 	pb "github.com/yatuk/tamga/proto/scanner/v1"
@@ -57,7 +58,8 @@ func (s *scannerServer) Scan(ctx context.Context, req *pb.ScanRequest) (*pb.Scan
 	// value, so the proxy cannot tell an echo from a second secret.
 	findings, err := s.registry.ScanRaw(ctx, req.Content, cfg)
 	if err != nil {
-		log.Warn().Err(err).Str("request_id", req.RequestId).Msg("scan failed")
+		// By kind only: a scanner's error can quote the text it read.
+		log.Warn().Str("reason", scanner.IncompleteReason(err)).Str("error_kind", errkind.Of(err)).Str("request_id", req.RequestId).Msg("scan failed")
 		// An empty response would read as a clean scan. The caller has to
 		// know the scan did not finish, so that its own scan.on_error applies.
 		code := codes.Unavailable

@@ -28,6 +28,7 @@ import (
 	"github.com/yatuk/tamga/internal/apikeys"
 	"github.com/yatuk/tamga/internal/classifier"
 	"github.com/yatuk/tamga/internal/config"
+	"github.com/yatuk/tamga/internal/errkind"
 	"github.com/yatuk/tamga/internal/events"
 	"github.com/yatuk/tamga/internal/extract"
 	"github.com/yatuk/tamga/internal/policy"
@@ -525,7 +526,9 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 			}
 		}
 		if err != nil {
-			logger.Warn().Err(err).Msg("gRPC scanner failed, falling back to local registry")
+			// By kind only, here and below: an error from a scanner or from
+			// the service that runs them can quote the text it was sent.
+			logger.Warn().Str("error_kind", errkind.Of(err)).Msg("gRPC scanner failed, falling back to local registry")
 			findings, err = scanWith(cfg.Registry)
 		} else if cfg.ProxyBoundRegistry != nil && cfg.ProxyBoundRegistry.Count() > 0 {
 			// The remote service only runs the stateless scanners. Policy- and
@@ -546,7 +549,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 		// The proxy fails open here: findings from the scanners that did run
 		// are still enforced, but the caller and the operator are told the
 		// verdict was reached with reduced coverage.
-		logger.Error().Err(err).Msg("scanner error")
+		logger.Error().Str("reason", scanIncomplete).Str("error_kind", errkind.Of(err)).Msg("scanner error")
 		w.Header().Set("X-Tamga-Scan-Degraded", "true")
 		span.SetAttributes(attribute.Bool("tamga.scan_degraded", true))
 		if pol.BlockOnScanError() {
@@ -620,7 +623,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 		case res.err != nil:
 			// The policy asked for a second opinion and did not get one.
 			scanner.RecordDegraded("classifier")
-			logger.Warn().Err(res.err).Msg("classifier unavailable")
+			logger.Warn().Str("error_kind", errkind.Of(res.err)).Msg("classifier unavailable")
 			w.Header().Set("X-Tamga-Scan-Degraded", "classifier")
 			span.SetAttributes(attribute.Bool("tamga.scan_degraded", true))
 			if pol.BlockOnScanError() {
@@ -700,8 +703,9 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 	if action == policy.ActionRedact {
 		masked, mapping, targets, reason, rwErr := redactRequest(provider, body, segs, findings, actionOf, vaultOn)
 		if rwErr != nil {
-			// The error names a path in the body, never text from it.
-			logger.Error().Err(rwErr).Msg("redaction could not be applied")
+			// By kind: the error names a path in the body, and a path
+			// holds the body's own keys.
+			logger.Error().Str("error_kind", errkind.Of(rwErr)).Msg("redaction could not be applied")
 		}
 		if reason == "" {
 			redactedBody, vaultMapping, redactTargeted = masked, mapping, targets
@@ -722,7 +726,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 		res, stripErr := stripSegments(provider, body, segs, findings, actionOf, vaultOn)
 		if stripErr != nil {
 			reason := stripFailure(stripErr)
-			logger.Warn().Err(stripErr).Str("reason", reason).Msg("STRIP not possible, blocking instead")
+			logger.Warn().Str("error_kind", errkind.Of(stripErr)).Str("reason", reason).Msg("STRIP not possible, blocking instead")
 			scanner.RecordDegraded("strip_" + reason)
 			w.Header().Set("X-Tamga-Strip-Fallback", "block:"+reason)
 			action = policy.ActionBlock

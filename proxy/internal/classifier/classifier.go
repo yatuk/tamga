@@ -10,7 +10,6 @@ package classifier
 import (
 	"context"
 	"crypto/sha256"
-	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -20,6 +19,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
 
+	"github.com/yatuk/tamga/internal/errkind"
 	pb "github.com/yatuk/tamga/proto/classifier/v1"
 )
 
@@ -39,7 +39,7 @@ type Scorer interface {
 
 // ErrOpen is returned while the breaker is open: the service failed
 // repeatedly and is not being asked again yet.
-var ErrOpen = errors.New("classifier: unavailable (circuit open)")
+var ErrOpen = errkind.New("circuit_open", "classifier: unavailable (circuit open)")
 
 // ── gRPC client ──────────────────────────────────────────────────────────
 

@@ -2,15 +2,17 @@ package scanner
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/yatuk/tamga/internal/errkind"
 	"github.com/yatuk/tamga/internal/telemetry"
 )
 
@@ -165,9 +167,9 @@ func (p *Pipeline) scanSync(ctx context.Context, content []byte) ([]Finding, err
 		findings, err := scanEntry(sctx, entry.Scanner, content, p.cfg.RequestCtx)
 		sp.SetAttributes(attribute.Int("findings.count", len(findings)))
 		if err != nil {
-			sp.RecordError(err)
+			recordScanError(sp, err)
 			if firstErr == nil {
-				firstErr = err
+				firstErr = &scannerError{scanner: entry.Scanner.Name(), cause: err}
 			}
 		}
 		sp.End()
@@ -211,7 +213,7 @@ func (p *Pipeline) scanAsync(ctx context.Context, content []byte) ([]Finding, er
 			findings, err := scanEntry(sctx, e.Scanner, content, p.cfg.RequestCtx)
 			sp.SetAttributes(attribute.Int("findings.count", len(findings)))
 			if err != nil {
-				sp.RecordError(err)
+				recordScanError(sp, err)
 				deg.note(e.Scanner.Name(), DegradedError, err)
 			}
 			sp.End()
@@ -272,7 +274,7 @@ func (p *Pipeline) scanAdaptive(ctx context.Context, content []byte) ([]Finding,
 			findings, err := scanEntry(sctx, e.Scanner, content, p.cfg.RequestCtx)
 			sp.SetAttributes(attribute.Int("findings.count", len(findings)))
 			if err != nil {
-				sp.RecordError(err)
+				recordScanError(sp, err)
 				deg.note(e.Scanner.Name(), DegradedError, err)
 			}
 			sp.End()
@@ -304,7 +306,7 @@ func (p *Pipeline) scanFast(ctx context.Context, entry ScannerEntry, content []b
 	findings, err := scanEntry(sctx, entry.Scanner, content, p.cfg.RequestCtx)
 	sp.SetAttributes(attribute.Int("findings.count", len(findings)))
 	if err != nil {
-		sp.RecordError(err)
+		recordScanError(sp, err)
 		deg.note(entry.Scanner.Name(), DegradedError, err)
 	}
 	return findings
@@ -403,21 +405,74 @@ func (d *degradation) note(scannerName, reason string, cause error) {
 	}
 	ev = ev.Str("component", "scanner").Str("scanner", scannerName).Str("reason", reason)
 	if cause != nil {
-		ev = ev.Err(cause)
+		// The kind of error and never its text: a scanner's error can quote
+		// what it read, and what it read is the request.
+		ev = ev.Str("error_kind", errkind.Of(cause))
 	}
 	ev.Msg("scanner did not report; request evaluated with reduced coverage")
 
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.err == nil {
-		if cause != nil {
-			// The cause stays in the chain: a caller tells a scan that was
-			// cut short from one that failed by it (IncompleteReason).
-			d.err = fmt.Errorf("%w: %s (%s): %w", ErrScanDegraded, scannerName, reason, cause)
-		} else {
-			d.err = fmt.Errorf("%w: %s (%s)", ErrScanDegraded, scannerName, reason)
-		}
+		d.err = &scannerError{scanner: scannerName, reason: reason, cause: cause}
 	}
+}
+
+// scannerError is the error of a run in which a scanner did not report. Its
+// message names the scanner, the reason and the kind of the cause. The cause
+// stays in the chain, so a caller still tells a scan that was cut short from
+// one that failed (IncompleteReason), but its text is in no message: whoever
+// logs this error logs nothing a scanner quoted.
+//
+// The one cause whose own words are kept is a stopError, the built-in
+// scanners' report of a cap or a budget: its message is written here, from
+// a scanner's name and a number, and policy simulation shows it to the
+// person whose pattern hit the cap.
+type scannerError struct {
+	scanner string
+	// reason is one of the Degraded constants, or "" for sync mode, which
+	// counts nothing.
+	reason string
+	cause  error
+}
+
+func (e *scannerError) Error() string {
+	msg := ErrScanDegraded.Error() + ": " + e.scanner
+	if e.reason != "" {
+		msg += " (" + e.reason + ")"
+	}
+	var stop *stopError
+	switch {
+	case errors.As(e.cause, &stop):
+		msg += ": " + stop.msg
+	case e.cause != nil:
+		msg += ": " + errkind.Of(e.cause)
+	}
+	return msg
+}
+
+func (e *scannerError) Unwrap() []error {
+	if e.cause == nil {
+		return []error{ErrScanDegraded}
+	}
+	return []error{ErrScanDegraded, e.cause}
+}
+
+// panicError is a scanner's panic as an error. The recovered value is kept
+// out of the message for the same reason: it can be the text.
+type panicError struct {
+	value any
+}
+
+func (e *panicError) Error() string     { return "panic" }
+func (e *panicError) ErrorKind() string { return errkind.Panic }
+
+// recordScanError marks a scanner's span as failed by the kind of the error.
+// Span.RecordError would export the error's text to the trace backend.
+func recordScanError(sp trace.Span, err error) {
+	kind := errkind.Of(err)
+	sp.SetAttributes(attribute.String("error.type", kind))
+	sp.SetStatus(codes.Error, kind)
 }
 
 func (d *degradation) result() error {
@@ -430,7 +485,7 @@ func (d *degradation) result() error {
 // reports it as a degraded scan.
 func recoverScanPanic(name string, d *degradation) {
 	if r := recover(); r != nil {
-		d.note(name, DegradedPanic, fmt.Errorf("panic: %v", r))
+		d.note(name, DegradedPanic, &panicError{value: r})
 	}
 }
 
