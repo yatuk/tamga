@@ -60,15 +60,6 @@ func NewTestPostgres(t *testing.T) *pgxpool.Pool {
 	// Run all migrations from the deploy/migrations directory.
 	runMigrations(t, pool)
 
-	// Migration 011 enables Row Level Security with a policy that requires
-	// app.tenant_id to be set. Disable RLS for tests so queries work without
-	// session-level tenant configuration.
-	for _, tbl := range []string{"request_logs", "daily_stats"} {
-		if _, err := pool.Exec(ctx, "ALTER TABLE IF EXISTS "+tbl+" DISABLE ROW LEVEL SECURITY"); err != nil {
-			t.Logf("disable RLS on %s: %v (table may not exist)", tbl, err)
-		}
-	}
-
 	// Seed default org if not present (needed for FK references in other tables).
 	_, _ = pool.Exec(ctx, `INSERT INTO organizations (name, slug, plan) VALUES ('Default Org', 'default', 'trial') ON CONFLICT DO NOTHING`)
 	// Tests write rows under testOrgID; daily_stats and alerts reference

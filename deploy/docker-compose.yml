@@ -157,6 +157,8 @@ services:
       - ./migrations/014_incident_lifecycle_align.up.sql:/docker-entrypoint-initdb.d/014_incident_lifecycle_align.sql:ro
       - ./migrations/015_virtual_keys.up.sql:/docker-entrypoint-initdb.d/015_virtual_keys.sql:ro
       - ./migrations/016_stored_documents.up.sql:/docker-entrypoint-initdb.d/016_stored_documents.sql:ro
+      - ./migrations/017_request_record.up.sql:/docker-entrypoint-initdb.d/017_request_record.sql:ro
+      - ./migrations/018_drop_tenant_rls.up.sql:/docker-entrypoint-initdb.d/018_drop_tenant_rls.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tamga}"]
       interval: 5s
