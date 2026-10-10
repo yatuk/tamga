@@ -200,8 +200,14 @@ export function History({ adminKey }: { adminKey: string }) {
 }
 
 const SEVERITIES = ["critical", "high", "medium", "low"] as const;
-const ACTIONS = ["block", "redact", "warn", "log"] as const;
-const ACTION_CHOICES: Record<(typeof ACTIONS)[number], string> = { block: "Stop the request", redact: "Redact the match", warn: "Warn", log: "Only log" };
+const ACTIONS = ["block", "strip", "redact", "warn", "log"] as const;
+const ACTION_CHOICES: Record<(typeof ACTIONS)[number], string> = {
+  block: "Stop the request",
+  strip: "Remove the message part it is in",
+  redact: "Redact the match",
+  warn: "Warn",
+  log: "Only log",
+};
 
 type EntityValues = { name: string; pattern: string; description: string; severity: (typeof SEVERITIES)[number]; action: (typeof ACTIONS)[number] };
 const EMPTY: EntityValues = { name: "", pattern: "", description: "", severity: "medium", action: "log" };
@@ -425,7 +431,8 @@ function parseCompetitors(yaml: string): Competitor[] {
         patterns,
         enabled: !entry.includes("enabled: false"),
         severity: entry.match(/^\s*severity:\s*(\w+)/m)?.[1] ?? "low",
-        action: entry.match(/^\s*action:\s*(\w+)/m)?.[1] ?? "log",
+        // No action of its own: the competitor rule or the default action decides.
+        action: entry.match(/^\s*action:\s*(\w+)/m)?.[1] ?? "",
         description: entry.match(/^\s*description:\s*"?(.+?)"?\s*$/m)?.[1] ?? "",
       });
     }
@@ -487,7 +494,7 @@ export function Competitors({ adminKey }: { adminKey: string }) {
                   </TableCell>
                   <TableCell>{cap(c.severity)}</TableCell>
                   <TableCell>
-                    <ActionMark action={c.action.toUpperCase()} />
+                    {c.action ? <ActionMark action={c.action.toUpperCase()} /> : <span className="t-note">Set by the rule</span>}
                   </TableCell>
                   <TableCell>{c.enabled ? "Yes" : "Switched off"}</TableCell>
                 </TableRow>
