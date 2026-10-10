@@ -1,36 +1,12 @@
-"use client";
+import { NoAccounts } from "@/components/console/auth";
 
-import dynamic from "next/dynamic";
-import { AuthFrame, NoAccounts } from "@/components/console/auth";
-
-const ClerkSignIn = dynamic(
-  async () => {
-    try {
-      const mod = await import("@clerk/nextjs");
-      return { default: mod.SignIn };
-    } catch {
-      return { default: () => null };
-    }
-  },
-  { ssr: false },
-);
-
+// The console has no sign-in of its own: it reads the proxy with the key
+// entered under Settings. The proxy issues no session for a Clerk account, so
+// Clerk's form is not shown here: signing in to it opened nothing.
 export default function SignInPage() {
-  const pk = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || "";
-  const enabled = pk && !pk.toLowerCase().includes("placeholder");
-
-  if (enabled) {
-    return (
-      <AuthFrame>
-        <h1 className="cds--visually-hidden">Sign in to Tamga</h1>
-        <ClerkSignIn />
-      </AuthFrame>
-    );
-  }
-
   return (
     <NoAccounts title="Sign in">
-      No identity provider is set up for this deployment. The console is open and uses the admin key from Settings.
+      There is nothing to sign in to here. The console is open and reads the proxy with the admin key from Settings.
     </NoAccounts>
   );
 }

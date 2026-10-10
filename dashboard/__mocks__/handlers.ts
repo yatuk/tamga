@@ -1,7 +1,13 @@
 import { http, HttpResponse } from "msw";
 import { policyHandlers, policyMock } from "./policy-handlers";
+import { teamHandlers } from "./team-handlers";
 
 const API = "/api/v1";
+
+/** GET/PUT /settings/sso. A test may replace `config` to start from another one. */
+export const ssoMock = {
+  config: { provider_type: "", metadata_url: "", attribute_mapping: {} as Record<string, string>, enabled: false, domain: "" },
+};
 
 /**
  * The proxy's answer to a key whose role is too low, or nothing when the key
@@ -464,6 +470,17 @@ export const handlers = [
   // Policies, proposals and custom entities: see policy-handlers.ts for the
   // keys that stand for an analyst and for a person's own admin key.
   ...policyHandlers,
+
+  // The team, its roles and its sessions: see team-handlers.ts for the keys
+  // that stand for a role below admin and for a signed-in user.
+  ...teamHandlers,
+
+  // The sign-in configuration the proxy stores and no sign-in reads.
+  http.get(`${API}/settings/sso`, () => HttpResponse.json(ssoMock.config)),
+  http.put(`${API}/settings/sso`, async ({ request }) => {
+    ssoMock.config = { ...ssoMock.config, ...((await request.json()) as Partial<typeof ssoMock.config>) };
+    return HttpResponse.json({ ok: true, config: ssoMock.config });
+  }),
 
   // Budget
   http.get(`${API}/budget/stats`, () => HttpResponse.json(MOCK_BUDGET)),

@@ -8,6 +8,7 @@ import { ADMIN_KEY_STORAGE } from "@/hooks/useAdminKey";
 import { ApiError } from "@/lib/api/fetch-core";
 import { POLICY_DRAFT_STORAGE } from "./_constants";
 import PoliciesPage from "./page";
+import { maskedNotifyRules } from "./policyUtils";
 import { explainRefusal, sectionWords } from "./refusal";
 
 // CodeMirror needs a real layout. The draft comes from this browser's storage, as it does after a reload.
@@ -266,6 +267,115 @@ describe("Policies page: proposals", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("The proposal was not applied and is still open. Use an admin key under Settings.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Approve and apply" })).toBeInTheDocument();
+  });
+});
+
+describe("Policies page: masked alert addresses", () => {
+  const SECRET = "https://hooks.slack.com/services/T000/B000/s3cr3t";
+  const MASKED = "https://hooks.slack.com/***masked***";
+  const rulesWith = (webhook: string, action = "redact") => ({
+    rules: {
+      ...(policyMock.policy.rules as object),
+      pii_detection: { action, severity: "high", notify: [{ channel: "slack", webhook }] },
+    },
+  });
+  const UP_FRONT = "This key cannot see where alerts are sent.";
+
+  it("finds the rules whose address is masked, and no others", () => {
+    expect(maskedNotifyRules(JSON.stringify(rulesWith(MASKED)))).toEqual(["rules.pii_detection.notify"]);
+    expect(maskedNotifyRules(JSON.stringify(rulesWith(SECRET)))).toEqual([]);
+    expect(maskedNotifyRules(JSON.stringify(rulesWith("${SLACK_WEBHOOK_URL}")))).toEqual([]);
+    // The marker anywhere else is not an address the proxy refuses.
+    expect(maskedNotifyRules(JSON.stringify({ name: "***masked***", rules: {} }))).toEqual([]);
+    expect(maskedNotifyRules("rules: ***masked***")).toEqual([]);
+  });
+
+  it("explains the proxy's refusal of a masked address, naming the rules", () => {
+    const refusal = explainRefusal(
+      new ApiError("the policy holds a masked webhook URL", 422, { code: "masked_value", fields: ["rules.pii_detection.notify"] }),
+      "save",
+    );
+    expect(refusal.title).toBe("The policy holds a masked alert address, which cannot be saved back.");
+    expect(refusal.detail).toMatch(/^Nothing was saved\. With an admin key, write each address in full or, better, as a reference/);
+    expect(refusal.sections).toEqual([{ words: "Alert destinations of rule pii_detection", path: "rules.pii_detection.notify" }]);
+  });
+
+  it("tells a key below admin up front that it cannot see or save the addresses, and switches the save off", async () => {
+    policyMock.reset({ policy: rulesWith(SECRET) });
+    // An edit this key may make, in the document as it reads it.
+    const user = show({ key: ANALYST_KEY, draft: policyMock.draft(rulesWith(MASKED, "block")) });
+
+    expect(await screen.findByText(UP_FRONT)).toBeInTheDocument();
+    expect(screen.getByText(/A masked address cannot be saved back, so the proxy refuses a save or a proposal of this document, and Save and apply is off\./)).toBeInTheDocument();
+    expect(screen.getByText(/as a reference such as \$\{SLACK_WEBHOOK_URL\}/)).toBeInTheDocument();
+    const named = screen.getByRole("list", { name: "Rules with a masked alert address" });
+    expect(within(named).getByText("rules.pii_detection.notify")).toBeInTheDocument();
+
+    expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+    expect(await saveButton()).toBeDisabled();
+    // Nor can the draft be proposed, and the form says why.
+    await openTab(user, "Proposals");
+    const form = (await screen.findByLabelText("What it changes and why")).closest("form") as HTMLFormElement;
+    expect(within(form).getByRole("button", { name: "Propose this change" })).toBeDisabled();
+    expect(within(form).getByText(/The draft holds a masked alert address, which the proxy does not take back/)).toBeInTheDocument();
+    expect((policyMock.policy.rules as Record<string, { action: string }>).pii_detection.action).toBe("redact");
+  });
+
+  it("does not show the masked address as a change the person made", async () => {
+    policyMock.reset({ policy: rulesWith(SECRET) });
+    const user = show({ key: ANALYST_KEY });
+    expect(await screen.findByText(UP_FRONT)).toBeInTheDocument();
+    expect(screen.queryByText("Unsaved changes")).toBeNull();
+    await openTab(user, "Changes");
+    expect(await screen.findByText("The draft is the same as the policy the proxy is running.")).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain("s3cr3t");
+  });
+
+  it("says a difference in a masked line comes from the key, not from an edit", async () => {
+    policyMock.reset({ policy: rulesWith(SECRET) });
+    // A draft written with an admin key, read later with a key below admin.
+    const user = show({ key: ANALYST_KEY, draft: policyMock.draft({}) });
+    expect(await screen.findByText(UP_FRONT)).toBeInTheDocument();
+    await openTab(user, "Changes");
+    expect(await screen.findByText(/It differs because the draft\s+and the running policy were read with different keys, not because of an edit\./)).toBeInTheDocument();
+  });
+
+  it("shows an admin key the addresses, and says nothing", async () => {
+    policyMock.reset({ policy: rulesWith(SECRET) });
+    show({ draft: policyMock.draft(rulesWith(SECRET, "block")) });
+    const button = await saveButton();
+    await waitFor(() => expect(button).toBeEnabled());
+    expect(screen.queryByText(UP_FRONT)).toBeNull();
+    expect(screen.queryByText("The draft holds a masked alert address.")).toBeNull();
+  });
+
+  it("never masks a reference, so a key below admin saves as before", async () => {
+    policyMock.reset({ policy: rulesWith("${SLACK_WEBHOOK_URL}") });
+    const user = show({ key: ANALYST_KEY, draft: policyMock.draft(rulesWith("${SLACK_WEBHOOK_URL}", "block")) });
+    await save(user);
+    expect(await screen.findByText("Policy saved. The proxy is now enforcing it.")).toBeInTheDocument();
+    expect(screen.queryByText(UP_FRONT)).toBeNull();
+  });
+
+  it("stops an admin key from saving a draft that was read masked", async () => {
+    policyMock.reset({ policy: rulesWith(SECRET) });
+    show({ draft: policyMock.draft(rulesWith(MASKED, "block")) });
+    expect(await screen.findByText("The draft holds a masked alert address.")).toBeInTheDocument();
+    expect(screen.getByText(/It was read with a key that is not an admin key/)).toBeInTheDocument();
+    expect(await saveButton()).toBeDisabled();
+  });
+
+  it("explains the refusal where a proposal that holds the mask is approved", async () => {
+    policyMock.reset({ policy: rulesWith(SECRET) });
+    policyMock.addProposal({ author: "apikey:analyst-ayse", yaml: policyMock.draft(rulesWith(MASKED, "block")), message: "Stop personal data" });
+    const user = show();
+    await openTab(user, "Proposals");
+    await user.click(await screen.findByRole("button", { name: "Approve and apply" }));
+
+    expect(await screen.findByText("The policy holds a masked alert address, which cannot be saved back.")).toBeInTheDocument();
+    expect(screen.getByText(/^The proposal was not applied and is still open\. With an admin key, write each address in full/)).toBeInTheDocument();
+    expect(screen.getByText("Alert destinations of rule pii_detection")).toBeInTheDocument();
+    expect((policyMock.policy.rules as Record<string, { action: string }>).pii_detection.action).toBe("redact");
   });
 });
 

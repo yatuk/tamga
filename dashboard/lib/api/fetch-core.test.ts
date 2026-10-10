@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { ApiError, authHeaders, fetchAPI } from "@/lib/api/fetch-core";
+import { ApiError, authHeaders, fetchAPI, permissionDenied, sessionRefused } from "@/lib/api/fetch-core";
 
 // ---------------------------------------------------------------------------
 // Helper: build a fresh fetch-like Response each call so the body stream
@@ -55,6 +55,30 @@ describe("fetchAPI", () => {
     await expect(fetchAPI("/test", { retry: 0 })).rejects.toThrow(
       "Admin key is wrong or missing",
     );
+  });
+
+  it("keeps the proxy's sentence for a 401 that is an ended session, not a wrong key", async () => {
+    const body = { error: "this session has ended; sign in again", code: "session_revoked" };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(res(401, body)));
+
+    const error = await fetchAPI("/test", { retry: 0 }).catch((e: unknown) => e);
+    expect(error).toMatchObject({ status: 401, code: "session_revoked", message: "this session has ended; sign in again" });
+    expect(sessionRefused(error)?.title).toBe("This session has ended.");
+    expect(permissionDenied(error)).toBeNull();
+  });
+
+  it("reads an account without a role apart from a role that is too low", async () => {
+    const body = { error: "this account has not been given access", code: "account_not_assigned", user_id: "583231" };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(res(403, body)));
+
+    const error = await fetchAPI("/test", { retry: 0 }).catch((e: unknown) => e);
+    expect(sessionRefused(error)).toMatchObject({
+      title: "This account has not been given a role.",
+      detail: "An admin can assign one under Team: 583231.",
+    });
+    expect(permissionDenied(error)).toBeNull();
+    // A wrong key is neither.
+    expect(sessionRefused(new ApiError("Admin key is wrong or missing", 401, { error: "unauthorized" }))).toBeNull();
   });
 
   it("does not retry a 401: the same key gives the same answer", async () => {

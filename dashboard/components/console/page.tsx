@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import { Button, ContentSwitcher, IconButton, InlineNotification, SkeletonText, Switch } from "@carbon/react";
 import { TrashCan } from "@carbon/icons-react";
 import { useHealth } from "@/hooks/useHealth";
-import { permissionDenied } from "@/lib/api/fetch-core";
+import { permissionDenied, sessionRefused } from "@/lib/api/fetch-core";
 import type { TimeRange } from "@/lib/types";
 import { Bar } from "./motion";
 
@@ -61,15 +61,19 @@ export function DataNotice({
   const health = useHealth();
   if (adminKey && !failed && !error) return null;
   const denied = adminKey ? permissionDenied(error) : null;
+  // A session the proxy no longer honours is not a wrong key, and says so itself.
+  const session = adminKey ? sessionRefused(error) : null;
   const [title, subtitle] = !adminKey
     ? ["No admin key in this browser.", "Add one under Settings to read the proxy's data."]
     : denied
       ? [`This key's role cannot read ${what}.`, `${denied.needs} Use a key with a higher role under Settings.`]
-      : health.detailState === "rejected"
-        ? ["The proxy did not accept the admin key.", "It is up. Check the key under Settings."]
-        : health.data
-          ? ["The proxy is up, but it did not return this page's data.", "Proxy status shows whether one of its parts is down."]
-          : ["The proxy did not answer.", "Check that it is running and that this console points at it."];
+      : session
+        ? [session.title, session.detail]
+        : health.detailState === "rejected"
+          ? ["The proxy did not accept the admin key.", "It is up. Check the key under Settings."]
+          : health.data
+            ? ["The proxy is up, but it did not return this page's data.", "Proxy status shows whether one of its parts is down."]
+            : ["The proxy did not answer.", "Check that it is running and that this console points at it."];
   return (
     <InlineNotification
       kind={adminKey ? "error" : "info"}
@@ -117,14 +121,15 @@ export function NoData({
  * What the proxy said when it refused an action because the key's role is too
  * low, beside the button that asked. The console cannot know a key's role
  * beforehand, so the button is there for everyone and the answer is shown.
- * Renders nothing for any other error: those are reported where they were.
+ * The same for a session the proxy no longer honours. Renders nothing for any
+ * other error: those are reported where they were.
  */
 export function Refused({ error }: { error: unknown }) {
-  const denied = permissionDenied(error);
-  if (!denied) return null;
+  const refused = (permissionDenied(error) ?? sessionRefused(error))?.refused;
+  if (!refused) return null;
   return (
     <span className="t-refused" role="alert">
-      {denied.refused}
+      {refused}
     </span>
   );
 }

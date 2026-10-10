@@ -1001,6 +1001,18 @@ html {
   color: var(--cds-text-primary);
   white-space: normal;
 }
+/* What an action on a row did, or will do, under the control that does it. */
+.tamga .t-rownote {
+  display: block;
+  max-width: 28rem;
+  margin-top: 0.25rem;
+  font-size: 0.8125rem;
+  color: var(--cds-text-secondary);
+  white-space: normal;
+}
+.tamga .t-table .t-refused {
+  margin-top: 0.25rem;
+}
 
 /* ── Event explorer ────────────────────────────────────────────────── */
 .tamga .t-live {

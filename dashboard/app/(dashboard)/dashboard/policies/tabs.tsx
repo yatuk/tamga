@@ -28,6 +28,7 @@ import { api, type PolicyRevision, type PolicySimulateResult } from "@/lib/api";
 import { API_BASE, authHeaders } from "@/lib/api/fetch-core";
 import type { CustomEntity } from "@/lib/api/types-core";
 import { toast } from "@/lib/toast";
+import { NOTIFY_MASK } from "./policyUtils";
 import { explainRefusal, RefusalNotice, type Refusal } from "./refusal";
 
 const cap = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);
@@ -36,8 +37,17 @@ const when = (iso?: string) => (iso ? `${dayLabel(iso)}, ${clockTime(iso)}` : "N
 /** What the draft changes against the policy the proxy is running. */
 export function Changes({ original, draft }: { original: string; draft: string }) {
   const lines = useMemo(() => diffLines(original, draft), [original, draft]);
+  // A draft written with an admin key and read against the policy as a lower
+  // key sees it (or the other way round) differs where the addresses are masked.
+  const maskDiffers = lines.some((l) => l.type !== " " && l.text.includes(NOTIFY_MASK));
   return (
     <Section id="changes" title="The draft against the running policy" note={lines.length > 0 ? diffWords(lines) : undefined}>
+      {maskDiffers ? (
+        <p className="t-note" style={{ marginTop: "0.75rem" }}>
+          A line that holds {NOTIFY_MASK} is an alert address the proxy hid from a key that is not an admin key. It differs because the draft
+          and the running policy were read with different keys, not because of an edit.
+        </p>
+      ) : null}
       {lines.length === 0 ? (
         <p className="t-empty">The draft is the same as the policy the proxy is running.</p>
       ) : (

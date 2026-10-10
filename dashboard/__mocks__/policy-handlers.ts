@@ -24,6 +24,13 @@ const API = "/api/v1";
  * 422: a negative rate_limit.requests_per_minute and a rule action that is
  * not an action. Text that is not JSON is the 400 "policy parse" answer.
  *
+ * A rule's alert address (notify[].webhook) is shown to an admin only
+ * (policy_mask.go). An analyst reads "scheme://host/***masked***" in the
+ * policy, the revisions and the proposals, and the answer carries the header
+ * X-Tamga-Masked: notify.webhook. A "${NAME}" reference is never masked. A
+ * policy that holds the mask is refused with 422 "masked_value", from an
+ * admin too.
+ *
  * State is kept between requests so that a write shows in the next read.
  * Tests start from a known state with policyMock.reset().
  */
@@ -151,6 +158,90 @@ function callerOf(request: Request): Caller | null {
 
 const unauthorized = () => HttpResponse.json({ error: "unauthorized" }, { status: 401 });
 const sharedActor = (actor: string) => actor === "admin-key" || actor === "dev-mode";
+
+// ── Alert addresses, as a caller below admin reads them ─────────────────
+const NOTIFY_MASK = "***masked***";
+
+function maskWebhook(value: string): string {
+  const t = value.trim();
+  if (t === "" || (t.startsWith("${") && t.endsWith("}")) || t.includes(NOTIFY_MASK)) return value;
+  try {
+    const u = new URL(t);
+    if (u.protocol === "http:" || u.protocol === "https:") return `${u.protocol}//${u.host}/${NOTIFY_MASK}`;
+  } catch {
+    // Not a URL: nothing of it is shown.
+  }
+  return NOTIFY_MASK;
+}
+
+/** Calls `visit` with every notify entry of every rule that has a webhook. */
+function eachWebhook(pol: Doc, visit: (rule: string, entry: Doc) => void) {
+  for (const [name, rule] of Object.entries(isObject(pol.rules) ? pol.rules : {})) {
+    const notify = isObject(rule) && Array.isArray(rule.notify) ? rule.notify : [];
+    for (const entry of notify) if (isObject(entry) && typeof entry.webhook === "string") visit(name, entry);
+  }
+}
+
+/** A copy of the policy as `who` may read it, and whether anything in it was masked. */
+function readable(who: Caller, pol: Doc): { doc: Doc; masked: boolean } {
+  if (who.role === "admin") return { doc: pol, masked: false };
+  const doc = clone(pol);
+  let masked = false;
+  eachWebhook(doc, (_rule, entry) => {
+    const shown = maskWebhook(entry.webhook as string);
+    if (shown !== entry.webhook) {
+      entry.webhook = shown;
+      masked = true;
+    }
+  });
+  return { doc, masked };
+}
+
+/** Policy text as `who` may read it. Text that is not JSON has no address the mock can find. */
+function readableText(who: Caller, text: string): { text: string; masked: boolean } {
+  try {
+    const parsed: unknown = JSON.parse(text);
+    if (!isObject(parsed)) return { text, masked: false };
+    const { doc, masked } = readable(who, parsed);
+    return masked ? { text: JSON.stringify(doc, null, 2), masked } : { text, masked };
+  } catch {
+    return { text, masked: false };
+  }
+}
+
+/** Answers with records that carry policy text (revisions, proposals), each as `who` may read it. */
+function withText<T extends { yaml: string }>(who: Caller, records: T | T[], init?: ResponseInit) {
+  let masked = false;
+  const show = (record: T): T => {
+    const shown = readableText(who, record.yaml);
+    masked = masked || shown.masked;
+    return { ...record, yaml: shown.text };
+  };
+  const body = Array.isArray(records) ? records.map(show) : show(records);
+  return HttpResponse.json(body, { ...init, headers: masked ? { "X-Tamga-Masked": "notify.webhook" } : undefined });
+}
+
+/** The rules whose alert address is the mask, as the proxy names them in its refusal. */
+function maskedFields(pol: Doc): string[] {
+  const fields = new Set<string>();
+  eachWebhook(pol, (rule, entry) => {
+    if ((entry.webhook as string).includes(NOTIFY_MASK)) fields.add(`rules.${rule}.notify`);
+  });
+  return [...fields].sort();
+}
+
+const maskedRefused = (fields: string[]) =>
+  HttpResponse.json(
+    {
+      error:
+        `the policy holds a masked webhook URL (${NOTIFY_MASK}) in ${fields.join(", ")}: ` +
+        "this text was read without the admin role, which hides webhook URLs. " +
+        "Write the URL itself or, better, a reference such as ${SLACK_WEBHOOK_URL}.",
+      code: "masked_value",
+      fields,
+    },
+    { status: 422 },
+  );
 
 // ── What differs between two policies ───────────────────────────────────
 const ANALYST_SECTIONS = new Set(["name", "version", "rules", "output_rules", "custom_entities", "competitors"]);
@@ -289,7 +380,7 @@ function privilegeRefused(who: Caller, next: Doc) {
 const dualControlOn = () => isObject(state.policy.governance) && state.policy.governance.require_dual_control === true;
 
 /** Reads `{ "yaml": "..." }` and decodes the text. Answers the request itself when the text is refused. */
-async function readPolicy(request: Request): Promise<{ text: string; policy: Doc } | { refused: Response }> {
+async function readPolicy(request: Request, { dryRun = false } = {}): Promise<{ text: string; policy: Doc } | { refused: Response }> {
   const body = (await request.json().catch(() => ({}))) as { yaml?: string };
   const text = body.yaml ?? "";
   if (!text.trim()) return { refused: HttpResponse.json({ error: "empty policy" }, { status: 400 }) };
@@ -302,6 +393,8 @@ async function readPolicy(request: Request): Promise<{ text: string; policy: Doc
   if (!isObject(policy)) return { refused: HttpResponse.json({ error: "policy parse: not a mapping" }, { status: 400 }) };
   const issues = issuesOf(policy);
   if (issues.some((i) => i.severity === "error")) return { refused: validationFailed(issues) };
+  const masked = dryRun ? [] : maskedFields(policy);
+  if (masked.length > 0) return { refused: maskedRefused(masked) };
   return { text, policy };
 }
 
@@ -324,15 +417,21 @@ function settled(p: MockProposal) {
 }
 
 export const policyHandlers = [
-  http.get(`${API}/policies`, ({ request }) => (callerOf(request) ? HttpResponse.json([state.policy]) : unauthorized())),
+  http.get(`${API}/policies`, ({ request }) => {
+    const who = callerOf(request);
+    if (!who) return unauthorized();
+    const { doc, masked } = readable(who, state.policy);
+    return HttpResponse.json([doc], { headers: masked ? { "X-Tamga-Masked": "notify.webhook" } : undefined });
+  }),
 
   http.post(`${API}/policies/reload`, ({ request }) =>
     callerOf(request) ? HttpResponse.json({ ok: true, name: state.policy.name, changed: [] }) : unauthorized(),
   ),
 
+  // A dry run checks the limits only: it does not refuse the mask, the write does.
   http.post(`${API}/policies/validate`, async ({ request }) => {
     if (!callerOf(request)) return unauthorized();
-    const read = await readPolicy(request);
+    const read = await readPolicy(request, { dryRun: true });
     if ("refused" in read) return read.refused;
     return HttpResponse.json({ valid: true, warnings: issuesOf(read.policy).filter((i) => i.severity === "warning") });
   }),
@@ -350,12 +449,16 @@ export const policyHandlers = [
     return HttpResponse.json({ ok: true, name: state.policy.name, version: state.policy.version, ...res });
   }),
 
-  http.get(`${API}/policies/history`, ({ request }) => (callerOf(request) ? HttpResponse.json(state.revisions) : unauthorized())),
+  http.get(`${API}/policies/history`, ({ request }) => {
+    const who = callerOf(request);
+    return who ? withText(who, state.revisions) : unauthorized();
+  }),
 
   http.get(`${API}/policies/revisions/:id`, ({ request, params }) => {
-    if (!callerOf(request)) return unauthorized();
+    const who = callerOf(request);
+    if (!who) return unauthorized();
     const rev = state.revisions.find((r) => r.id === params.id);
-    return rev ? HttpResponse.json(rev) : HttpResponse.json({ error: "revision not found" }, { status: 404 });
+    return rev ? withText(who, rev) : HttpResponse.json({ error: "revision not found" }, { status: 404 });
   }),
 
   // The one policy route the analyst role is kept out of altogether.
@@ -371,7 +474,10 @@ export const policyHandlers = [
   }),
 
   // ── Proposals ─────────────────────────────────────────────────────────
-  http.get(`${API}/policies/proposals`, ({ request }) => (callerOf(request) ? HttpResponse.json(state.proposals) : unauthorized())),
+  http.get(`${API}/policies/proposals`, ({ request }) => {
+    const who = callerOf(request);
+    return who ? withText(who, state.proposals) : unauthorized();
+  }),
 
   // Open under dual control too: it is the way in. The author is the caller; a name in the body is not read.
   http.post(`${API}/policies/proposals`, async ({ request }) => {
@@ -383,7 +489,7 @@ export const policyHandlers = [
     const refused = privilegeRefused(who, read.policy);
     if (refused) return refused;
     const proposal = policyMock.addProposal({ author: who.actor, yaml: read.text, message: body.message ?? "" });
-    return HttpResponse.json(proposal, { status: 201 });
+    return withText(who, proposal, { status: 201 });
   }),
 
   http.post(`${API}/policies/proposals/:id/approve`, ({ request, params }) => {
@@ -418,6 +524,8 @@ export const policyHandlers = [
     const next = JSON.parse(prop.yaml) as Doc;
     const issues = issuesOf(next);
     if (issues.some((i) => i.severity === "error")) return validationFailed(issues);
+    const masked = maskedFields(next);
+    if (masked.length > 0) return maskedRefused(masked);
     const refused = privilegeRefused(who, next);
     if (refused) return refused;
     if (state.readOnly) return readOnlyRefused();
@@ -443,7 +551,7 @@ export const policyHandlers = [
     prop.status = "rejected";
     prop.rejected_by = who.actor;
     prop.rejected_at = now();
-    return HttpResponse.json(prop);
+    return withText(who, prop);
   }),
 
   // ── Custom entities: each change rewrites the policy, so it is a direct write ──

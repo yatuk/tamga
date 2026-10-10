@@ -368,12 +368,15 @@ function SSOForm({ config, onSave }: { config: SSOSettings | undefined; onSave: 
   };
 
   return (
-    <Section
-      id="sso"
-      title="Single sign-on"
-      note={enabled && providerType ? `Required, over ${providerType === "saml" ? "SAML 2.0" : "OpenID Connect"}` : "Not in use"}
-      style={{ maxWidth: "44rem" }}
-    >
+    <Section id="sso" title="Single sign-on" note="Stored, not used by any sign-in" style={{ maxWidth: "44rem" }}>
+      <InlineNotification
+        kind="info"
+        lowContrast
+        hideCloseButton
+        title="No sign-in uses these settings yet."
+        subtitle="The proxy stores them and reads them nowhere: nobody signs in over SAML or OpenID Connect, and saving this form admits or refuses no one. Today people sign in through GitHub OAuth, which is configured on the proxy, or use a key."
+        style={{ marginTop: "1rem", maxWidth: "none" }}
+      />
       <form
         className="t-form"
         onSubmit={(e) => {
@@ -400,21 +403,20 @@ function SSOForm({ config, onSave }: { config: SSOSettings | undefined; onSave: 
         <TextInput
           id="sso-domain"
           labelText="Email domain"
-          helperText="People with an address on this domain sign in through the identity provider."
+          helperText="The domain whose addresses would sign in through the identity provider."
           placeholder="example.com"
           autoComplete="off"
           spellCheck={false}
           value={domain}
           onChange={(e) => setDomain(e.target.value)}
         />
-        <Toggle id="sso-enabled" size="sm" labelText="Require it for this domain" labelA="No" labelB="Yes" toggled={enabled} onToggle={setEnabled} />
+        <Toggle id="sso-enabled" size="sm" labelText="Marked as required for this domain" labelA="No" labelB="Yes" toggled={enabled} onToggle={setEnabled} />
         <div className="t-buttons">
           <Button type="submit" kind="primary" size="md" disabled={saving}>
             {saving ? "Saving" : "Save"}
           </Button>
         </div>
       </form>
-      <p className="t-footnote">Single sign-on needs a plan with your identity provider that includes it.</p>
     </Section>
   );
 }

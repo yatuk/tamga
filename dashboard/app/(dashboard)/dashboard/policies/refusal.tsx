@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { ActionableNotification, InlineNotification } from "@carbon/react";
-import { ApiError } from "@/lib/api/fetch-core";
+import { ApiError, sessionRefused } from "@/lib/api/fetch-core";
 import type { PolicyIssue } from "@/lib/api/types-extended";
 
 /** What the person was doing when the proxy said no. It decides how "nothing happened" is worded. */
@@ -68,6 +68,10 @@ const FAILED: Record<PolicyAction, string> = {
   "entity-delete": "The entity could not be deleted.",
   reload: "The policy could not be reloaded.",
 };
+
+/** What to do about a masked alert address. Said before a write is tried, and again if the proxy refuses one. */
+export const MASKED_WAY_OUT =
+  "With an admin key, write each address in full or, better, as a reference such as ${SLACK_WEBHOOK_URL}: a reference is never masked.";
 
 function issuesOf(error: ApiError): PolicyIssue[] {
   const inner = error.body.error;
@@ -147,7 +151,21 @@ export function explainRefusal(error: unknown, action: PolicyAction): Refusal {
         issues,
       };
     }
+    case "masked_value": {
+      // The proxy hides the address of an alert from every role below admin, and
+      // takes the text it handed out that way back from nobody, an admin included.
+      const raw = error.body.fields;
+      const paths = Array.isArray(raw) ? raw.filter((p): p is string => typeof p === "string") : [];
+      return {
+        code: error.code,
+        title: "The policy holds a masked alert address, which cannot be saved back.",
+        detail: `${notDone}. ${MASKED_WAY_OUT}`,
+        sections: paths.map((path) => ({ words: sectionWords(path), path })),
+      };
+    }
   }
+  const session = sessionRefused(error);
+  if (session) return { code: error.code, title: session.title, detail: `${notDone}. ${session.detail}` };
   if (error.code === "permission_denied") {
     const required = error.body.required_permission;
     return {

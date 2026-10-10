@@ -9,7 +9,8 @@ import { useHealthDetail } from "@/hooks/useHealth";
 import { POLICY_TABS } from "./_constants";
 import { appendCustomEntity, appendRateLimitTemplate, strengthenInjection } from "./snippets";
 import { Proposals } from "./proposals";
-import { ChangedNotice, RefusalNotice } from "./refusal";
+import { maskedNotifyRules, NOTIFY_MASK } from "./policyUtils";
+import { ChangedNotice, MASKED_WAY_OUT, RefusalNotice, sectionWords } from "./refusal";
 import { Changes, Competitors, Entities, History, TryIt } from "./tabs";
 import { usePoliciesPage } from "./usePoliciesPage";
 
@@ -20,12 +21,55 @@ const PolicyCodeEditor = dynamic(() => import("./policy-code-editor"), {
   loading: () => <SkeletonText paragraph lineCount={12} />,
 });
 
+/**
+ * Said before anything is tried: the document holds an alert address the
+ * proxy masked, so a write of the whole document will be refused.
+ */
+function MaskedNotice({ running, draft, dualControl }: { running: string[]; draft: string[]; dualControl: boolean }) {
+  const blocked = draft.length > 0;
+  const button = dualControl ? "Propose this change" : "Save and apply";
+  return (
+    <InlineNotification
+      kind="info"
+      lowContrast
+      hideCloseButton
+      title={running.length > 0 ? "This key cannot see where alerts are sent." : "The draft holds a masked alert address."}
+      subtitle={[
+        running.length > 0
+          ? `The proxy shows the address of an alert to an admin only; here each reads as its host and ${NOTIFY_MASK}.`
+          : "It was read with a key that is not an admin key, which hides where alerts are sent.",
+        blocked
+          ? `A masked address cannot be saved back, so the proxy refuses a save or a proposal of this document, and ${button} is off.`
+          : "The draft no longer holds one, but changing where alerts are sent is for an admin key.",
+        MASKED_WAY_OUT,
+      ].join(" ")}
+      className="t-refusal"
+      style={{ marginTop: "1.5rem", maxWidth: "none" }}
+    >
+      <ul className="t-issues" aria-label="Rules with a masked alert address">
+        {(blocked ? draft : running).map((path) => (
+          <li key={path}>
+            <span className="t-data">{path}</span>
+            <span>{sectionWords(path)}</span>
+          </li>
+        ))}
+      </ul>
+    </InlineNotification>
+  );
+}
+
 export default function PoliciesPage() {
   const m = usePoliciesPage();
   const { activePolicy } = m;
   // A proxy that cannot write its policy file says so; older ones say nothing and are assumed able.
   const readOnly = useHealthDetail().data?.policy_writable === false;
   const dirty = Boolean(m.originalYaml && m.draft && m.originalYaml !== m.draft);
+  // Below admin the proxy hands out the address of an alert masked, and takes a
+  // masked address back from nobody. The policy as this key reads it says which
+  // case this is; the draft says whether a write of it would be refused.
+  const maskedRunning = maskedNotifyRules(m.originalYaml);
+  const maskedDraft = maskedNotifyRules(m.draft);
+  const masked = maskedDraft.length > 0;
   // The running policy says whether a change needs a second person. Then nothing is
   // written directly, and the way to change it is a proposal.
   const governance = activePolicy?.governance as { require_dual_control?: boolean } | null | undefined;
@@ -60,11 +104,11 @@ export default function PoliciesPage() {
               Reload from disk
             </Button>
             {dualControl ? (
-              <Button kind="primary" size="sm" onClick={() => m.setTab("proposals")} disabled={!dirty}>
+              <Button kind="primary" size="sm" onClick={() => m.setTab("proposals")} disabled={!dirty || masked}>
                 Propose this change
               </Button>
             ) : (
-              <Button kind="primary" size="sm" renderIcon={Save} onClick={() => void m.onSave()} disabled={m.saving || !dirty || readOnly}>
+              <Button kind="primary" size="sm" renderIcon={Save} onClick={() => void m.onSave()} disabled={m.saving || !dirty || readOnly || masked}>
                 {m.saving ? "Saving" : "Save and apply"}
               </Button>
             )}
@@ -83,6 +127,10 @@ export default function PoliciesPage() {
           subtitle="You can read it here, try a draft against a prompt and see what it would change, but not save. Edit the file there and choose Reload from disk, or mount it writable."
           style={{ marginTop: "1.5rem", maxWidth: "none" }}
         />
+      ) : null}
+
+      {maskedRunning.length > 0 || masked ? (
+        <MaskedNotice running={maskedRunning} draft={maskedDraft} dualControl={dualControl} />
       ) : null}
 
       {dualControl ? (
@@ -160,6 +208,7 @@ export default function PoliciesPage() {
                     draft={m.draft}
                     running={m.originalYaml}
                     dirty={dirty}
+                    masked={masked}
                     readOnly={readOnly}
                     dualControl={dualControl}
                     onApplied={() => void m.refetch()}

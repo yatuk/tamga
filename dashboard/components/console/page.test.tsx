@@ -59,6 +59,32 @@ describe("DataNotice", () => {
     expect(screen.queryByText(/role cannot read/)).toBeNull();
   });
 
+  it("says an account has no role, and which id an admin gives one to", async () => {
+    localStorage.setItem(ADMIN_KEY_STORAGE, "test-key");
+    const error = new ApiError("this account has not been given access; an admin assigns it a role first", 403, {
+      code: "account_not_assigned",
+      user_id: "583231",
+    });
+    show(<DataNotice adminKey="test-key" error={error} />);
+    expect(screen.getByText("This account has not been given a role.")).toBeInTheDocument();
+    expect(screen.getByText("An admin can assign one under Team: 583231.")).toBeInTheDocument();
+    // Still so once the health check has answered: it is not a wrong key.
+    await new Promise((done) => setTimeout(done, 100));
+    expect(screen.getByText("This account has not been given a role.")).toBeInTheDocument();
+    expect(screen.queryByText("The proxy did not accept the admin key.")).toBeNull();
+  });
+
+  it("says a session has ended, not that the key is wrong", async () => {
+    // A key the health check rejects, so that the notice would otherwise blame the key.
+    localStorage.setItem(ADMIN_KEY_STORAGE, "wrong-key");
+    const error = new ApiError("this session has ended; sign in again", 401, { code: "session_revoked" });
+    show(<DataNotice adminKey="wrong-key" error={error} />);
+    expect(screen.getByText("This session has ended.")).toBeInTheDocument();
+    expect(screen.getByText("Its role changed, or the account was signed out. Sign in again.")).toBeInTheDocument();
+    await new Promise((done) => setTimeout(done, 100));
+    expect(screen.queryByText("The proxy did not accept the admin key.")).toBeNull();
+  });
+
   it("without a key says that, not that a role is too low", () => {
     show(<DataNotice adminKey="" error={denied} what="API keys" />);
     expect(screen.getByText("No admin key in this browser.")).toBeInTheDocument();
@@ -79,6 +105,11 @@ describe("Refused", () => {
   it("puts the refusal beside the button that asked", () => {
     show(<Refused error={denied} />);
     expect(screen.getByRole("alert")).toHaveTextContent("This key's role cannot do this. The proxy asks for the apikeys:read permission.");
+  });
+
+  it("says the same of an account without a role", () => {
+    show(<Refused error={new ApiError("no role", 403, { code: "account_not_assigned", user_id: "583231" })} />);
+    expect(screen.getByRole("alert")).toHaveTextContent("This account has not been given a role. An admin can assign one under Team: 583231.");
   });
 
   it("renders nothing for an error that is not about the role", () => {

@@ -68,6 +68,7 @@ export function Proposals({
   draft,
   running,
   dirty,
+  masked = false,
   readOnly = false,
   dualControl = false,
   onApplied,
@@ -77,6 +78,8 @@ export function Proposals({
   /** The policy the proxy is running, as the editor shows it. */
   running: string;
   dirty: boolean;
+  /** The draft holds a masked alert address: the proxy would refuse it as a proposal. */
+  masked?: boolean;
   readOnly?: boolean;
   dualControl?: boolean;
   /** Called once an approved proposal is in force. */
@@ -243,7 +246,7 @@ export function Proposals({
         ) : null}
       </Section>
 
-      <Section id="propose" title="Propose the draft" note={dirty ? undefined : "The draft has no changes"}>
+      <Section id="propose" title="Propose the draft" note={masked ? "The draft cannot be proposed" : dirty ? undefined : "The draft has no changes"}>
         <form
           noValidate
           className="t-form"
@@ -253,9 +256,11 @@ export function Proposals({
           }}
         >
           <p className="t-note">
-            {dirty
-              ? "The draft from Editor is sent as it is now. It changes nothing until it is approved."
-              : "The draft is the same as the running policy. Edit the document under Editor first."}
+            {masked
+              ? "The draft holds a masked alert address, which the proxy does not take back, so it cannot be proposed. See the note at the top of the page."
+              : dirty
+                ? "The draft from Editor is sent as it is now. It changes nothing until it is approved."
+                : "The draft is the same as the running policy. Edit the document under Editor first."}
           </p>
           <TextInput
             id="proposal-message"
@@ -266,10 +271,10 @@ export function Proposals({
             onChange={(e) => setMessage(e.target.value)}
             invalid={submitted && !!messageError}
             invalidText={messageError}
-            disabled={!dirty}
+            disabled={!dirty || masked}
           />
           <div className="t-buttons">
-            <Button type="submit" kind="primary" size="md" disabled={!dirty || propose.isPending}>
+            <Button type="submit" kind="primary" size="md" disabled={!dirty || masked || propose.isPending}>
               {propose.isPending ? "Proposing" : "Propose this change"}
             </Button>
           </div>

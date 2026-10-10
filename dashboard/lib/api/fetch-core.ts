@@ -60,12 +60,40 @@ export function permissionDenied(error: unknown): { permission: string; needs: s
 }
 
 /**
+ * Whether the proxy refused a session token that is well formed and signed:
+ * the account has no role (403, "account_not_assigned"), or its sessions were
+ * ended (401, "session_revoked"). Neither is a wrong key. The console sends a
+ * key and gets neither today; this is for a caller that signs in.
+ */
+export function sessionRefused(error: unknown): { title: string; detail: string; refused: string } | null {
+  if (!(error instanceof ApiError)) return null;
+  if (error.status === 403 && error.code === "account_not_assigned") {
+    const id = typeof error.body.user_id === "string" ? error.body.user_id : "";
+    const title = "This account has not been given a role.";
+    const detail = id ? `An admin can assign one under Team: ${id}.` : "An admin can assign one under Team.";
+    return { title, detail, refused: `${title} ${detail}` };
+  }
+  if (error.status === 401 && error.code === "session_revoked") {
+    const title = "This session has ended.";
+    const detail = "Its role changed, or the account was signed out. Sign in again.";
+    return { title, detail, refused: `${title} ${detail}` };
+  }
+  return null;
+}
+
+/** The sentence for an answer outside 2xx. A 401 is a wrong key unless the proxy says a session ended. */
+function messageFor(status: number, body: Record<string, unknown>): string {
+  if (status === 401 && body.code !== "session_revoked") return "Admin key is wrong or missing";
+  return formatFetchErrorMessage(status, body);
+}
+
+/**
  * The error for an answer outside 2xx, read from the response. For the calls
  * that do not go through fetchAPI because their answer is not JSON.
  */
 export async function errorFromResponse(res: Response): Promise<ApiError> {
   const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-  const message = res.status === 401 ? "Admin key is wrong or missing" : formatFetchErrorMessage(res.status, body);
+  const message = messageFor(res.status, body);
   return new ApiError(message, res.status, body && typeof body === "object" ? body : {});
 }
 
@@ -90,7 +118,7 @@ export async function fetchAPI<T>(path: string, options?: APIOptions): Promise<T
       if (!res.ok) {
         const errBody = (await res.json().catch(() => ({}))) as Record<string, unknown>;
         if (options?.accept?.(res.status, errBody)) return errBody as T;
-        const message = res.status === 401 ? "Admin key is wrong or missing" : formatFetchErrorMessage(res.status, errBody);
+        const message = messageFor(res.status, errBody);
         // Only a server fault (5xx) is worth asking again. A wrong key or a
         // bad request fails the same way every time.
         if (res.status < 500) throw new ClientError(message, res.status, errBody);
