@@ -1,5 +1,7 @@
 [build-system]
-requires = ["hatchling"]
+# hatchling 1.27 is the first release that writes PEP 639 licence metadata
+# (License-Expression, License-File) and copies license-files into the wheel.
+requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [project]
@@ -7,12 +9,28 @@ name = "tamga-client"
 version = "0.1.0"
 description = "Python SDK for Tamga AI Security Proxy"
 readme = "README.md"
-license = { text = "AGPL-3.0-only" }
+license = "AGPL-3.0-only"
+# LICENSE is a copy of the repository root LICENSE, kept here so that the
+# package carries the licence text when this directory is built on its own
+# (for example from an sdist). tests/test_license.py fails if the two differ.
+license-files = ["LICENSE"]
 requires-python = ">=3.11"
 dependencies = ["httpx>=0.27"]
+
+[project.urls]
+Homepage = "https://github.com/yatuk/tamga"
+Repository = "https://github.com/yatuk/tamga"
+Source = "https://github.com/yatuk/tamga/tree/main/sdk/python"
+Issues = "https://github.com/yatuk/tamga/issues"
+Changelog = "https://github.com/yatuk/tamga/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "pytest-asyncio>=0.23"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["tamga"]
+
+[tool.hatch.build.targets.sdist]
+# Named explicitly so that caches and local files never reach the archive.
+# pyproject.toml, README.md and the license-files are always included.
+include = ["/tamga", "/tests", "/README.md", "/LICENSE"]

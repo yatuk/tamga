@@ -20,6 +20,11 @@ RUN pip install --no-cache-dir \
 # ── Runtime stage ───────────────────────────────────────────────────────────
 FROM python:3.11-slim
 
+LABEL org.opencontainers.image.title="Tamga analyzer" \
+      org.opencontainers.image.description="Asynchronous deep analysis and PDF reports for the Tamga LLM security proxy" \
+      org.opencontainers.image.source="https://github.com/yatuk/tamga" \
+      org.opencontainers.image.licenses="AGPL-3.0-only"
+
 # /app is the service user's home and must be writable: transformers caches
 # downloaded models under ~/.cache.
 RUN groupadd -r tamga && useradd -r -g tamga -d /app -s /sbin/nologin tamga && \

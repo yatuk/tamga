@@ -3,6 +3,18 @@
   "version": "0.1.1",
   "description": "TypeScript SDK for Tamga AI Security Proxy",
   "license": "AGPL-3.0-only",
+  "homepage": "https://github.com/yatuk/tamga/tree/main/sdk/typescript/tamga-client#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yatuk/tamga.git",
+    "directory": "sdk/typescript/tamga-client"
+  },
+  "bugs": {
+    "url": "https://github.com/yatuk/tamga/issues"
+  },
+  "engines": {
+    "node": ">=18"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -21,5 +33,5 @@
     "typescript": "^5.4",
     "vitest": "^1.6"
   },
-  "files": ["dist/", "README.md"]
+  "files": ["dist/", "README.md", "LICENSE"]
 }

@@ -1,0 +1,91 @@
+Tamga
+Copyright (C) 2026 Fatih Serdar Çakmak
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License, version 3, as published by
+the Free Software Foundation. It is distributed WITHOUT ANY WARRANTY; without
+even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+PURPOSE. The full text of the licence is in the file LICENSE.
+
+Source: https://github.com/yatuk/tamga
+
+This file lists third-party material that is included in the source tree and
+the attribution its licence asks for. Libraries that are fetched at build time
+and are not in the source tree are listed, with the licences they declare, in
+THIRD_PARTY_LICENSES.md.
+
+================================================================================
+1. BIN/IIN list
+================================================================================
+
+File:      proxy/internal/scanner/bindata/binlist.csv (compiled into the proxy)
+Source:    binlist-data, https://github.com/iannuttall/binlist-data
+Credit:    Ian Nuttall and the binlist-data contributors
+Licence:   Creative Commons Attribution 4.0 International (CC BY 4.0)
+           https://creativecommons.org/licenses/by/4.0/
+Changes:   The repository does not record whether the file differs from the
+           upstream file. The upstream repository was archived by its owner
+           on 2020-12-24.
+See also:  proxy/internal/scanner/bindata/LICENSE.md
+
+================================================================================
+2. Prompt-injection phrases: OWASP Top 10 for LLM Applications
+================================================================================
+
+Files:     proxy/internal/scanner/injection.go
+Source:    OWASP Top 10 for Large Language Model Applications (2025)
+           https://github.com/OWASP/www-project-top-10-for-large-language-model-applications
+Credit:    The OWASP Foundation and the contributors to the OWASP Top 10 for
+           LLM Applications
+Licence:   Creative Commons Attribution-ShareAlike 4.0 International
+           (CC BY-SA 4.0), as stated in the README of the repository above
+           https://creativecommons.org/licenses/by-sa/4.0/
+Changes:   The source file names this document as a source of the short
+           match phrases in six pattern categories. It does not record which
+           phrase came from which source, or how a phrase was changed from
+           the source's wording.
+
+================================================================================
+3. Prompt-injection phrases: Lakera Gandalf
+================================================================================
+
+Files:     proxy/internal/scanner/injection.go
+Source:    Lakera, Gandalf prompt-injection data, for example
+           https://huggingface.co/datasets/Lakera/gandalf_ignore_instructions
+Credit:    Lakera AI
+Licence:   MIT License, as stated on the dataset card above. The card gives
+           no copyright line; none is reproduced here.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+================================================================================
+4. Sources named in the code whose licence could not be established
+================================================================================
+
+The comment above `injectionPatterns` in proxy/internal/scanner/injection.go
+also names the following sources. No licence statement could be found for
+them when this file was written (2026-10-10), so no licence is claimed here:
+
+  - "JailbreakChat.com public dataset (2024)". The site is offline.
+  - "Lakera indirect prompt injection set". No dataset of that name was found.
+  - "Community Turkish translations (Tamga)". There is no upstream and no
+    record in the repository of the translators or of a licence grant.
+
+Phrases marked "Tamga red-team" were written for Tamga and are under the
+licence of the repository.

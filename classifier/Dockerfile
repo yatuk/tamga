@@ -14,6 +14,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 FROM python:3.11-slim
 
+LABEL org.opencontainers.image.title="Tamga classifier" \
+      org.opencontainers.image.description="Inline prompt-injection classifier service of the Tamga LLM security proxy (no model included)" \
+      org.opencontainers.image.source="https://github.com/yatuk/tamga" \
+      org.opencontainers.image.licenses="AGPL-3.0-only"
+
 RUN groupadd -r tamga && useradd -r -g tamga -d /app -s /sbin/nologin tamga && \
     mkdir -p /app && chown tamga:tamga /app
 

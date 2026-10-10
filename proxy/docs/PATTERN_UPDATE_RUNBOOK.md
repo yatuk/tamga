@@ -50,7 +50,9 @@ Where did this pattern come from?
 - Community contribution (GitHub user)
 
 ### License
-[ ] CC0  [ ] MIT  [ ] CC-BY  [ ] Apache 2.0  [ ] AGPL-3.0 (written for Tamga)
+[ ] CC0  [ ] MIT  [ ] CC-BY  [ ] CC-BY-SA  [ ] Apache 2.0  [ ] AGPL-3.0 (written for Tamga)
+
+Licence URL (the upstream's own licence page or file) and the date you read it: ___
 
 ### Proposed Confidence
 0.00 – 1.00 (see confidence ranges in Section 3)
@@ -83,12 +85,18 @@ Before any pattern is merged, a Tamga engineer must verify:
 
 ### 2.1 License Compatibility
 
+The licence is the one the upstream declares, read at the upstream (its LICENSE file, README or
+dataset card), not one remembered or assumed. Record the URL and the date in the pull request and
+in the source table above `injectionPatterns`; if it cannot be found, the table says
+"not verified". The table below is the project's intake rule, not legal advice.
+
 | License | Allowed? | Notes |
 |---------|:---:|-------|
 | CC0 | ✅ | Public domain, no restrictions |
-| MIT | ✅ | Attribution in source comments |
-| CC-BY | ✅ | Attribution in source comments |
-| Apache 2.0 | ✅ | Attribution in source comments |
+| MIT | ✅ | Attribution in source comments and in the root `NOTICE` |
+| CC-BY | ✅ | Attribution in source comments and in the root `NOTICE` |
+| CC-BY-SA | ⚠️ | Ask the maintainer first. The OWASP LLM Top 10 material already cited is CC BY-SA 4.0 and is attributed in `NOTICE`. Creative Commons declared BY-SA 4.0 one-way compatible with GPLv3 (<https://creativecommons.org/share-your-work/licensing-considerations/compatible-licenses/>); that page does not mention the AGPL, so this is an open legal question |
+| Apache 2.0 | ✅ | Attribution in source comments and in the root `NOTICE` |
 | AGPL-3.0 (written for Tamga) | ✅ | The licence of the repository |
 | Proprietary | ❌ | Reject — everything in the repository is AGPL-3.0; there is no private module |
 | Unknown / Unlicensed | ❌ | Reject — cannot accept patterns without clear license |

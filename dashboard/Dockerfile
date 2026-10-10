@@ -14,6 +14,11 @@ RUN npm run build
 
 FROM node:22-alpine
 
+LABEL org.opencontainers.image.title="Tamga console" \
+      org.opencontainers.image.description="Web console of the Tamga LLM security proxy" \
+      org.opencontainers.image.source="https://github.com/yatuk/tamga" \
+      org.opencontainers.image.licenses="AGPL-3.0-only"
+
 RUN addgroup -S tamga && adduser -S -G tamga -u 1001 tamga
 
 WORKDIR /app

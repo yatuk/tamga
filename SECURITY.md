@@ -3,22 +3,39 @@
 ## Reporting a Vulnerability
 
 If you discover a security vulnerability in Tamga, please **do not**
-open a public issue. Email security@tamga.dev with:
+open a public issue. Report it privately:
+
+1. **GitHub private vulnerability reporting (preferred).** Open the
+   repository's **Security** tab and choose **Report a vulnerability**, or go
+   to <https://github.com/yatuk/tamga/security/advisories/new>.
+2. **E-mail**, if you cannot use GitHub or the form is not offered to you:
+   security@tamga.dev. No PGP key is published for this address.
+
+Include:
 
 - Description of the vulnerability
 - Steps to reproduce
-- Affected version (e.g. v0.7.0)
+- What you tested: the commit, or the version named in `CHANGELOG.md`
 - Your suggested fix (optional)
 
-We aim to acknowledge reports within 48 hours and release a fix
-within 14 days for critical issues.
+Tamga is maintained by its author; there is no security team. The
+maintainer's targets are to acknowledge a report within 48 hours and to have
+a fix on `main` within 14 days of confirming a critical issue. They are
+targets, not a service level or a guarantee. What happens to a report is
+described in
+[Vulnerability Handling and Coordinated Disclosure](docs/ENISA_VULNERABILITY_DISCLOSURE.md).
 
 ## Supported Versions
 
-| Version | Supported |
+No release has been tagged in the repository, and the project publishes no
+container image or package. `CHANGELOG.md` names v0.7.0 (2026-06-20) and
+v0.8.0-rc1 (2026-07-21) and lists v0.9.0 as unreleased. Security fixes are
+made on `main` only; nothing is backported.
+
+| Version | Security fixes |
 |---------|-----------|
-| 0.7.x   | ✅ |
-| < 0.7.0 | ❌ |
+| `main` | ✅ |
+| v0.8.0-rc1 and earlier (changelog entries; no tag or branch exists) | ❌ Update to `main` |
 
 ## Management API
 
@@ -96,18 +113,23 @@ Found in an internal review on 2026-10-01; see the Security section of
 
 ## Disclosure Policy
 
-We follow responsible disclosure. Once a fix is released, we credit
-the reporter (unless they prefer to remain anonymous) in the
-release notes.
+Disclosure is coordinated with the reporter. Once a fix is on `main`, a
+GitHub Security Advisory and an entry in the Security section of
+`CHANGELOG.md` are published, and the reporter is credited in both unless
+they prefer not to be named. The project has no list of who runs Tamga, so
+those two are the only announcement.
 
 ## EU Cyber Resilience Act
 
-The coordinated vulnerability disclosure procedure written for the EU Cyber
-Resilience Act's reporting obligations is in
-[ENISA Vulnerability Disclosure](docs/ENISA_VULNERABILITY_DISCLOSURE.md). It is
-a procedure, not a statement that Tamga has been assessed against the Act.
+How the project handles vulnerabilities (private reports, fixes on `main`,
+published advisories, a changelog) is described in
+[Vulnerability Handling and Coordinated Disclosure](docs/ENISA_VULNERABILITY_DISCLOSURE.md).
+That document does not state whether or how the Act applies to Tamga, its
+maintainer, or anyone who deploys or redistributes it; that is for each of
+them to determine. Tamga has not been assessed against the Act, and the
+project has no arrangement for notifying ENISA or a national CSIRT.
 
 ## Security Advisory Archive
 
-Security advisories are published on our
+Security advisories are published on the repository's
 [GitHub Security Advisories](https://github.com/yatuk/tamga/security/advisories) page.

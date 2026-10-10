@@ -8,6 +8,11 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o scanner-service ./cmd/
 
 # Stage 2 — minimal runtime.
 FROM alpine:3.21
+
+LABEL org.opencontainers.image.title="Tamga scanner service" \
+      org.opencontainers.image.description="Standalone gRPC scanner service of the Tamga LLM security proxy" \
+      org.opencontainers.image.source="https://github.com/yatuk/tamga" \
+      org.opencontainers.image.licenses="AGPL-3.0-only"
 RUN apk add --no-cache ca-certificates tzdata wget
 RUN adduser -D -u 1001 tamga
 COPY --from=builder /build/scanner-service /usr/local/bin/scanner-service

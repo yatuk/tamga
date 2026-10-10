@@ -213,4 +213,6 @@ Requests time out after 30 seconds.
 
 ## License
 
-[AGPL-3.0](../../LICENSE), as for the rest of the repository.
+AGPL-3.0-only, as for the rest of the repository. The text is in
+[LICENSE](LICENSE), a copy of the repository root `LICENSE` that ships in the
+wheel and the sdist; `tests/test_license.py` keeps the two identical.

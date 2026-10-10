@@ -172,7 +172,7 @@ The role is the least privileged role that may make the call, as declared in
 | `getSSOSettings()` | `GET /api/v1/settings/sso` | viewer |
 | `updateSSOSettings(settings)` | `PUT /api/v1/settings/sso` | admin |
 | `getOwaspPdfReport(params?)` | `GET /api/v1/reports/owasp/pdf` | viewer |
-| `getIncidentPdfReport(params?)` | `GET /api/v1/reports/incident/pdf` | viewer |
+| `getIncidentPdfReport({ range })` | `GET /api/v1/reports/incident/pdf` (the proxy computes the counts; only `range` has an effect) | viewer |
 | `listProviders()` | `GET /api/v1/providers` | viewer |
 | `getRateLimitStats()` | `GET /api/v1/ratelimit/stats` | viewer |
 | `listScimUsers()` | `GET /api/v1/scim/v2/Users` | admin |
@@ -232,4 +232,6 @@ try {
 
 ## License
 
-[AGPL-3.0](../../../LICENSE), as for the rest of the repository.
+AGPL-3.0-only, as for the rest of the repository. The text is in
+[LICENSE](LICENSE), a copy of the repository root `LICENSE` that ships in the
+npm tarball; `src/__tests__/license.test.ts` keeps the two identical.
