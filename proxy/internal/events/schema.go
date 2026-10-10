@@ -87,6 +87,9 @@ func eventToV2(e Event) EventV2 {
 			payload["output_risk"] = json.RawMessage(rj)
 		}
 	}
+	if e.Direction != "" {
+		payload["direction"] = e.Direction
+	}
 	if e.PolicyName != "" {
 		payload["policy_name"] = e.PolicyName
 	}

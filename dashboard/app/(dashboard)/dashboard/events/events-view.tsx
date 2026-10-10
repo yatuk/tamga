@@ -16,7 +16,7 @@ const ACTIONS: [ActionFilter, string][] = [
   ["pass", "Passed"],
 ];
 const ANY_PROVIDER = "Any provider";
-const PROVIDERS = ["anthropic", "openai", "gemini", "azure", "bedrock", "mistral", "local"];
+const PROVIDERS = ["anthropic", "openai", "gemini", "azure", "bedrock", "mistral", "local", "litellm"];
 
 const LIVE: Record<SSEStatus, string> = {
   connecting: "Connecting to the live feed",

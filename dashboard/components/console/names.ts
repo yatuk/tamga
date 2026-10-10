@@ -29,7 +29,13 @@ const ROLE_NAMES: Record<string, string> = {
   request: "Request parameters",
 };
 
-const PROVIDER_NAMES: Record<string, string> = { openai: "OpenAI", anthropic: "Anthropic", gemini: "Gemini", azure: "Azure OpenAI" };
+/**
+ * "litellm" is not a provider: it is what the proxy records for a call that came over the LiteLLM route, where it is
+ * not told which provider the request went to.
+ */
+const PROVIDER_NAMES: Record<string, string> = {
+  openai: "OpenAI", anthropic: "Anthropic", gemini: "Gemini", azure: "Azure OpenAI", litellm: "LiteLLM bridge",
+};
 
 /** Which scanner family a category belongs to. */
 const KIND_TYPES: Record<string, string> = {

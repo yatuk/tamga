@@ -60,6 +60,11 @@ type Event struct {
 	// OrgVerified says OrgID came from a Tamga key. Otherwise it is what the
 	// caller sent in X-Tamga-Org-Id, or empty.
 	OrgVerified bool
+	// Direction is "output" on a request's own event when what was judged
+	// was an answer and nothing else: a call LiteLLM made for a response
+	// (the LiteLLM route). Action and Findings are then the answer's. Empty
+	// everywhere else.
+	Direction string
 }
 
 const defaultChanCap = 1000

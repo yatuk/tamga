@@ -491,6 +491,16 @@ func TestMatchEventSearch_ShadowOnly(t *testing.T) {
 			t.Error("empty provider should not match shadow filter")
 		}
 	})
+	// A call over the LiteLLM route names the way it came, not a provider.
+	t.Run("the LiteLLM bridge is not a shadow provider", func(t *testing.T) {
+		e := Event{Provider: "litellm", Timestamp: now}
+		if MatchEventSearch(e, "", "", true, "", "", "", "", "", time.Time{}, time.Time{}) {
+			t.Error("a bridge call should not match the shadow filter")
+		}
+		if !MatchEventSearch(e, "", "litellm", false, "", "", "", "", "", time.Time{}, time.Time{}) {
+			t.Error("a bridge call should match its own provider filter")
+		}
+	})
 }
 
 func TestMatchEventSearch_ProviderShadowKeyword(t *testing.T) {

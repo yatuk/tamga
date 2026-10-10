@@ -30,6 +30,7 @@ import (
 	"github.com/yatuk/tamga/internal/scanner"
 	"github.com/yatuk/tamga/internal/store"
 	"github.com/yatuk/tamga/internal/vault"
+	"github.com/yatuk/tamga/internal/webhooks"
 )
 
 const scanAdminKey = "scan-test-admin-key"
@@ -101,6 +102,9 @@ type scanRigOptions struct {
 	scanners []scanner.Scanner
 	origins  string
 	devMode  bool
+	// alerts, when set, is subscribed to the bus and handed to the handlers,
+	// as cmd/tamga wires the alert dispatcher.
+	alerts *webhooks.Dispatcher
 }
 
 type scanRig struct {
@@ -164,6 +168,9 @@ func newScanRig(t *testing.T, o scanRigOptions) *scanRig {
 		g.events = append(g.events, e)
 		g.mu.Unlock()
 	})
+	if o.alerts != nil {
+		bus.Subscribe(o.alerts.HandleEvent)
+	}
 	bus.Start()
 	t.Cleanup(bus.Stop)
 
@@ -187,6 +194,7 @@ func newScanRig(t *testing.T, o scanRigOptions) *scanRig {
 		Keys:         g.keys,
 		RateLimit:    limiter,
 		Bus:          bus,
+		Alerts:       o.alerts,
 		VaultStore:   vault.NewStore(g.vault, cipher, time.Minute),
 	}
 	opts := ScanOptions{AdminKey: scanAdminKey, CORSOrigins: o.origins}

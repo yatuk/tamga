@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"bytes"
 	"context"
 	"crypto/subtle"
 	"encoding/json"
@@ -8,6 +9,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -20,6 +22,7 @@ import (
 	"github.com/yatuk/tamga/internal/api"
 	"github.com/yatuk/tamga/internal/apikeys"
 	"github.com/yatuk/tamga/internal/classifier"
+	"github.com/yatuk/tamga/internal/errkind"
 	"github.com/yatuk/tamga/internal/extract"
 	"github.com/yatuk/tamga/internal/policy"
 	"github.com/yatuk/tamga/internal/ratelimit"
@@ -188,6 +191,8 @@ type scanCall struct {
 type bridgeCall struct {
 	direction string
 	texts     int
+	tools     int
+	toolCalls int
 	callID    string
 }
 
@@ -213,6 +218,8 @@ func (c *scanCall) done(outcome string, refused bool) {
 	if c.bridge != nil {
 		ev = ev.Str("direction", c.bridge.direction).
 			Int("texts", c.bridge.texts).
+			Int("tools", c.bridge.tools).
+			Int("tool_calls", c.bridge.toolCalls).
 			Str("litellm_call_id", c.bridge.callID)
 	}
 	ev.Str("outcome", outcome).
@@ -398,6 +405,9 @@ type scanEval struct {
 	// in the order the messages were given. It is set when the action is
 	// REDACT or STRIP, and only then.
 	rewritten []string
+	// tools is the tool definitions as the proxy would forward them, set
+	// with rewritten when one of them was changed and nil otherwise.
+	tools []json.RawMessage
 	// fallback says why a REDACT or a STRIP became a BLOCK, and is empty
 	// when the BLOCK is a rule's own.
 	fallback string
@@ -405,32 +415,148 @@ type scanEval struct {
 	headers [][2]string
 }
 
-// evaluate is the scan path: the messages are read as the segments the proxy
-// path would scan, scanned by the proxy path's registry, and judged by the
-// policy and the inline classifier on the proxy path's terms. A non-empty
-// outcome means the scan did not run to the end and there is no verdict.
-func (h *scanHandler) evaluate(ctx context.Context, call *scanCall, requestID string, who caller, pol *policy.Policy, msgs []scanMessage) (ev scanEval, outcome string) {
-	// One chat message per text, read back as the segments the proxy path
-	// would scan.
-	wire := make([]map[string]string, len(msgs))
-	for i, m := range msgs {
-		wire[i] = map[string]string{"role": m.role, "content": m.text}
+// scanInput is what evaluate reads: a chat request in OpenAI's shape, built
+// from what the caller sent, and its segments as the proxy path would scan
+// them. The first texts messages hold one text each; the LiteLLM route adds
+// tool calls (one more message, the assistant's) and tool definitions.
+type scanInput struct {
+	body  []byte
+	segs  []extract.Segment
+	texts int
+}
+
+// scanWireMessage is one message of the request a scanInput is built as.
+type scanWireMessage struct {
+	Role      string            `json:"role"`
+	Content   *string           `json:"content,omitempty"`
+	ToolCalls []json.RawMessage `json:"tool_calls,omitempty"`
+}
+
+// Why a segment of a scanInput cannot be rewritten. They are reasons a
+// REDACT or a STRIP falls back to BLOCK, beside those in redact.go.
+const (
+	// redactToolCall: the value is in a tool call's arguments, and the
+	// LiteLLM contract's reply has no field to return tool calls in.
+	redactToolCall = "tool_call"
+	// redactToolName: the value is a tool's name. LiteLLM matches the tools
+	// it gets back to its own by name.
+	redactToolName = "tool_name"
+)
+
+// toolNamePath is the path of a tool definition's name.
+var toolNamePath = regexp.MustCompile(`^tools\[\d+\](\.function)?\.name$`)
+
+// newScanInput builds the request evaluate reads. toolCalls and tools are
+// the caller's own JSON and go in as they came, so the extractor reads them
+// as it reads a tool call and a tool definition on the proxy path. ok is
+// false when the request does not read back as what it was built from.
+func newScanInput(msgs []scanMessage, toolCalls, tools []json.RawMessage) (in scanInput, ok bool) {
+	doc := struct {
+		Messages []scanWireMessage `json:"messages"`
+		Tools    []json.RawMessage `json:"tools,omitempty"`
+	}{Messages: make([]scanWireMessage, 0, len(msgs)+1), Tools: tools}
+	for i := range msgs {
+		doc.Messages = append(doc.Messages, scanWireMessage{Role: msgs[i].role, Content: &msgs[i].text})
 	}
-	body, err := json.Marshal(map[string]interface{}{"messages": wire})
-	var segs []extract.Segment
-	if err == nil {
-		if res, ok := extract.Extract(scanProvider, body); ok {
-			segs = res.Segments
+	if len(toolCalls) > 0 {
+		doc.Messages = append(doc.Messages, scanWireMessage{Role: string(extract.RoleAssistant), ToolCalls: toolCalls})
+	}
+	// Without HTML escaping: a tool definition that is sent back should
+	// differ from the one received only where it was masked.
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(doc); err != nil {
+		return in, false
+	}
+	in.body, in.texts = bytes.TrimSuffix(buf.Bytes(), []byte("\n")), len(msgs)
+	res, extracted := extract.Extract(scanProvider, in.body)
+	if !extracted || len(res.Segments) < len(msgs) {
+		return in, false
+	}
+	in.segs = res.Segments
+	for i, m := range msgs {
+		if in.segs[i].Text != m.text || string(in.segs[i].Role) != m.role || in.segs[i].Path != indexed("messages", i)+".content" {
+			return in, false
 		}
 	}
-	if len(segs) != len(msgs) {
+	// Whatever follows the texts is a tool call's or a tool definition's.
+	for _, seg := range in.segs[len(msgs):] {
+		switch {
+		case in.inToolCall(seg) && seg.Role == extract.RoleAssistant:
+		case strings.HasPrefix(seg.Path, "tools[") && seg.Role == extract.RoleToolDefinition:
+		default:
+			return in, false
+		}
+	}
+	return in, true
+}
+
+func indexed(path string, i int) string { return path + "[" + strconv.Itoa(i) + "]" }
+
+// inToolCall reports whether seg is part of the tool calls.
+func (in scanInput) inToolCall(seg extract.Segment) bool {
+	return strings.HasPrefix(seg.Path, indexed("messages", in.texts)+".tool_calls")
+}
+
+// fixed says why one of the edited segments may not be rewritten, and "" when
+// all of them may. A value there that the policy wants masked or stripped
+// blocks the request.
+func (in scanInput) fixed(edited []int) string {
+	for _, i := range edited {
+		if i < in.texts || i >= len(in.segs) {
+			continue
+		}
+		switch seg := in.segs[i]; {
+		case in.inToolCall(seg):
+			return redactToolCall
+		case toolNamePath.MatchString(seg.Path):
+			return redactToolName
+		}
+	}
+	return ""
+}
+
+// rewritten reads the texts and the tool definitions back out of the body a
+// rewrite produced. The tools are returned only when the rewrite touched one.
+func (in scanInput) rewritten(body []byte, edited []int) (texts []string, tools []json.RawMessage, err error) {
+	if texts, err = messageTexts(body, in.texts); err != nil {
+		return nil, nil, err
+	}
+	changed := false
+	for _, i := range edited {
+		if i >= 0 && i < len(in.segs) && strings.HasPrefix(in.segs[i].Path, "tools[") {
+			changed = true
+		}
+	}
+	if !changed {
+		return texts, nil, nil
+	}
+	var doc struct {
+		Tools []json.RawMessage `json:"tools"`
+	}
+	if err = json.Unmarshal(body, &doc); err != nil {
+		return nil, nil, err
+	}
+	return texts, doc.Tools, nil
+}
+
+// evaluate is the scan path for texts alone, as the scan API sends them.
+func (h *scanHandler) evaluate(ctx context.Context, call *scanCall, requestID string, who caller, pol *policy.Policy, msgs []scanMessage) (ev scanEval, outcome string) {
+	in, ok := newScanInput(msgs, nil, nil)
+	if !ok {
 		return ev, "segment_mismatch"
 	}
-	for i, m := range msgs {
-		if segs[i].Text != m.text || string(segs[i].Role) != m.role {
-			return ev, "segment_mismatch"
-		}
-	}
+	return h.evaluateInput(ctx, call, requestID, who, pol, in)
+}
+
+// evaluateInput is the scan path: the request is read as the segments the
+// proxy path would scan, scanned by the proxy path's registry, and judged by
+// the policy and the inline classifier on the proxy path's terms. A
+// non-empty outcome means the scan did not run to the end and there is no
+// verdict.
+func (h *scanHandler) evaluateInput(ctx context.Context, call *scanCall, requestID string, who caller, pol *policy.Policy, in scanInput) (ev scanEval, outcome string) {
+	body, segs := in.body, in.segs
 
 	// The proxy path's registry, by segment, as handleProxy scans a chat
 	// request. Not through the shared worker pool, and without load
@@ -440,7 +566,8 @@ func (h *scanHandler) evaluate(ctx context.Context, call *scanCall, requestID st
 	findings, err := h.cfg.Registry.Without(scanExcluded...).ScanSegments(ctx, segs, pipelineCfg)
 	if err != nil {
 		// Logged by kind only: a scanner's error can quote what it read.
-		call.logger.Error().Bool("degraded", errors.Is(err, scanner.ErrScanDegraded)).Msg("scan incomplete")
+		call.logger.Error().Bool("degraded", errors.Is(err, scanner.ErrScanDegraded)).
+			Str("reason", scanner.IncompleteReason(err)).Str("error_kind", errkind.Of(err)).Msg("scan incomplete")
 		return ev, "scan_incomplete"
 	}
 	api.ObserveScan(float64(time.Since(call.start).Milliseconds()))
@@ -500,17 +627,24 @@ func (h *scanHandler) evaluate(ctx context.Context, call *scanCall, requestID st
 		reason := redactBlocker(targets)
 		if reason == "" {
 			edits := scanner.RedactEdits(targets)
+			edited := make([]int, len(edits))
+			for i, e := range edits {
+				edited[i] = e.Seg
+			}
 			if len(edits) == 0 {
 				reason = redactNothing
-			} else if texts, rwErr := rewrittenTexts(body, segs, edits); rwErr != nil {
+			} else if reason = in.fixed(edited); reason != "" {
+				// Nothing is rewritten: see scanInput.fixed.
+			} else if masked, rwErr := extract.RewriteChecked(scanProvider, body, segs, edits); rwErr != nil {
 				reason = redactRewrite
-			} else {
-				ev.rewritten = texts
+			} else if ev.rewritten, ev.tools, rwErr = in.rewritten(masked, edited); rwErr != nil {
+				reason = redactRewrite
 			}
 		}
 		if reason != "" {
 			ev.headers = append(ev.headers, [2]string{"X-Tamga-Redact-Fallback", "block:" + reason})
 			ev.fallback = "REDACT could not be carried out (" + reason + ")"
+			ev.rewritten, ev.tools = nil, nil
 			action = policy.ActionBlock
 		}
 	}
@@ -518,14 +652,19 @@ func (h *scanHandler) evaluate(ctx context.Context, call *scanCall, requestID st
 	// The same for STRIP.
 	if action == policy.ActionStrip {
 		res, stripErr := stripSegments(scanProvider, body, segs, findings, actionOf, false)
+		reason := ""
 		if stripErr == nil {
-			ev.rewritten, stripErr = messageTexts(res.body, len(msgs))
+			if reason = in.fixed(res.edited); reason == "" {
+				ev.rewritten, ev.tools, stripErr = in.rewritten(res.body, res.edited)
+			}
 		}
 		if stripErr != nil {
-			reason := stripFailure(stripErr)
+			reason = stripFailure(stripErr)
+		}
+		if reason != "" {
 			ev.headers = append(ev.headers, [2]string{"X-Tamga-Strip-Fallback", "block:" + reason})
 			ev.fallback = "STRIP could not be carried out (" + reason + ")"
-			ev.rewritten = nil
+			ev.rewritten, ev.tools = nil, nil
 			action = policy.ActionBlock
 		}
 	}
@@ -658,20 +797,9 @@ func (h *scanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	writeScanJSON(w, http.StatusOK, out)
 }
 
-// rewrittenTexts applies edits to the messages of body as the proxy path
-// would before forwarding them, and returns the text each message then
-// holds. The rewrite is confirmed by reading the new body back
-// (extract.RewriteChecked).
-func rewrittenTexts(body []byte, segs []extract.Segment, edits []extract.Edit) ([]string, error) {
-	rewritten, err := extract.RewriteChecked(scanProvider, body, segs, edits)
-	if err != nil {
-		return nil, err
-	}
-	return messageTexts(rewritten, len(segs))
-}
-
-// messageTexts returns the content of each message of a body evaluate built,
-// after a rewrite. A message edited down to nothing is an empty text.
+// messageTexts returns the content of the first n messages of a body
+// evaluate built, after a rewrite: its texts. A message edited down to
+// nothing is an empty text.
 func messageTexts(body []byte, n int) ([]string, error) {
 	var doc struct {
 		Messages []struct {
@@ -681,11 +809,11 @@ func messageTexts(body []byte, n int) ([]string, error) {
 	if err := json.Unmarshal(body, &doc); err != nil {
 		return nil, err
 	}
-	if len(doc.Messages) != n {
+	if len(doc.Messages) < n {
 		return nil, errors.New("the rewritten body does not hold the messages it was built from")
 	}
 	out := make([]string, n)
-	for i, m := range doc.Messages {
+	for i, m := range doc.Messages[:n] {
 		if m.Content == nil {
 			return nil, errors.New("a rewritten message has no text content")
 		}

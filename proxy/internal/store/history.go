@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/yatuk/tamga/internal/events"
+	"github.com/yatuk/tamga/internal/providers"
 	"github.com/yatuk/tamga/internal/scanner"
 )
 
@@ -475,7 +476,7 @@ func eventSearchWhere(org uuid.UUID, p EventSearchParams) (string, []interface{}
 	}
 	prov := strings.ToLower(strings.TrimSpace(p.Provider))
 	if p.ShadowOnly || prov == "shadow" {
-		where.WriteString(` AND lower(provider) NOT IN ('openai','anthropic','google','azure','azure_openai','google_vertex')`)
+		where.WriteString(` AND lower(provider) NOT IN ('openai','anthropic','google','azure','azure_openai','google_vertex','` + providers.LiteLLMBridge + `')`)
 	} else if prov != "" && prov != "all" {
 		i := next()
 		fmt.Fprintf(&where, " AND lower(provider) = $%d", i)

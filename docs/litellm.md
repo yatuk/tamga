@@ -3,8 +3,9 @@
 A team that already runs a [LiteLLM](https://github.com/BerriAI/litellm) proxy
 can have Tamga check its traffic without putting Tamga's proxy in the path.
 LiteLLM has a guardrail type, `generic_guardrail_api`, that posts the texts
-of a request (and of the answer) to an HTTP endpoint and does what the reply
-says. Tamga serves that endpoint.
+of a request (and of the answer) to an HTTP endpoint, with its tool
+definitions and tool calls, and does what the reply says. Tamga serves that
+endpoint.
 
 It is the same scan and the same policy as on Tamga's own proxy path: the
 endpoint is an adapter over [`POST /api/v1/scan`](operations.md#checking-a-text-without-sending-it),
@@ -51,7 +52,7 @@ place.
 | Policy action | Reply to LiteLLM | What LiteLLM does |
 |---|---|---|
 | `BLOCK` | `{"action":"BLOCKED","blocked_reason":"…"}` | Refuses the request. Its own caller gets an error, HTTP 400, with the reason as the message. |
-| `REDACT` | `{"action":"GUARDRAIL_INTERVENED","texts":[…]}` | Goes on with the returned texts in place of the ones it sent. |
+| `REDACT` | `{"action":"GUARDRAIL_INTERVENED","texts":[…]}`, with `"tools":[…]` when a tool definition was masked | Goes on with the returned texts, and tools, in place of the ones it sent. |
 | `STRIP` | the same, with the stripped text replaced by `[Content removed by Tamga security policy.]` | The same. |
 | `WARN`, `LOG`, `PASS` | `{"action":"NONE"}` | Goes on unchanged. |
 
@@ -66,8 +67,8 @@ place.
   proxy path. The reason then says so.
 - The reply has no field for findings that do not change the outcome, so a
   `WARN` looks like a `PASS` to LiteLLM. The policy's own action is in the
-  `X-Tamga-Action` response header, and the count of findings by type is in
-  Tamga's log line for the call.
+  `X-Tamga-Action` response header, and the findings are in the request
+  record (below).
 
 **Answers** (`input_type: response`) are judged by `output_rules`, exactly as
 the proxy judges an answer: `block_on` blocks, `redact_on` masks, and with
@@ -79,6 +80,63 @@ call also carries the conversation (`structured_messages`); when its texts
 match `texts` one for one, each text is scanned in the role of its message,
 so a rule with `applies_to: [tool]` covers tool results. In every other case
 all texts are scanned as the user's.
+
+## Tools and tool calls
+
+A request through LiteLLM carries more than its texts, and Tamga reads it
+as its own proxy reads the same request
+([what is scanned](AGENTS.md#what-is-scanned)):
+
+| Field | Read as | What a rule does there |
+|---|---|---|
+| `tools` (a request's tool definitions) | Role `tool_definition`: every string in a definition but its `type`, so the name, the description and the parameters' descriptions | `BLOCK` blocks. `REDACT` masks the value and `STRIP` replaces the string, and all the tools go back in `tools`. |
+| `tool_calls` (the tool calls in the conversation, or the model's in an answer) | Role `assistant`: the strings in the arguments, as the proxy reads the arguments the model gave a tool. The function's name is not read, as on the proxy path. | `BLOCK` blocks. `REDACT` and `STRIP` block as well: see below. |
+| `images` | Not read. Tamga's proxy does not read images either. | |
+
+So a poisoned tool description is caught by a rule that covers
+`tool_definition`, and a national id in the arguments of a tool call by the
+rule that would catch it in a message:
+
+```yaml
+rules:
+  injection:
+    action: BLOCK
+    sensitivity: low
+    applies_to: [tool, tool_definition]
+```
+
+On an answer the tool calls are judged by `output_rules`, like its texts.
+Tool definitions are a request's: `tools` sent with an answer is not read.
+
+**What is rewritten and what is not.** The contract's reply has `texts` and
+`tools`, and nothing for tool calls. So:
+
+- A value masked or stripped in a **tool definition** goes back: the reply
+  carries every tool, in the order received, changed only where the policy
+  changed it. LiteLLM v1.104.2 puts the returned list in place of the
+  request's own on its chat completions, Anthropic messages and Responses
+  routes (read in
+  `litellm/llms/openai/chat/guardrail_translation/handler.py`, the
+  `anthropic/chat` one and the `openai/responses` one). Its other routes
+  were not read; if one sends `tools` and does not take them back, a
+  `REDACT` there is not applied, so use `BLOCK` for tool definitions if you
+  serve such a route. When no tool was changed the reply has no `tools`, and
+  LiteLLM keeps its own.
+- A value that the policy would mask or strip in a **tool call's
+  arguments** cannot be returned, in a request or in an answer. The call is
+  `BLOCKED`, the reason reads `REDACT could not be carried out (tool_call)`
+  (or `STRIP …`), and the response header `X-Tamga-Redact-Fallback` (or
+  `X-Tamga-Strip-Fallback`) is `block:tool_call`. This is the proxy's own
+  rule for a `REDACT` it cannot carry out: sending the value on unmasked is
+  the one outcome `REDACT` must not have.
+- A tool's **name** is never rewritten, because LiteLLM matches the tools
+  it gets back to its own by name. A value to mask there blocks, with
+  `tool_name` in the same places.
+
+A policy that masks e-mail addresses will therefore block a conversation
+whose history holds a tool call with an address in its arguments. If that
+is too strict for your traffic, scope the rule with `applies_to` so that it
+does not cover `assistant`.
 
 ## When Tamga cannot give a verdict
 
@@ -102,10 +160,57 @@ guardrail call.
   `rate_limit.max_requests_per_minute`. Each request through LiteLLM is one
   call, and one more with `post_call`. The count is apart from the key's
   scans and proxy requests.
-- A body of at most 1 MiB, at most 256 texts, and at most 256 KiB of text in
-  total.
+- A body of at most 1 MiB; at most 256 texts, 256 tools and 256 tool calls;
+  and at most 256 KiB of what is scanned in total: the texts, and the tools
+  and tool calls as LiteLLM sent them. Over any of these the answer is 413.
+  LiteLLM sends the tool definitions with every request, so a request with
+  very large tool definitions can reach the limit with little text.
 - Scans share the scan API's slots; when all are in use the answer is 503
   with `tamga_scan_busy`.
+
+## What is recorded
+
+A call over the bridge is real traffic, so it is recorded as a request on
+Tamga's proxy path is. It appears in the console (the request list, the
+live feed, the counts and the findings breakdown), in the stored request
+log, and in the NATS stream when that is on:
+
+| Recorded | Value |
+|---|---|
+| Provider | `litellm`, shown as "LiteLLM bridge". Tamga is not told which provider LiteLLM sends the request to; this names the way the request came. Filter with `?provider=litellm`. It is not counted as a shadow provider. |
+| Endpoint | `/api/v1/beta/litellm_basic_guardrail_api (request)` or `… (response)` |
+| Action | The policy's action for the call: `BLOCK`, `REDACT`, `STRIP`, `WARN`, `LOG`, `PASS` |
+| Findings | Type, category, severity, role, the scanners' masked match (hashed with `data.hash_findings`), and where it was: `texts[1]`, `tools[0].function.description`, `tool_calls[0].function.arguments#q` |
+| Organisation | The Tamga key's. A call with the admin key goes to the default organisation. |
+| Model | The `model` LiteLLM named, when it looks like a model name |
+| Policy, time, latency | As for any request |
+
+Not recorded, because Tamga never sees them here: tokens, cost, cache
+status, the user. No text is recorded, in the row or in the log.
+
+- **Every request call is a row**, a clean one included, as every request on
+  the proxy path is.
+- **An answer call is a row when something was found or done.** LiteLLM
+  calls once more for every answer, and for a streamed answer once every few
+  chunks; a row for each clean one would be several rows per request that
+  say nothing. A row for an answer has the verdict as its action and the
+  findings as its findings (role `assistant`), and the same again in its
+  output fields (`output_action`, `output_findings`).
+- A request and its answer are two calls and two rows. `litellm_call_id`
+  links them in Tamga's log line for each call (`litellm bridge call`, with
+  the Tamga request id); there is no column for it in the request log.
+- **Alerts fire as on the proxy path**: a `BLOCK`, `STRIP`, `REDACT` or
+  `WARN` goes to the alert destinations, with the direction `output` for an
+  answer, and a rule's own `notify` URLs are told about a request.
+- A call that got no verdict (a 503, a 401, a 429, a 413, a 400) is a log
+  line and a count (`tamga_scan_api_requests_total`, outcomes prefixed
+  `litellm_`), not a row.
+- Recording does not hold up the reply: the event is published after the
+  reply is written and dropped if the event queue is full
+  (`tamga_events_dropped_total`).
+
+`POST /api/v1/scan` is different and stays unrecorded: it answers what the
+policy would say about a text, and stores nothing.
 
 ## What is not supported over the bridge
 
@@ -114,17 +219,17 @@ guardrail call.
   put back: the model sees the marker and so does the caller. The contract
   does link an answer to its request (`litellm_call_id`), but restoring would
   mean keeping the original values in Tamga under an id the caller chooses.
-- **Only `texts` is scanned.** Images, tool definitions and tool-call
-  arguments (`images`, `tools`, `tool_calls`) are not read.
+- **Images are not read** (`images`). Tamga's own proxy does not read them
+  either.
+- **Tool-call arguments are never rewritten**, only passed or blocked (see
+  [Tools and tool calls](#tools-and-tool-calls)).
 - **Streamed answers** are checked the way LiteLLM hands them over (by
   default every few chunks, block only). Tamga's own stream scanning is not
   involved, and with LiteLLM's default a masked answer is not what the client
   receives while streaming.
-- **No request record.** A call is one log line and one count
-  (`tamga_scan_api_requests_total`, outcomes prefixed `litellm_`). It does
-  not appear in the console, the request log, the audit log or the alerts,
-  because the scan API stores nothing either. LiteLLM's own logs hold the
-  refusal.
+- **No audit log entry.** The audit log is for changes to Tamga and
+  refused management credentials; a guardrail call is a request, and is in
+  the request log.
 - The `operator_state` scanner, the response cache, budgets and provider
   pools belong to the proxy path and play no part here.
 - What LiteLLM says about its caller (`request_data`: key alias, user, team)
@@ -133,8 +238,10 @@ guardrail call.
 ## What leaves the machine
 
 Nothing. Tamga receives what LiteLLM sends it, scans it in process, and
-answers. It forwards the texts nowhere, stores none of them, and logs none
-of them.
+answers. It forwards the texts, tools and tool calls nowhere, stores none
+of them, and logs none of them. What it keeps of a call is the record
+above: the verdict and the findings with their masked matches. An alert
+names the kinds of finding and carries no match.
 
 ## What this was written and tested against
 
@@ -144,6 +251,9 @@ of them.
   (`litellm/proxy/guardrails/guardrail_hooks/generic_guardrail_api/generic_guardrail_api.py`
   and `litellm/types/proxy/guardrails/guardrail_hooks/generic_guardrail_api.py`),
   read on **2026-10-10**. LiteLLM marks the API as beta, and its path says so.
+  What LiteLLM does with returned `tools`, and that it reads no `tool_calls`
+  from a reply, was read in the same files and in the three route handlers
+  named above, at the same tag.
 - The Go tests call the endpoint as a fake caller that speaks that contract.
   **It has not yet been run against a real LiteLLM container.** The
   end-to-end test that does this is written (`deploy/e2e/litellm/`, run by

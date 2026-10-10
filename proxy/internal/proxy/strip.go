@@ -20,6 +20,8 @@ type stripResult struct {
 	stripped int
 	redacted int
 	mapping  map[string]string
+	// edited lists the segments the rewrite changed, by index.
+	edited []int
 }
 
 var (
@@ -120,5 +122,8 @@ func stripSegments(provider string, body []byte, segs []extract.Segment, finding
 	}
 	out.body = rewritten
 	out.stripped = len(strip)
+	for _, e := range edits {
+		out.edited = append(out.edited, e.Seg)
+	}
 	return out, nil
 }

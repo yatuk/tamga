@@ -105,6 +105,21 @@ func TestAlertFromEvent(t *testing.T) {
 		t.Fatalf("output alert = %+v ok=%v", out, ok)
 	}
 
+	// A request's own event that judged an answer alone (the LiteLLM route)
+	// is a decision on the output, with the event's action and findings.
+	answer, ok := AlertFromEvent(events.Event{
+		RequestID: "r2",
+		EventType: "request_blocked",
+		Provider:  "litellm",
+		Direction: "output",
+		Action:    "BLOCK",
+		Findings:  []scanner.Finding{{Type: "pii", Category: "tc_kimlik", Severity: "critical", Match: "10*******46"}},
+	}, "default")
+	if !ok || answer.Direction != "output" || answer.Action != "BLOCK" || answer.Provider != "litellm" ||
+		len(answer.Findings) != 1 || answer.Findings[0].Category != "tc_kimlik" {
+		t.Fatalf("bridge answer alert = %+v ok=%v", answer, ok)
+	}
+
 	for _, e := range []events.Event{
 		{EventType: "request_scanned", Action: "PASS"},
 		{EventType: "request_scanned", Action: "LOG"},

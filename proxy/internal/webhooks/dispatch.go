@@ -272,6 +272,10 @@ func AlertFromEvent(e events.Event, defaultOrg string) (Alert, bool) {
 	switch e.EventType {
 	case "request_blocked", "request_scanned":
 		a.Direction = "input"
+		if e.Direction == "output" {
+			// A check of an answer alone (the LiteLLM route).
+			a.Direction = "output"
+		}
 		a.Action = strings.ToUpper(e.Action)
 		a.Findings = AlertFindings(e.Findings)
 	case "output_scanned":

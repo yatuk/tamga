@@ -66,9 +66,10 @@ const (
 // litellmReply is a reply as LiteLLM reads it: action defaults to NONE, and
 // the other fields to nothing.
 type litellmReply struct {
-	Action        string   `json:"action"`
-	BlockedReason string   `json:"blocked_reason"`
-	Texts         []string `json:"texts"`
+	Action        string            `json:"action"`
+	BlockedReason string            `json:"blocked_reason"`
+	Texts         []string          `json:"texts"`
+	Tools         []json.RawMessage `json:"tools"`
 }
 
 type litellmFailure struct {
@@ -156,7 +157,7 @@ func (g *scanRig) litellm(t *testing.T, inputType string, texts []string, struct
 		t.Fatalf("reply is not JSON: %v: %s", err, raw)
 	}
 	for k := range fields {
-		if k != "action" && k != "blocked_reason" && k != "texts" {
+		if k != "action" && k != "blocked_reason" && k != "texts" && k != "tools" {
 			t.Fatalf("reply has field %q, which is not in the contract: %s", k, raw)
 		}
 	}
@@ -166,12 +167,12 @@ func (g *scanRig) litellm(t *testing.T, inputType string, texts []string, struct
 	}
 	switch out.Action {
 	case "NONE":
-		if out.Texts != nil || out.BlockedReason != "" {
-			t.Fatalf("NONE with texts or a reason: %s", raw)
+		if out.Texts != nil || out.Tools != nil || out.BlockedReason != "" {
+			t.Fatalf("NONE with texts, tools or a reason: %s", raw)
 		}
 	case "BLOCKED":
-		if out.Texts != nil || out.BlockedReason == "" {
-			t.Fatalf("BLOCKED needs a reason and no texts: %s", raw)
+		if out.Texts != nil || out.Tools != nil || out.BlockedReason == "" {
+			t.Fatalf("BLOCKED needs a reason and no texts or tools: %s", raw)
 		}
 	case "GUARDRAIL_INTERVENED":
 		if len(out.Texts) != len(texts) || out.BlockedReason != "" {
@@ -823,8 +824,10 @@ func TestLiteLLM_DefaultRateLimit(t *testing.T) {
 	}
 }
 
-// A call leaves what a scan leaves: one log line, and no record.
-func TestLiteLLM_LeavesNoRecord(t *testing.T) {
+// A call is recorded as a request (see litellm_record_test.go) and leaves
+// nothing else: nothing in the vault, and nothing for the operator_state
+// scanner, which hands what it reads to the deep-analysis publisher.
+func TestLiteLLM_KeepsNoText(t *testing.T) {
 	opState := &spyScanner{name: "operator_state"}
 	g := newScanRig(t, scanRigOptions{
 		policy:   litellmPolicy + "vault:\n  enabled: true\n",
@@ -839,17 +842,18 @@ func TestLiteLLM_LeavesNoRecord(t *testing.T) {
 	g.litellmRaw(t, nil, litellmBody("request", []string{litellmTCKNText}, nil))
 
 	time.Sleep(150 * time.Millisecond)
-	if n := g.eventCount(); n != 0 {
-		t.Fatalf("%d events published by bridge calls, want 0", n)
-	}
-	if got := g.recent.Latest(10); len(got) != 0 {
-		t.Fatalf("recent buffer holds %d events after bridge calls, want 0", len(got))
-	}
 	if n := g.vault.sets.Load(); n != 0 {
 		t.Fatalf("%d vault writes by bridge calls, want 0", n)
 	}
 	if n := opState.calls.Load(); n != 0 {
 		t.Fatalf("operator_state scanner run %d times by bridge calls, want 0", n)
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	for _, e := range g.events {
+		if len(e.Body) != 0 {
+			t.Fatalf("a bridge call's event carries %d bytes of body", len(e.Body))
+		}
 	}
 }
 
