@@ -3,6 +3,14 @@
 ## v0.9.0 (unreleased)
 
 ### Security
+- The Team list says whether an account's role was given by an admin
+  (`assigned`) or is only the default for accounts without one. An account
+  whose role was removed stays listed for 30 days, marked `role_removed`,
+  with the moment its sessions ended, so it can be seen and given a role
+  again. `DELETE /api/v1/team/{id}/role` returns that moment.
+- The console no longer carries Clerk: the sign-in widgets, the user menu,
+  the `@clerk/nextjs` dependency and the dashboard's Clerk variables in the
+  compose file are gone. Nothing signed in through them.
 - **A session could not be ended.** A token was good for 24 hours whatever
   happened to its owner. Changing or removing a role, `POST
   /api/v1/team/{id}/sessions/revoke` and `POST /api/v1/auth/logout` now end
