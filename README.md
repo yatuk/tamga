@@ -378,6 +378,7 @@ default. Prompt and response bodies are not written to the database.
 | [Benchmarks](docs/benchmarks/README.md) | Method, corpus and per-category results |
 | [Development](docs/development.md) | Repository layout, local commands, tech stack |
 | [Writing a scanner](docs/scanner-development.md) | Stateful scanners with request context |
+| [Migrating from LLM Guard](docs/migrating-from-llm-guard.md) | Scanner by scanner: what Tamga replaces, in part or not at all |
 | [jugeni integration](docs/integrations/jugeni.md) | Operator-state decision governance |
 | [Use cases](docs/use-cases.md) · [FAQ](docs/faq.md) | Where it fits, common questions |
 
@@ -445,8 +446,12 @@ custom entity UI · the security fixes listed in the [changelog](CHANGELOG.md).
   (SSO settings are stored and used by no sign-in; the SCIM routes have no
   store behind them) and no custom roles.
 
-**Next:** a browser extension for chat sites · MCP inspection · an
-independent benchmark for the classifier.
+**Planned next,** in this order, with no dates and no promise: an endpoint
+LiteLLM can call as a guardrail · a locked evaluation set for the scanners
+and the classifier · detectors for invisible text, more secret formats and
+encoded blocks · response scanners for malicious links and for JSON that
+does not match a schema · a browser extension for chat sites. MCP inspection
+is not in the plan.
 
 ## Related projects
 

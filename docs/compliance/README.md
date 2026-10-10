@@ -9,7 +9,12 @@ of each framework. The controls, the request log and the hash-chained audit
 log can be used as evidence in an assessment. The controls apply only to
 traffic that is routed through the proxy.
 
-- [KVKK](kvkk.md): Turkish Data Protection Law, articles 4-13
-- [BDDK](bddk.md): Turkish Banking Regulator, information systems regulation
-- [GDPR](gdpr.md): EU General Data Protection Regulation
-- [OWASP LLM Top 10](owasp-llm-top-10.md): coverage matrix and gap analysis
+- [KVKK](kvkk.md): Turkish Data Protection Law (articles 4-16), and the authority's guidance on generative AI at work ("Gölge Yapay Zekâ"), on agentic AI ("Etken Yapay Zekâ") and its recommendations on AI, with what Tamga does not cover
+- [BDDK](bddk.md): Turkish Banking Regulator, "Bankaların Bilgi Sistemleri ve Elektronik Bankacılık Hizmetleri Hakkında Yönetmelik" (Resmî Gazete 15/3/2020, sayı 31069): the articles on classification, confidentiality, sharing of data, access, iz kayıtları, incidents, change management and keeping systems in the country, with what Tamga does not cover
+- [GDPR](gdpr.md): EU General Data Protection Regulation (Regulation (EU) 2016/679): the articles for which Tamga has a relevant control (principles, access, erasure, design, security, breach notification, transfers) and those for which it has none
+- [OWASP LLM Top 10](owasp-llm-top-10.md): Tamga's own coverage assessment against the 2025 edition and the 2023-24 edition (v1.1), with a gap analysis; the 2026 edition is not mapped
+
+The article numbers and headings on the KVKK, BDDK and GDPR pages, and the
+category names on the OWASP page, were checked against the official texts
+on 2026-10-10; each page lists what was read under its sources. Laws,
+regulations and lists change, and a page may be out of date after that day.

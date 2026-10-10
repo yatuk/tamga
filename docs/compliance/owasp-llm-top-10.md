@@ -4,9 +4,26 @@
 > to which requirement. Whether an organisation complies depends on its own
 > processes and on an assessment by a qualified person.
 
-Two views: the current OWASP LLM Top 10 list mapped to Tamga controls, and
-the detailed v1.1 coverage self-assessment (scanner mapping, gap analysis)
-beneath it.
+Editions mapped on this page: the OWASP Top 10 for LLM Applications 2025
+(category IDs `LLM01:2025` to `LLM10:2025`), and beneath it the detailed
+coverage self-assessment against the 2023-24 edition, version 1.1 (scanner
+mapping, gap analysis). The two editions number and name the risks
+differently: LLM02, for example, is Sensitive Information Disclosure in
+2025 and Insecure Output Handling in 2023-24. The category IDs and names
+were checked against the lists the OWASP GenAI Security Project publishes
+at <https://genai.owasp.org/llm-top-10/> (2025) and
+<https://genai.owasp.org/llm-top-10-2023-24/> (2023-24, v1.1) on 2026-10-10.
+
+Not mapped: the 2026 edition, which the project published on 3 August 2026
+(<https://genai.owasp.org/resource/owasp-genai-llm-top-10-2026/>). Its
+category list is in a document that was not read for this page, and its
+numbering may differ from 2025, so the 2025 IDs below must not be read as
+2026 IDs.
+
+Category names and IDs are from the OWASP Top 10 for LLM Applications,
+(c) OWASP Foundation, licensed under CC BY-SA 4.0
+(<https://creativecommons.org/licenses/by-sa/4.0/>). The coverage columns
+are Tamga's own and are not OWASP's.
 
 The coverage levels are Tamga's own assessment, not an OWASP certification
 or an external audit. FULL means Tamga has a control for the main forms of
@@ -14,9 +31,9 @@ the risk that appear in traffic routed through the proxy. It does not mean
 the risk is removed. Tamga does not see traffic that is not routed through
 it.
 
-## Current list (2026 naming)
+## 2025 edition
 
-| OWASP Risk | Coverage | Tamga Controls |
+| OWASP risk (2025 ID and name) | Coverage | Tamga Controls |
 |------------|----------|----------------|
 | LLM01 Prompt Injection | FULL | `injection` (phrase patterns), `jailbreak` (TR+EN override, many-shot, base64/hex), `content_moderation` (regex patterns), optional inline classifier (`scan.classifier`), analyzer LLM judge (asynchronous, adds findings to the record and does not change the verdict) |
 | LLM02 Sensitive Information Disclosure | FULL | `pii` (TCKN, credit card Luhn+BIN, IBAN TR, email, phone), `secret` (key and token patterns), REDACT/BLOCK rules, `data.hash_findings` for matches kept in the request log |
@@ -29,9 +46,9 @@ it.
 | LLM09 Misinformation | N/A | Model-level concern. Tamga does not check whether model output is correct |
 | LLM10 Unbounded Consumption | FULL | Rate limiting (token bucket, `rate_limit`), body limits (`body_limits`), daily token and cost caps (`cost.max_tokens_per_day`, `cost.max_cost_usd_per_day`), circuit breaker on provider pools |
 
-## v1.1 coverage self-assessment (2026-06-13)
+## 2023-24 edition (v1.1): coverage self-assessment (2026-06-13)
 
-Reference: [OWASP Top 10 for LLM Applications v1.1](https://genai.owasp.org/resource/owasp-top-10-for-llm-applications/)
+Reference: [OWASP Top 10 for LLM Applications 2023-24, v1.1](https://genai.owasp.org/llm-top-10-2023-24/)
 
 | # | Risk (v1.1 naming) | Coverage | Scanner(s) | Confidence |
 |---|------|---------------|------------|------------|
