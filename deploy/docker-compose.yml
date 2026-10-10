@@ -37,6 +37,8 @@ services:
       - TAMGA_PROXY_PORT=8443
       - TAMGA_POLICY_PATH=/app/tamga-policy.yaml
       - TAMGA_ANALYZER_ADDR=analyzer:50051
+      # The analyzer's HTTP API, where the PDF reports are generated.
+      - TAMGA_ANALYZER_HTTP_URL=http://analyzer:8444
       # Inline prompt-injection classifier. Empty unless the classifier
       # profile is in use: set TAMGA_CLASSIFIER_ADDR=classifier:50052 in .env.
       - TAMGA_CLASSIFIER_ADDR=${TAMGA_CLASSIFIER_ADDR:-}

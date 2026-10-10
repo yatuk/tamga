@@ -11,7 +11,7 @@ type Config struct {
 	Port            int
 	PolicyPath      string
 	AnalyzerAddr    string // gRPC address for Python analyzer (e.g. "analyzer:50051")
-	AnalyzerHTTPURL string // HTTP base URL for Python analyzer REST API (e.g. "http://analyzer:8000")
+	AnalyzerHTTPURL string // HTTP base URL for Python analyzer REST API (e.g. "http://analyzer:8444")
 	DatabaseURL     string
 	// DefaultOrgID is used when X-Tamga-Org-Id is absent (UUID string, e.g. dev org from migrations).
 	DefaultOrgID string
@@ -258,7 +258,7 @@ func Load() (*Config, error) {
 		Port:                     port,
 		PolicyPath:               envOrDefault("TAMGA_POLICY_PATH", "./tamga-policy.yaml"),
 		AnalyzerAddr:             envOrDefault("TAMGA_ANALYZER_ADDR", "localhost:50051"),
-		AnalyzerHTTPURL:          envOrDefault("TAMGA_ANALYZER_HTTP_URL", "http://localhost:8000"),
+		AnalyzerHTTPURL:          envOrDefault("TAMGA_ANALYZER_HTTP_URL", "http://localhost:8444"),
 		DatabaseURL:              envOrDefault("TAMGA_DB_URL", ""),
 		DefaultOrgID:             envOrDefault("TAMGA_ORG_ID", ""),
 		RedisURL:                 envOrDefault("REDIS_URL", ""),
