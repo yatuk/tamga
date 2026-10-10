@@ -494,11 +494,15 @@ the last 1000 are kept in memory):
 - **Findings** are stored with their match text in a reduced form, not the
   whole value in the clear, but the form depends on the type: a PII,
   custom-entity or competitor match keeps its first two and last two
-  characters and has the rest starred; a secret keeps its first eight
-  characters; an injection or content-moderation finding stores the matched
+  characters and has the rest starred; a secret keeps no character of its
+  value, only the vendor's marker when the kind has one (`sk-ant-****`,
+  `AKIA****`, `ghp_****`) and `****` otherwise (rows written before v0.9.0
+  keep the first eight characters, as they were stored); an injection or
+  content-moderation finding stores the matched
   phrase itself, cut at 64 to 200 characters depending on the scanner.
   `data.hash_findings: true` stores a SHA-256 of the match instead.
-- **Audit log**: administrative actions (policy changes, keys), hash-chained.
+- **Audit log**: administrative actions (policy changes, keys) and refused
+  management credentials (never the credential itself), hash-chained.
   Request decisions are in the request log, which is not chained.
 - **Alerts** carry the type, category and severity of findings, never text
   from the request.

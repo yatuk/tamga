@@ -34,6 +34,20 @@
   of an existing release of that name**.
 - CI runs on `main`; it triggered on a branch that does not exist, and the
   integration smoke test had never run.
+- **Compose did not pass the session secret or the GitHub sign-in settings to
+  the proxy**, so sign-in could not be turned on from `.env`. It now passes
+  `TAMGA_JWT_SECRET`, `TAMGA_GITHUB_CLIENT_ID`, `TAMGA_GITHUB_CLIENT_SECRET`,
+  `TAMGA_GITHUB_OAUTH_CALLBACK_URL` and `TAMGA_SSO_DEFAULT_ROLE`, each empty
+  unless set. **A `.env` that already holds them turns sessions on at the
+  next `up`**; one without them changes nothing. `.env.example` lists them,
+  commented out and empty.
+- The Helm chart has `analyzer.sendContent` (default `false`) for
+  `TAMGA_ANALYZER_SEND_CONTENT`. A release that sets the variable under `env`
+  keeps working; the render fails when it is set in both places.
+- `.gitignore` ignored any directory called `tamga`, so a new source file
+  under `proxy/cmd/tamga/` was left out of a commit without a word. The
+  pattern is tied to the repository root; the built binaries are still
+  ignored (`bin/`, `proxy/tamga`, `proxy/cmd/tamga/tamga`, `*.exe`).
 
 ### Security
 - **A rule that said REDACT could forward the value unmasked.** On a request
@@ -96,6 +110,55 @@
   at build time (`VERSION`, `REVISION` build arguments); a build without one
   reports `dev` and the commit.
 - `TAMGA_CLERK_CALLBACK_URL` is no longer read; nothing used it.
+- **A stored secret finding kept the first eight characters of its match.**
+  For a labelled secret that was the label, but for a connection string's
+  password, a bare key or a secret after a short label it was eight
+  characters of the value, in the request log, the console and the exports.
+  A secret finding now keeps the vendor's marker when the kind has one
+  (`sk-ant-****`, `AKIA****`, `ghp_****`) and `****` otherwise. A second
+  secret of the same kind that only the normalised text reveals is no longer
+  taken for a copy of the first. **Rows already stored are not rewritten:
+  they keep the eight characters until retention deletes them.** **With
+  `TAMGA_SCANNER_SERVICE_ADDR` set, upgrade scanner-service with the proxy**:
+  against an older one, a request with a secret under a REDACT rule is
+  blocked instead of masked.
+- **A refused management credential left no trace.** A wrong or revoked key,
+  a bad or expired session token, a revoked session, an account without a
+  role, a proxy key on the management API and a role without the permission
+  now write an `auth.refused` audit entry: the route, the reason, the source
+  address, and never the credential or a part of it. The first refusal of a
+  source for a reason is written; the others within the minute are counted
+  in one `auth.refused.repeated` entry, and 32 sources are followed at a
+  time, so refusals cannot fill the log. A request with no credential at all
+  is not recorded. **The audit log gains these two kinds of entry.**
+- **The rate limiter kept a request count for every key it had ever seen**,
+  one per client address for callers without a key, and every past day's
+  token totals, until the process ended. A count is dropped after 24 hours
+  without a request and a daily total when its day is over, and the limiter
+  holds at most 50,000 keys of each kind, dropping the ones used longest
+  ago. **`top_keys` of `/api/v1/ratelimit/stats` counts a key from its
+  first request after such a drop, not from the start of the process.**
+
+### LiteLLM
+- **Tamga can be added to a LiteLLM proxy as a guardrail**, without Tamga's
+  proxy in the traffic path. `POST /api/v1/beta/litellm_basic_guardrail_api`
+  speaks LiteLLM's Generic Guardrail API: a `generic_guardrail_api` guardrail
+  with `api_base: https://<tamga>/api/v1` and a Tamga key as `api_key` is the
+  whole setup. It is an adapter over the scan path of `POST /api/v1/scan`,
+  not a second implementation. BLOCK is returned as `BLOCKED` with a reason
+  that names the kind of finding and never the value; REDACT and STRIP as
+  `GUARDRAIL_INTERVENED` with the texts masked by the proxy's own markers;
+  WARN, LOG and PASS as `NONE`. Answers (`post_call`) are judged by
+  `output_rules`. A scan that did not finish is a 503
+  (`tamga_scan_unavailable`), never a verdict. Nothing is stored and nothing
+  is put in the vault, so nothing masked over the bridge is restored.
+  Written against LiteLLM v1.104.2. **Tested against a fake caller that
+  speaks the contract; the end-to-end test with a real LiteLLM container
+  (`deploy/e2e/litellm/`, CI job `litellm-e2e`) is written and has not been
+  run yet.** See [docs/litellm.md](docs/litellm.md).
+- A Tamga key is also read from `x-api-key` on that route, because that is
+  where LiteLLM sends it. Nowhere else: the header is no credential on any
+  other route, and the admin key is not read from it.
 
 ### Licences and packaging
 - `NOTICE` gives the attributions the bundled material asks for, and
