@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { permissionDenied } from "@/lib/api/fetch-core";
 import { useAdminKey } from "@/hooks/useAdminKey";
 import { useHealth } from "@/hooks/useHealth";
 import { useRangeParam } from "@/hooks/useRangeParam";
@@ -58,8 +59,9 @@ export function useLatencyPage() {
     onSuccess: (data) => {
       toast.success(`Circuit reset for ${data.endpoint} in pool ${data.pool}`);
     },
-    onError: () => {
-      toast.error("Failed to reset circuit breaker");
+    // A refusal for the key's role is shown beside the button that asked: see LatencyBody.
+    onError: (e: Error) => {
+      if (!permissionDenied(e)) toast.error("Could not reset the endpoint", { description: e.message });
     },
   });
 

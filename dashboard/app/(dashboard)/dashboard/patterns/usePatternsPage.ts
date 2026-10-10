@@ -13,7 +13,7 @@ export function usePatternsPage() {
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [testInput, setTestInput] = useState("");
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ["tamga-patterns", adminKey],
     queryFn: () => api.listPatterns(adminKey),
     enabled: !!adminKey,
@@ -114,6 +114,7 @@ export function usePatternsPage() {
     setTestInput,
     items,
     isLoading,
+    error,
     compiledRegex,
     createMut,
     updateMut,

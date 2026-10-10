@@ -43,7 +43,15 @@ export interface Webhook {
   id: string;
   label: string;
   kind: WebhookKind;
+  /**
+   * When read back from the proxy this is the scheme and host only, followed
+   * by "/[redacted]": the path often carries a token, so the proxy keeps it.
+   */
   url: string;
+  /** Set on a webhook read back from the proxy: `url` is cut to scheme and host. */
+  url_redacted?: boolean;
+  /** Whether the proxy holds a token for this destination. The token itself is never sent back. */
+  has_auth_token?: boolean;
   enabled: boolean;
   rule?: {
     blocks_per_minute?: number;

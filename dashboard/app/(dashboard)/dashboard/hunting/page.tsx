@@ -114,34 +114,37 @@ export default function HuntingPage() {
         <SavedHunts hunts={m.savedHunts} onApply={m.applyHunt} onDelete={m.deleteHunt} onSave={m.saveHunt} />
       </div>
 
-      <Section
-        id="matches"
-        title="Matches"
-        note={m.isLoading ? "Searching" : counted(total, "request")}
-        style={{ marginTop: "3rem" }}
-      >
-        {m.isLoading ? (
-          <DataTableSkeleton columnCount={6} rowCount={8} showHeader={false} showToolbar={false} />
-        ) : (
-          <EventTable
-            label="Matches"
-            events={events}
-            swapKey={`${JSON.stringify(f)}|${m.shadow}|${m.range}|${m.page}`}
-            openId={openId}
-            open={open}
-            missing={missing}
-            onToggle={toggle}
-            onClose={close}
-            adminKey={m.adminKey}
-            empty={
-              m.activeFilterCount > 0
-                ? "No request in this window fits the search. Loosen a filter or pick a longer range."
-                : "No request went through in this window."
-            }
-            after={<Pager page={m.page} pages={Math.max(1, Math.ceil(total / PAGE_SIZE))} onPage={m.setPage} />}
-          />
-        )}
-      </Section>
+      {/* Without a key or an answer there are no matches to count. */}
+      {!m.adminKey || (m.error && !m.data) ? null : (
+        <Section
+          id="matches"
+          title="Matches"
+          note={m.isLoading ? "Searching" : counted(total, "request")}
+          style={{ marginTop: "3rem" }}
+        >
+          {m.isLoading ? (
+            <DataTableSkeleton columnCount={6} rowCount={8} showHeader={false} showToolbar={false} />
+          ) : (
+            <EventTable
+              label="Matches"
+              events={events}
+              swapKey={`${JSON.stringify(f)}|${m.shadow}|${m.range}|${m.page}`}
+              openId={openId}
+              open={open}
+              missing={missing}
+              onToggle={toggle}
+              onClose={close}
+              adminKey={m.adminKey}
+              empty={
+                m.activeFilterCount > 0
+                  ? "No request in this window fits the search. Loosen a filter or pick a longer range."
+                  : "No request went through in this window."
+              }
+              after={<Pager page={m.page} pages={Math.max(1, Math.ceil(total / PAGE_SIZE))} onPage={m.setPage} />}
+            />
+          )}
+        </Section>
+      )}
     </>
   );
 }

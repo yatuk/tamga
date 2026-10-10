@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ContentSwitcher, DataTableSkeleton, Dropdown, InlineNotification, Search, Switch } from "@carbon/react";
+import { NoData } from "@/components/console/page";
 import { api } from "@/lib/api";
 import { useAdminKey } from "@/hooks/useAdminKey";
 import { useEnumParam } from "@/hooks/useUrlState";
@@ -48,6 +49,10 @@ export function Incidents() {
   const stopped = incidents.filter((e) => e.action === "BLOCK").length;
   const { openId, open, missing, toggle, close } = useOpenEvent(incidents, adminKey);
 
+  if (!adminKey) {
+    return <NoData title="Incidents" lede="The requests that were stopped or redacted, newest first." adminKey={adminKey} />;
+  }
+
   return (
     <>
       <div className="t-pagehead">
@@ -56,9 +61,11 @@ export function Incidents() {
           <p className="t-lede">
             {list.isLoading
               ? "Reading the queue."
-              : incidents.length === 0
-                ? "Nothing has been stopped or redacted. Requests that pass do not appear here."
-                : `The ${incidents.length} most recent requests that were stopped or redacted, newest first. ${stopped} of them were stopped. Open one to see what was found and where.`}
+              : list.isError && !list.data
+                ? "The requests that were stopped or redacted, newest first."
+                : incidents.length === 0
+                  ? "Nothing has been stopped or redacted. Requests that pass do not appear here."
+                  : `The ${incidents.length} most recent requests that were stopped or redacted, newest first. ${stopped} of them were stopped. Open one to see what was found and where.`}
           </p>
         </div>
       </div>
@@ -126,7 +133,13 @@ export function Incidents() {
           onToggle={toggle}
           onClose={close}
           adminKey={adminKey}
-          empty={incidents.length === 0 ? "The queue is empty." : "No incident matches these filters."}
+          empty={
+            list.isError && !list.data
+              ? "The queue could not be read, so there is nothing to show."
+              : incidents.length === 0
+                ? "The queue is empty."
+                : "No incident matches these filters."
+          }
         />
       )}
     </>

@@ -3,7 +3,7 @@
 import { Trace } from "@/components/console/charts";
 import { Count } from "@/components/console/motion";
 import { bucketName, RANGE_WORDS, typeName } from "@/components/console/names";
-import { DataNotice, PageHead, RangeSwitch, Section, Shares, Statement } from "@/components/console/page";
+import { DataNotice, NoData, PageHead, RangeSwitch, Section, Shares, Statement } from "@/components/console/page";
 import { useTrendsPage } from "./useTrendsPage";
 
 type Point = { total: number; blocked: number; redacted?: number; warned?: number };
@@ -28,6 +28,12 @@ export default function TrendsPage() {
   const rate = totals.attempted > 0 ? (totals.caught / totals.attempted) * 100 : 0;
   const split = halves(points);
   const unit = hourly ? "hour" : "day";
+
+  if (!adminKey) {
+    return (
+      <NoData title="Detection trends" lede="How much of the traffic a policy acted on, and whether that share is moving." adminKey={adminKey} />
+    );
+  }
 
   return (
     <>

@@ -48,6 +48,7 @@ export function KeysBody({
   adminKey,
   isLoading,
   hasError,
+  listError,
   apiKeys,
   createOpen,
   setCreateOpen,
@@ -102,7 +103,7 @@ export function KeysBody({
         </Button>
       </PageHead>
 
-      <DataNotice adminKey={adminKey} failed={hasError} />
+      <DataNotice adminKey={adminKey} failed={hasError} error={listError} what="API keys" />
 
       {!adminKey || hasError ? null : isLoading ? (
         <div style={{ marginTop: "1.5rem" }}>

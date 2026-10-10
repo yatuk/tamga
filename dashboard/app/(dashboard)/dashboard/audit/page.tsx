@@ -23,7 +23,7 @@ import { Close, Renew } from "@carbon/icons-react";
 import { EXPRESSIVE, PRODUCTIVE } from "@/components/console/motion";
 import { clockTime, counted, dayLabel } from "@/components/console/names";
 import { Pager } from "@/components/console/events";
-import { DataNotice, PageHead, Section, Shares } from "@/components/console/page";
+import { DataNotice, NoData, PageHead, Section, Shares } from "@/components/console/page";
 import { useEscape, usePanelFocus, useRows } from "@/components/console/rows";
 import { useAdminKey } from "@/hooks/useAdminKey";
 import { useStringParam } from "@/hooks/useUrlState";
@@ -103,6 +103,18 @@ export default function AuditPage() {
   const broken = c && !c.chain_ok;
   const filtering = Boolean(q || kind || actor);
 
+  if (!adminKey || (log.isError && !log.data)) {
+    return (
+      <NoData
+        title="Audit log"
+        lede="Who changed what in this console. Each entry carries the hash of the one before it, so a change to the record shows."
+        adminKey={adminKey}
+        error={log.error}
+        what="the audit log"
+      />
+    );
+  }
+
   return (
     <>
       <PageHead
@@ -143,7 +155,7 @@ export default function AuditPage() {
         ) : null}
       </PageHead>
 
-      <DataNotice adminKey={adminKey} failed={log.isError} />
+      <DataNotice adminKey={adminKey} failed={log.isError} error={log.error} what="the audit log" />
 
       {byKind.length > 0 ? (
         <Section id="frequent" title="Most frequent actions" style={{ marginTop: "2rem", maxWidth: "44rem" }}>

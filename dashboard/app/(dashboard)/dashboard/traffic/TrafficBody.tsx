@@ -5,7 +5,7 @@ import { Download } from "@carbon/icons-react";
 import { Columns } from "@/components/console/charts";
 import { Count } from "@/components/console/motion";
 import { bucketLabel, bucketName, counted, providerName, RANGE_WORDS } from "@/components/console/names";
-import { DataNotice, PageHead, RangeSwitch, Section, Shares, Statement } from "@/components/console/page";
+import { DataNotice, NoData, PageHead, RangeSwitch, Section, Shares, Statement } from "@/components/console/page";
 import type { useTrafficPage } from "./useTrafficPage";
 
 type Props = ReturnType<typeof useTrafficPage>;
@@ -29,6 +29,10 @@ export function TrafficBody({
   const perHour = requestsPerSecond * 3600;
   const busiest = points.reduce<(typeof points)[number] | undefined>((top, p) => (!top || p.total > top.total ? p : top), undefined);
   const quiet = points.filter((p) => p.total === 0).length;
+
+  if (!adminKey) {
+    return <NoData title="Traffic" lede="How much went through the proxy, and where it was headed." adminKey={adminKey} />;
+  }
 
   return (
     <>

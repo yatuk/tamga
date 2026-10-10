@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import { Button, ContentSwitcher, IconButton, InlineNotification, SkeletonText, Switch } from "@carbon/react";
 import { TrashCan } from "@carbon/icons-react";
 import { useHealth } from "@/hooks/useHealth";
+import { permissionDenied } from "@/lib/api/fetch-core";
 import type { TimeRange } from "@/lib/types";
 import { Bar } from "./motion";
 
@@ -37,19 +38,38 @@ export function RangeSwitch({ value, onChange }: { value: TimeRange; onChange: (
   );
 }
 
-/** Why the page has no data, when it has none. Renders nothing otherwise. */
-export function DataNotice({ adminKey, failed }: { adminKey: string; failed?: boolean }) {
+/**
+ * Why the page has no data, when it has none. Renders nothing otherwise.
+ *
+ * `error` is what the page's main read threw. When the proxy refused it
+ * because the key's role is too low, the notice says so, naming `what` the
+ * page lists ("API keys"); the proxy is up and the key is valid in that case.
+ */
+export function DataNotice({
+  adminKey,
+  failed,
+  error,
+  what = "this page's data",
+}: {
+  adminKey: string;
+  failed?: boolean;
+  error?: unknown;
+  what?: string;
+}) {
   // The health check is answered without a key, so it tells a proxy that is
   // down from one that is up and refused the key or could not serve the data.
   const health = useHealth();
-  if (adminKey && !failed) return null;
+  if (adminKey && !failed && !error) return null;
+  const denied = adminKey ? permissionDenied(error) : null;
   const [title, subtitle] = !adminKey
     ? ["No admin key in this browser.", "Add one under Settings to read the proxy's data."]
-    : health.detailState === "rejected"
-      ? ["The proxy did not accept the admin key.", "It is up. Check the key under Settings."]
-      : health.data
-        ? ["The proxy is up, but it did not return this page's data.", "Proxy status shows whether one of its parts is down."]
-        : ["The proxy did not answer.", "Check that it is running and that this console points at it."];
+    : denied
+      ? [`This key's role cannot read ${what}.`, `${denied.needs} Use a key with a higher role under Settings.`]
+      : health.detailState === "rejected"
+        ? ["The proxy did not accept the admin key.", "It is up. Check the key under Settings."]
+        : health.data
+          ? ["The proxy is up, but it did not return this page's data.", "Proxy status shows whether one of its parts is down."]
+          : ["The proxy did not answer.", "Check that it is running and that this console points at it."];
   return (
     <InlineNotification
       kind={adminKey ? "error" : "info"}
@@ -59,6 +79,53 @@ export function DataNotice({ adminKey, failed }: { adminKey: string; failed?: bo
       subtitle={subtitle}
       style={{ marginTop: "1.5rem", maxWidth: "none" }}
     />
+  );
+}
+
+/**
+ * A page with nothing to show: its title, what it is for, and why there is
+ * nothing. Used in place of the page's body when there is no key, or when the
+ * read the page is built on failed with nothing loaded before it, so that
+ * empty figures are never read as "nothing happened".
+ */
+export function NoData({
+  title,
+  lede,
+  adminKey,
+  error,
+  what,
+  children,
+}: {
+  title: string;
+  lede: ReactNode;
+  adminKey: string;
+  error?: unknown;
+  what?: string;
+  children?: ReactNode;
+}) {
+  return (
+    <>
+      <PageHead title={title} lede={lede}>
+        {children}
+      </PageHead>
+      <DataNotice adminKey={adminKey} failed error={error} what={what} />
+    </>
+  );
+}
+
+/**
+ * What the proxy said when it refused an action because the key's role is too
+ * low, beside the button that asked. The console cannot know a key's role
+ * beforehand, so the button is there for everyone and the answer is shown.
+ * Renders nothing for any other error: those are reported where they were.
+ */
+export function Refused({ error }: { error: unknown }) {
+  const denied = permissionDenied(error);
+  if (!denied) return null;
+  return (
+    <span className="t-refused" role="alert">
+      {denied.refused}
+    </span>
   );
 }
 

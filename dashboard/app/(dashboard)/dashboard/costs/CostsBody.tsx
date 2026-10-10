@@ -6,7 +6,7 @@ import { Download } from "@carbon/icons-react";
 import { Columns } from "@/components/console/charts";
 import { Bar, Count } from "@/components/console/motion";
 import { dayLabel, providerName, RANGE_WORDS, weekdayLabel } from "@/components/console/names";
-import { DataNotice, PageHead, RangeSwitch, Section, Shares, Statement } from "@/components/console/page";
+import { DataNotice, NoData, PageHead, RangeSwitch, Section, Shares, Statement } from "@/components/console/page";
 import { formatInt } from "@/lib/utils/format";
 import type { useCostsPage } from "./useCostsPage";
 
@@ -58,6 +58,10 @@ export function CostsBody({
   const hasLimit = limitTokens > 0;
   const used = hasLimit ? Math.min(1, tokensToday / limitTokens) : 0;
   const left = Math.max(0, limitTokens - tokensToday);
+
+  if (!adminKey) {
+    return <NoData title="Token costs" lede="What the traffic is estimated to have cost, by model." adminKey={adminKey} />;
+  }
 
   return (
     <>

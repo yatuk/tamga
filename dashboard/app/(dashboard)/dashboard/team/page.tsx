@@ -18,7 +18,7 @@ import {
 } from "@carbon/react";
 import { Launch } from "@carbon/icons-react";
 import { counted, dayLabel } from "@/components/console/names";
-import { DataNotice, PageHead, Section } from "@/components/console/page";
+import { DataNotice, NoData, PageHead, Section } from "@/components/console/page";
 import { useAdminKey } from "@/hooks/useAdminKey";
 import { api, type TeamMember, type TeamRole } from "@/lib/api";
 import { toast } from "@/lib/toast";
@@ -100,6 +100,18 @@ export default function TeamPage() {
   const count = (role: TeamRole) => items.filter((m) => m.role === role).length;
   const admins = count("admin");
 
+  if (!adminKey || (team.isError && !team.data)) {
+    return (
+      <NoData
+        title="Team"
+        lede="Who can sign in to this console, and what each of them is allowed to do."
+        adminKey={adminKey}
+        error={team.error}
+        what="the team"
+      />
+    );
+  }
+
   return (
     <>
       <PageHead
@@ -117,7 +129,7 @@ export default function TeamPage() {
         ) : null}
       </PageHead>
 
-      <DataNotice adminKey={adminKey} failed={team.isError} />
+      <DataNotice adminKey={adminKey} failed={team.isError} error={team.error} what="the team" />
 
       {items.length > 0 && admins === 0 ? (
         <InlineNotification

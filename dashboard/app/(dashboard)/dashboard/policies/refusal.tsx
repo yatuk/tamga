@@ -148,6 +148,16 @@ export function explainRefusal(error: unknown, action: PolicyAction): Refusal {
       };
     }
   }
+  if (error.code === "permission_denied") {
+    const required = error.body.required_permission;
+    return {
+      code: error.code,
+      title: "This key's role cannot do this.",
+      detail: `${notDone}. ${
+        typeof required === "string" && required ? `The proxy asks for the ${required} permission.` : "The proxy asks for a higher role."
+      } Use a key with a higher role under Settings.`,
+    };
+  }
   if (error.status === 401) {
     return { code: "", title: "The proxy did not accept the admin key.", detail: `${notDone}. Check the key under Settings.` };
   }

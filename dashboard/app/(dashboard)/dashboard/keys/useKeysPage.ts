@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { permissionDenied } from "@/lib/api/fetch-core";
 import { useAdminKey } from "@/hooks/useAdminKey";
 
 type RevealedKey = {
@@ -45,8 +46,8 @@ export function useKeysPage() {
         label: result.label,
       });
     },
-    onError: () => {
-      toast.error("Could not create the API key");
+    onError: (e: Error) => {
+      toast.error("Could not create the API key", { description: permissionDenied(e)?.refused ?? e.message });
     },
   });
 
@@ -56,8 +57,8 @@ export function useKeysPage() {
       invalidate();
       toast.success("API key revoked");
     },
-    onError: () => {
-      toast.error("Could not revoke the API key");
+    onError: (e: Error) => {
+      toast.error("Could not revoke the API key", { description: permissionDenied(e)?.refused ?? e.message });
     },
   });
 
@@ -67,6 +68,7 @@ export function useKeysPage() {
     adminKey,
     isLoading,
     hasError,
+    listError,
     apiKeys,
     createOpen,
     setCreateOpen,

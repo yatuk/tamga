@@ -1,4 +1,4 @@
-import { API_BASE, authHeaders } from "@/lib/api/fetch-core";
+import { API_BASE, authHeaders, errorFromResponse } from "@/lib/api/fetch-core";
 
 export const exportEndpoints = {
   exportEventsUrl: (filters: {
@@ -34,9 +34,7 @@ export const exportEndpoints = {
     const resp = await fetch(`${API_BASE}/api/v1/events/export?${params.toString()}`, {
       headers: authHeaders(adminKey),
     });
-    if (!resp.ok) {
-      throw new Error(`Export failed: ${resp.status}`);
-    }
+    if (!resp.ok) throw await errorFromResponse(resp);
     return resp.blob();
   },
 
@@ -44,9 +42,7 @@ export const exportEndpoints = {
     const resp = await fetch(`${API_BASE}/api/v1/metrics`, {
       headers: authHeaders(adminKey),
     });
-    if (!resp.ok) {
-      throw new Error(`Metrics fetch failed: ${resp.status}`);
-    }
+    if (!resp.ok) throw await errorFromResponse(resp);
     return resp.text();
   },
 
@@ -59,13 +55,10 @@ export const exportEndpoints = {
     fetchPdf("/api/v1/reports/incident/pdf", adminKey, queryParams),
 };
 
-/** A PDF report as a Blob, or an error carrying the proxy's own message. */
+/** A PDF report as a Blob, or an ApiError carrying the proxy's own message and code. */
 async function fetchPdf(path: string, adminKey: string, queryParams?: Record<string, string>): Promise<Blob> {
   const qs = queryParams ? "?" + new URLSearchParams(queryParams).toString() : "";
   const resp = await fetch(`${API_BASE}${path}${qs}`, { headers: authHeaders(adminKey) });
-  if (!resp.ok) {
-    const errBody = await resp.json().catch(() => ({}));
-    throw new Error(typeof errBody.message === "string" ? errBody.message : `PDF generation failed: ${resp.status}`);
-  }
+  if (!resp.ok) throw await errorFromResponse(resp);
   return resp.blob();
 }

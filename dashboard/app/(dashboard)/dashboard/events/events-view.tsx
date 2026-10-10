@@ -5,7 +5,7 @@ import { Button, Checkbox, CheckboxGroup, DataTableSkeleton, Dropdown } from "@c
 import { EventTable, useFresh, useOpenEvent } from "@/components/console/events";
 import { PRODUCTIVE } from "@/components/console/motion";
 import { counted, providerName, RANGE_WORDS } from "@/components/console/names";
-import { DataNotice, PageHead, RangeSwitch } from "@/components/console/page";
+import { DataNotice, NoData, PageHead, RangeSwitch } from "@/components/console/page";
 import { type ActionFilter, useEventsPage } from "./useEventsPage";
 import type { SSEStatus } from "./useLiveEventsStream";
 
@@ -22,8 +22,23 @@ const LIVE: Record<SSEStatus, string> = {
   connecting: "Connecting to the live feed",
   open: "Live",
   error: "Live feed dropped, reconnecting",
+  "no-key": "Live feed needs an admin key",
+  refused: "Live feed off: the proxy did not accept the admin key",
+  forbidden: "Live feed off: this key's role cannot read it",
   closed: "Live feed off",
 };
+/** The states in which the feed is not coming back by itself. */
+const LIVE_STOPPED: SSEStatus[] = ["no-key", "refused", "forbidden", "closed"];
+
+/** Where the live feed stands, in words, beside the page's controls. */
+function LiveState({ status }: { status: SSEStatus }) {
+  return (
+    <span className="t-live" role="status">
+      <span className="t-dot" data-state={status === "open" ? "up" : LIVE_STOPPED.includes(status) ? "down" : "checking"} />
+      {LIVE[status]}
+    </span>
+  );
+}
 
 export function EventsView() {
   const p = useEventsPage();
@@ -32,6 +47,20 @@ export function EventsView() {
   const fresh = useFresh(events, !p.isLoading);
   const { openId, open, missing, toggle, close } = useOpenEvent(events, p.adminKey);
   const left = total - events.length;
+
+  if (!p.adminKey || (p.hasError && events.length === 0)) {
+    return (
+      <NoData
+        title="Event explorer"
+        lede={`Every request the proxy scanned in ${RANGE_WORDS[filters.range]}, newest first.`}
+        adminKey={p.adminKey}
+        error={p.error}
+        what="the scanned requests"
+      >
+        <LiveState status={p.sseStatus} />
+      </NoData>
+    );
+  }
 
   return (
     <>
@@ -43,14 +72,11 @@ export function EventsView() {
             : `Every request the proxy scanned in ${RANGE_WORDS[filters.range]}, newest first: ${windowTotals.all.toLocaleString("en")} in all, ${windowTotals.blocked.toLocaleString("en")} stopped, ${windowTotals.redacted.toLocaleString("en")} redacted, ${windowTotals.passed.toLocaleString("en")} passed untouched.`
         }
       >
-        <span className="t-live" role="status">
-          <span className="t-dot" data-state={p.sseStatus === "open" ? "up" : "checking"} />
-          {LIVE[p.sseStatus]}
-        </span>
+        <LiveState status={p.sseStatus} />
         <RangeSwitch value={filters.range} onChange={(range) => p.updateFilters({ range })} />
       </PageHead>
 
-      <DataNotice adminKey={p.adminKey} failed={p.hasError} />
+      <DataNotice adminKey={p.adminKey} failed={p.hasError} error={p.error} what="the scanned requests" />
 
       <div className="t-filters">
         <CheckboxGroup legendText="Only show" orientation="horizontal">

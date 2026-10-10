@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { permissionDenied } from "@/lib/api/fetch-core";
 import { toast } from "@/lib/toast";
 import { toUpperEn, toLowerEn } from "@/lib/utils/case";
 import { useAdminKey } from "@/hooks/useAdminKey";
@@ -15,8 +16,10 @@ export function useReportsPage() {
   const [adminKey] = useAdminKey();
   const [range, setRange] = useRangeParam("7d");
   const [isExporting, setIsExporting] = useState(false);
+  // The last export the proxy refused, kept so the page can say why beside its button.
+  const [exportRefusal, setExportRefusal] = useState<{ what: "events" | "owasp" | "incident"; error: unknown } | null>(null);
 
-  const { data: stats } = useQuery({
+  const { data: stats, error: statsError } = useQuery({
     queryKey: ["tamga-stats", adminKey, range],
     queryFn: () => api.getStats(adminKey, range),
     enabled: !!adminKey,
@@ -157,11 +160,13 @@ export function useReportsPage() {
   const exportEventsCsv = useCallback(async () => {
     if (!adminKey) return;
     setIsExporting(true);
+    setExportRefusal(null);
     try {
       const blob = await api.getEventsExport(adminKey, { range, format: "csv" });
       downloadBlob(blob, `tamga-events-${range}.csv`);
     } catch (err) {
-      toast.error("Could not export events", err instanceof Error ? err.message : undefined);
+      if (permissionDenied(err)) setExportRefusal({ what: "events", error: err });
+      else toast.error("Could not export events", err instanceof Error ? err.message : undefined);
     } finally {
       setIsExporting(false);
     }
@@ -170,13 +175,15 @@ export function useReportsPage() {
   const exportOwaspPdf = useCallback(async () => {
     if (!adminKey) return;
     setIsExporting(true);
+    setExportRefusal(null);
     try {
       const blob = await api.getOwaspPdfReport(adminKey, { range });
       downloadBlob(blob, `tamga-owasp-report-${range}.pdf`);
       toast.success("OWASP report downloaded");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not generate the PDF";
-      toast.error("Could not generate the PDF", message);
+      if (permissionDenied(err)) setExportRefusal({ what: "owasp", error: err });
+      else toast.error("Could not generate the PDF", message);
     } finally {
       setIsExporting(false);
     }
@@ -185,6 +192,7 @@ export function useReportsPage() {
   const exportIncidentPdf = useCallback(async () => {
     if (!adminKey) return;
     setIsExporting(true);
+    setExportRefusal(null);
     try {
       const totalRequests = stats?.total_requests ?? 0;
       const blocked = stats?.blocked_requests ?? 0;
@@ -202,7 +210,8 @@ export function useReportsPage() {
       toast.success("Incident report downloaded");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not generate the PDF";
-      toast.error("Could not generate the PDF", message);
+      if (permissionDenied(err)) setExportRefusal({ what: "incident", error: err });
+      else toast.error("Could not generate the PDF", message);
     } finally {
       setIsExporting(false);
     }
@@ -223,6 +232,8 @@ export function useReportsPage() {
     exportOwaspPdf,
     exportIncidentPdf,
     isExporting,
+    exportRefusal,
+    statsError,
     mttrData,
     comparisonDelta,
     executiveSummary,

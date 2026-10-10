@@ -6,7 +6,7 @@ import { Download, DocumentPdf } from "@carbon/icons-react";
 import { Columns } from "@/components/console/charts";
 import { Arrive, Arriving } from "@/components/console/motion";
 import { bucketLabel, bucketName, clockTime, dayLabel, providerName, RANGE_WORDS, typeName } from "@/components/console/names";
-import { DataNotice, PageHead, RangeSwitch, Section, Shares } from "@/components/console/page";
+import { DataNotice, PageHead, RangeSwitch, Refused, Section, Shares } from "@/components/console/page";
 import type { useReportsPage } from "./useReportsPage";
 
 type Props = ReturnType<typeof useReportsPage>;
@@ -29,6 +29,8 @@ export function ReportsBody({
   exportOwaspPdf,
   exportIncidentPdf,
   isExporting,
+  exportRefusal,
+  statsError,
   mttrData,
   comparisonDelta,
   executiveSummary: s,
@@ -42,6 +44,7 @@ export function ReportsBody({
     <>
       <PageHead title="Reports" lede={`${RANGE_WORDS[range][0].toUpperCase()}${RANGE_WORDS[range].slice(1)} in words and figures, with the exports an auditor asks for.`}>
         <RangeSwitch value={range} onChange={setRange} />
+        {exportRefusal && exportRefusal.what !== "events" ? <Refused error={exportRefusal.error} /> : null}
         <Button kind="tertiary" size="sm" renderIcon={DocumentPdf} disabled={isExporting || !adminKey} onClick={exportOwaspPdf}>
           OWASP report
         </Button>
@@ -50,8 +53,11 @@ export function ReportsBody({
         </Button>
       </PageHead>
 
-      <DataNotice adminKey={adminKey} />
+      <DataNotice adminKey={adminKey} error={statsError} what="the figures of this report" />
 
+      {/* Without the figures there is no report: zeros would read as a quiet week. */}
+      {!adminKey || statsError ? null : (
+      <>
       {/* The report opens as a report does: with what happened, in sentences. */}
       <div className="t-statement">
         <div className="t-prose">
@@ -193,6 +199,7 @@ export function ReportsBody({
               <div>
                 <b>Every scanned request</b>
                 <span className="t-note">All of {RANGE_WORDS[range]}, as CSV.</span>
+                {exportRefusal?.what === "events" ? <Refused error={exportRefusal.error} /> : null}
               </div>
               <Button kind="tertiary" size="sm" renderIcon={Download} onClick={exportEventsCsv} disabled={isExporting}>
                 Download
@@ -228,6 +235,8 @@ export function ReportsBody({
           </ul>
         </Section>
       </div>
+      </>
+      )}
     </>
   );
 }

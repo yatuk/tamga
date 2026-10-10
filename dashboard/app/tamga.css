@@ -993,6 +993,15 @@ html {
   font-variant-numeric: tabular-nums;
 }
 
+/* What the proxy said when it refused an action, beside the button that asked. */
+.tamga .t-refused {
+  display: block;
+  max-width: 28rem;
+  font-size: 0.8125rem;
+  color: var(--cds-text-primary);
+  white-space: normal;
+}
+
 /* ── Event explorer ────────────────────────────────────────────────── */
 .tamga .t-live {
   display: inline-flex;

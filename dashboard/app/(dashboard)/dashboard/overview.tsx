@@ -10,7 +10,7 @@ import { useHealth } from "@/hooks/useHealth";
 import { useRangeParam } from "@/hooks/useRangeParam";
 import { Columns } from "@/components/console/charts";
 import { NEEDS_KEY } from "@/components/console/health";
-import { DataNotice } from "@/components/console/page";
+import { DataNotice, NoData } from "@/components/console/page";
 import { Arrive, Arriving, Bar, Count } from "@/components/console/motion";
 import {
   bucketLabel,
@@ -69,6 +69,10 @@ export function Overview() {
   const waiting = (events.data?.events ?? []).filter((e) => e.action === "BLOCK").slice(0, 7);
   const points = series.data?.points ?? [];
   const hourly = series.data?.bucket === "hour";
+
+  if (!adminKey || (stats.isError && !s)) {
+    return <NoData title="Overview" lede="What the proxy scanned, and what it did about it." adminKey={adminKey} error={stats.error} />;
+  }
 
   return (
     <>

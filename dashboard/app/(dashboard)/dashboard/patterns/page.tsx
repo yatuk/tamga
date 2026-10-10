@@ -75,12 +75,14 @@ export default function PatternsPage() {
         lede="Your own regular expressions and literal strings for the scanners to look for, on top of what they already detect."
       />
 
-      <DataNotice adminKey={adminKey} />
+      <DataNotice adminKey={adminKey} error={m.error} what="the patterns" />
 
       <div className="t-hunt" style={{ gridTemplateColumns: "minmax(0, 1fr) 24rem" }}>
         <Section id="list" title="Your patterns" note={m.items.length > 0 ? `${enabled} of ${m.items.length} switched on` : undefined}>
           {m.isLoading ? (
             <DataTableSkeleton columnCount={5} rowCount={4} showHeader={false} showToolbar={false} />
+          ) : !adminKey || m.error ? (
+            <p className="t-empty">Your patterns are listed here once the proxy has been read.</p>
           ) : m.items.length === 0 ? (
             <p className="t-empty">None yet. Add one with the form to catch a value the built-in scanners do not know, such as a project codename.</p>
           ) : (

@@ -3,12 +3,11 @@ import type { BudgetStats, AuditChainResult } from "@/lib/api/types-extended";
 import type { ModelPricing, CostsBreakdownResponse } from "@/lib/api/types-billing";
 
 export const billing = {
-  getBudgetStats: (adminKey: string, org?: string) => {
-    const qs = org ? `?org=${encodeURIComponent(org)}` : "";
-    return fetchAPI<BudgetStats>(`/api/v1/budget/stats${qs}`, {
+  // The proxy answers for its own organisation; it takes no `org` parameter.
+  getBudgetStats: (adminKey: string) =>
+    fetchAPI<BudgetStats>("/api/v1/budget/stats", {
       headers: authHeaders(adminKey),
-    });
-  },
+    }),
 
   verifyAuditChain: (adminKey: string) =>
     fetchAPI<AuditChainResult>("/api/v1/audit/verify", {

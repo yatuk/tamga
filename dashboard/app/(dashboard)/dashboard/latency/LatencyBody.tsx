@@ -5,7 +5,7 @@ import { Scale, Trace } from "@/components/console/charts";
 import { failureWords, HealthDetailNotice, NEEDS_KEY } from "@/components/console/health";
 import { Count } from "@/components/console/motion";
 import { bucketName, RANGE_WORDS, uptimeText } from "@/components/console/names";
-import { DataNotice, PageHead, RangeSwitch, Section, Statement } from "@/components/console/page";
+import { DataNotice, PageHead, RangeSwitch, Refused, Section, Statement } from "@/components/console/page";
 import { formatMs, formatRate, formatSince } from "@/lib/utils/format";
 import type { useLatencyPage } from "./useLatencyPage";
 
@@ -189,6 +189,9 @@ export function LatencyBody({
                         >
                           {circuitReset.isPending ? "Resetting" : "Send traffic again"}
                         </Button>
+                        {circuitReset.variables?.pool === p.pool && circuitReset.variables?.endpoint === p.name ? (
+                          <Refused error={circuitReset.error} />
+                        ) : null}
                       </TableCell>
                     </TableRow>
                   );

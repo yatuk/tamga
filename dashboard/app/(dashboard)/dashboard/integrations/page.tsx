@@ -24,6 +24,7 @@ import { counted } from "@/components/console/names";
 import { DataNotice, PageHead, Remove, Section } from "@/components/console/page";
 import { formatSince } from "@/lib/utils/format";
 import { type IntegrationDraft, openIntegrationDraft } from "./integrationDraft";
+import { webhookHost } from "./integrationWebhookHelpers";
 import { INTEGRATION_PRESETS, PRIMARY_PRESETS, SECONDARY_PRESETS, type IntegrationPreset } from "./integrationPresets";
 import { useIntegrationsPage } from "./useIntegrationsPage";
 
@@ -42,7 +43,7 @@ function validate(draft: IntegrationDraft): Partial<Record<"url" | "projectKey" 
 }
 
 export default function IntegrationsPage() {
-  const { adminKey, draft, setDraft, hooks, createMut, testMut, deleteMut } = useIntegrationsPage();
+  const { adminKey, draft, setDraft, hooks, error, createMut, testMut, deleteMut } = useIntegrationsPage();
   const [showAll, setShowAll] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const testing = testMut.isPending ? testMut.variables : undefined;
@@ -80,13 +81,15 @@ export default function IntegrationsPage() {
       <PageHead
         title="Integrations"
         lede={
-          hooks.length === 0
-            ? "Where stopped requests and alerts are sent. Nothing is connected yet, so they stay in this console."
-            : `Stopped requests and alerts are sent to ${counted(hooks.length, "destination")}, ${sending} of them switched on.`
+          !adminKey || error
+            ? "Where stopped requests and alerts are sent."
+            : hooks.length === 0
+              ? "Where stopped requests and alerts are sent. Nothing is connected yet, so they stay in this console."
+              : `Stopped requests and alerts are sent to ${counted(hooks.length, "destination")}, ${sending} of them switched on.`
         }
       />
 
-      <DataNotice adminKey={adminKey} />
+      <DataNotice adminKey={adminKey} error={error} what="the connected destinations" />
 
       {hooks.length > 0 ? (
         <Section id="connected" title="Connected" style={{ marginTop: "2rem" }}>
@@ -96,7 +99,7 @@ export default function IntegrationsPage() {
                 <TableRow>
                   <TableHeader>Name</TableHeader>
                   <TableHeader>Sends to</TableHeader>
-                  <TableHeader>URL</TableHeader>
+                  <TableHeader>Host</TableHeader>
                   <TableHeader>Last delivery</TableHeader>
                   <TableHeader>
                     <span className="cds--visually-hidden">Test or disconnect</span>
@@ -118,8 +121,8 @@ export default function IntegrationsPage() {
                         </span>
                       ) : null}
                     </TableCell>
-                    <TableCell className="t-clip" title={h.url}>
-                      <span className="t-data">{h.url}</span>
+                    <TableCell className="t-clip" title={webhookHost(h.url)}>
+                      <span className="t-data">{webhookHost(h.url)}</span>
                     </TableCell>
                     <TableCell>{hasFired(h.last_fired) ? formatSince(h.last_fired) : "Never"}</TableCell>
                     <TableCell>
@@ -135,6 +138,10 @@ export default function IntegrationsPage() {
               </TableBody>
             </Table>
           </TableContainer>
+          <p className="t-footnote">
+            Only the host of each destination is shown. The rest of the address and any token in it are kept by the proxy and are not sent to
+            this console.
+          </p>
         </Section>
       ) : null}
 

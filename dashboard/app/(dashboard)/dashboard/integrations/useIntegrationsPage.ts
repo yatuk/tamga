@@ -24,7 +24,7 @@ export function useIntegrationsPage() {
     router.replace("/dashboard/integrations");
   }, [params, router]);
 
-  const { data } = useQuery({
+  const { data, error } = useQuery({
     queryKey: ["tamga-webhooks-integrations", adminKey],
     queryFn: () => api.listWebhooks(adminKey),
     enabled: !!adminKey,
@@ -90,6 +90,7 @@ export function useIntegrationsPage() {
     draft,
     setDraft,
     hooks,
+    error,
     createMut,
     testMut,
     deleteMut,

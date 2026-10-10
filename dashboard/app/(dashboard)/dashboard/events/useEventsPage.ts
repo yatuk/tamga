@@ -139,6 +139,7 @@ export function useEventsPage() {
     toggleAction,
     isLoading,
     hasError,
+    error: queryError,
     events,
     total,
     windowTotals,

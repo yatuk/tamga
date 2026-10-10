@@ -17,3 +17,18 @@ export function defaultHeadersForIntegration(kind: WebhookKind): string {
       return "";
   }
 }
+
+/**
+ * Where a connected destination sends to, for the table. The proxy hands back
+ * the scheme and host followed by "/[redacted]", because the path often
+ * carries a token; this is the host alone, with the scheme only when it is
+ * not HTTPS, since that is worth seeing.
+ */
+export function webhookHost(url: string): string {
+  try {
+    const u = new URL(url);
+    return u.protocol === "https:" ? u.host : `${u.protocol}//${u.host}`;
+  } catch {
+    return url.replace(/\/\[redacted\]$/, "");
+  }
+}
