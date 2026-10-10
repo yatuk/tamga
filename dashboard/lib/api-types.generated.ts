@@ -211,6 +211,13 @@ export interface paths {
                     };
                     content?: never;
                 };
+                /** @description `account_not_assigned`: see `POST /api/v1/auth/github/exchange`. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
             };
         };
         put?: never;
@@ -242,6 +249,18 @@ export interface paths {
             responses: {
                 /** @description OK */
                 200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /**
+                 * @description `account_not_assigned`: nobody has given this GitHub account a
+                 *     role, so it gets no session. An admin assigns one with
+                 *     `PUT /api/v1/team/{id}/role`, where `id` is the `github_user_id`
+                 *     in this body; the static admin key can do so before any user exists.
+                 */
+                403: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -336,6 +355,7 @@ export interface paths {
                         "application/json": components["schemas"]["DashboardStatsV2"];
                     };
                 };
+                403: components["responses"]["PermissionDenied"];
             };
         };
         put?: never;
@@ -374,6 +394,7 @@ export interface paths {
                         "application/json": components["schemas"]["ModelStatsResponse"];
                     };
                 };
+                403: components["responses"]["PermissionDenied"];
             };
         };
         put?: never;
@@ -446,6 +467,7 @@ export interface paths {
                     };
                     content?: never;
                 };
+                403: components["responses"]["PermissionDenied"];
             };
         };
         put?: never;
@@ -521,6 +543,7 @@ export interface paths {
                     };
                     content?: never;
                 };
+                403: components["responses"]["PermissionDenied"];
                 /** @description Event not found */
                 404: {
                     headers: {
@@ -585,6 +608,7 @@ export interface paths {
                         };
                     };
                 };
+                403: components["responses"]["PermissionDenied"];
             };
         };
         put?: never;
@@ -619,6 +643,7 @@ export interface paths {
                     };
                     content?: never;
                 };
+                403: components["responses"]["PermissionDenied"];
             };
         };
         delete?: never;
@@ -675,6 +700,7 @@ export interface paths {
                     };
                     content?: never;
                 };
+                403: components["responses"]["PermissionDenied"];
             };
         };
         put?: never;
@@ -720,6 +746,7 @@ export interface paths {
                     };
                     content?: never;
                 };
+                403: components["responses"]["PermissionDenied"];
             };
         };
         options?: never;
@@ -770,6 +797,7 @@ export interface paths {
                     };
                     content?: never;
                 };
+                403: components["responses"]["PermissionDenied"];
             };
         };
         put?: never;
@@ -808,6 +836,7 @@ export interface paths {
                         "application/json": components["schemas"]["BreakdownResponse"];
                     };
                 };
+                403: components["responses"]["PermissionDenied"];
             };
         };
         put?: never;
@@ -849,6 +878,7 @@ export interface paths {
                         };
                     };
                 };
+                403: components["responses"]["PermissionDenied"];
                 /** @description Incidents store unavailable */
                 503: {
                     headers: {
@@ -901,6 +931,7 @@ export interface paths {
                     };
                     content?: never;
                 };
+                403: components["responses"]["PermissionDenied"];
                 /** @description Incident not found */
                 404: {
                     headers: {
@@ -954,6 +985,7 @@ export interface paths {
                     };
                     content?: never;
                 };
+                403: components["responses"]["PermissionDenied"];
                 /** @description Incidents store unavailable */
                 503: {
                     headers: {
@@ -1008,6 +1040,7 @@ export interface paths {
                     };
                     content?: never;
                 };
+                403: components["responses"]["PermissionDenied"];
                 /** @description Lifecycle store unavailable */
                 503: {
                     headers: {
@@ -1071,6 +1104,7 @@ export interface paths {
                     };
                     content?: never;
                 };
+                403: components["responses"]["PermissionDenied"];
                 /** @description Lifecycle store unavailable */
                 503: {
                     headers: {
@@ -1123,6 +1157,7 @@ export interface paths {
                     };
                     content?: never;
                 };
+                403: components["responses"]["PermissionDenied"];
                 /** @description Lifecycle store unavailable */
                 503: {
                     headers: {
@@ -1150,7 +1185,6 @@ export interface paths {
             parameters: {
                 query?: {
                     range?: components["schemas"]["ReportRange"];
-                    org_id?: string;
                 };
                 header?: never;
                 path?: never;
@@ -1158,7 +1192,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description OK */
+                /** @description OK, for the deployment's organisation */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -1167,6 +1201,7 @@ export interface paths {
                         "application/json": components["schemas"]["MTTRStats"];
                     };
                 };
+                403: components["responses"]["PermissionDenied"];
                 /** @description Lifecycle store unavailable */
                 503: {
                     headers: {
@@ -1215,6 +1250,7 @@ export interface paths {
                         };
                     };
                 };
+                403: components["responses"]["PermissionDenied"];
             };
         };
         put?: never;
@@ -1256,6 +1292,7 @@ export interface paths {
                         "application/json": components["schemas"]["AuditChainResult"];
                     };
                 };
+                403: components["responses"]["PermissionDenied"];
             };
         };
         put?: never;
@@ -1277,10 +1314,18 @@ export interface paths {
          * Server-Sent Events stream of scanned/blocked requests
          * @description text/event-stream yanıt; `request_scanned` ve `request_blocked`
          *     event tiplerini yayınlar. Bağlantı client kapatana kadar açık kalır.
+         *
+         *     Only events of the deployment's organisation are sent. This is the
+         *     one route that reads the key from `?key=` when the
+         *     `X-Tamga-Admin-Key` header is absent: a browser EventSource cannot
+         *     set a header. A server-side caller should send the header.
          */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    /** @description The admin key or a scoped API key, for EventSource only. Prefer the header. */
+                    key?: string;
+                };
                 header?: never;
                 path?: never;
                 cookie?: never;
@@ -1296,6 +1341,7 @@ export interface paths {
                         "text/event-stream": string;
                     };
                 };
+                403: components["responses"]["PermissionDenied"];
                 /** @description Live stream unavailable (no broker) */
                 503: {
                     headers: {
@@ -1339,6 +1385,7 @@ export interface paths {
                         "application/json": components["schemas"]["TamgaPolicy"][];
                     };
                 };
+                403: components["responses"]["PermissionDenied"];
                 /** @description Policy store unavailable */
                 500: {
                     headers: {
@@ -1462,7 +1509,9 @@ export interface paths {
          * Reload the policy from disk without changing content
          * @description Brings in whatever the policy file on disk holds. It is not a direct
          *     write and is not held back by dual control or the privilege split:
-         *     the file was changed by someone with access to the host. The audit
+         *     the file was changed by someone with access to the host. Because it
+         *     installs the sections only an admin may change along with the rest,
+         *     it needs the admin role. The audit
          *     entry (`policy.reload`) carries the caller's verified actor and the
          *     paths that changed; a reload that changed the policy also appends a
          *     history revision.
@@ -1490,6 +1539,7 @@ export interface paths {
                         };
                     };
                 };
+                403: components["responses"]["PermissionDenied"];
                 /** @description Policy store unavailable or reload failed */
                 500: {
                     headers: {
@@ -1549,6 +1599,7 @@ export interface paths {
                     };
                     content?: never;
                 };
+                403: components["responses"]["PermissionDenied"];
                 /**
                  * @description The policy decodes but is refused: a semantic error, a value outside
                  *     its bounds or a pool endpoint the upstream rules do not allow. One
@@ -1614,6 +1665,7 @@ export interface paths {
                     };
                     content?: never;
                 };
+                403: components["responses"]["PermissionDenied"];
             };
         };
         delete?: never;
@@ -1780,6 +1832,7 @@ export interface paths {
                         };
                     };
                 };
+                403: components["responses"]["PermissionDenied"];
                 /** @description Policy store unavailable or no policy loaded */
                 500: {
                     headers: {
@@ -1893,6 +1946,7 @@ export interface paths {
                     };
                     content?: never;
                 };
+                403: components["responses"]["PermissionDenied"];
                 /** @description Entity not found */
                 404: {
                     headers: {
@@ -1953,6 +2007,7 @@ export interface paths {
                         "application/json": components["schemas"]["PolicyRevision"][];
                     };
                 };
+                403: components["responses"]["PermissionDenied"];
             };
         };
         put?: never;
@@ -1991,6 +2046,7 @@ export interface paths {
                         "application/json": components["schemas"]["PolicyRevision"];
                     };
                 };
+                403: components["responses"]["PermissionDenied"];
                 /** @description Revision not found */
                 404: {
                     headers: {
@@ -2054,6 +2110,7 @@ export interface paths {
                     };
                     content?: never;
                 };
+                403: components["responses"]["PermissionDenied"];
                 /** @description Revision not found */
                 404: {
                     headers: {
@@ -2111,6 +2168,7 @@ export interface paths {
                         "application/json": components["schemas"]["PolicyProposal"][];
                     };
                 };
+                403: components["responses"]["PermissionDenied"];
             };
         };
         put?: never;
@@ -2397,6 +2455,7 @@ export interface paths {
                         };
                     };
                 };
+                403: components["responses"]["PermissionDenied"];
             };
         };
         put?: never;
@@ -2451,6 +2510,7 @@ export interface paths {
                     };
                     content?: never;
                 };
+                403: components["responses"]["PermissionDenied"];
                 /** @description API keys store unavailable */
                 503: {
                     headers: {
@@ -2500,6 +2560,7 @@ export interface paths {
                         };
                     };
                 };
+                403: components["responses"]["PermissionDenied"];
                 /** @description Key not found */
                 404: {
                     headers: {
@@ -2528,7 +2589,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List configured webhooks */
+        /**
+         * List configured webhooks
+         * @description Credentials are not in the list: `auth_token` is left out
+         *     (`has_auth_token` says whether one is set), every header value is
+         *     `[redacted]`, and `url` is cut to its scheme and host when it has a
+         *     path, query or user (`url_redacted`).
+         */
         get: {
             parameters: {
                 query?: never;
@@ -2550,6 +2617,7 @@ export interface paths {
                         };
                     };
                 };
+                403: components["responses"]["PermissionDenied"];
             };
         };
         put?: never;
@@ -2583,6 +2651,7 @@ export interface paths {
                     };
                     content?: never;
                 };
+                403: components["responses"]["PermissionDenied"];
                 /** @description Webhooks unavailable */
                 503: {
                     headers: {
@@ -2631,6 +2700,7 @@ export interface paths {
                         };
                     };
                 };
+                403: components["responses"]["PermissionDenied"];
                 /** @description Webhook not found */
                 404: {
                     headers: {
@@ -2694,6 +2764,7 @@ export interface paths {
                         };
                     };
                 };
+                403: components["responses"]["PermissionDenied"];
                 /** @description Webhook not found */
                 404: {
                     headers: {
@@ -2748,6 +2819,7 @@ export interface paths {
                         "text/plain": string;
                     };
                 };
+                403: components["responses"]["PermissionDenied"];
             };
         };
         put?: never;
@@ -2790,6 +2862,7 @@ export interface paths {
                         };
                     };
                 };
+                403: components["responses"]["PermissionDenied"];
             };
         };
         put?: never;
@@ -2834,6 +2907,7 @@ export interface paths {
                         };
                     };
                 };
+                403: components["responses"]["PermissionDenied"];
             };
         };
         put?: never;
@@ -2873,6 +2947,7 @@ export interface paths {
                         };
                     };
                 };
+                403: components["responses"]["PermissionDenied"];
             };
         };
         put?: never;
@@ -2906,6 +2981,7 @@ export interface paths {
                     };
                     content?: never;
                 };
+                403: components["responses"]["PermissionDenied"];
                 /** @description Patterns store unavailable */
                 503: {
                     headers: {
@@ -2961,6 +3037,7 @@ export interface paths {
                     };
                     content?: never;
                 };
+                403: components["responses"]["PermissionDenied"];
                 /** @description Pattern not found */
                 404: {
                     headers: {
@@ -3002,6 +3079,7 @@ export interface paths {
                         };
                     };
                 };
+                403: components["responses"]["PermissionDenied"];
                 /** @description Pattern not found */
                 404: {
                     headers: {
@@ -3052,6 +3130,7 @@ export interface paths {
                         };
                     };
                 };
+                403: components["responses"]["PermissionDenied"];
                 /** @description Saved hunts store unavailable */
                 503: {
                     headers: {
@@ -3095,6 +3174,7 @@ export interface paths {
                     };
                     content?: never;
                 };
+                403: components["responses"]["PermissionDenied"];
                 /** @description Saved hunts store unavailable */
                 503: {
                     headers: {
@@ -3153,6 +3233,7 @@ export interface paths {
                     };
                     content?: never;
                 };
+                403: components["responses"]["PermissionDenied"];
                 /** @description Saved hunt not found */
                 404: {
                     headers: {
@@ -3201,6 +3282,7 @@ export interface paths {
                     };
                     content?: never;
                 };
+                403: components["responses"]["PermissionDenied"];
                 /** @description Saved hunt not found */
                 404: {
                     headers: {
@@ -3256,6 +3338,7 @@ export interface paths {
                         };
                     };
                 };
+                403: components["responses"]["PermissionDenied"];
             };
         };
         put?: never;
@@ -3301,8 +3384,27 @@ export interface paths {
                         "application/json": components["schemas"]["TeamMember"];
                     };
                 };
-                /** @description Invalid role or body */
+                /** @description Invalid role, body or user id */
                 400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /**
+                 * @description `permission_denied`: the caller is not an admin.
+                 *     `own_role`: the caller is the user named in the path; nobody sets their own role.
+                 */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PermissionDenied"];
+                    };
+                };
+                /** @description `last_admin`: the user is the only admin in the user store and the new role is not admin. */
+                409: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -3355,6 +3457,7 @@ export interface paths {
                         };
                     };
                 };
+                403: components["responses"]["PermissionDenied"];
                 /** @description Pricing store not configured */
                 503: {
                     headers: {
@@ -3417,6 +3520,7 @@ export interface paths {
                         };
                     };
                 };
+                403: components["responses"]["PermissionDenied"];
             };
         };
         put?: never;
@@ -3434,12 +3538,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Daily token + cost counters for an organisation */
+        /** Daily token + cost counters for the deployment's organisation */
         get: {
             parameters: {
-                query?: {
-                    org?: string;
-                };
+                query?: never;
                 header?: never;
                 path?: never;
                 cookie?: never;
@@ -3455,6 +3557,7 @@ export interface paths {
                         "application/json": components["schemas"]["BudgetStats"];
                     };
                 };
+                403: components["responses"]["PermissionDenied"];
             };
         };
         put?: never;
@@ -3498,6 +3601,7 @@ export interface paths {
                         };
                     };
                 };
+                403: components["responses"]["PermissionDenied"];
                 /** @description Retention not enabled */
                 503: {
                     headers: {
@@ -3560,6 +3664,7 @@ export interface paths {
                     };
                     content?: never;
                 };
+                403: components["responses"]["PermissionDenied"];
                 /** @description Upstream registry not configured */
                 503: {
                     headers: {
@@ -3601,6 +3706,7 @@ export interface paths {
                         "application/json": components["schemas"]["ProviderCatalogEntry"][];
                     };
                 };
+                403: components["responses"]["PermissionDenied"];
             };
         };
         put?: never;
@@ -3693,6 +3799,7 @@ export interface paths {
                     };
                     content?: never;
                 };
+                403: components["responses"]["PermissionDenied"];
             };
         };
         put?: never;
@@ -3713,6 +3820,7 @@ export interface paths {
                     };
                     content?: never;
                 };
+                403: components["responses"]["PermissionDenied"];
             };
         };
         delete?: never;
@@ -3747,6 +3855,7 @@ export interface paths {
                     };
                     content?: never;
                 };
+                403: components["responses"]["PermissionDenied"];
             };
         };
         put?: never;
@@ -3770,6 +3879,7 @@ export interface paths {
                     };
                     content?: never;
                 };
+                403: components["responses"]["PermissionDenied"];
             };
         };
         options?: never;
@@ -3793,6 +3903,7 @@ export interface paths {
                     };
                     content?: never;
                 };
+                403: components["responses"]["PermissionDenied"];
             };
         };
         trace?: never;
@@ -4257,6 +4368,17 @@ export interface components {
              */
             status?: "approved" | "rejected";
         };
+        PermissionDenied: {
+            /** @example role viewer lacks incidents:write */
+            error: string;
+            /** @enum {string} */
+            code: "permission_denied";
+            /**
+             * @description The permission the route asks for. Absent when the route itself has none declared, which is refused to every caller.
+             * @example incidents:write
+             */
+            required_permission?: string;
+        };
         PolicyPrivilegeError: {
             error: string;
             /** @enum {string} */
@@ -4311,7 +4433,12 @@ export interface components {
             payload_template?: string;
             project_key?: string;
             issue_type?: string;
+            /** @description Returned by create only; never in the list. */
             auth_token?: string;
+            /** @description In the list only. */
+            has_auth_token?: boolean;
+            /** @description In the list only. True when `url` was cut to its scheme and host. */
+            url_redacted?: boolean;
             /** Format: date-time */
             created_at?: string;
             /** Format: date-time */
@@ -4474,7 +4601,17 @@ export interface components {
             models?: components["schemas"]["ProviderModelEntry"][];
         };
     };
-    responses: never;
+    responses: {
+        /** @description The caller is authenticated and its role does not carry the permission the route asks for. Nothing was read or changed. */
+        PermissionDenied: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["PermissionDenied"];
+            };
+        };
+    };
     parameters: never;
     requestBodies: never;
     headers: never;

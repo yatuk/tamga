@@ -203,7 +203,9 @@ test.describe("Integrations", () => {
     const row = table.getByRole("row").filter({ hasText: label });
     await expect(row).toBeVisible();
     await expect(row).toContainText("Generic Webhook");
-    await expect(row).toContainText(SINK);
+    // The list shows where a destination is, not the path, which can carry a secret.
+    await expect(row).toContainText("https://example.invalid/");
+    await expect(row).not.toContainText("invalid/e2e-live");
     await expect(row).toContainText("Never");
 
     const on = before.filter((h) => h.enabled).length + 1;
