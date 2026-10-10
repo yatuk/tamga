@@ -38,16 +38,13 @@ veri ikametgahını `tr` olarak işaretleyen policy kullanılır.
 Migrations follow the `golang-migrate` format (`NNN_name.up.sql` + `NNN_name.down.sql`).
 
 ```bash
-psql "$TAMGA_POSTGRES_URL" -f migrations/001_init.up.sql
-psql "$TAMGA_POSTGRES_URL" -f migrations/002_indexes.up.sql
-psql "$TAMGA_POSTGRES_URL" -f migrations/003_output_scan.up.sql
-psql "$TAMGA_POSTGRES_URL" -f migrations/004_audit_policy.up.sql
-psql "$TAMGA_POSTGRES_URL" -f migrations/005_retention_run_log.up.sql
-psql "$TAMGA_POSTGRES_URL" -f migrations/006_model_metadata.up.sql
+# Every migration, in order. The proxy reads the same address from TAMGA_DB_URL.
+for f in migrations/*.up.sql; do psql "$TAMGA_DB_URL" -v ON_ERROR_STOP=1 -f "$f"; done
 ```
 
-To roll back the most recent migration:
+They are written to be run again without harm. To roll one back, run its
+`.down.sql`:
 
 ```bash
-psql "$TAMGA_POSTGRES_URL" -f migrations/006_model_metadata.down.sql
+psql "$TAMGA_DB_URL" -f migrations/018_drop_tenant_rls.down.sql
 ```

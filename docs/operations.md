@@ -301,7 +301,7 @@ or through the API:
 ```bash
 curl -s -X POST "$TAMGA_URL/api/v1/apikeys" \
   -H "X-Tamga-Admin-Key: $TAMGA_ADMIN_KEY" -H "Content-Type: application/json" \
-  -d '{"label":"billing-service","scope":"proxy","org_id":"acme","expires_in_days":90}'
+  -d '{"label":"billing-service","scope":"proxy","expires_in_days":90}'
 ```
 
 The value is in `raw_key` and is shown this once. The application sends it
@@ -474,11 +474,11 @@ text in the clear. Keep it on the internal network, next to the proxy.
 
 With `TAMGA_DB_URL` set, the following are kept in PostgreSQL and are the same
 on every replica: request logs, incidents, the audit log, policy history,
-saved hunts, API keys, custom patterns and team roles. Webhooks are kept too
+saved hunts, API keys, custom patterns, team roles and SSO settings. Webhooks are kept too
 when `TAMGA_VAULT_KEY` is set; they are stored encrypted with it, so without
 the key they stay in memory. A change to keys, patterns, team roles or
 webhooks made on one replica is meant to reach the others within 30 seconds:
-each replica reloads patterns, team roles and webhooks from the database on
+each replica reloads patterns, team roles, SSO settings and webhooks from the database on
 a 30-second ticker (`settingsReloadInterval` in `proxy/cmd/tamga/main.go`)
 and serves a verified key from memory for 30 seconds
 (`proxy/internal/apikeys/postgres.go`). No test runs two replicas, so that
@@ -493,20 +493,66 @@ log writer batches for. Each of these responses says where it came from in
 reached they fall back to the last 1000 requests this process saw and say
 `memory`; they do not fail.
 
-A stored request has no policy name or version and no output risk, so the
-detail of a request older than the proxy's memory leaves those out. The CSV
-export takes the same filters as the event list and stops at 50,000 rows,
-newest first, with `X-Tamga-Export-Truncated: true` when more matched.
+The CSV export takes the same filters as the event list and stops at 50,000
+rows, newest first, with `X-Tamga-Export-Truncated: true` when more matched.
+
+### What a stored request holds
+
+One row per request the proxy scanned, written once the provider has
+answered: the findings and the action, the scan and total time to a fraction
+of a millisecond, the name and version of the policy that decided, and, when
+the proxy read the response, its tokens, its cost, and what the scan of the
+response found and did. What the proxy did not learn is left empty, never
+written as 0, and is absent from the API:
+
+| Request | Tokens | Cost | Response scan |
+|---|---|---|---|
+| Response read (`output_rules` or the vault on), priced model | kept | kept | kept |
+| Same, model without a price | kept | empty | kept |
+| Response not read (`output_rules` and the vault off) | empty | empty | empty |
+| Stream | empty | empty | kept when stream scanning is on |
+| Cache hit | empty | 0 | empty: it was scanned when it was stored |
+| Stopped request | empty | empty | empty |
+
+So `GET /api/v1/billing/costs/breakdown` is empty unless `output_rules` is
+on: that is what makes the proxy read a response and its usage. The shipped
+policy has it commented out.
+
+Rows written by earlier versions have no policy name, tokens or cost, and
+may hold 0 for the times; averages and percentiles leave those out.
+
+A request that could not be stored is counted in
+`tamga_request_log_unrecorded_total{reason}`. The reason `org_not_uuid`
+means a key whose `org_id` is not the UUID of an organisation: its requests
+are scanned and not recorded. Leave `org_id` out when creating a key and it
+gets the default organisation. A caller without a key that sends an
+`X-Tamga-Org-Id` which is not a UUID is recorded under the default
+organisation.
 
 Still per process and reset by a restart: the scan-time percentiles on the
 health check and the Latency page's headline, the counters under `/metrics`,
-today's spend and token use under `/budget/stats`, rate-limit counters, and
-the SSO settings.
+today's spend and token use under `/budget/stats`, and rate-limit counters.
+
+### Upgrading the database
+
+Start the new proxy first, then apply the new migrations. At startup the
+proxy adds the columns it needs to `request_logs` if they are missing, and it
+runs without them if it cannot. Migration `017_request_record` also builds
+an index on the request id; on a partitioned table that build cannot be
+concurrent and holds back inserts while it runs, so on a large table do it in
+a quiet hour or by hand per partition, as the comment in the file shows.
+Without the index a request's detail still opens, slowly.
+
+Migration `018_drop_tenant_rls` removes the row-level security policy on
+`request_logs` and `daily_stats`. It never had an effect: nothing set the
+tenant it compared against, and the proxy connects as the owner of the
+tables. What keeps organisations apart is the `org_id` condition in each
+query.
 
 Without a database the request logs are not kept at all and the console shows
 the last 1000 requests from memory. Policy history is then a file next to the
-policy; incidents, the audit log, API keys, patterns, team roles and webhooks
-live in memory.
+policy; incidents, the audit log, API keys, patterns, team roles, SSO settings
+and webhooks live in memory.
 
 ## Provider pools
 
@@ -706,7 +752,8 @@ curl -s -H "X-Tamga-Admin-Key: $TAMGA_ADMIN_KEY" \
 
 `GET /api/v1/billing/costs/breakdown?range=24h|7d|30d` returns usage and
 cost by day, provider and model from the request log, with a month-to-date
-total and a projection for the month. Models without a price are listed
+total and a projection for the month. Only requests whose usage the proxy
+read are in it; see "What a stored request holds". Models without a price are listed
 under `unpriced` and are in no USD total.
 
 ### Response cache

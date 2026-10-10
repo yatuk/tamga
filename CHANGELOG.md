@@ -150,6 +150,32 @@
   limit is raised from 256 KB to 1 MB.
 
 ### Console data
+- **The request log did not hold what a request cost or what its response
+  scan found.** Tokens were always 0 and the cost was never written, so the
+  cost breakdown was empty. A stored request now carries its tokens and cost
+  when the proxy read the response, the cache status, the findings, action
+  and risk of the response scan, and the name and version of the policy that
+  decided it. What is not known is left empty and is absent from the API, not
+  0. **Tokens and cost are only read when `output_rules` is on.**
+- Scan and total time are stored to a fraction of a millisecond; a scan under
+  one millisecond used to store 0, which emptied the Latency page.
+- With NATS on, output hints and provider state changes were stored as
+  requests, a redelivered event added a second row, and
+  `data.hash_findings` was ignored. All three are fixed.
+- A request's detail is found through a new index on the request id
+  (migration 017). **Start the new proxy before applying the migration; the
+  index build holds back inserts on a large table.**
+- **A request from a caller without a key was not recorded when its
+  `X-Tamga-Org-Id` was not a UUID**, so any caller could keep its requests,
+  stopped ones included, out of the record. It is now stored under the
+  default organisation. A key whose `org_id` is not a UUID still produces no
+  rows; they are counted in `tamga_request_log_unrecorded_total`.
+- SSO settings are kept in PostgreSQL and reach other replicas within 30
+  seconds; they were lost on restart. **Changing them now needs the admin
+  role** (any signed-in caller could) and is written to the audit log.
+- Migration 018 removes the row-level security policy on `request_logs` and
+  `daily_stats`. It compared against a setting nothing set and did not apply
+  to the role the proxy connects as, so it protected nothing.
 - **After a restart the console showed no traffic and older requests would
   not open**, although the requests were in PostgreSQL. The summary, the
   charts, the findings breakdown, model shares, a request's detail and the
