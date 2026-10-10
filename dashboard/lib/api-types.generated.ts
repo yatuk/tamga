@@ -257,14 +257,18 @@ export interface paths {
                 /**
                  * @description `account_not_assigned`: nobody has given this GitHub account a
                  *     role, so it gets no session. An admin assigns one with
-                 *     `PUT /api/v1/team/{id}/role`, where `id` is the `github_user_id`
-                 *     in this body; the static admin key can do so before any user exists.
+                 *     `PUT /api/v1/team/{id}/role`, where `id` is the `user_id` in this
+                 *     body (also sent as `github_user_id`); the static admin key can do
+                 *     so before any user exists. With `TAMGA_SSO_DEFAULT_ROLE=viewer`
+                 *     the account is let in as a viewer instead.
                  */
                 403: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["AccountNotAssigned"];
+                    };
                 };
             };
         };
@@ -281,7 +285,17 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get current session info */
+        /**
+         * Get current session info
+         * @description Answers for the bearer token it is handed, with what the management
+         *     API would say to that token now: the role is the one the user has
+         *     today, not the one the token was signed with.
+         *
+         *     A session token is an HS256 JWT signed by this proxy, good for 24
+         *     hours, with `iss: tamga` and `aud: tamga-management`. A token with
+         *     another algorithm in its header, another issuer or audience, or
+         *     none (every token signed before these were checked) is refused.
+         */
         get: {
             parameters: {
                 query?: never;
@@ -298,10 +312,174 @@ export interface paths {
                     };
                     content?: never;
                 };
+                /**
+                 * @description No token, an invalid or expired one, or `session_revoked`: the
+                 *     token was issued before its user's sessions were revoked (the
+                 *     role changed or was removed, an admin revoked them, or the user
+                 *     signed out). The user signs in again.
+                 */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SessionRevoked"];
+                    };
+                };
+                /** @description `account_not_assigned`: the account has no role now. Every management route answers a session token the same way. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AccountNotAssigned"];
+                    };
+                };
             };
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign out
+         * @description Ends every session of the user whose bearer token is sent, that
+         *     token included: nothing is kept per session, so signing out on one
+         *     device signs the user out on all of them. The role is not touched
+         *     and the user can sign in again at once. The call is written to the
+         *     audit log as `auth.logout`.
+         *
+         *     The replica that serves the call refuses the tokens from the next
+         *     request on; other replicas do within 30 seconds, when they next
+         *     reload the team roles.
+         *
+         *     The route validates the token itself, like `GET /api/v1/auth/session`,
+         *     so a token whose account has lost its role can still be signed out.
+         *     An API key or the admin key is not a session and gets 401.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Signed out. Also the answer for a token that was already revoked. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok?: boolean;
+                        };
+                    };
+                };
+                /** @description No bearer token, or one that is invalid or expired */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Sessions are not configured, or the revocation could not be stored */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/clerk/saml/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Not implemented
+         * @description The proxy has no Clerk sign-in. The route issues no session.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description `clerk_sso_unavailable` */
+                501: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/clerk/oidc/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Not implemented
+         * @description The proxy has no Clerk sign-in. The route issues no session.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description `clerk_sso_unavailable` */
+                501: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -661,7 +839,12 @@ export interface paths {
         };
         /**
          * GDPR Art. 15 / KVKK madde 11 subject access
+         * @deprecated
          * @description Return request_log rows for a data subject.
+         *
+         *     Prefer `POST /api/v1/events/subject`: here the selector, which names
+         *     a person, is in the query string, and URLs are kept in access logs,
+         *     proxies and browser history. GET stays for existing callers.
          */
         get: {
             parameters: {
@@ -704,7 +887,57 @@ export interface paths {
             };
         };
         put?: never;
-        post?: never;
+        /**
+         * GDPR Art. 15 / KVKK madde 11 subject access (selector in the body)
+         * @description Return request_log rows for a data subject. The preferred form: the
+         *     selector is in the body and nothing is read from the query string.
+         *     The answer is that of the GET.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        user_id?: string;
+                        /** Format: email */
+                        email?: string;
+                        tckn_hash?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            subject?: {
+                                user_id?: string;
+                                email?: string;
+                                tckn_hash?: string;
+                            };
+                            rows?: unknown[];
+                            count?: number;
+                        };
+                    };
+                };
+                /** @description No identifier in the body, or a body that is not JSON */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                403: components["responses"]["PermissionDenied"];
+            };
+        };
         /** KVKK/GDPR subject erase */
         delete: {
             parameters: {
@@ -1365,7 +1598,21 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get active policy (returns array for dashboard compatibility) */
+        /**
+         * Get active policy (returns array for dashboard compatibility)
+         * @description A rule's `notify[].webhook` is either a reference to an environment
+         *     variable (`${SLACK_WEBHOOK_URL}`) or the URL itself, and such a URL
+         *     is a credential. An admin reads it as it is. Every other caller gets
+         *     scheme and host followed by `***masked***`
+         *     (`https://hooks.slack.com/***masked***`), in the structured policy
+         *     and in any policy text (`yaml`), comments included; a reference is
+         *     never changed. A response in which something was masked carries the
+         *     header `X-Tamga-Masked: notify.webhook`.
+         *
+         *     Masked text cannot be written back: `PUT /api/v1/policies` and
+         *     `POST /api/v1/policies/proposals` answer 422 `masked_value` to a
+         *     policy that holds the mask in a webhook, from any role.
+         */
         get: {
             parameters: {
                 query?: never;
@@ -1987,7 +2234,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List policy revisions */
+        /**
+         * List policy revisions
+         * @description Policy text is masked for callers below admin as described under
+         *     `GET /api/v1/policies`: a literal `notify[].webhook` URL is cut to
+         *     scheme and host followed by `***masked***`, and the response then
+         *     carries `X-Tamga-Masked: notify.webhook`.
+         */
         get: {
             parameters: {
                 query?: never;
@@ -2024,7 +2277,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get a single policy revision */
+        /**
+         * Get a single policy revision
+         * @description Policy text is masked for callers below admin as described under
+         *     `GET /api/v1/policies`: a literal `notify[].webhook` URL is cut to
+         *     scheme and host followed by `***masked***`, and the response then
+         *     carries `X-Tamga-Masked: notify.webhook`.
+         */
         get: {
             parameters: {
                 query?: never;
@@ -2148,7 +2407,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List policy proposals (open, approved and rejected) */
+        /**
+         * List policy proposals (open, approved and rejected)
+         * @description Policy text is masked for callers below admin as described under
+         *     `GET /api/v1/policies`: a literal `notify[].webhook` URL is cut to
+         *     scheme and host followed by `***masked***`, and the response then
+         *     carries `X-Tamga-Masked: notify.webhook`.
+         */
         get: {
             parameters: {
                 query?: never;
@@ -3314,6 +3579,10 @@ export interface paths {
          * List team members with roles
          * @description If Clerk is configured, merges Clerk user profiles with local
          *     role assignments. Returns `clerk: false` when Clerk is unavailable.
+         *
+         *     Being listed by Clerk assigns nothing. An account nobody assigned a
+         *     role is listed with `role` equal to `default_role`: empty (it has no
+         *     access) unless the operator set `TAMGA_SSO_DEFAULT_ROLE=viewer`.
          */
         get: {
             parameters: {
@@ -3334,6 +3603,11 @@ export interface paths {
                             items?: components["schemas"]["TeamMember"][];
                             total?: number;
                             clerk?: boolean;
+                            /**
+                             * @description The role of a signed-in account nobody assigned one (`TAMGA_SSO_DEFAULT_ROLE`). Empty means such an account is refused.
+                             * @enum {string}
+                             */
+                            default_role?: "" | "viewer";
                         };
                     };
                 };
@@ -3356,7 +3630,16 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Set a team member's role */
+        /**
+         * Set a team member's role
+         * @description A role that differs from the one the user had ends the user's
+         *     sessions, a promotion included: the tokens issued before get 401
+         *     `session_revoked` and the user signs in again. Assigning the role
+         *     the user already has changes nothing.
+         *
+         *     The check for the last admin and the write are one step, so two
+         *     demotions at the same moment cannot both succeed.
+         */
         put: {
             parameters: {
                 query?: never;
@@ -3419,6 +3702,149 @@ export interface paths {
             };
         };
         post?: never;
+        /**
+         * Remove a team member's role
+         * @description The account keeps no role: its sessions end (401 `session_revoked`)
+         *     and it cannot sign in again (403 `account_not_assigned`), unless the
+         *     operator set `TAMGA_SSO_DEFAULT_ROLE=viewer`, in which case it signs
+         *     in as a viewer. A role assigned later does not bring back a token
+         *     from before. Written to the audit log as `team.role.remove`.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok?: boolean;
+                            user_id?: string;
+                        };
+                    };
+                };
+                /** @description Invalid user id */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /**
+                 * @description `permission_denied`: the caller is not an admin.
+                 *     `own_role`: the caller is the user named in the path.
+                 */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PermissionDenied"];
+                    };
+                };
+                /** @description The account has no role */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description `last_admin`: the user is the only admin in the user store. */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Users store unavailable */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/team/{id}/sessions/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revoke a user's sessions
+         * @description Every session token the user holds now stops working (401
+         *     `session_revoked`) and the user signs in again. The role is not
+         *     touched. The user need not have a role. Written to the audit log as
+         *     `team.sessions.revoke`, with the caller as actor.
+         *
+         *     The replica that serves the call refuses the tokens from the next
+         *     request on; other replicas do within 30 seconds, when they next
+         *     reload the team roles.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok?: boolean;
+                            user_id?: string;
+                            /**
+                             * Format: int64
+                             * @description Unix seconds. A token issued at or before it is refused.
+                             */
+                            sessions_valid_from?: number;
+                        };
+                    };
+                };
+                /** @description Invalid user id */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                403: components["responses"]["PermissionDenied"];
+                /** @description Users store unavailable, or the revocation could not be stored */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -4378,6 +4804,25 @@ export interface components {
              */
             required_permission?: string;
         };
+        AccountNotAssigned: {
+            error: string;
+            /** @enum {string} */
+            code: "account_not_assigned";
+            /** @description The id an admin assigns a role to with `PUT /api/v1/team/{id}/role`. */
+            user_id: string;
+            /** @description The identity provider of a refused sign-in (`github`). Absent on a refused session token. */
+            provider?: string;
+            /** @description The same id, under the name it had before `user_id`. GitHub sign-in only. */
+            github_user_id?: string;
+        };
+        SessionRevoked: {
+            error: string;
+            /**
+             * @description Absent when the token is missing, invalid or expired.
+             * @enum {string}
+             */
+            code?: "session_revoked";
+        };
         PolicyPrivilegeError: {
             error: string;
             /** @enum {string} */
@@ -4523,9 +4968,15 @@ export interface components {
             email?: string;
             name?: string;
             image_url?: string;
-            role?: components["schemas"]["TeamRole"];
+            /** @description Empty for an account listed by Clerk that nobody assigned a role and that gets none by default. */
+            role?: components["schemas"]["TeamRole"] | "";
             /** Format: date-time */
             updated_at?: string;
+            /**
+             * Format: int64
+             * @description Unix seconds up to which the user's session tokens are revoked. Absent when nothing was revoked.
+             */
+            sessions_valid_from?: number;
         };
         ModelPricing: {
             id?: number;

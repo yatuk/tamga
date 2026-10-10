@@ -227,17 +227,17 @@ test.describe("Team", () => {
     await expect(page.getByRole("heading", { name: "What each role can do" })).toBeVisible();
     await expect(page.getByText(/The proxy did not (answer|accept the admin key)./)).toHaveCount(0);
 
-    const warning = page.getByText("The identity provider is not connected.");
-    if (clerk) await expect(warning).toHaveCount(0);
-    else await expect(warning).toBeVisible();
-    await expect(page.getByRole("link", { name: "Invite someone in Clerk" })).toHaveCount(clerk ? 1 : 0);
+    // Nobody signs in through Clerk: the page neither asks for it nor sends anyone there.
+    await expect(page.getByText("The identity provider is not connected.")).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Invite someone in Clerk" })).toHaveCount(0);
+    await expect(page.getByText(/nobody signs in through Clerk/)).toHaveCount(clerk ? 1 : 0);
 
     if (members.length === 0) {
-      await expect(page.getByText("Nobody yet. People appear after they sign in")).toBeVisible();
+      await expect(page.getByText("No account holds a role yet.")).toBeVisible();
       await expect(page.getByRole("table", { name: "Members" })).toHaveCount(0);
     } else {
       await expect(page.getByRole("table", { name: "Members" }).getByRole("row")).toHaveCount(members.length + 1);
-      await expect(page.getByText(`${members.length} ${members.length === 1 ? "person" : "people"} can sign in`)).toBeVisible();
+      await expect(page.getByText(/accounts? holds? a role on this proxy/)).toBeVisible();
     }
     expect(errors).toEqual([]);
   });
@@ -257,7 +257,8 @@ test.describe("Team", () => {
 
       await select.selectOption(other);
       await saveRole.click();
-      await expect(toastWith(page, "Role updated")).toBeVisible();
+      // Said at the row, with the sign-out the change causes.
+      await expect(page.getByRole("status").filter({ hasText: /^Now / })).toBeVisible();
       await expect(select).toHaveValue(other);
       expect((await team(request)).items?.find((m) => m.user_id === member.user_id)?.role).toBe(other);
 

@@ -92,8 +92,21 @@ export interface TeamMember {
   email?: string;
   name?: string;
   image_url?: string;
-  role: TeamRole;
+  /** Empty for an account nobody gave a role: it has no access, unless the proxy admits such accounts as viewers. */
+  role: TeamRole | "";
   updated_at?: string;
+  /** Unix seconds. A session token issued at or before it is refused. Absent when the sessions were never ended. */
+  sessions_valid_from?: number;
+}
+
+/** GET /api/v1/team */
+export interface TeamList {
+  items: TeamMember[] | null;
+  total: number;
+  /** Whether names and addresses were read from the Clerk directory. Nobody signs in through it. */
+  clerk: boolean;
+  /** What an account without a role gets: nothing, or the viewer role (TAMGA_SSO_DEFAULT_ROLE=viewer). Absent on an older proxy. */
+  default_role?: "" | "viewer";
 }
 
 export interface BudgetStats {
