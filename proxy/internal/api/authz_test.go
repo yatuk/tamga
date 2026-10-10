@@ -39,6 +39,8 @@ var wantAccess = map[string]string{
 	"POST /auth/clerk/oidc/callback": "public",
 	"POST /scan":                     "public",
 
+	"POST /beta/litellm_basic_guardrail_api": "public",
+
 	"GET /stats":                   "viewer",
 	"GET /stats/models":            "viewer",
 	"GET /timeseries":              "viewer",

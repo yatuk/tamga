@@ -107,6 +107,7 @@ type scanRig struct {
 	url     string
 	keys    *apikeys.MemoryStore
 	handler *scanHandler
+	bridge  *litellmHandler
 	guard   *classifier.Guard // the proxy path's
 	recent  *events.RecentBuffer
 	vault   *vaultSpy
@@ -194,8 +195,13 @@ func newScanRig(t *testing.T, o scanRigOptions) *scanRig {
 		opts.Classifier = classifier.NewGuard(o.scorer)
 	}
 	g.guard = cfg.Classifier
-	g.handler = NewScanHandler(cfg, opts).(*scanHandler)
-	t.Cleanup(func() { _ = g.handler.fallback.Close() })
+	scan, bridge := NewScanHandlers(cfg, opts)
+	g.handler = scan.(*scanHandler)
+	g.bridge = bridge.(*litellmHandler)
+	t.Cleanup(func() {
+		_ = g.handler.fallback.Close()
+		_ = g.bridge.fallback.Close()
+	})
 
 	mux := http.NewServeMux()
 	mux.Handle("/api/v1/", api.NewHandler(api.Config{
@@ -209,6 +215,7 @@ func newScanRig(t *testing.T, o scanRigOptions) *scanRig {
 		Store:       store.NewNoopStoreSilent(),
 		Metrics:     &events.Metrics{},
 		Scan:        g.handler,
+		LiteLLM:     g.bridge,
 	}))
 	RegisterRoutes(mux, cfg)
 	srv := httptest.NewServer(mux)
@@ -1143,14 +1150,14 @@ func TestScan_LogsNoText(t *testing.T) {
 	}
 	key := map[string]string{"X-Tamga-Key": created.RawKey}
 
-	g.scanRaw(t, key, scanBody("marker-7f3a what is the capital of France?", "user"))
-	g.scanRaw(t, key, scanBody("marker-7f3a write to "+scanEmail, "user"))
-	g.scanRaw(t, key, scanBody("marker-7f3a key "+scanSecret, "user"))
-	g.scanRaw(t, key, scanBody("marker-7f3a "+scanInjection, "tool"))
-	g.scanRaw(t, key, []byte(`{"text":"marker-7f3a`))
-	g.scanRaw(t, map[string]string{"X-Tamga-Key": "tk_marker-7f3a"}, scanBody("hello", ""))
+	g.scanRaw(t, key, scanBody("marker-qzxj what is the capital of France?", "user"))
+	g.scanRaw(t, key, scanBody("marker-qzxj write to "+scanEmail, "user"))
+	g.scanRaw(t, key, scanBody("marker-qzxj key "+scanSecret, "user"))
+	g.scanRaw(t, key, scanBody("marker-qzxj "+scanInjection, "tool"))
+	g.scanRaw(t, key, []byte(`{"text":"marker-qzxj`))
+	g.scanRaw(t, map[string]string{"X-Tamga-Key": "tk_marker-qzxj"}, scanBody("hello", ""))
 	failing.fail.Store(true)
-	g.scanRaw(t, key, scanBody("marker-7f3a "+scanEmail, "user"))
+	g.scanRaw(t, key, scanBody("marker-qzxj "+scanEmail, "user"))
 
 	mu.Lock()
 	logged := buf.String()
@@ -1189,7 +1196,7 @@ func TestScan_LogsNoText(t *testing.T) {
 		t.Fatalf("latency_ms = %v", redact["latency_ms"])
 	}
 
-	for _, secret := range []string{"7f3a", scanEmail, "jane", scanSecret, "AKIA", "previous instructions", "capital of France", created.RawKey, scanAdminKey} {
+	for _, secret := range []string{"qzxj", scanEmail, "jane", scanSecret, "AKIA", "previous instructions", "capital of France", created.RawKey, scanAdminKey} {
 		if strings.Contains(logged, secret) {
 			t.Fatalf("log contains %q:\n%s", secret, logged)
 		}

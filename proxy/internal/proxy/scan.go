@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"context"
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
@@ -178,11 +179,27 @@ type scanCall struct {
 	textRole string
 	bytes    int
 	byType   map[string]int
+	// bridge is set by the LiteLLM route (litellm.go), which is counted and
+	// logged apart from the scan API.
+	bridge *bridgeCall
+}
+
+// bridgeCall is what a call over the LiteLLM route adds to its log line.
+type bridgeCall struct {
+	direction string
+	texts     int
+	callID    string
 }
 
 // done writes the call's one log line and counts it.
 func (c *scanCall) done(outcome string, refused bool) {
-	api.CountScanAPI(outcome)
+	msg := "scan api call"
+	if c.bridge != nil {
+		msg = "litellm bridge call"
+		api.CountScanAPI("litellm_" + outcome)
+	} else {
+		api.CountScanAPI(outcome)
+	}
 	ev := c.logger.Info()
 	if refused {
 		ev = c.logger.Warn()
@@ -193,6 +210,11 @@ func (c *scanCall) done(outcome string, refused bool) {
 		counts.Int(typ, n)
 		total += n
 	}
+	if c.bridge != nil {
+		ev = ev.Str("direction", c.bridge.direction).
+			Int("texts", c.bridge.texts).
+			Str("litellm_call_id", c.bridge.callID)
+	}
 	ev.Str("outcome", outcome).
 		Str("key_id", c.keyID).
 		Str("org_id", c.org).
@@ -202,7 +224,7 @@ func (c *scanCall) done(outcome string, refused bool) {
 		Int("findings", total).
 		Dict("findings_by_type", counts).
 		Float64("latency_ms", float64(time.Since(c.start).Microseconds())/1000).
-		Msg("scan api call")
+		Msg(msg)
 }
 
 func writeScanJSON(w http.ResponseWriter, status int, v interface{}) {
@@ -220,14 +242,14 @@ func writeScanError(w http.ResponseWriter, status int, msg string) {
 //
 // A key in X-Tamga-Key is verified as the proxy path verifies it, whatever
 // its scope. X-Tamga-Admin-Key takes the admin key. bucket names the
-// caller's rate limit.
+// caller within a route's rate limit.
 func (h *scanHandler) authenticate(r *http.Request) (who caller, bucket string, ok bool) {
 	if strings.TrimSpace(r.Header.Get(keyHeader)) != "" {
 		who, errType, _ := authenticate(r, h.cfg)
 		if errType != "" || !who.verified() {
 			return caller{}, "", false
 		}
-		return who, "scan:tk:" + who.KeyID, true
+		return who, "tk:" + who.KeyID, true
 	}
 	key := r.Header.Get(adminKeyHeader)
 	if key == "" || h.opts.AdminKey == "" {
@@ -236,7 +258,7 @@ func (h *scanHandler) authenticate(r *http.Request) (who caller, bucket string, 
 	if subtle.ConstantTimeCompare([]byte(key), []byte(h.opts.AdminKey)) != 1 {
 		return caller{}, "", false
 	}
-	return caller{}, "scan:admin", true
+	return caller{}, "admin", true
 }
 
 // originAllowed refuses a request a web page made, unless the page's origin
@@ -252,14 +274,275 @@ func (h *scanHandler) originAllowed(r *http.Request) bool {
 	return h.origins[origin]
 }
 
-// checkRate counts the call in the caller's scan bucket, which is apart from
-// the one its proxy requests are counted in: a CI job that scans in a loop
-// must not use up the application's requests, nor the other way round.
-func (h *scanHandler) checkRate(bucket string, pol *policy.Policy) ratelimit.AllowResult {
+// checkRate counts the call in the caller's bucket for this route, which is
+// apart from the one its proxy requests are counted in: a CI job that scans
+// in a loop must not use up the application's requests, nor the other way
+// round. fallback is the route's limit when the policy sets none.
+func (h *scanHandler) checkRate(bucket string, pol *policy.Policy, fallback *ratelimit.Limiter) ratelimit.AllowResult {
 	if h.cfg.RateLimit != nil && pol != nil && pol.RateLimit != nil && pol.RateLimit.MaxRequestsPerMinute > 0 {
 		return h.cfg.RateLimit.Check(bucket)
 	}
-	return h.fallback.Check(bucket)
+	return fallback.Check(bucket)
+}
+
+// scanAdmission is what differs between the routes that share the scan path
+// (the scan API and the LiteLLM route) before a text is read.
+type scanAdmission struct {
+	// bucket is the prefix of the route's rate-limit buckets.
+	bucket string
+	// fallback limits callers when the policy has no rate limit.
+	fallback *ratelimit.Limiter
+	// maxBody is the largest body read, and tooLarge the message for one
+	// that is larger.
+	maxBody  int64
+	tooLarge string
+	// apiKeyHeader, when set, is a second header a Tamga key is read from.
+	// X-Tamga-Key wins when both are sent. The admin key is not read from it.
+	apiKeyHeader string
+}
+
+// admit does what every route on the scan path does before it looks at a
+// text: origin, key, rate limit, content type, body limit, and the proxy
+// path's own test of a JSON body. A request that fails one is answered
+// through refuse, and ok is false.
+func (h *scanHandler) admit(w http.ResponseWriter, r *http.Request, call *scanCall, adm scanAdmission,
+	refuse func(status int, outcome, msg string)) (who caller, pol *policy.Policy, raw []byte, ok bool) {
+	if !h.originAllowed(r) {
+		refuse(http.StatusForbidden, "origin_refused", scanErrOrigin)
+		return caller{}, nil, nil, false
+	}
+
+	if adm.apiKeyHeader != "" {
+		if key := strings.TrimSpace(r.Header.Get(adm.apiKeyHeader)); key != "" && strings.TrimSpace(r.Header.Get(keyHeader)) == "" {
+			r.Header.Set(keyHeader, key)
+		}
+		r.Header.Del(adm.apiKeyHeader)
+	}
+	who, bucket, authed := h.authenticate(r)
+	if !authed {
+		call.logger = call.logger.With().Str("client_ip", clientIP(r, trustedProxies(h.cfg))).Logger()
+		refuse(http.StatusUnauthorized, "unauthorized", scanErrUnauthorized)
+		return caller{}, nil, nil, false
+	}
+	call.keyID, call.keyRole = who.KeyID, who.Role
+	if who.verified() {
+		call.org = r.Header.Get("X-Tamga-Org-Id")
+	}
+
+	pol = h.cfg.GetPolicy()
+
+	// Going over the limit is always refused. rate_limit.action_on_exceed
+	// can say WARN on the proxy path, where the request is then forwarded;
+	// a verdict has no such second outcome.
+	res := h.checkRate(adm.bucket+bucket, pol, adm.fallback)
+	if res.Limit > 0 {
+		w.Header().Set("X-RateLimit-Limit", strconv.Itoa(res.Limit))
+		w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(res.Remaining))
+	}
+	if !res.Allowed {
+		w.Header().Set("Retry-After", strconv.Itoa(max(1, res.RetryAfterS)))
+		refuse(http.StatusTooManyRequests, "rate_limited", scanErrRateLimit)
+		return caller{}, nil, nil, false
+	}
+
+	// Only JSON, said to be JSON. A web page can post text/plain to another
+	// origin without asking first; it cannot do that with this type.
+	if mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type")); err != nil || mt != "application/json" {
+		refuse(http.StatusUnsupportedMediaType, "unsupported_media_type", scanErrContentType)
+		return caller{}, nil, nil, false
+	}
+
+	if r.ContentLength > adm.maxBody {
+		refuse(http.StatusRequestEntityTooLarge, "too_large", adm.tooLarge)
+		return caller{}, nil, nil, false
+	}
+	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, adm.maxBody))
+	call.bytes = len(raw)
+	if err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			refuse(http.StatusRequestEntityTooLarge, "too_large", adm.tooLarge)
+			return caller{}, nil, nil, false
+		}
+		refuse(http.StatusBadRequest, "invalid", scanErrRead)
+		return caller{}, nil, nil, false
+	}
+
+	// The proxy path's own test of a JSON body: bytes that are not UTF-8,
+	// which the decoder would quietly replace, and duplicate keys, which
+	// would let the text scanned differ from the text the caller meant.
+	if strictErr := extract.CheckStrict(raw); strictErr != nil {
+		msg := scanErrJSON
+		if strictErr.Reason == extract.ReasonInvalidUTF8 {
+			msg = scanErrUTF8
+		}
+		refuse(http.StatusBadRequest, "invalid", msg)
+		return caller{}, nil, nil, false
+	}
+	return who, pol, raw, true
+}
+
+// scanMessage is one text and the role it is scanned in.
+type scanMessage struct {
+	role string
+	text string
+}
+
+// scanEval is what the policy does with a set of messages.
+type scanEval struct {
+	action   policy.Action
+	findings []scanner.Finding
+	// actionOf is what the policy does about one finding on its own.
+	actionOf func(scanner.Finding) policy.Action
+	// rewritten is the text of each message as the proxy would forward it,
+	// in the order the messages were given. It is set when the action is
+	// REDACT or STRIP, and only then.
+	rewritten []string
+	// fallback says why a REDACT or a STRIP became a BLOCK, and is empty
+	// when the BLOCK is a rule's own.
+	fallback string
+	// headers are response headers the evaluation asks for.
+	headers [][2]string
+}
+
+// evaluate is the scan path: the messages are read as the segments the proxy
+// path would scan, scanned by the proxy path's registry, and judged by the
+// policy and the inline classifier on the proxy path's terms. A non-empty
+// outcome means the scan did not run to the end and there is no verdict.
+func (h *scanHandler) evaluate(ctx context.Context, call *scanCall, requestID string, who caller, pol *policy.Policy, msgs []scanMessage) (ev scanEval, outcome string) {
+	// One chat message per text, read back as the segments the proxy path
+	// would scan.
+	wire := make([]map[string]string, len(msgs))
+	for i, m := range msgs {
+		wire[i] = map[string]string{"role": m.role, "content": m.text}
+	}
+	body, err := json.Marshal(map[string]interface{}{"messages": wire})
+	var segs []extract.Segment
+	if err == nil {
+		if res, ok := extract.Extract(scanProvider, body); ok {
+			segs = res.Segments
+		}
+	}
+	if len(segs) != len(msgs) {
+		return ev, "segment_mismatch"
+	}
+	for i, m := range msgs {
+		if segs[i].Text != m.text || string(segs[i].Role) != m.role {
+			return ev, "segment_mismatch"
+		}
+	}
+
+	// The proxy path's registry, by segment, as handleProxy scans a chat
+	// request. Not through the shared worker pool, and without load
+	// shedding: a queue filled by scans would cost real traffic its
+	// scanners, and a scan with scanners shed is not a verdict.
+	pipelineCfg, strictMode := h.pipeline()
+	findings, err := h.cfg.Registry.Without(scanExcluded...).ScanSegments(ctx, segs, pipelineCfg)
+	if err != nil {
+		// Logged by kind only: a scanner's error can quote what it read.
+		call.logger.Error().Bool("degraded", errors.Is(err, scanner.ErrScanDegraded)).Msg("scan incomplete")
+		return ev, "scan_incomplete"
+	}
+	api.ObserveScan(float64(time.Since(call.start).Milliseconds()))
+
+	scoreProximityBySegment(segs, findings)
+
+	// Policy exceptions go by the role on the key's record. The admin key
+	// has none, and X-Tamga-Role is not read: no gateway vouches for it here.
+	userRole := who.Role
+	action, _ := pol.EvaluateWithRole(findings, userRole, strictMode)
+
+	// The inline classifier, on the proxy path's terms: asked when the
+	// policy turns it on and the rules have not already blocked.
+	if set, on := pol.ClassifierSettings(); on && action != policy.ActionBlock {
+		if h.opts.Classifier == nil {
+			call.logger.Warn().Msg("classifier is enabled in the policy and not configured")
+			return ev, "classifier_unavailable"
+		}
+		res := classifySegments(ctx, h.opts.Classifier, set, requestID, segs, findings)
+		// What it did read counts, also when it could not read everything.
+		if len(res.findings) > 0 {
+			findings = append(findings, res.findings...)
+			action, _ = pol.EvaluateWithRole(findings, userRole, strictMode)
+		}
+		if res.err != nil || res.partial {
+			call.logger.Warn().Bool("partial", res.partial).Msg("classifier did not read the text")
+			// unread: the classifier read none of what it was to read. For
+			// one text that is every partial answer. For several it is not:
+			// the classifier takes the newest texts first, up to max_chars,
+			// and the proxy path forwards a conversation it read in part.
+			unread := res.err != nil || res.asked == 0
+			mark := "partial"
+			if unread {
+				// Text the classifier did not read cannot be called clean,
+				// so a verdict that would let the text through as it is, is
+				// not given. One that already stops or rewrites it stands:
+				// the unread part could only have made it stricter, and the
+				// header says it was not read.
+				if !scanActs(action) {
+					return ev, "classifier_unavailable"
+				}
+				mark = "incomplete"
+			}
+			ev.headers = append(ev.headers, [2]string{scanClassifierHeader, mark})
+		}
+	}
+
+	// REDACT that cannot be carried out is a BLOCK on the proxy path, so it
+	// is one here. The vault is not used: with it on the proxy sends
+	// numbered placeholders and keeps the originals to put back, and a scan
+	// keeps nothing. The text shows the plain markers instead.
+	actionOf := func(f scanner.Finding) policy.Action { return pol.FindingAction(f, userRole, strictMode) }
+	if action == policy.ActionRedact {
+		// The same findings, on the same terms, as on the proxy path
+		// (redact.go).
+		targets := redactTargets(findings, actionOf)
+		reason := redactBlocker(targets)
+		if reason == "" {
+			edits := scanner.RedactEdits(targets)
+			if len(edits) == 0 {
+				reason = redactNothing
+			} else if texts, rwErr := rewrittenTexts(body, segs, edits); rwErr != nil {
+				reason = redactRewrite
+			} else {
+				ev.rewritten = texts
+			}
+		}
+		if reason != "" {
+			ev.headers = append(ev.headers, [2]string{"X-Tamga-Redact-Fallback", "block:" + reason})
+			ev.fallback = "REDACT could not be carried out (" + reason + ")"
+			action = policy.ActionBlock
+		}
+	}
+
+	// The same for STRIP.
+	if action == policy.ActionStrip {
+		res, stripErr := stripSegments(scanProvider, body, segs, findings, actionOf, false)
+		if stripErr == nil {
+			ev.rewritten, stripErr = messageTexts(res.body, len(msgs))
+		}
+		if stripErr != nil {
+			reason := stripFailure(stripErr)
+			ev.headers = append(ev.headers, [2]string{"X-Tamga-Strip-Fallback", "block:" + reason})
+			ev.fallback = "STRIP could not be carried out (" + reason + ")"
+			ev.rewritten = nil
+			action = policy.ActionBlock
+		}
+	}
+
+	ev.action, ev.findings, ev.actionOf = action, findings, actionOf
+	return ev, ""
+}
+
+// pipeline is the scanner pipeline a scan runs with: the proxy path's mode
+// and timeout, without its worker pool.
+func (h *scanHandler) pipeline() (cfg scanner.PipelineConfig, strictMode bool) {
+	if h.cfg.Config != nil {
+		cfg.Mode = scanner.PipelineMode(h.cfg.Config.ScannerPipelineMode)
+		cfg.Timeout = time.Duration(h.cfg.Config.ScannerPipelineTimeoutMs) * time.Millisecond
+		strictMode = h.cfg.Config.StrictMode
+	}
+	return cfg, strictMode
 }
 
 func (h *scanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -284,72 +567,16 @@ func (h *scanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		refuse(http.StatusServiceUnavailable, outcome, scanErrUnavailable)
 	}
 
-	if !h.originAllowed(r) {
-		refuse(http.StatusForbidden, "origin_refused", scanErrOrigin)
-		return
-	}
-
-	who, bucket, ok := h.authenticate(r)
+	who, pol, raw, ok := h.admit(w, r, call, scanAdmission{
+		bucket:   "scan:",
+		fallback: h.fallback,
+		maxBody:  scanMaxBodyBytes,
+		tooLarge: scanErrTooLarge,
+	}, refuse)
 	if !ok {
-		call.logger = call.logger.With().Str("client_ip", clientIP(r, trustedProxies(h.cfg))).Logger()
-		refuse(http.StatusUnauthorized, "unauthorized", scanErrUnauthorized)
-		return
-	}
-	call.keyID, call.keyRole = who.KeyID, who.Role
-	if who.verified() {
-		call.org = r.Header.Get("X-Tamga-Org-Id")
-	}
-
-	pol := h.cfg.GetPolicy()
-
-	// Going over the limit is always refused. rate_limit.action_on_exceed
-	// can say WARN on the proxy path, where the request is then forwarded;
-	// a verdict has no such second outcome.
-	res := h.checkRate(bucket, pol)
-	if res.Limit > 0 {
-		w.Header().Set("X-RateLimit-Limit", strconv.Itoa(res.Limit))
-		w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(res.Remaining))
-	}
-	if !res.Allowed {
-		w.Header().Set("Retry-After", strconv.Itoa(max(1, res.RetryAfterS)))
-		refuse(http.StatusTooManyRequests, "rate_limited", scanErrRateLimit)
 		return
 	}
 
-	// Only JSON, said to be JSON. A web page can post text/plain to another
-	// origin without asking first; it cannot do that with this type.
-	if mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type")); err != nil || mt != "application/json" {
-		refuse(http.StatusUnsupportedMediaType, "unsupported_media_type", scanErrContentType)
-		return
-	}
-
-	if r.ContentLength > scanMaxBodyBytes {
-		refuse(http.StatusRequestEntityTooLarge, "too_large", scanErrTooLarge)
-		return
-	}
-	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, scanMaxBodyBytes))
-	call.bytes = len(raw)
-	if err != nil {
-		var tooLarge *http.MaxBytesError
-		if errors.As(err, &tooLarge) {
-			refuse(http.StatusRequestEntityTooLarge, "too_large", scanErrTooLarge)
-			return
-		}
-		refuse(http.StatusBadRequest, "invalid", scanErrRead)
-		return
-	}
-
-	// The proxy path's own test of a JSON body: bytes that are not UTF-8,
-	// which the decoder would quietly replace, and duplicate keys, which
-	// would let the text scanned differ from the text the caller meant.
-	if strictErr := extract.CheckStrict(raw); strictErr != nil {
-		msg := scanErrJSON
-		if strictErr.Reason == extract.ReasonInvalidUTF8 {
-			msg = scanErrUTF8
-		}
-		refuse(http.StatusBadRequest, "invalid", msg)
-		return
-	}
 	var req scanRequest
 	if err := json.Unmarshal(raw, &req); err != nil {
 		refuse(http.StatusBadRequest, "invalid", scanErrJSON)
@@ -387,125 +614,28 @@ func (h *scanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// One chat message holding the text, read back as the one segment the
-	// proxy path would scan.
-	body, err := json.Marshal(map[string]interface{}{
-		"messages": []map[string]string{{"role": role, "content": text}},
-	})
-	var segs []extract.Segment
-	if err == nil {
-		if res, ok := extract.Extract(scanProvider, body); ok {
-			segs = res.Segments
-		}
-	}
-	if len(segs) != 1 || segs[0].Text != text || string(segs[0].Role) != role {
-		unavailable("segment_mismatch")
+	ev, outcome := h.evaluate(r.Context(), call, requestID, who, pol, []scanMessage{{role: role, text: text}})
+	if outcome != "" {
+		unavailable(outcome)
 		return
 	}
-
-	// The proxy path's registry, by segment, as handleProxy scans a chat
-	// request. Not through the shared worker pool, and without load
-	// shedding: a queue filled by scans would cost real traffic its
-	// scanners, and a scan with scanners shed is not a verdict.
-	ctx := r.Context()
-	pipelineCfg := scanner.PipelineConfig{}
-	strictMode := false
-	if h.cfg.Config != nil {
-		pipelineCfg.Mode = scanner.PipelineMode(h.cfg.Config.ScannerPipelineMode)
-		pipelineCfg.Timeout = time.Duration(h.cfg.Config.ScannerPipelineTimeoutMs) * time.Millisecond
-		strictMode = h.cfg.Config.StrictMode
-	}
-	findings, err := h.cfg.Registry.Without(scanExcluded...).ScanSegments(ctx, segs, pipelineCfg)
-	if err != nil {
-		// Logged by kind only: a scanner's error can quote what it read.
-		call.logger.Error().Bool("degraded", errors.Is(err, scanner.ErrScanDegraded)).Msg("scan incomplete")
-		unavailable("scan_incomplete")
-		return
-	}
-	api.ObserveScan(float64(time.Since(call.start).Milliseconds()))
-
-	scoreProximityBySegment(segs, findings)
-
-	// Policy exceptions go by the role on the key's record. The admin key
-	// has none, and X-Tamga-Role is not read: no gateway vouches for it here.
-	userRole := who.Role
-	action, _ := pol.EvaluateWithRole(findings, userRole, strictMode)
-
-	// The inline classifier, on the proxy path's terms: asked when the
-	// policy turns it on and the rules have not already blocked.
-	if set, on := pol.ClassifierSettings(); on && action != policy.ActionBlock {
-		if h.opts.Classifier == nil {
-			call.logger.Warn().Msg("classifier is enabled in the policy and not configured")
-			unavailable("classifier_unavailable")
-			return
-		}
-		res := classifySegments(ctx, h.opts.Classifier, set, requestID, segs, findings)
-		// What it did read counts, also when it could not read everything.
-		if len(res.findings) > 0 {
-			findings = append(findings, res.findings...)
-			action, _ = pol.EvaluateWithRole(findings, userRole, strictMode)
-		}
-		if res.err != nil || res.partial {
-			call.logger.Warn().Bool("partial", res.partial).Msg("classifier did not read the text")
-			// Text the classifier did not read cannot be called clean, so
-			// a verdict that would let the text through as it is, is not
-			// given. One that already stops or rewrites it stands: the
-			// unread part could only have made it stricter, and the
-			// header says it was not read.
-			if !scanActs(action) {
-				unavailable("classifier_unavailable")
-				return
-			}
-			w.Header().Set(scanClassifierHeader, "incomplete")
-		}
-	}
-
-	// REDACT that cannot be carried out is a BLOCK on the proxy path, so it
-	// is one here. The vault is not used: with it on the proxy sends
-	// numbered placeholders and keeps the originals to put back, and a scan
-	// keeps nothing. The text shows the plain markers instead.
-	actionOf := func(f scanner.Finding) policy.Action { return pol.FindingAction(f, userRole, strictMode) }
-	var redactedText *string
-	if action == policy.ActionRedact {
-		// The same findings, on the same terms, as on the proxy path
-		// (redact.go).
-		targets := redactTargets(findings, actionOf)
-		reason := redactBlocker(targets)
-		if reason == "" {
-			edits := scanner.RedactEdits(targets)
-			if len(edits) == 0 {
-				reason = redactNothing
-			} else if redacted, rwErr := rewrittenText(body, segs, edits); rwErr != nil {
-				reason = redactRewrite
-			} else {
-				redactedText = &redacted
-			}
-		}
-		if reason != "" {
-			w.Header().Set("X-Tamga-Redact-Fallback", "block:"+reason)
-			action = policy.ActionBlock
-		}
-	}
-
-	// The same for STRIP. The stripped body itself is not returned.
-	if action == policy.ActionStrip {
-		if _, stripErr := stripSegments(scanProvider, body, segs, findings, actionOf, false); stripErr != nil {
-			reason := stripFailure(stripErr)
-			w.Header().Set("X-Tamga-Strip-Fallback", "block:"+reason)
-			action = policy.ActionBlock
-		}
+	for _, hd := range ev.headers {
+		w.Header().Set(hd[0], hd[1])
 	}
 
 	out := scanResponse{
-		Action:        scanVerdict(action),
-		Findings:      make([]scanFinding, 0, len(findings)),
-		RedactedText:  redactedText,
+		Action:        scanVerdict(ev.action),
+		Findings:      make([]scanFinding, 0, len(ev.findings)),
 		Policy:        scanPolicyRef{Name: pol.Name, Version: pol.Version},
 		ScanLatencyMs: float64(time.Since(call.start).Microseconds()) / 1000,
 	}
+	// The stripped text is not returned here, only the redacted one.
+	if ev.action == policy.ActionRedact && len(ev.rewritten) == 1 {
+		out.RedactedText = &ev.rewritten[0]
+	}
 	coarse := who.Scope == apikeys.ScopeProxy
 	call.byType = map[string]int{}
-	for _, f := range findings {
+	for _, f := range ev.findings {
 		call.byType[f.Type]++
 		category := f.Category
 		if coarse && scanNamedTypes[f.Type] {
@@ -515,7 +645,7 @@ func (h *scanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			Type:     f.Type,
 			Category: category,
 			Severity: f.Severity,
-			Action:   scanVerdict(pol.FindingAction(f, userRole, strictMode)),
+			Action:   scanVerdict(ev.actionOf(f)),
 		}
 		if f.Placed() && !scanUnplacedTypes[f.Type] && !scanUnplacedTypes[f.Category] {
 			start, end := f.StartPos, f.EndPos
@@ -528,22 +658,40 @@ func (h *scanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	writeScanJSON(w, http.StatusOK, out)
 }
 
-// rewrittenText applies edits to the one message of body as the proxy path
-// would before forwarding it, and returns the text that message then holds.
-func rewrittenText(body []byte, segs []extract.Segment, edits []extract.Edit) (string, error) {
+// rewrittenTexts applies edits to the messages of body as the proxy path
+// would before forwarding them, and returns the text each message then
+// holds. The rewrite is confirmed by reading the new body back
+// (extract.RewriteChecked).
+func rewrittenTexts(body []byte, segs []extract.Segment, edits []extract.Edit) ([]string, error) {
 	rewritten, err := extract.RewriteChecked(scanProvider, body, segs, edits)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	res, ok := extract.Extract(scanProvider, rewritten)
-	if !ok || len(res.Segments) > 1 {
-		return "", errors.New("rewritten text did not read back as one message")
+	return messageTexts(rewritten, len(segs))
+}
+
+// messageTexts returns the content of each message of a body evaluate built,
+// after a rewrite. A message edited down to nothing is an empty text.
+func messageTexts(body []byte, n int) ([]string, error) {
+	var doc struct {
+		Messages []struct {
+			Content *string `json:"content"`
+		} `json:"messages"`
 	}
-	if len(res.Segments) == 0 {
-		// A message edited down to nothing is no longer a segment.
-		return "", nil
+	if err := json.Unmarshal(body, &doc); err != nil {
+		return nil, err
 	}
-	return res.Segments[0].Text, nil
+	if len(doc.Messages) != n {
+		return nil, errors.New("the rewritten body does not hold the messages it was built from")
+	}
+	out := make([]string, n)
+	for i, m := range doc.Messages {
+		if m.Content == nil {
+			return nil, errors.New("a rewritten message has no text content")
+		}
+		out[i] = *m.Content
+	}
+	return out, nil
 }
 
 // scanActs reports whether a verdict stops the text or rewrites it, as

@@ -1,0 +1,57 @@
+# End-to-end test of the LiteLLM bridge: a real LiteLLM proxy calls Tamga as
+# its guardrail, in front of a fake model. Started by run.sh; see
+# docs/litellm.md.
+#
+# The network is internal: no container here can reach anything outside it,
+# so no request of this test can go to a real provider. The checks are run
+# from inside the network (run.sh), which is why no port is published.
+#
+# The keys below open nothing but this test's own containers.
+
+name: tamga-litellm-e2e
+
+services:
+  # The fake model, and the place the checks are run from.
+  upstream:
+    image: python:3.12.7-alpine3.20
+    command: ["python", "/e2e/fake_upstream.py"]
+    volumes:
+      - ./fake_upstream.py:/e2e/fake_upstream.py:ro
+      - ./check.py:/e2e/check.py:ro
+    networks: [e2e]
+
+  tamga:
+    build:
+      context: ../../../proxy
+    environment:
+      TAMGA_PROXY_PORT: "8443"
+      TAMGA_ADMIN_KEY: e2e-litellm-admin-key-opens-only-this-test
+      TAMGA_POLICY_PATH: /e2e/policy.yaml
+      # No analyzer, database or Redis: the bridge needs none of them.
+      TAMGA_ANALYZER_ADDR: ""
+    volumes:
+      - ./policy.yaml:/e2e/policy.yaml:ro
+    networks: [e2e]
+
+  litellm:
+    # Pinned by tag: the release the bridge was written against. See
+    # docs/litellm.md before changing it.
+    image: ghcr.io/berriai/litellm:v1.104.2
+    command: ["--config", "/e2e/litellm-config.yaml", "--port", "4000"]
+    environment:
+      LITELLM_MASTER_KEY: sk-e2e-litellm-master-key-opens-only-this-test
+      # A proxy-scope Tamga key. run.sh makes it once Tamga is up and only
+      # then starts this service; it is empty while the other two start.
+      TAMGA_KEY: ${TAMGA_KEY:-}
+      # Both keep LiteLLM from calling out at start. The network would refuse
+      # the calls anyway; this keeps the start quick and the log quiet.
+      LITELLM_LOCAL_MODEL_COST_MAP: "True"
+      LITELLM_TELEMETRY: "False"
+    volumes:
+      - ./litellm-config.yaml:/e2e/litellm-config.yaml:ro
+    depends_on: [tamga, upstream]
+    networks: [e2e]
+
+networks:
+  e2e:
+    internal: true

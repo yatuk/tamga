@@ -739,6 +739,14 @@ func main() {
 		VaultStore:         vaultStore,
 	}
 
+	// The scan API and the route LiteLLM calls as a guardrail: one scan path,
+	// two request shapes.
+	scanAPI, litellmBridge := proxy.NewScanHandlers(proxyCfg, proxy.ScanOptions{
+		AdminKey:    cfg.AdminKey,
+		Classifier:  scanClassifierGuard,
+		CORSOrigins: cfg.CORSOrigins,
+	})
+
 	root := http.NewServeMux()
 	root.Handle("/api/v1/", api.NewHandler(api.Config{
 		AdminKey:               cfg.AdminKey,
@@ -790,12 +798,10 @@ func main() {
 		GitHubOAuthCallbackURL: cfg.GitHubOAuthCallbackURL,
 		SSODefaultRole:         cfg.SSODefaultRole,
 		AnalyzerHTTPURL:        cfg.AnalyzerHTTPURL,
+		ClientAddr:             func(r *http.Request) string { return proxy.ClientIP(r, cfg.TrustedProxies) },
 		SSOSettings:            ssoStore,
-		Scan: proxy.NewScanHandler(proxyCfg, proxy.ScanOptions{
-			AdminKey:    cfg.AdminKey,
-			Classifier:  scanClassifierGuard,
-			CORSOrigins: cfg.CORSOrigins,
-		}),
+		Scan:                   scanAPI,
+		LiteLLM:                litellmBridge,
 	}))
 	proxy.RegisterRoutes(root, proxyCfg)
 

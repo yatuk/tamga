@@ -1,0 +1,24 @@
+# LiteLLM's configuration for the end-to-end test.
+#
+# The guardrail entry is the one docs/litellm.md gives, with default_on so
+# that every request runs it and both modes so that answers are checked too.
+
+model_list:
+  - model_name: fake-model
+    litellm_params:
+      model: openai/fake-model
+      # The fake model in this compose file. Never a real provider.
+      api_base: http://upstream:8080/v1
+      api_key: sk-e2e-fake-upstream-takes-any-key
+
+guardrails:
+  - guardrail_name: tamga
+    litellm_params:
+      guardrail: generic_guardrail_api
+      mode: [pre_call, post_call]
+      api_base: http://tamga:8443/api/v1
+      api_key: os.environ/TAMGA_KEY
+      default_on: true
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY

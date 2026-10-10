@@ -1390,6 +1390,113 @@ paths:
         "503":
           description: No verdict. The scan did not complete, the policy is not loaded, or every scan slot is in use (Retry-After is set)
 
+  /api/v1/beta/litellm_basic_guardrail_api:
+    post:
+      tags: [scan]
+      summary: The scan path, in the shape LiteLLM's Generic Guardrail API calls
+      description: |
+        A LiteLLM proxy with a `generic_guardrail_api` guardrail whose
+        `api_base` is `https://<tamga>/api/v1` posts here: the texts of a
+        request before it calls the model (`input_type: request`), and the
+        texts of the answer afterwards (`input_type: response`). The path is
+        LiteLLM's, which appends it to the `api_base`. Written against
+        LiteLLM v1.104.2. See `docs/litellm.md`.
+
+        It is an adapter over the scan path and decides nothing of its own.
+        A request's texts are scanned and judged as `POST /api/v1/scan`
+        judges a text. An answer's texts are judged by `output_rules`, as
+        the proxy judges an answer, and pass when `output_rules` is off.
+        Nothing is forwarded and nothing is stored: no event, no audit log
+        entry, no request record, no vault entry. The call is counted and
+        logged without the texts.
+
+        The reply uses the three actions of the contract:
+        - BLOCK, or a REDACT or STRIP that cannot be carried out:
+          `BLOCKED`, with a `blocked_reason` that names the kinds of finding
+          (`pii/tc_kimlik`) and the Tamga request id, never what was matched.
+        - REDACT and STRIP: `GUARDRAIL_INTERVENED`, with `texts` holding
+          one text for each one received, in the same order, masked with
+          the proxy's `[category_REDACTED]` markers or replaced by its
+          strip placeholder.
+        - WARN, LOG and PASS: `NONE`.
+        The policy's own action is in the `X-Tamga-Action` header.
+
+        A scan that did not run to the end is a 503 with the code
+        `tamga_scan_unavailable`, never a reply with an action, whatever
+        `scan.on_error` and `output_rules.fail_open` say. LiteLLM treats a
+        503 as its guardrail being unreachable and stops the request unless
+        it was configured to fail open.
+
+        Authentication is the scan route's: a Tamga key of any scope, or the
+        admin key as `X-Tamga-Admin-Key`. The key is also read from
+        `x-api-key`, where LiteLLM sends a guardrail's `api_key`; the admin
+        key is not read from there. Keys in the query string, sessions and
+        dev mode do not open it, and a web page's request is refused as on
+        the scan route.
+
+        Limits: 600 calls a minute per key unless the policy sets
+        `rate_limit.max_requests_per_minute`, counted apart from the key's
+        scans and proxy requests; a body of at most 1048576 bytes; at most
+        256 texts and 262144 bytes of text; the scan route's slots, shared
+        with it.
+
+        Only `texts` is scanned. `structured_messages` is read for the role
+        of each text and for nothing else; without it every text is scanned
+        as the user's. `images`, `tools` and `tool_calls` are not read.
+        Nothing masked here can be restored: the vault is not used.
+      security:
+        - TamgaKey: []
+        - LiteLLMKey: []
+        - AdminKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LiteLLMGuardrailRequest"
+      responses:
+        "200":
+          description: The verdict. BLOCKED is a verdict, not an error.
+          headers:
+            X-Tamga-Action:
+              description: The policy's action
+              schema:
+                type: string
+                enum: [PASS, WARN, REDACT, STRIP, BLOCK]
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LiteLLMGuardrailResponse"
+        "400":
+          description: Body is not unambiguous UTF-8 JSON, input_type is missing or not one of the two, or texts is not a list of strings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LiteLLMGuardrailError"
+        "401":
+          description: No valid key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LiteLLMGuardrailError"
+        "403":
+          description: Request came from a web page whose origin is not on the CORS allowlist
+        "413":
+          description: Body over 1048576 bytes, more than 256 texts, or more than 262144 bytes of text
+        "415":
+          description: Content-Type is not application/json
+        "429":
+          description: Rate limit exceeded (Retry-After is set)
+        "503":
+          description: |
+            No verdict (Retry-After is set). `tamga_scan_unavailable`: the
+            scan did not complete or the policy is not loaded.
+            `tamga_scan_busy`: every scan slot is in use.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LiteLLMGuardrailError"
+
   /api/v1/policies/custom-entities:
     get:
       tags: [policies]
@@ -3019,7 +3126,12 @@ components:
       type: apiKey
       in: header
       name: X-Tamga-Key
-      description: Tamga key of any scope, proxy included. In the management API it opens POST /api/v1/scan only.
+      description: Tamga key of any scope, proxy included. In the management API it opens POST /api/v1/scan and POST /api/v1/beta/litellm_basic_guardrail_api, and nothing else.
+    LiteLLMKey:
+      type: apiKey
+      in: header
+      name: x-api-key
+      description: The same Tamga key, in the header LiteLLM sends a guardrail's api_key in. Read on POST /api/v1/beta/litellm_basic_guardrail_api only.
 
   schemas:
     # ── Shared ────────────────────────────────────────────────────────
@@ -3536,6 +3648,76 @@ components:
             name: { type: string }
             version: { type: string }
         scan_latency_ms: { type: number }
+
+    LiteLLMGuardrailRequest:
+      type: object
+      description: |
+        LiteLLM's GenericGuardrailAPIRequest. The fields listed are the
+        ones read; the others LiteLLM sends (`images`, `tools`,
+        `tool_calls`, `request_data`, `request_headers`, `model`,
+        `litellm_trace_id`, `litellm_version`,
+        `additional_provider_specific_params`) are accepted and ignored.
+      required: [input_type]
+      additionalProperties: true
+      properties:
+        input_type:
+          type: string
+          enum: [request, response]
+          description: Whether the texts are a request's or an answer's
+        texts:
+          type: array
+          nullable: true
+          maxItems: 256
+          items: { type: string }
+          description: The texts to scan, 262144 bytes at most in total. Empty ones are skipped.
+        structured_messages:
+          type: array
+          nullable: true
+          items:
+            type: object
+            additionalProperties: true
+          description: |
+            The conversation in OpenAI's shape. When its texts, in order,
+            are exactly `texts`, each text is scanned in the role of its
+            message; otherwise every text is scanned as the user's.
+        litellm_call_id:
+          type: string
+          nullable: true
+          description: Logged with the call, shortened to 64 bytes
+
+    LiteLLMGuardrailResponse:
+      type: object
+      description: LiteLLM's GenericGuardrailAPIResponse. No other field is sent.
+      required: [action]
+      properties:
+        action:
+          type: string
+          enum: [NONE, BLOCKED, GUARDRAIL_INTERVENED]
+        blocked_reason:
+          type: string
+          description: Present only with BLOCKED. Names the kinds of finding and the Tamga request id; holds nothing of what was matched.
+        texts:
+          type: array
+          items: { type: string }
+          description: Present only with GUARDRAIL_INTERVENED. One text for each one received, in the same order.
+
+    LiteLLMGuardrailError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, request_id]
+          properties:
+            code:
+              type: string
+              description: |
+                `tamga_scan_unavailable`, `tamga_scan_busy`,
+                `tamga_unauthorized`, `tamga_origin_refused`,
+                `tamga_rate_limited`, `tamga_unsupported_media_type`,
+                `tamga_too_large` or `tamga_invalid`
+            message: { type: string }
+            request_id: { type: string }
 
     CustomEntity:
       type: object

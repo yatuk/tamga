@@ -29,6 +29,8 @@ const (
 	publicSignIn = "sign-in: the caller has no session yet"
 	publicToken  = "validates the bearer token it is handed, and answers about that token only"
 	publicScan   = "authenticates its own callers: a proxy key or the admin key (see Config.Scan)"
+	// The same callers as the scan route, by the same check.
+	publicLiteLLM = "authenticates its own callers as the scan route does (see Config.LiteLLM)"
 )
 
 // routes is the management API: every route NewHandler serves is an entry
@@ -55,8 +57,12 @@ func routes(cfg *Config) []route {
 		// There is no Clerk sign-in: both answer 501 and issue nothing.
 		{method: "POST", path: "/auth/clerk/saml/callback", public: publicSignIn, handler: h(handleClerkCallback)},
 		{method: "POST", path: "/auth/clerk/oidc/callback", public: publicSignIn, handler: h(handleClerkCallback)},
-		// The one route a proxy-scope key opens.
+		// The two routes a proxy-scope key opens.
 		{method: "POST", path: "/scan", public: publicScan, handler: cfg.Scan},
+		// The scan path again, in the shape LiteLLM's generic guardrail
+		// speaks. The path is LiteLLM's: it appends it to the api_base it is
+		// given, which is this API's own base.
+		{method: "POST", path: "/beta/litellm_basic_guardrail_api", public: publicLiteLLM, handler: cfg.LiteLLM},
 
 		// --- traffic ---
 		{method: "GET", path: "/stats", scope: scopeRead, handler: h(cfg.handleStats)},

@@ -6,6 +6,7 @@ on:
     paths:
       - "proxy/**"
       - "deploy/migrations/**"
+      - "deploy/e2e/**"
       - "scripts/verify-bin-data.sh"
       - ".github/workflows/proxy-ci.yml"
   pull_request:
@@ -136,3 +137,18 @@ jobs:
         with:
           name: benchmark-results
           path: proxy/bench_output.txt
+
+  litellm-e2e:
+    name: LiteLLM bridge (end to end)
+    # A LiteLLM container, pinned by tag in deploy/e2e/litellm, calls the
+    # proxy built from this commit as its guardrail, in front of a fake model.
+    # The compose network is internal: nothing in it can reach a provider.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: LiteLLM calls Tamga as a guardrail
+        # The script and its compose file are relative to the repo root, not
+        # to proxy/ (this workflow's default working directory).
+        working-directory: ${{ github.workspace }}
+        run: bash deploy/e2e/litellm/run.sh

@@ -1072,6 +1072,7 @@ Things that follow from this:
 | `GET` | `/api/v1/policies` | Viewer | Active policy as JSON |
 | `POST` | `/api/v1/policies/reload` | Admin | Hot-reload policy from disk |
 | `POST` | `/api/v1/scan` | Any Tamga key, or admin | Policy verdict for a text, nothing forwarded |
+| `POST` | `/api/v1/beta/litellm_basic_guardrail_api` | Any Tamga key, or admin | The same verdict, in the shape LiteLLM calls as a guardrail ([LiteLLM](litellm.md)) |
 
 ```bash
 # Health check. Without a key the answer says only whether the proxy is up.

@@ -379,6 +379,7 @@ default. Prompt and response bodies are not written to the database.
 | [Development](docs/development.md) | Repository layout, local commands, tech stack |
 | [Writing a scanner](docs/scanner-development.md) | Stateful scanners with request context |
 | [Migrating from LLM Guard](docs/migrating-from-llm-guard.md) | Scanner by scanner: what Tamga replaces, in part or not at all |
+| [LiteLLM guardrail](docs/litellm.md) | Adding Tamga to a LiteLLM proxy as a guardrail, without its proxy in the path |
 | [jugeni integration](docs/integrations/jugeni.md) | Operator-state decision governance |
 | [Use cases](docs/use-cases.md) · [FAQ](docs/faq.md) | Where it fits, common questions |
 
@@ -393,10 +394,13 @@ with hot reload · the OpenAI, Anthropic and Gemini routes · role-aware
 scanning of tool results, and `STRIP` · the optional inline classifier ·
 per-key rate limits · a daily token and cost cap per organisation · response
 cache · the Postgres request
-log · `POST /api/v1/scan` · Docker Compose.
+log · `POST /api/v1/scan` · the endpoint a LiteLLM proxy calls as a
+guardrail ([LiteLLM](docs/litellm.md)) · Docker Compose.
 
 None of it has been run against a real provider or a real third-party service
-as part of the tests: the other side is always a stand-in.
+as part of the tests: the other side is always a stand-in. That includes
+LiteLLM: the test that runs a real LiteLLM container against the endpoint is
+written and has not been run yet.
 
 **In the repository, not tested end to end.** The code is there; nothing
 exercises the whole path, so treat these as experimental:
@@ -446,12 +450,11 @@ custom entity UI · the security fixes listed in the [changelog](CHANGELOG.md).
   (SSO settings are stored and used by no sign-in; the SCIM routes have no
   store behind them) and no custom roles.
 
-**Planned next,** in this order, with no dates and no promise: an endpoint
-LiteLLM can call as a guardrail · a locked evaluation set for the scanners
-and the classifier · detectors for invisible text, more secret formats and
-encoded blocks · response scanners for malicious links and for JSON that
-does not match a schema · a browser extension for chat sites. MCP inspection
-is not in the plan.
+**Planned next,** in this order, with no dates and no promise: a locked
+evaluation set for the scanners and the classifier · detectors for invisible
+text, more secret formats and encoded blocks · response scanners for
+malicious links and for JSON that does not match a schema · a browser
+extension for chat sites. MCP inspection is not in the plan.
 
 ## Related projects
 

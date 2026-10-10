@@ -1,0 +1,21 @@
+# Tamga's policy for the LiteLLM end-to-end test: a Turkish national id is
+# blocked and an e-mail address is masked, in a request and in an answer.
+version: "1.0"
+name: litellm-e2e
+rules:
+  pii_detection:
+    action: REDACT
+    sensitivity: low
+    types: [email]
+  pii:
+    action: BLOCK
+    sensitivity: low
+    types: [tc_kimlik]
+output_rules:
+  enabled: true
+  redact_on: [email]
+  block_on: [tc_kimlik]
+scan:
+  on_error: block
+providers:
+  allowed: [openai]
