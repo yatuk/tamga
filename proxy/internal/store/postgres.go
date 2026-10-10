@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -31,6 +32,8 @@ type PostgresStore struct {
 	done   chan struct{}
 	wg     sync.WaitGroup
 	closed bool
+	// schema is what is known of the request_logs columns (request_log_schema.go).
+	schema atomic.Pointer[requestLogSchema]
 }
 
 // NewPostgresStore opens a pool and starts periodic flushing.
@@ -83,36 +86,71 @@ func (s *PostgresStore) insertBatch(ctx context.Context, rows []RequestLog) erro
 	if len(rows) == 0 {
 		return nil
 	}
-	batch := &pgx.Batch{}
-	var n int
+	type keyed struct {
+		org uuid.UUID
+		row RequestLog
+	}
+	valid := make([]keyed, 0, len(rows))
 	for _, r := range rows {
 		org, err := uuid.Parse(r.OrgID)
 		if err != nil {
+			// The column holds a UUID and this is not one, so there is no
+			// row to write. The request is counted and said, not dropped
+			// in silence.
+			s.unrecorded(UnrecordedOrgNotUUID, 1, r.RequestID, r.OrgID, nil)
 			continue
 		}
-		batch.Queue(`
-INSERT INTO request_logs (
-  org_id, request_id, provider, model, model_family, endpoint,
-  input_tokens, output_tokens, findings, findings_count,
-  action_taken, scan_latency_ms, total_latency_ms, user_identifier, created_at
-) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,COALESCE($15, now()))`,
-			org, r.RequestID, r.Provider, nullIfEmpty(r.Model), nullIfEmpty(r.ModelFamily), nullIfEmpty(r.Endpoint),
-			r.InputTokens, r.OutputTokens, findingsOrEmpty(r.Findings), r.FindingsCount,
-			r.ActionTaken, r.ScanLatencyMs, r.TotalLatencyMs, nullIfEmpty(r.UserID), happenedAt(r.At),
-		)
-		n++
+		valid = append(valid, keyed{org, r})
 	}
-	if n == 0 {
+	if len(valid) == 0 {
 		return nil
 	}
-	br := s.pool.SendBatch(ctx, batch)
-	defer func() { _ = br.Close() }()
-	for i := 0; i < n; i++ {
-		if _, err := br.Exec(); err != nil {
-			return fmt.Errorf("batch exec %d: %w", i, err)
+	send := func(sc *requestLogSchema) error {
+		batch := &pgx.Batch{}
+		for _, v := range valid {
+			batch.Queue(sc.insertSQL, sc.insertArgs(v.org, v.row)...)
 		}
+		br := s.pool.SendBatch(ctx, batch)
+		defer func() { _ = br.Close() }()
+		for i := range valid {
+			if _, err := br.Exec(); err != nil {
+				return fmt.Errorf("batch exec %d: %w", i, err)
+			}
+		}
+		return nil
 	}
-	return nil
+	err := send(s.requestLogSchema(ctx))
+	if undefinedColumn(err) {
+		// The table changed since it was looked at (a migration was rolled
+		// back). The batch was not applied in part: look again and resend.
+		s.schema.Store(nil)
+		err = send(s.requestLogSchema(ctx))
+	}
+	if err != nil {
+		// The batch is one transaction: none of its rows were stored.
+		s.unrecorded(UnrecordedInsertFailed, len(valid), valid[0].row.RequestID, "", err)
+	}
+	return err
+}
+
+// unrecorded counts requests that were not stored and logs the reason, at
+// most once per unrecordedLogEvery, with one of the requests as an example.
+func (s *PostgresStore) unrecorded(reason string, n int, requestID, orgID string, cause error) {
+	total, logNow := countUnrecorded(reason, n)
+	if !logNow {
+		return
+	}
+	if len(orgID) > 64 {
+		orgID = orgID[:64]
+	}
+	ev := s.log.Warn().Str("reason", reason).Int64("unrecorded_total", total).Str("request_id", requestID)
+	if orgID != "" {
+		ev = ev.Str("org_id", orgID)
+	}
+	if cause != nil {
+		ev = ev.Err(cause)
+	}
+	ev.Msg("scanned requests are not being stored in request_logs")
 }
 
 // findingsOrEmpty gives the findings column its value. A request with no

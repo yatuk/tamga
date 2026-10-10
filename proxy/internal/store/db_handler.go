@@ -4,8 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
-	"strings"
 
 	"github.com/rs/zerolog"
 
@@ -22,47 +20,9 @@ func DBHandler(log zerolog.Logger, s Store, defaultOrgID string, getPolicy func(
 		return func(events.Event) {}
 	}
 	return func(e events.Event) {
-		if e.EventType != "request_scanned" && e.EventType != "request_blocked" {
+		rl, ok := RequestLogFromEvent(e, defaultOrgID, getPolicy)
+		if !ok {
 			return
-		}
-		org := strings.TrimSpace(e.OrgID)
-		if org == "" {
-			org = strings.TrimSpace(defaultOrgID)
-		}
-		if org == "" {
-			return
-		}
-		// Hash finding matches when data protection is enabled (KVKK/GDPR).
-		// Hashing is irreversible — finding content cannot be recovered from the log.
-		findings := e.Findings
-		if getPolicy != nil {
-			if pol := getPolicy(); pol != nil && pol.Data != nil && pol.Data.HashFindings {
-				findings = hashFindingMatches(findings)
-			}
-		}
-		findingsJSON, err := json.Marshal(findings)
-		if err != nil {
-			log.Warn().Err(err).Str("component", "db_handler").Str("request_id", e.RequestID).Msg("marshal findings for request log")
-			findingsJSON = []byte("[]")
-		}
-		rl := RequestLog{
-			RequestID:      e.RequestID,
-			OrgID:          org,
-			Provider:       e.Provider,
-			Model:          e.Model,
-			ModelFamily:    e.ModelFamily,
-			InputTokens:    e.InputTokens,
-			OutputTokens:   e.OutputTokens,
-			Findings:       findingsJSON,
-			FindingsCount:  len(e.Findings),
-			ActionTaken:    strings.ToLower(strings.TrimSpace(e.Action)),
-			ScanLatencyMs:  e.ScanLatencyMs,
-			TotalLatencyMs: e.TotalLatencyMs,
-			UserID:         e.UserID,
-			Endpoint:       e.Endpoint,
-			// The row is written up to a flush interval after the request;
-			// it is dated by the request, as on the NATS path.
-			At: e.Timestamp,
 		}
 		if err := s.SaveRequestLog(context.Background(), rl); err != nil {
 			log.Warn().Err(err).Str("component", "db_handler").Str("request_id", e.RequestID).Msg("save request log")

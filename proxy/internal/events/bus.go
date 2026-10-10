@@ -41,6 +41,22 @@ type Event struct {
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
 	// TraceContext propagates W3C trace context to async consumers (analyzer, DB handlers).
 	TraceContext map[string]string `json:"-"`
+
+	// CostKnown says CostUSD is what the request was charged. It is false
+	// when no cost is known (a model with no price, a stream, a request that
+	// reached no provider), and CostUSD is then not a cost of zero.
+	// InputTokens and OutputTokens need no such flag: a count is never zero
+	// on both sides, so both zero means the counts are not known.
+	CostKnown bool
+	// On a request's own event: the name and version of the policy the
+	// request was decided with, and whether its response was scanned (the
+	// output fields above then describe that scan).
+	PolicyName    string
+	PolicyVersion string
+	OutputScanned bool
+	// OrgVerified says OrgID came from a Tamga key. Otherwise it is what the
+	// caller sent in X-Tamga-Org-Id, or empty.
+	OrgVerified bool
 }
 
 const defaultChanCap = 1000

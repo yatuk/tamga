@@ -590,7 +590,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 	}
 
 	scanDuration := time.Since(start)
-	api.ObserveScan(float64(scanDuration.Milliseconds()))
+	api.ObserveScan(durationMs(scanDuration))
 	logger.Debug().
 		Int64("scan_ms", scanDuration.Milliseconds()).
 		Int("findings", len(findings)).
@@ -789,6 +789,10 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 	if model != "" {
 		span.SetAttributes(attribute.String("gen_ai.request.model", model))
 	}
+	// What the response tells the proxy is collected here and goes out with
+	// the request's event, which is published when the request is over.
+	outcome := &requestOutcome{policyName: pol.Name, policyVersion: pol.Version, verified: who.verified()}
+	ctx = withOutcome(ctx, outcome)
 	// A decision on the response is published from the upstream callbacks,
 	// which have this context and not the request.
 	ctx = withOutputEventMeta(ctx, r, model)
@@ -823,7 +827,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 		writeSecurityBlock(w, requestID, findings)
 		span.SetAttributes(attribute.Bool("tamga.blocked", true))
 		publishEvent(ctx, cfg, r, requestID, provider, body, findings, action, "request_blocked",
-			float64(scanDuration.Milliseconds()), float64(time.Since(start).Milliseconds()), inputRisk, outputRisk)
+			durationMs(scanDuration), durationMs(time.Since(start)), inputRisk, outputRisk)
 		return
 
 	case policy.ActionRedact:
@@ -921,7 +925,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 		setConfidenceHeaders(w.Header(), findings)
 		mockWriteResponse(w, r, requestID, requestIDShort, provider, action, redactedCount, redactedTypes, body, vaultMapping)
 		publishEvent(ctx, cfg, r, requestID, provider, body, findings, action, "request_scanned",
-			float64(scanDuration.Milliseconds()), float64(time.Since(start).Milliseconds()), inputRisk, outputRisk)
+			durationMs(scanDuration), durationMs(time.Since(start)), inputRisk, outputRisk)
 		return
 	}
 
@@ -994,6 +998,8 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 	)
 	defer upSpan.End()
 
+	// streamDone is closed when a guarded stream's guard has finished.
+	var streamDone chan struct{}
 	rev := &httputil.ReverseProxy{
 		Director: func(req *http.Request) {
 			req.URL.Scheme = target.Scheme
@@ -1123,6 +1129,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 					}
 					outputClean = false
 					resp.Header.Set("X-Tamga-System-Prompt-Leak", "true")
+					recordOutput(ctx, []scanner.Finding{leak}, policy.ActionBlock, false)
 					go publishOutputEvent(ctx, cfg, requestID, provider, []scanner.Finding{leak}, policy.ActionBlock, 0)
 					if pol.Canary != nil && pol.Canary.BlockOnLeak {
 						resp.StatusCode = http.StatusForbidden
@@ -1181,19 +1188,29 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 					g.canaryBlocks = pol.Canary != nil && pol.Canary.BlockOnLeak
 				}
 				streamStart := time.Now()
+				// The guard finishes on its own goroutine, just after the
+				// last byte went to the client. The request's event waits
+				// for it (streamDone), so it has what the guard found.
+				done := make(chan struct{})
+				streamDone = done
 				attachStreamGuard(resp, g, func(g *streamGuard) {
+					defer close(done)
 					if streamScan && g.recognised == 0 {
 						// An event stream in a shape the guard has no rule
 						// for went through unread.
 						scanner.RecordDegraded("stream_unrecognised")
 					}
 					if len(g.findings) == 0 {
+						if streamScan && g.recognised > 0 {
+							recordOutput(ctx, nil, policy.ActionPass, true)
+						}
 						return
 					}
 					act := policy.ActionRedact
 					if g.stopReason != "" || g.leaked {
 						act = policy.ActionBlock
 					}
+					recordOutput(ctx, g.findings, act, streamScan)
 					publishOutputEvent(ctx, cfg, requestID, provider, g.findings, act, time.Since(streamStart))
 				})
 				return nil
@@ -1206,13 +1223,20 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 				return nil
 			}
 			// Budget tracking: extract token usage from the provider payload.
-			if respBuffered && cfg.Budget != nil {
+			// The same counts and cost go on the request's event, budget or not.
+			if respBuffered {
 				inTok, outTok := prov.ExtractUsage(respBody)
 				if inTok+outTok > 0 {
 					orgID := orgIDForRequest(r, cfg)
 					model := extractModelFromBody(body)
 					costUSD, priced := priceFor(cfg.PricingResolver, provider, model, inTok, outTok)
-					cfg.Budget.Record(orgID, inTok+outTok, costUSD)
+					outcome.setUsage(inTok, outTok)
+					if priced {
+						outcome.setCost(costUSD)
+					}
+					if cfg.Budget != nil {
+						cfg.Budget.Record(orgID, inTok+outTok, costUSD)
+					}
 					resp.Header.Set("X-Tamga-Tokens-In", strconv.Itoa(inTok))
 					resp.Header.Set("X-Tamga-Tokens-Out", strconv.Itoa(outTok))
 					// No header rather than a zero the client would read as free.
@@ -1246,6 +1270,9 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 					LoadShed: cfg.Config.ScannerLoadShed,
 				}
 				res, err := scanResponseBody(ctx, cfg.Registry, cfg.OutputOnlyRegistry, pol, prov, respBody, winMs, outPipeCfg)
+				if err == nil && len(res.findings) == 0 {
+					recordOutput(ctx, nil, policy.ActionPass, true)
+				}
 				if err != nil {
 					// An incomplete scan cannot vouch for the body, so it
 					// is not cacheable either.
@@ -1258,6 +1285,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 					// does for a stream: unless it is set, an answer the scan
 					// could not vouch for is not sent.
 					outputWithheld = true
+					recordOutput(ctx, nil, policy.ActionBlock, false)
 					scanner.RecordDegraded("output_unscanned")
 					resp.StatusCode = http.StatusServiceUnavailable
 					blockBody := outputUnscannedBody(requestID)
@@ -1306,6 +1334,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 						resp.Header.Set("X-Tamga-Output-Redacted-Count", strconv.Itoa(res.redactedCount))
 					}
 					// Publish the output scan finding into the event bus.
+					recordOutput(ctx, res.findings, res.action, true)
 					go publishOutputEvent(ctx, cfg, requestID, provider, res.findings, res.action, res.elapsed)
 				}
 			}
@@ -1426,9 +1455,13 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 					Str("model", model).
 					Msg("served from cache")
 				// A hit is a request like any other to the request log, the
-				// dashboard and the alerts: same event, marked as a hit.
+				// dashboard and the alerts: same event, marked as a hit. No
+				// provider was called and the budget is not charged, so its
+				// cost is zero; the entry does not keep the tokens of the
+				// answer it holds, so those stay unknown.
+				outcome.setCost(0)
 				publishEvent(withCacheStatus(ctx, "hit"), cfg, r, requestID, provider, body, findings, action, "request_scanned",
-					float64(scanDuration.Milliseconds()), float64(time.Since(start).Milliseconds()), inputRisk, outputRisk)
+					durationMs(scanDuration), durationMs(time.Since(start)), inputRisk, outputRisk)
 				return
 			}
 		}
@@ -1438,6 +1471,15 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 	}
 
 	rev.ServeHTTP(w, r.WithContext(upCtx))
+	total := time.Since(start)
+	if streamDone != nil {
+		// The guard's goroutine has only its last step left; the wait is
+		// bounded in case the upstream body is slow to let go.
+		select {
+		case <-streamDone:
+		case <-time.After(streamOutcomeWait):
+		}
+	}
 
 	logger.Info().
 		Int64("total_ms", time.Since(start).Milliseconds()).
@@ -1450,7 +1492,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 		Msg(requestLogMessage(action))
 
 	publishEvent(withCacheStatus(ctx, cacheStatus), cfg, r, requestID, provider, body, findings, action, "request_scanned",
-		float64(scanDuration.Milliseconds()), float64(time.Since(start).Milliseconds()), inputRisk, outputRisk)
+		durationMs(scanDuration), durationMs(total), inputRisk, outputRisk)
 }
 
 type resilientTransport struct {
@@ -2158,6 +2200,10 @@ var errUnreadableResponse = errors.New("upstream response is encoded and cannot 
 
 const maxEventBodyBytes = 65536
 
+// streamOutcomeWait is how long a request's event waits, after the response
+// was relayed, for the stream guard to say what it found.
+const streamOutcomeWait = 2 * time.Second
+
 func setRiskHeaders(h http.Header, in, out scanner.RiskScore) {
 	if h == nil {
 		return
@@ -2250,10 +2296,15 @@ func applyFindingActionTaken(findings []scanner.Finding, action policy.Action) {
 	}
 }
 
+// publishEvent publishes a request's own event: the one the request log, the
+// dashboard and the alerts take the request from. It is published once, when
+// the request is over, so what the response told the proxy (the outcome in
+// ctx, see requestOutcome) goes out with it.
 func publishEvent(ctx context.Context, cfg HandlerConfig, r *http.Request, requestID, provider string, body []byte, findings []scanner.Finding, action policy.Action, eventType string, scanLatencyMs, totalLatencyMs float64, inputRisk, outputRisk scanner.RiskScore) {
 	if cfg.Bus == nil {
 		return
 	}
+	out := outcomeFrom(ctx)
 	orgID := ""
 	endpoint := ""
 	userID := ""
@@ -2263,7 +2314,7 @@ func publishEvent(ctx context.Context, cfg HandlerConfig, r *http.Request, reque
 		userID = r.Header.Get("X-Tamga-User-Id")
 	}
 	model := extractModelFromBody(body)
-	cfg.Bus.PublishContext(ctx, events.Event{
+	e := events.Event{
 		RequestID:      requestID,
 		OrgID:          orgID,
 		Provider:       provider,
@@ -2281,7 +2332,9 @@ func publishEvent(ctx context.Context, cfg HandlerConfig, r *http.Request, reque
 		InputRisk:      inputRisk,
 		OutputRisk:     outputRisk,
 		CacheStatus:    cacheStatusFrom(ctx),
-	})
+	}
+	out.fill(&e)
+	cfg.Bus.PublishContext(ctx, e)
 }
 
 // cacheTTLWarned holds the last cache.ttl_seconds the proxy said was above

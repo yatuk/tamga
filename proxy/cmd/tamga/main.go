@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -247,6 +246,12 @@ func main() {
 			pgStore = ps
 			requestStore = ps
 			log.Info().Msg("postgres request logging enabled")
+			// The table may be older than this binary (the migrations are
+			// run after the upgrade). Its newest columns are added here;
+			// failing that, requests are stored without them.
+			if err := ps.EnsureRequestLogColumns(context.Background()); err != nil {
+				log.Warn().Err(err).Msg("request_logs could not be brought up to date; requests are stored without the newest columns until migration 017 is applied")
+			}
 			// Without an organisation nothing is stored and the saved hunts
 			// API refuses every call. A single-tenant install has exactly one.
 			if cfg.DefaultOrgID == "" {
@@ -495,7 +500,7 @@ func main() {
 				Handler: func(ev events.EventV2) {
 					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 					defer cancel()
-					storeEventFromNATS(ctx, requestStore, ev, cfg.DefaultOrgID, log.Logger)
+					storeEventFromNATS(ctx, requestStore, ev, cfg.DefaultOrgID, getPolicy, log.Logger)
 				},
 			},
 		}, log.Logger)
@@ -959,77 +964,18 @@ func main() {
 
 // storeEventFromNATS persists a NATS EventV2 to PostgreSQL. This runs in the
 // NATS consumer goroutine, decoupled from the HTTP request path.
-func storeEventFromNATS(ctx context.Context, s store.Store, ev events.EventV2, defaultOrgID string, log zerolog.Logger) {
-	// An event that names no organisation belongs to the install's own.
-	if strings.TrimSpace(ev.OrgID) == "" {
-		ev.OrgID = defaultOrgID
-	}
-	rl := store.RequestLog{
-		RequestID:    ev.RequestID,
-		OrgID:        ev.OrgID,
-		Provider:     stringField(ev.Payload, "provider"),
-		Model:        stringField(ev.Payload, "model"),
-		InputTokens:  intField(ev.Payload, "input_tokens"),
-		OutputTokens: intField(ev.Payload, "output_tokens"),
-		ActionTaken:  stringField(ev.Payload, "action"),
-		UserID:       stringField(ev.Payload, "user_id"),
-		// The row is written some time after the request, in batches; it is
-		// dated by the request, as the event itself is.
-		At:             ev.Timestamp,
-		ModelFamily:    stringField(ev.Payload, "model_family"),
-		Endpoint:       stringField(ev.Payload, "endpoint"),
-		ScanLatencyMs:  floatField(ev.Payload, "scan_latency_ms"),
-		TotalLatencyMs: floatField(ev.Payload, "total_latency_ms"),
-	}
-	if raw, ok := ev.Payload["findings"]; ok {
-		var findings []scanner.Finding
-		if b, err := json.Marshal(raw); err == nil {
-			_ = json.Unmarshal(b, &findings)
-			rl.Findings, _ = json.Marshal(findings)
-			rl.FindingsCount = len(findings)
-		}
+//
+// The row is the one the in-process bus would have written: both build it
+// with store.RequestLogFromEvent. Events that are not a request's own share
+// its subject (output hints, provider state changes) and are not rows.
+func storeEventFromNATS(ctx context.Context, s store.Store, ev events.EventV2, defaultOrgID string, getPolicy func() *policy.Policy, log zerolog.Logger) {
+	rl, ok := store.RequestLogFromV2(ev, defaultOrgID, getPolicy)
+	if !ok {
+		return
 	}
 	if err := s.SaveRequestLog(ctx, rl); err != nil {
 		log.Warn().Err(err).Str("request_id", ev.RequestID).Msg("nats consumer: db write failed")
 	}
-}
-
-func stringField(m map[string]any, key string) string {
-	if v, ok := m[key]; ok {
-		s, _ := v.(string)
-		return s
-	}
-	return ""
-}
-
-func floatField(m map[string]any, key string) float64 {
-	if v, ok := m[key]; ok {
-		switch n := v.(type) {
-		case float64:
-			return n
-		case int:
-			return float64(n)
-		}
-	}
-	return 0
-}
-
-	// The SSO settings hold no secret (see store.SSOSettings), so like the
-	// team roles they are stored as they are and need no vault key.
-	if err := sso.Persist(docstore.NewTable(pool, "sso_settings", nil)); err != nil {
-		log.Warn().Err(err).Msg("settings: SSO settings could not be loaded")
-	}
-	live = append(live, sso)
-func intField(m map[string]any, key string) int {
-	if v, ok := m[key]; ok {
-		switch n := v.(type) {
-		case float64:
-			return int(n)
-		case int:
-			return n
-		}
-	}
-	return 0
 }
 
 func retentionSchedulerEnabled() bool {
@@ -1068,6 +1014,12 @@ func persistSettings(cfg *config.Config, pg *store.PostgresStore, pats *patterns
 		log.Warn().Err(err).Msg("settings: team roles could not be loaded")
 	}
 	live = append(live, team)
+	// The SSO settings hold no secret (see store.SSOSettings), so like the
+	// team roles they are stored as they are and need no vault key.
+	if err := sso.Persist(docstore.NewTable(pool, "sso_settings", nil)); err != nil {
+		log.Warn().Err(err).Msg("settings: SSO settings could not be loaded")
+	}
+	live = append(live, sso)
 
 	// A webhook holds a URL and often a token that are credentials for
 	// someone else's system. They go to the database encrypted or not at

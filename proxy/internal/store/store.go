@@ -23,7 +23,28 @@ type RequestLog struct {
 	UserID         string
 	Endpoint       string
 	// At is when the request happened. Zero means now, at the time of the insert.
+	// A row with the organisation, request id and time of one already stored
+	// is the same event delivered again, and is not stored twice.
 	At time.Time
+	// InputTokens and OutputTokens, above, are what the provider reported.
+	// Both zero means the counts are not known, and the row then holds NULL:
+	// a real count is never zero on both sides.
+	//
+	// CostUSD is what the request was charged; nil when no cost is known.
+	CostUSD *float64
+	// CacheStatus is what the response cache did: "hit", "miss", "bypass",
+	// or empty when the cache is off.
+	CacheStatus string
+	// OutputFindings (JSON), OutputAction and OutputRisk (JSON) describe the
+	// scan of the response. OutputFindings and OutputRisk are nil when the
+	// response was not scanned; OutputAction is empty when nothing was
+	// decided about it.
+	OutputFindings []byte
+	OutputAction   string
+	OutputRisk     []byte
+	// PolicyName and PolicyVersion name the policy the request was decided with.
+	PolicyName    string
+	PolicyVersion string
 }
 
 // Stats aggregates daily_stats rows for a window.

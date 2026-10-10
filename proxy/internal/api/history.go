@@ -111,7 +111,10 @@ func loadRequestStats(ctx context.Context, h requestHistory, orgID string, from,
 		return nil, err
 	}
 	st := &requestStats{providers: map[string]int64{}}
+	// The average is over the requests that have a scan latency: rows of
+	// older versions do not, and are not counted as scans of zero.
 	var latencySum float64
+	var latencySamples int64
 	for _, c := range counts {
 		st.total += c.Requests
 		switch c.Action {
@@ -124,9 +127,10 @@ func loadRequestStats(ctx context.Context, h requestHistory, orgID string, from,
 		}
 		st.providers[c.Provider] += c.Requests
 		latencySum += c.ScanLatencySumMs
+		latencySamples += c.ScanSamples
 	}
-	if st.total > 0 {
-		st.scanAvgMs = latencySum / float64(st.total)
+	if latencySamples > 0 {
+		st.scanAvgMs = latencySum / float64(latencySamples)
 	}
 
 	findings, err := h.FindingCounts(ctx, orgID, from, to)
@@ -214,9 +218,22 @@ func storedFindings(raw json.RawMessage) []scanner.Finding {
 	return findings
 }
 
+// storedOutputRisk is the output risk a row holds, or nil when it holds none
+// (the response was not scanned, or the row is older than the column).
+func storedOutputRisk(raw json.RawMessage) *scanner.RiskScore {
+	if len(raw) == 0 {
+		return nil
+	}
+	var risk scanner.RiskScore
+	if err := json.Unmarshal(raw, &risk); err != nil {
+		return nil
+	}
+	return &risk
+}
+
 // storedEventJSON is a stored row in the shape the event list and the export
-// use. The input risk is worked out from the stored findings; the output
-// risk is not stored and is left out.
+// use. The input risk is worked out from the stored findings. What the row
+// does not hold (tokens, cost, the output fields) is left out, not zeroed.
 func storedEventJSON(rec store.RequestRecord) events.EventJSON {
 	findings := storedFindings(rec.Findings)
 	action := storedAction(rec.ActionTaken)
@@ -236,14 +253,25 @@ func storedEventJSON(rec store.RequestRecord) events.EventJSON {
 		InputRiskPct:   risk.Percentage,
 		RiskLevel:      risk.Level,
 		InputRisk:      &risk,
+		OutputRisk:     storedOutputRisk(rec.OutputRisk),
+		InputTokens:    rec.InputTokens,
+		OutputTokens:   rec.OutputTokens,
+		CostUSD:        rec.CostUSD,
+		CacheStatus:    rec.CacheStatus,
+		OutputAction:   strings.ToUpper(rec.OutputAction),
+		PolicyName:     rec.PolicyName,
+		PolicyVersion:  rec.PolicyVersion,
 	}
 }
 
 // storedEventDetail is the detail of a request read from request_logs. It
-// holds what the row holds. Left out because the row does not record them:
-// the output risk, and the name and version of the policy that decided (the
-// policy loaded now may be a different one). Each finding's action_taken is
-// the request's own action, for the same reason.
+// holds what the row holds, and a field the row has no value for is absent:
+// the tokens when the provider reported none the proxy could read, the cost
+// when none is known, the output fields when the response was not scanned,
+// and, on rows written before they were recorded, the latencies and the
+// name and version of the policy that decided (the policy loaded now may be
+// a different one, so it is not shown in their place). Each finding's
+// action_taken is the request's own action, for the same reason.
 func storedEventDetail(rec store.RequestRecord) map[string]interface{} {
 	findings := storedFindings(rec.Findings)
 	action := storedAction(rec.ActionTaken)
@@ -251,21 +279,58 @@ func storedEventDetail(rec store.RequestRecord) map[string]interface{} {
 	for _, f := range findings {
 		findingsOut = append(findingsOut, eventFindingDetail(nil, f, policy.Action(action)))
 	}
-	return map[string]interface{}{
-		"request_id":       rec.RequestID,
-		"timestamp":        rec.CreatedAt.UTC(),
-		"provider":         rec.Provider,
-		"model":            rec.Model,
-		"action":           action,
-		"input_risk":       scanner.CalculateRisk(findings),
-		"findings":         findingsOut,
-		"scan_latency_ms":  rec.ScanLatencyMs,
-		"total_latency_ms": rec.TotalLatencyMs,
-		"input_tokens":     rec.InputTokens,
-		"output_tokens":    rec.OutputTokens,
-		"endpoint":         rec.Endpoint,
-		"event_type":       storedEventType(action),
+	out := map[string]interface{}{
+		"request_id": rec.RequestID,
+		"timestamp":  rec.CreatedAt.UTC(),
+		"provider":   rec.Provider,
+		"model":      rec.Model,
+		"action":     action,
+		"input_risk": scanner.CalculateRisk(findings),
+		"findings":   findingsOut,
+		"endpoint":   rec.Endpoint,
+		"event_type": storedEventType(action),
 	}
+	if rec.ScanLatencyMs > 0 {
+		out["scan_latency_ms"] = rec.ScanLatencyMs
+	}
+	if rec.TotalLatencyMs > 0 {
+		out["total_latency_ms"] = rec.TotalLatencyMs
+	}
+	if rec.InputTokens != nil && rec.OutputTokens != nil {
+		out["input_tokens"] = *rec.InputTokens
+		out["output_tokens"] = *rec.OutputTokens
+	}
+	if rec.CostUSD != nil {
+		out["cost_usd"] = *rec.CostUSD
+	}
+	if rec.CacheStatus != "" {
+		out["cache_status"] = rec.CacheStatus
+	}
+	if rec.PolicyName != "" {
+		out["policy_name"] = rec.PolicyName
+	}
+	if rec.PolicyVersion != "" {
+		out["policy_version"] = rec.PolicyVersion
+	}
+	if rec.OutputAction != "" {
+		out["output_action"] = strings.ToUpper(rec.OutputAction)
+	}
+	if len(rec.OutputFindings) > 0 {
+		outputFindings := storedFindings(rec.OutputFindings)
+		outAction := policy.Action(strings.ToUpper(rec.OutputAction))
+		if outAction == "" {
+			outAction = policy.ActionPass
+		}
+		list := make([]map[string]interface{}, 0, len(outputFindings))
+		for _, f := range outputFindings {
+			list = append(list, eventFindingDetail(nil, f, outAction))
+		}
+		out["output_findings"] = list
+	}
+	if risk := storedOutputRisk(rec.OutputRisk); risk != nil {
+		out["output_risk"] = risk
+	}
+	return out
 }
 
 // requestEvent reports whether e is the event of a scanned request, the kind

@@ -310,6 +310,11 @@ export interface paths {
          *     `/findings/breakdown`, `/providers`, `/events/{request_id}` and
          *     `/events/export`. `avg_input_risk_pct` is left out when it could not
          *     be worked out.
+         *
+         *     `scanner_latency_avg_ms` is the average over the requests that have a
+         *     scan latency stored, in milliseconds with a fraction. Requests stored
+         *     by versions that recorded whole milliseconds, or none, hold zero and
+         *     are not part of the average.
          */
         get: {
             parameters: {
@@ -462,10 +467,32 @@ export interface paths {
          * Get a single security event by request ID
          * @description Looked up in process memory first and then, in the caller's
          *     organisation, in the stored request logs (`X-Tamga-Data-Source` says
-         *     which answered). A stored request carries what its row holds:
-         *     `output_risk`, `policy_name` and `policy_version` are not recorded
-         *     and are left out, `input_risk` is computed from the stored findings,
-         *     and each finding's `action_taken` is the request's action.
+         *     which answered). A stored request carries what its row holds, and a
+         *     field the row has no value for is absent, never `null` and never a
+         *     zero standing in for it:
+         *
+         *     - `input_tokens` and `output_tokens` are present together, when the
+         *       proxy read the provider's usage: a response it buffered (output
+         *       scanning or the vault is on) that carried a usage block. They are
+         *       absent for a streamed response, a cache hit, a blocked request and
+         *       every request stored before they were recorded.
+         *     - `cost_usd` is what the request was charged: tokens times the
+         *       model's price at the time, and `0` for a cache hit, which calls no
+         *       provider. Otherwise absent when the tokens are, and for a model
+         *       with no price.
+         *     - `policy_name` and `policy_version` are those of the policy the
+         *       request was decided with. Absent on requests stored before they
+         *       were recorded: the policy loaded now is not shown in their place.
+         *     - `output_action`, `output_findings` and `output_risk` describe the
+         *       scan of the response, and are absent when it was not scanned.
+         *       `output_findings` is `[]` for a response that was scanned and
+         *       clean; its matches are masked as those of `findings` are.
+         *     - `scan_latency_ms` and `total_latency_ms` are in milliseconds with a
+         *       fraction; absent on requests stored without them.
+         *
+         *     `input_risk` is computed from the stored findings, and each
+         *     finding's `action_taken` is the request's action (for an output
+         *     finding, the response's).
          */
         get: {
             parameters: {
@@ -2695,7 +2722,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Prometheus text-format metrics snapshot */
+        /**
+         * Prometheus text-format metrics snapshot
+         * @description Includes `tamga_request_log_unrecorded_total{reason}`: scanned
+         *     requests that could not be stored in the request log, so the console
+         *     does not count them. `org_not_uuid` is a request whose key names an
+         *     organisation that is not a UUID; `insert_failed` is a batch the
+         *     database refused.
+         */
         get: {
             parameters: {
                 query?: never;
@@ -3345,7 +3379,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Per-model cost breakdown for a time range */
+        /**
+         * Per-model cost breakdown for a time range
+         * @description Sums the token counts stored with each request and prices them with
+         *     the prices in force now. Only requests whose usage the proxy read
+         *     are in it: a response it buffered (output scanning or the vault is
+         *     on) that carried a usage block. Streamed responses, cache hits and
+         *     requests stored before token counts were recorded add nothing, so
+         *     the totals are a lower bound on what the providers billed.
+         */
         get: {
             parameters: {
                 query?: {
@@ -3898,6 +3940,21 @@ export interface components {
             timestamp?: string;
             input_risk_pct?: number;
             risk_level?: string;
+            /** @description Absent when the proxy did not read the provider's usage. */
+            input_tokens?: number;
+            /** @description Absent when the proxy did not read the provider's usage. */
+            output_tokens?: number;
+            /** @description What the request was charged; 0 for a cache hit. Absent when not known. */
+            cost_usd?: number;
+            /**
+             * @description Absent when the response cache is off.
+             * @enum {string}
+             */
+            cache_status?: "hit" | "miss" | "bypass";
+            /** @description The action taken on the response. Absent when nothing was decided about it. */
+            output_action?: string;
+            policy_name?: string;
+            policy_version?: string;
         };
         SecurityEventDetail: {
             request_id?: string;
@@ -3908,12 +3965,27 @@ export interface components {
             action?: string;
             event_type?: string;
             findings?: components["schemas"]["SecurityFinding"][];
+            /** @description Milliseconds, with a fraction. */
             scan_latency_ms?: number;
+            /** @description Milliseconds, with a fraction. */
             total_latency_ms?: number;
+            /** @description The policy the request was decided with. */
             policy_name?: string;
             policy_version?: string;
+            /** @description Absent when not known; never a zero standing in for an unknown count. */
             input_tokens?: number;
+            /** @description Absent when not known. */
             output_tokens?: number;
+            /** @description What the request was charged; 0 for a cache hit. Absent when not known. */
+            cost_usd?: number;
+            /** @enum {string} */
+            cache_status?: "hit" | "miss" | "bypass";
+            /** @description The action taken on the response. */
+            output_action?: string;
+            /** @description What the scan of the response found, masked as `findings` are. Empty when it was scanned and clean; absent when it was not scanned. */
+            output_findings?: components["schemas"]["SecurityFinding"][];
+            /** @description The risk of the response as the proxy scored it. Absent when the response was not scanned. */
+            output_risk?: Record<string, never>;
             endpoint?: string;
         };
         TimeseriesPoint: {

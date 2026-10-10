@@ -43,22 +43,34 @@ const (
 var ErrTooManyGroups = errors.New("store: aggregate exceeds the group limit")
 
 // RequestRecord is one request_logs row, with what the table holds about it.
-// The risk scores, the policy that decided and the findings of the response
-// scan are not stored.
+// A value the row does not hold is nil or empty here, not zero: rows written
+// by older versions lack most of what follows the latencies. The input risk
+// is not stored; it is a function of the findings.
 type RequestRecord struct {
-	RequestID      string
-	Provider       string
-	Model          string
-	ModelFamily    string
-	Endpoint       string
-	ActionTaken    string
-	InputTokens    int
-	OutputTokens   int
-	Findings       json.RawMessage
-	FindingsCount  int
+	RequestID   string
+	Provider    string
+	Model       string
+	ModelFamily string
+	Endpoint    string
+	ActionTaken string
+	// InputTokens and OutputTokens are nil when the counts are not known.
+	InputTokens   *int
+	OutputTokens  *int
+	Findings      json.RawMessage
+	FindingsCount int
+	// ScanLatencyMs and TotalLatencyMs are zero when they were not recorded.
 	ScanLatencyMs  float64
 	TotalLatencyMs float64
 	CreatedAt      time.Time
+	// CostUSD is nil when no cost is known.
+	CostUSD     *float64
+	CacheStatus string
+	// OutputFindings and OutputRisk are nil when the response was not scanned.
+	OutputFindings json.RawMessage
+	OutputAction   string
+	OutputRisk     json.RawMessage
+	PolicyName     string
+	PolicyVersion  string
 }
 
 // RequestCount is the number of requests for one provider and action, with
@@ -68,6 +80,8 @@ type RequestCount struct {
 	Action           string // upper case
 	Requests         int64
 	ScanLatencySumMs float64
+	// ScanSamples is the number of those requests that have a scan latency.
+	ScanSamples int64
 }
 
 // RequestBucket is one bucket of a request timeseries.
@@ -104,26 +118,41 @@ type RiskProfile struct {
 	Requests int64
 }
 
-const requestRecordColumns = `request_id, COALESCE(provider,''), COALESCE(model,''), COALESCE(model_family,''),
-  COALESCE(endpoint,''), action_taken, COALESCE(input_tokens,0), COALESCE(output_tokens,0),
-  findings, findings_count, COALESCE(scan_latency_ms,0), COALESCE(total_latency_ms,0), created_at`
-
 func scanRequestRecord(row pgx.Row) (RequestRecord, error) {
 	var rec RequestRecord
-	var findings []byte
+	var findings, outputFindings, outputRisk []byte
 	err := row.Scan(&rec.RequestID, &rec.Provider, &rec.Model, &rec.ModelFamily,
 		&rec.Endpoint, &rec.ActionTaken, &rec.InputTokens, &rec.OutputTokens,
-		&findings, &rec.FindingsCount, &rec.ScanLatencyMs, &rec.TotalLatencyMs, &rec.CreatedAt)
+		&findings, &rec.FindingsCount, &rec.ScanLatencyMs, &rec.TotalLatencyMs, &rec.CreatedAt,
+		&rec.CostUSD, &rec.CacheStatus, &outputFindings, &rec.OutputAction, &outputRisk,
+		&rec.PolicyName, &rec.PolicyVersion)
 	if err != nil {
 		return rec, err
 	}
 	rec.Findings = json.RawMessage(findingsOrEmpty(findings))
+	if len(outputFindings) > 0 {
+		rec.OutputFindings = json.RawMessage(outputFindings)
+	}
+	if len(outputRisk) > 0 {
+		rec.OutputRisk = json.RawMessage(outputRisk)
+	}
 	return rec, nil
 }
 
+// requestRecordByID is the lookup of GetRequestRecord, after its column list.
+// Equality on the organisation and the request id, a range and the order on
+// the time: the shape of idx_request_logs_org_request.
+const requestRecordByID = `
+FROM request_logs
+WHERE org_id = $1 AND created_at >= $2 AND request_id = $3
+ORDER BY created_at DESC
+LIMIT 1`
+
 // GetRequestRecord returns the newest row with the given request id in the
-// organisation, no older than since, or nil when there is none. There is no
-// index on request_id: the lookup walks the organisation's rows in the window.
+// organisation, no older than since, or nil when there is none. The lookup is
+// answered by idx_request_logs_org_request (migration 017), one probe for each
+// monthly partition in the window; on a table without that index it walks the
+// organisation's rows in the window.
 func (s *PostgresStore) GetRequestRecord(ctx context.Context, orgID, requestID string, since time.Time) (*RequestRecord, error) {
 	org, err := uuid.Parse(orgID)
 	if err != nil {
@@ -134,12 +163,8 @@ func (s *PostgresStore) GetRequestRecord(ctx context.Context, orgID, requestID s
 	}
 	ctx2, cancel := context.WithTimeout(ctx, getStatsTimeout)
 	defer cancel()
-	rec, err := scanRequestRecord(s.pool.QueryRow(ctx2, `
-SELECT `+requestRecordColumns+`
-FROM request_logs
-WHERE org_id = $1 AND created_at >= $2 AND request_id = $3
-ORDER BY created_at DESC
-LIMIT 1`, org, since.UTC(), requestID))
+	rec, err := scanRequestRecord(s.pool.QueryRow(ctx2,
+		"SELECT "+s.requestLogSchema(ctx2).selectSQL+requestRecordByID, org, since.UTC(), requestID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -150,7 +175,9 @@ LIMIT 1`, org, since.UTC(), requestID))
 }
 
 // RequestCounts counts the organisation's requests in [from, to] by provider
-// and action.
+// and action. A scan latency of zero is one that was not recorded (older
+// versions stored whole milliseconds, or nothing), so it is in neither the
+// sum nor the samples.
 func (s *PostgresStore) RequestCounts(ctx context.Context, orgID string, from, to time.Time) ([]RequestCount, error) {
 	org, err := uuid.Parse(orgID)
 	if err != nil {
@@ -160,7 +187,8 @@ func (s *PostgresStore) RequestCounts(ctx context.Context, orgID string, from, t
 	defer cancel()
 	rows, err := s.pool.Query(ctx2, `
 SELECT COALESCE(provider,''), upper(btrim(action_taken)), COUNT(*),
-  COALESCE(SUM(scan_latency_ms), 0)::float8
+  COALESCE(SUM(scan_latency_ms::float8) FILTER (WHERE scan_latency_ms > 0), 0)::float8,
+  COUNT(*) FILTER (WHERE scan_latency_ms > 0)
 FROM request_logs
 WHERE org_id = $1 AND created_at >= $2 AND created_at <= $3
 GROUP BY 1, 2
@@ -173,7 +201,7 @@ LIMIT $4`, org, from.UTC(), to.UTC(), historyGroupLimit+1)
 	var out []RequestCount
 	for rows.Next() {
 		var c RequestCount
-		if err := rows.Scan(&c.Provider, &c.Action, &c.Requests, &c.ScanLatencySumMs); err != nil {
+		if err := rows.Scan(&c.Provider, &c.Action, &c.Requests, &c.ScanLatencySumMs, &c.ScanSamples); err != nil {
 			return nil, err
 		}
 		out = append(out, c)
@@ -189,7 +217,8 @@ LIMIT $4`, org, from.UTC(), to.UTC(), historyGroupLimit+1)
 
 // RequestTimeseries counts the organisation's requests in [from, to] per
 // bucket ("minute", "hour" or "day"), ascending. Buckets start on UTC
-// boundaries; a bucket with no requests has no row.
+// boundaries; a bucket with no requests has no row. The p95 is over the
+// requests that have a scan latency (see RequestCounts).
 func (s *PostgresStore) RequestTimeseries(ctx context.Context, orgID string, from, to time.Time, bucket string) ([]RequestBucket, error) {
 	org, err := uuid.Parse(orgID)
 	if err != nil {
@@ -208,8 +237,9 @@ SELECT date_trunc($4::text, created_at AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' AS
   COUNT(*) FILTER (WHERE upper(btrim(action_taken)) = 'BLOCK'),
   COUNT(*) FILTER (WHERE upper(btrim(action_taken)) = 'REDACT'),
   COUNT(*) FILTER (WHERE upper(btrim(action_taken)) = 'WARN'),
-  COALESCE(percentile_disc(0.95) WITHIN GROUP (ORDER BY scan_latency_ms), 0)::float8,
-  COUNT(scan_latency_ms)
+  COALESCE(round((percentile_disc(0.95) WITHIN GROUP (ORDER BY scan_latency_ms)
+    FILTER (WHERE scan_latency_ms > 0))::numeric, 3), 0)::float8,
+  COUNT(*) FILTER (WHERE scan_latency_ms > 0)
 FROM request_logs
 WHERE org_id = $1 AND created_at >= $2 AND created_at <= $3
 GROUP BY 1
@@ -395,7 +425,7 @@ func (s *PostgresStore) ExportRequestRecords(ctx context.Context, orgID string, 
 	ctx2, cancel := context.WithTimeout(ctx, exportTimeout)
 	defer cancel()
 	rows, err := s.pool.Query(ctx2, fmt.Sprintf(`
-SELECT `+requestRecordColumns+`
+SELECT `+s.requestLogSchema(ctx2).selectSQL+`
 FROM request_logs
 %s
 ORDER BY created_at DESC

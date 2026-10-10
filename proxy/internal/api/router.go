@@ -611,6 +611,11 @@ func (cfg Config) handleEventDetail(w http.ResponseWriter, r *http.Request) {
 			polVer = pol.Version
 		}
 	}
+	// The policy the request was decided with, when the event says: the one
+	// loaded now may be newer.
+	if ev.PolicyName != "" || ev.PolicyVersion != "" {
+		polName, polVer = ev.PolicyName, ev.PolicyVersion
+	}
 
 	findingsOut := make([]map[string]interface{}, 0, len(ev.Findings))
 	for _, f := range ev.Findings {
@@ -619,7 +624,7 @@ func (cfg Config) handleEventDetail(w http.ResponseWriter, r *http.Request) {
 
 	inR := ev.InputRisk
 	outR := ev.OutputRisk
-	writeSourced(w, sourceMemory, map[string]interface{}{
+	detail := map[string]interface{}{
 		"request_id":       ev.RequestID,
 		"timestamp":        ev.Timestamp.UTC(),
 		"provider":         ev.Provider,
@@ -632,11 +637,25 @@ func (cfg Config) handleEventDetail(w http.ResponseWriter, r *http.Request) {
 		"total_latency_ms": ev.TotalLatencyMs,
 		"policy_name":      polName,
 		"policy_version":   polVer,
-		"input_tokens":     ev.InputTokens,
-		"output_tokens":    ev.OutputTokens,
 		"endpoint":         ev.Endpoint,
 		"event_type":       ev.EventType,
-	})
+	}
+	// As in the stored detail: a count or a cost that is not known is left
+	// out, not shown as zero.
+	if ev.InputTokens > 0 || ev.OutputTokens > 0 {
+		detail["input_tokens"] = ev.InputTokens
+		detail["output_tokens"] = ev.OutputTokens
+	}
+	if ev.CostKnown {
+		detail["cost_usd"] = ev.CostUSD
+	}
+	if ev.CacheStatus != "" {
+		detail["cache_status"] = ev.CacheStatus
+	}
+	if ev.OutputAction != "" {
+		detail["output_action"] = ev.OutputAction
+	}
+	writeSourced(w, sourceMemory, detail)
 }
 
 func eventFindingDetail(p *policy.Policy, f scanner.Finding, fallback policy.Action) map[string]interface{} {

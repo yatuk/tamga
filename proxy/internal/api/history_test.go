@@ -92,7 +92,11 @@ func (f *fakeHistory) RequestCounts(_ context.Context, org string, from, to time
 			m[k] = &store.RequestCount{Provider: k.provider, Action: k.action}
 		}
 		m[k].Requests++
-		m[k].ScanLatencySumMs += r.ScanLatencyMs
+		// As the store does: a latency of zero is one that was not recorded.
+		if r.ScanLatencyMs > 0 {
+			m[k].ScanLatencySumMs += r.ScanLatencyMs
+			m[k].ScanSamples++
+		}
 	}
 	var out []store.RequestCount
 	for _, c := range m {
@@ -731,4 +735,98 @@ type overflowHistory struct{ *fakeHistory }
 
 func (o *overflowHistory) RiskProfiles(context.Context, string, time.Time, time.Time) ([]store.RiskProfile, error) {
 	return nil, store.ErrTooManyGroups
+}
+
+// A row written by this version says what the proxy knew when the request
+// was over; the detail shows it from the row, not from the policy loaded now.
+func TestEventDetail_StoredRecordSpeaksForItself(t *testing.T) {
+	h := newFakeHistory()
+	at := time.Now().UTC().Add(-3 * time.Hour)
+	in, out, cost := 120, 45, 0.00231
+	outFindings, _ := json.Marshal([]scanner.Finding{histPII})
+	outRisk, _ := json.Marshal(scanner.CalculateRisk([]scanner.Finding{histPII}))
+	h.rows = append(h.rows, fakeRow{org: histOrg, rec: store.RequestRecord{
+		RequestID: "req-full", Provider: "openai", Model: "gpt-4o", ActionTaken: "pass",
+		Findings: []byte("[]"), CreatedAt: at, ScanLatencyMs: 0.35, TotalLatencyMs: 812.5,
+		InputTokens: &in, OutputTokens: &out, CostUSD: &cost, CacheStatus: "miss",
+		OutputFindings: outFindings, OutputAction: "redact", OutputRisk: outRisk,
+		PolicyName: "bank-policy", PolicyVersion: "7",
+	}})
+	status, _, body := histGet(t, histConfig(h, events.NewRecentBuffer(10)), "/events/req-full")
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, body %s", status, body)
+	}
+	var got map[string]interface{}
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatal(err)
+	}
+	for k, want := range map[string]interface{}{
+		"input_tokens": 120.0, "output_tokens": 45.0, "cost_usd": 0.00231, "cache_status": "miss",
+		"policy_name": "bank-policy", "policy_version": "7", "output_action": "REDACT",
+		"scan_latency_ms": 0.35, "total_latency_ms": 812.5,
+	} {
+		if got[k] != want {
+			t.Errorf("%s = %v, want %v", k, got[k], want)
+		}
+	}
+	risk, _ := got["output_risk"].(map[string]interface{})
+	if risk == nil || risk["level"] != scanner.CalculateRisk([]scanner.Finding{histPII}).Level {
+		t.Errorf("output_risk = %v, want the stored one", got["output_risk"])
+	}
+	list, _ := got["output_findings"].([]interface{})
+	if len(list) != 1 || list[0].(map[string]interface{})["match"] != histPII.Match {
+		t.Errorf("output_findings = %v, want the stored, masked finding", got["output_findings"])
+	}
+}
+
+// What a row does not hold is absent from the detail and from the export:
+// not null, and not a zero that would read as a count or a price.
+func TestStoredRecord_UnknownIsAbsent(t *testing.T) {
+	h := newFakeHistory()
+	at := time.Now().UTC().Add(-3 * time.Hour)
+	// A row of an older version: no tokens, no cost, no latency, no policy.
+	h.rows = append(h.rows, fakeRow{org: histOrg, rec: store.RequestRecord{
+		RequestID: "req-poor", Provider: "openai", Model: "gpt-4o", ActionTaken: "PASS",
+		Findings: []byte("[]"), CreatedAt: at,
+	}})
+	cfg := histConfig(h, events.NewRecentBuffer(10))
+	for _, path := range []string{"/events/req-poor", "/events/export?format=json&range=24h"} {
+		status, _, body := histGet(t, cfg, path)
+		if status != http.StatusOK {
+			t.Fatalf("%s: status = %d, body %s", path, status, body)
+		}
+		if !strings.Contains(string(body), "req-poor") {
+			t.Fatalf("%s: the row is not in the answer: %s", path, body)
+		}
+		for _, k := range []string{"input_tokens", "output_tokens", "cost_usd", "cache_status", "policy_name",
+			"policy_version", "output_risk", "output_action", "output_findings", "scan_latency_ms", "total_latency_ms", "null"} {
+			if strings.Contains(string(body), k) {
+				t.Errorf("%s: %s is not known for this row and must be absent: %s", path, k, body)
+			}
+		}
+	}
+}
+
+// The export carries the stored tokens and cost of a request that has them.
+func TestExport_StoredTokensAndCost(t *testing.T) {
+	h := newFakeHistory()
+	in, out, cost := 10, 0, 0.0
+	h.rows = append(h.rows, fakeRow{org: histOrg, rec: store.RequestRecord{
+		RequestID: "req-hit", Provider: "openai", Model: "gpt-4o", ActionTaken: "pass",
+		Findings: []byte("[]"), CreatedAt: time.Now().UTC().Add(-time.Hour),
+		InputTokens: &in, OutputTokens: &out, CostUSD: &cost, CacheStatus: "hit",
+	}})
+	_, _, body := histGet(t, histConfig(h, events.NewRecentBuffer(10)), "/events/export?format=json&range=24h")
+	var doc struct {
+		Events []map[string]interface{} `json:"events"`
+	}
+	if err := json.Unmarshal(body, &doc); err != nil || len(doc.Events) != 1 {
+		t.Fatalf("export = %s (%v)", body, err)
+	}
+	e := doc.Events[0]
+	// A known zero is said: an output count of 0 beside a known input
+	// count, and the cost of a cache hit.
+	if e["input_tokens"] != 10.0 || e["output_tokens"] != 0.0 || e["cost_usd"] != 0.0 || e["cache_status"] != "hit" {
+		t.Errorf("export row = %v", e)
+	}
 }

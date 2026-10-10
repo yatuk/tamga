@@ -280,6 +280,14 @@ type EventJSON struct {
 	RiskLevel      string             `json:"risk_level,omitempty"`
 	InputRisk      *scanner.RiskScore `json:"input_risk,omitempty"`
 	OutputRisk     *scanner.RiskScore `json:"output_risk,omitempty"`
+	// Absent when not known: a token count or a cost that is missing is not zero.
+	InputTokens   *int     `json:"input_tokens,omitempty"`
+	OutputTokens  *int     `json:"output_tokens,omitempty"`
+	CostUSD       *float64 `json:"cost_usd,omitempty"`
+	CacheStatus   string   `json:"cache_status,omitempty"`
+	OutputAction  string   `json:"output_action,omitempty"`
+	PolicyName    string   `json:"policy_name,omitempty"`
+	PolicyVersion string   `json:"policy_version,omitempty"`
 }
 
 // EventToJSON converts an internal Event to its JSON-serialisable representation.
@@ -309,6 +317,18 @@ func EventToJSON(e Event) EventJSON {
 		or := e.OutputRisk
 		j.InputRisk = &ir
 		j.OutputRisk = &or
+		if e.InputTokens > 0 || e.OutputTokens > 0 {
+			in, out := e.InputTokens, e.OutputTokens
+			j.InputTokens, j.OutputTokens = &in, &out
+		}
+		if e.CostKnown {
+			cost := e.CostUSD
+			j.CostUSD = &cost
+		}
+		j.CacheStatus = e.CacheStatus
+		j.OutputAction = e.OutputAction
+		j.PolicyName = e.PolicyName
+		j.PolicyVersion = e.PolicyVersion
 	}
 	return j
 }

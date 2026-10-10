@@ -9,6 +9,7 @@ import (
 	"github.com/yatuk/tamga/internal/classifier"
 	"github.com/yatuk/tamga/internal/extract"
 	"github.com/yatuk/tamga/internal/scanner"
+	"github.com/yatuk/tamga/internal/store"
 	"github.com/yatuk/tamga/internal/webhooks"
 )
 
@@ -193,6 +194,14 @@ func (cfg Config) handleMetrics(w http.ResponseWriter, _ *http.Request) {
 		_, _ = fmt.Fprintln(w, "# HELP tamga_events_dropped_total Events silently dropped due to full bus buffer.")
 		_, _ = fmt.Fprintln(w, "# TYPE tamga_events_dropped_total counter")
 		_, _ = fmt.Fprintf(w, "tamga_events_dropped_total %d\n", dropped)
+	}
+
+	// Scanned requests that did not reach request_logs: what the console
+	// counts is short by these.
+	_, _ = fmt.Fprintln(w, "# HELP tamga_request_log_unrecorded_total Scanned requests that could not be stored in request_logs, by reason.")
+	_, _ = fmt.Fprintln(w, "# TYPE tamga_request_log_unrecorded_total counter")
+	for _, u := range store.UnrecordedRequests() {
+		_, _ = fmt.Fprintf(w, "tamga_request_log_unrecorded_total{reason=%q} %d\n", u.Reason, u.Count)
 	}
 
 	// Alert deliveries, by destination kind. Never by URL: a webhook URL is

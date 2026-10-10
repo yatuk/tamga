@@ -107,6 +107,7 @@ func attachStreamingOutputScanner(
 						// of forwarding the unscanned chunk. This prevents PII/secrets
 						// from leaking through when the scanner is unavailable.
 						_, _ = pw.Write(buildStreamTermination(ct, "scanner_unavailable"))
+						recordOutput(ctx, nil, policy.ActionBlock, false)
 						go publishOutputEvent(ctx, cfg, requestID, provider, nil, policy.ActionBlock, scanLatencySum)
 						return
 					}
@@ -115,6 +116,7 @@ func attachStreamingOutputScanner(
 					// REDACT cannot splice SSE/NDJSON safely mid-stream; fail-close like BLOCK.
 					if act == policy.ActionBlock || act == policy.ActionRedact {
 						_, _ = pw.Write(buildStreamTermination(ct, "content_blocked_by_policy"))
+						recordOutput(ctx, findings, act, true)
 						go publishOutputEvent(ctx, cfg, requestID, provider, findings, act, scanLatencySum)
 						return
 					}
@@ -124,6 +126,9 @@ func attachStreamingOutputScanner(
 				}
 			}
 			if rerr == io.EOF {
+				// Read to the end with nothing to stop it. Recorded before
+				// the pipe closes, so the request's event has it.
+				recordOutput(ctx, nil, policy.ActionPass, true)
 				return
 			}
 			if rerr != nil {

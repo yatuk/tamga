@@ -40,9 +40,17 @@ type EventMetadata struct {
 	TraceID string `json:"trace_id"`
 }
 
+// ToV2 is the envelope the NATS bridge publishes for e.
+func ToV2(e Event) EventV2 { return eventToV2(e) }
+
 // eventToV2 converts a legacy Event to the versioned EventV2 envelope.
 func eventToV2(e Event) EventV2 {
 	payload := map[string]any{
+		// The subject does not tell a request's event from the others that
+		// share scan.completed (output hints, provider state changes).
+		"event_type":       e.EventType,
+		"cost_known":       e.CostKnown,
+		"org_verified":     e.OrgVerified,
 		"provider":         e.Provider,
 		"model":            e.Model,
 		"model_family":     e.ModelFamily,
@@ -69,6 +77,21 @@ func eventToV2(e Event) EventV2 {
 		if fj, err := json.Marshal(e.OutputFindings); err == nil {
 			payload["output_findings"] = json.RawMessage(fj)
 		}
+	}
+	if e.OutputAction != "" {
+		payload["output_action"] = e.OutputAction
+	}
+	if e.OutputScanned {
+		payload["output_scanned"] = true
+		if rj, err := json.Marshal(e.OutputRisk); err == nil {
+			payload["output_risk"] = json.RawMessage(rj)
+		}
+	}
+	if e.PolicyName != "" {
+		payload["policy_name"] = e.PolicyName
+	}
+	if e.PolicyVersion != "" {
+		payload["policy_version"] = e.PolicyVersion
 	}
 
 	var traceID string
