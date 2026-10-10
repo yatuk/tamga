@@ -10,7 +10,9 @@ venv/
 
 # Build
 proxy/tamga
+proxy/cmd/tamga/tamga
 proxy/bin/
+/bin/
 *.exe
 dist/
 *.tsbuildinfo
@@ -52,7 +54,9 @@ outputs/
 .pnpm-store/
 
 # Nested copies / separate demos
-tamga/
+# Anchored to the repository root: "tamga/" alone also matches
+# proxy/cmd/tamga/, and a new source file there would be ignored.
+/tamga/
 qalqan-jury-demo/
 
 # Secrets (belt-and-suspenders)

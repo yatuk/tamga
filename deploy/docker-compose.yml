@@ -56,6 +56,18 @@ services:
       - TAMGA_MOCK_UPSTREAM=${TAMGA_MOCK_UPSTREAM:-false}
       - TAMGA_ORG_ID=${TAMGA_ORG_ID:-}
       - TAMGA_CLERK_SECRET_KEY=${TAMGA_CLERK_SECRET_KEY:-}
+      # Sessions and GitHub sign-in. All empty unless set in .env, and an
+      # empty value is the same as an unset one: no sessions, and the admin
+      # key and API keys are the only way in. TAMGA_JWT_SECRET signs the
+      # session tokens (openssl rand -hex 32); GitHub sign-in needs it and
+      # the three values of a GitHub OAuth app.
+      - TAMGA_JWT_SECRET=${TAMGA_JWT_SECRET:-}
+      - TAMGA_GITHUB_CLIENT_ID=${TAMGA_GITHUB_CLIENT_ID:-}
+      - TAMGA_GITHUB_CLIENT_SECRET=${TAMGA_GITHUB_CLIENT_SECRET:-}
+      - TAMGA_GITHUB_OAUTH_CALLBACK_URL=${TAMGA_GITHUB_OAUTH_CALLBACK_URL:-}
+      # Empty refuses a signed-in account nobody gave a role; "viewer" lets
+      # it in as a viewer. The proxy does not start on any other value.
+      - TAMGA_SSO_DEFAULT_ROLE=${TAMGA_SSO_DEFAULT_ROLE:-}
       - TAMGA_CORS_ORIGIN=${TAMGA_CORS_ORIGIN:-http://localhost:3000}
       # Exact-match allowlist. Browsers treat localhost and 127.0.0.1 as
       # different origins, so the dashboard default covers both.

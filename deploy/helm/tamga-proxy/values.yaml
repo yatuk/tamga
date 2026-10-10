@@ -69,6 +69,19 @@ analyzer:
   # HTTP base URL. Passed as TAMGA_ANALYZER_HTTP_URL.
   # e.g. http://analyzer.tamga.svc:8444
   httpUrl: ""
+  # Whether the proxy sends the analyzer the text of requests it forwarded,
+  # for a second look after the decision. Passed as
+  # TAMGA_ANALYZER_SEND_CONTENT=true when true; false passes nothing, and the
+  # proxy's own default is off. A release that already sets the variable
+  # under env keeps working; the render fails when it is set in both places.
+  # Off: request text does not leave the proxy for the analyzer. The PDF
+  # reports do not need it.
+  # On: each request the proxy forwarded goes to grpcAddr as it was forwarded
+  # (masked where the policy masked it; a blocked request is never sent).
+  # Turn it on only when the analyzer runs where that text may go: with the
+  # analyzer's LLM judge on (TAMGA_LLM_JUDGE, set on the analyzer), the
+  # analyzer sends the start of the text on to that provider.
+  sendContent: false
 
 policy:
   # Empty: the proxy uses the policy built into the image

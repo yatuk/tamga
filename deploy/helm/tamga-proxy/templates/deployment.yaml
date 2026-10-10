@@ -11,6 +11,10 @@
 {{- if and (get $analyzer "httpUrl") (hasKey $env "TAMGA_ANALYZER_HTTP_URL") }}
 {{- fail "analyzer.httpUrl and env.TAMGA_ANALYZER_HTTP_URL are both set; keep one" }}
 {{- end }}
+{{- $sendContent := eq (toString (get $analyzer "sendContent")) "true" -}}
+{{- if and $sendContent (hasKey $env "TAMGA_ANALYZER_SEND_CONTENT") }}
+{{- fail "analyzer.sendContent and env.TAMGA_ANALYZER_SEND_CONTENT are both set; keep one" }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -83,6 +87,10 @@ spec:
             {{- with (get $analyzer "httpUrl") }}
             - name: TAMGA_ANALYZER_HTTP_URL
               value: {{ . | quote }}
+            {{- end }}
+            {{- if $sendContent }}
+            - name: TAMGA_ANALYZER_SEND_CONTENT
+              value: "true"
             {{- end }}
             {{- range $k, $v := $env }}
             {{- if ne (toString $v) "" }}

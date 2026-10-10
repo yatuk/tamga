@@ -70,6 +70,7 @@ and cache state.
 | `containerPort` | `8443` | The port the proxy listens on, passed as `TAMGA_PROXY_PORT`. |
 | `service.type`, `service.port` | `ClusterIP`, `8443` | The Service. |
 | `analyzer.grpcAddr`, `analyzer.httpUrl` | empty | The analyzer's gRPC address (`TAMGA_ANALYZER_ADDR`) and HTTP base URL (`TAMGA_ANALYZER_HTTP_URL`). See [Analyzer](#analyzer). |
+| `analyzer.sendContent` | `false` | Whether the proxy sends the analyzer the text of forwarded requests (`TAMGA_ANALYZER_SEND_CONTENT`). See [Analyzer](#analyzer). |
 | `podDisruptionBudget.enabled`, `.minAvailable` | `true`, `1` | See [Disruption budget](#disruption-budget). |
 | `env` | `{}` | Other proxy environment variables, by the names in [docs/operations.md](../docs/operations.md#configuration). |
 | `policy.inline` | empty | A complete policy document. Empty uses the policy built into the image. |
@@ -123,6 +124,21 @@ does not work then:
 
 Proxying, the inline scanners and the policy do not depend on the analyzer.
 The render fails when an address is given both here and under `env`.
+
+The proxy sends the analyzer no request text unless `analyzer.sendContent` is
+`true`, which the chart passes as `TAMGA_ANALYZER_SEND_CONTENT=true`. With it
+on, each request the proxy forwarded goes to `analyzer.grpcAddr` as it was
+forwarded (masked where the policy masked it; a blocked request is never
+sent) for a second look after the decision; the findings are logged as a
+count and change no verdict. Leave it off unless the analyzer runs where that
+text may go: with the analyzer's LLM judge on (`TAMGA_LLM_JUDGE`, set on the
+analyzer), the analyzer sends the start of the text on to that provider. The
+PDF reports work either way. A release that already sets the variable under
+`env` keeps working; the render fails when it is set in both places.
+
+```bash
+  --set analyzer.sendContent=true
+```
 
 ### Disruption budget
 
