@@ -21,6 +21,8 @@ const AUDIT_KIND_MAP: Record<string, string> = {
   "team.role": "Role changed",
   "privacy.subject_erase": "Personal data erased",
   "privacy.subject_access": "Personal data read",
+  "auth.refused": "Request refused",
+  "auth.refused.repeated": "Further requests refused",
   genesis: "Log started",
 };
 

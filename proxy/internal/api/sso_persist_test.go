@@ -168,8 +168,14 @@ func TestSSO_PutNeedsAnAdmin(t *testing.T) {
 	if status, body := ssoRequest(t, ts.URL, "PUT", analyst.RawKey, ssoPutBody); status != http.StatusForbidden {
 		t.Fatalf("analyst PUT: %d %s, want 403", status, body)
 	}
-	if sso.Get("org-1").Enabled || len(audit.List(10)) != 0 {
-		t.Fatal("the refused change was applied or recorded")
+	if sso.Get("org-1").Enabled {
+		t.Fatal("the refused change was applied")
+	}
+	// The refusal may be on record (see refusalLog); the change is not.
+	for _, e := range audit.List(10) {
+		if !strings.HasPrefix(e.Kind, auditRefused) {
+			t.Fatalf("the refused change was recorded: %+v", e)
+		}
 	}
 	if status, _ := ssoRequest(t, ts.URL, "GET", analyst.RawKey, ""); status != http.StatusOK {
 		t.Fatalf("analyst GET: %d, want 200", status)

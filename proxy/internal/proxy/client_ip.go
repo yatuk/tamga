@@ -38,6 +38,10 @@ func clientIP(r *http.Request, trusted []*net.IPNet) string {
 	return peer
 }
 
+// ClientIP is clientIP for the packages that record where a request came
+// from, so that they name the same address the proxy path acts on.
+func ClientIP(r *http.Request, trusted []*net.IPNet) string { return clientIP(r, trusted) }
+
 func peerIP(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {

@@ -754,7 +754,14 @@ func TestViewerSessionCannotWrite(t *testing.T) {
 	if role, _ := f.users.Role("u-viewer"); role != "viewer" {
 		t.Errorf("the viewer is now %s", role)
 	}
-	if n := len(f.audit.List(0)); n != auditBefore {
+	// A refusal is itself recorded (see refusalLog); the writes are not.
+	n := 0
+	for _, e := range f.audit.List(0) {
+		if !strings.HasPrefix(e.Kind, auditRefused) {
+			n++
+		}
+	}
+	if n != auditBefore {
 		t.Errorf("refused writes left %d audit entries", n-auditBefore)
 	}
 }

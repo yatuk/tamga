@@ -108,6 +108,14 @@ func (cfg Config) sessionRole(claims *auth.Claims) (string, sessionRefusal) {
 	return role, ""
 }
 
+// sessionRefusalStatus is the status refuseSession answers with.
+func sessionRefusalStatus(why sessionRefusal) int {
+	if why == codeSessionRevoked {
+		return http.StatusUnauthorized
+	}
+	return http.StatusForbidden
+}
+
 // refuseSession writes the answer for a refused session token.
 func refuseSession(w http.ResponseWriter, why sessionRefusal, claims *auth.Claims) {
 	if why == codeSessionRevoked {

@@ -125,13 +125,28 @@ type Config struct {
 	// callers and is mounted outside the admin middleware, because a proxy
 	// key must open it and nothing else here. Nil leaves the route out.
 	Scan http.Handler
+	// LiteLLM serves POST /beta/litellm_basic_guardrail_api, the path a
+	// LiteLLM proxy calls its generic guardrail on. The proxy package builds
+	// it over the same scan path as Scan, and it is mounted the same way,
+	// for the same reason. Nil leaves the route out.
+	LiteLLM http.Handler
+	// ClientAddr returns the address a request came from, as the proxy
+	// path derives it (the trusted-proxy rules of TAMGA_TRUSTED_PROXIES).
+	// Nil means the address of the connection. It names the source in the
+	// audit entry of a refused request.
+	ClientAddr func(*http.Request) string
 	// gitHubHTTP is the client GitHub is asked with; nil is the default
 	// one. Tests point it at a stand-in for GitHub.
 	gitHubHTTP *http.Client
+	// refusals writes refused requests to the audit log. NewHandler makes
+	// it; a Config used without one records no refusal.
+	refusals *refusalLog
 }
 
 // NewHandler serves /api/v1/* (mount with mux.Handle("/api/v1/", handler)).
 func NewHandler(cfg Config) http.Handler {
+	// Before the table is built: its handlers keep a copy of cfg.
+	cfg.refusals = newRefusalLog(cfg.Audit, cfg.ClientAddr)
 	return newHandler(cfg, routes(&cfg))
 }
 
@@ -143,7 +158,7 @@ func newHandler(cfg Config, table []route) http.Handler {
 	for _, rt := range table {
 		switch {
 		case rt.handler == nil:
-			// Left out of this deployment (Config.Scan).
+			// Left out of this deployment (Config.Scan, Config.LiteLLM).
 		case rt.public != "":
 			inner.Handle(rt.pattern(), rt.handler)
 		default:
@@ -151,7 +166,10 @@ func newHandler(cfg Config, table []route) http.Handler {
 		}
 	}
 
-	inner.Handle("/", adminAuth(cfg)(protected))
+	if cfg.refusals == nil {
+		cfg.refusals = newRefusalLog(cfg.Audit, cfg.ClientAddr)
+	}
+	inner.Handle("/", adminAuth(cfg)(cfg.refusals.watch(protected)))
 
 	// Path normalisation runs before routing so encoded path-traversal
 	// attempts (%2F, %5C, %c0%af, etc.) are decoded and blocked before
@@ -279,6 +297,7 @@ func adminAuth(cfg Config) func(http.Handler) http.Handler {
 					// A proxy key identifies an application on the proxy
 					// path. It opens nothing here.
 					if meta.Scope == apikeys.ScopeProxy {
+						cfg.refusals.note(r, refusal{reason: refusedProxyKey, status: http.StatusForbidden, actor: actorAPIKeyPrefix + meta.ID})
 						writeJSON(w, http.StatusForbidden, map[string]string{"error": "this key is for the proxy path, not the management API"})
 						return
 					}
@@ -300,6 +319,7 @@ func adminAuth(cfg Config) func(http.Handler) http.Handler {
 					// account has no role now.
 					role, refused := cfg.sessionRole(claims)
 					if refused != "" {
+						cfg.refusals.note(r, refusal{reason: string(refused), status: sessionRefusalStatus(refused), actor: actorUserPrefix + claims.Sub})
 						refuseSession(w, refused, claims)
 						return
 					}
@@ -316,6 +336,9 @@ func adminAuth(cfg Config) func(http.Handler) http.Handler {
 					next.ServeHTTP(w, withIdentity(r, actorUserPrefix+subject, role))
 					return
 				}
+			}
+			if reason := credentialRefusal(r, cfg.JWTSecret); reason != "" {
+				cfg.refusals.note(r, refusal{reason: reason, status: http.StatusUnauthorized})
 			}
 			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		})
@@ -711,7 +734,7 @@ func (cfg Config) handleRatelimitStats(w http.ResponseWriter, _ *http.Request) {
 // revoked key and a wrong key are all refused there, and get the public body
 // here instead of an error: an uptime check must not fail on a stale header.
 func (cfg Config) healthFull(r *http.Request) bool {
-	probe := r.Clone(r.Context())
+	probe := asProbe(r.Clone(r.Context()))
 	// A key in the query string ends up in access logs, and nothing that
 	// polls health has to put it there. Only a header counts.
 	probe.URL.RawQuery = ""
