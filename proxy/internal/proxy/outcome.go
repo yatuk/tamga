@@ -77,8 +77,9 @@ func (o *requestOutcome) setCost(usd float64) {
 // when it is withheld because it could not be scanned.
 //
 // The findings are stored as the request's are: the scanners mask what they
-// matched. The canary finding is the exception, its match is the token
-// itself, and it is masked here.
+// matched. A canary finding is made without the token (canaryLeakFinding);
+// its match is set again here, so that one built any other way is recorded
+// without it too.
 func (o *requestOutcome) recordOutput(findings []scanner.Finding, action policy.Action, scanned bool) {
 	if o == nil {
 		return
@@ -90,7 +91,7 @@ func (o *requestOutcome) recordOutput(findings []scanner.Finding, action policy.
 	}
 	for _, f := range findings {
 		if f.Type == "system_prompt_leak" {
-			f.Match = scanner.MaskMatch(f.Match)
+			f.Match = canaryMasked
 		}
 		o.outputFindings = append(o.outputFindings, f)
 	}

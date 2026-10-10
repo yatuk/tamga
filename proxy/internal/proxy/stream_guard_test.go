@@ -306,6 +306,10 @@ func TestStreamGuard_CanarySplitAnywhere(t *testing.T) {
 		if strings.Contains(wire, token) {
 			t.Fatalf("pieces of %d: the token went out", size)
 		}
+		// One finding however many pieces the token came in, without the token.
+		if len(g.findings) != 1 || g.findings[0].Match != canaryMasked {
+			t.Fatalf("pieces of %d: findings = %+v, want one with match %q", size, g.findings, canaryMasked)
+		}
 	}
 
 	// Without block_on_leak the leak is recorded and the stream goes on.

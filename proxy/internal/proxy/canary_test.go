@@ -2,8 +2,18 @@ package proxy
 
 import (
 	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
+
+	"github.com/yatuk/tamga/internal/config"
+	"github.com/yatuk/tamga/internal/events"
+	"github.com/yatuk/tamga/internal/policy"
 )
 
 func TestInjectCanary_OpenAI_AppendsToSystem(t *testing.T) {
@@ -132,5 +142,114 @@ func TestGenerateCanaryToken_Unique(t *testing.T) {
 	}
 	if !strings.HasPrefix(a, canaryMarkerPrefix) {
 		t.Errorf("token missing prefix: %q", a)
+	}
+}
+
+// The token is a secret of the deployment. A leak finding names the leak and
+// holds no character of the token, at either end.
+func TestCanaryLeakFinding_HoldsNoneOfTheToken(t *testing.T) {
+	f := canaryLeakFinding()
+	if f.Match != canaryMasked || f.Type != "system_prompt_leak" || f.Severity != "critical" {
+		t.Fatalf("finding = %+v", f)
+	}
+	if strings.Contains(canaryMasked, canaryMarkerPrefix) || strings.ContainsAny(canaryMasked, "0123456789") {
+		t.Fatalf("the marker %q looks like a token", canaryMasked)
+	}
+}
+
+// A leak is published twice: as an output event when it is seen, and on the
+// request's event. Neither may carry the token. The output event used to
+// carry all of it, and the request's event its first and last two characters.
+func TestHandleProxy_CanaryLeakEventsHoldNoToken(t *testing.T) {
+	var mu sync.Mutex
+	var token string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reqBody, _ := io.ReadAll(r.Body)
+		if i := strings.Index(string(reqBody), canaryMarkerPrefix); i >= 0 {
+			mu.Lock()
+			token = string(reqBody)[i : i+len(canaryMarkerPrefix)+16]
+			mu.Unlock()
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":` + strconv.Quote(string(reqBody)) + `}}]}`))
+	}))
+	defer upstream.Close()
+	u, _ := url.Parse(upstream.URL)
+
+	var seen []events.Event
+	bus := events.NewBus()
+	bus.Subscribe(func(e events.Event) {
+		mu.Lock()
+		seen = append(seen, e)
+		mu.Unlock()
+	})
+	bus.Start()
+	defer bus.Stop()
+
+	pol := mustPolicy(t, `
+version: "1.0"
+canary:
+  enabled: true
+  block_on_leak: true
+providers:
+  allowed: [openai]
+`)
+	srv := httptest.NewServer(NewHandler(HandlerConfig{
+		Registry:     testRegistry(),
+		GetPolicy:    func() *policy.Policy { return pol },
+		UpstreamURLs: map[string]*url.URL{"openai": u},
+		Config:       &config.Config{},
+		Bus:          bus,
+	}))
+	defer srv.Close()
+
+	body := `{"model":"gpt-4o","messages":[{"role":"system","content":"secret instructions"},{"role":"user","content":"hi"}]}`
+	resp, err := http.Post(srv.URL+"/v1/chat/completions", "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("status %d, want 403: %s", resp.StatusCode, out)
+	}
+
+	// Both events, each with the leak among its output findings.
+	leaks := func() int {
+		mu.Lock()
+		defer mu.Unlock()
+		n := 0
+		for _, e := range seen {
+			for _, f := range e.OutputFindings {
+				if f.Type == "system_prompt_leak" {
+					n++
+				}
+			}
+		}
+		return n
+	}
+	eventually(t, "the leak on the output event and on the request event", func() bool { return leaks() == 2 })
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(token) != len(canaryMarkerPrefix)+16 {
+		t.Fatalf("no token in the forwarded body (got %q)", token)
+	}
+	if strings.Contains(string(out), token) {
+		t.Fatalf("the token reached the client: %s", out)
+	}
+	for _, e := range seen {
+		for _, f := range e.OutputFindings {
+			if f.Type == "system_prompt_leak" && f.Match != canaryMasked {
+				t.Errorf("%s: match = %q, want %q", e.EventType, f.Match, canaryMasked)
+			}
+		}
+		b, err := json.Marshal(e)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(b), token) || strings.Contains(string(b), strings.TrimPrefix(token, canaryMarkerPrefix)) {
+			t.Errorf("%s carries the token: %s", e.EventType, b)
+		}
 	}
 }

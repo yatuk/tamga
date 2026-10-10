@@ -1071,14 +1071,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 					}
 				}
 				if respBuffered && detectCanary(string(respBody), canaryToken) {
-					leak := scanner.Finding{
-						Type:           "system_prompt_leak",
-						Category:       "system_prompt_leak",
-						Severity:       "critical",
-						Confidence:     1.0,
-						Match:          canaryToken,
-						ScannerVersion: scanner.ScannerVersion,
-					}
+					leak := canaryLeakFinding()
 					outputClean = false
 					resp.Header.Set("X-Tamga-System-Prompt-Leak", "true")
 					recordOutput(ctx, []scanner.Finding{leak}, policy.ActionBlock, false)

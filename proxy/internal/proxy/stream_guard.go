@@ -270,10 +270,7 @@ func (g *streamGuard) release(ch *streamChannel, final bool) (released string, s
 	if g.canary != "" && strings.Contains(window, g.canary) {
 		if !g.leaked {
 			g.leaked = true
-			g.findings = append(g.findings, scanner.Finding{
-				Type: "system_prompt_leak", Category: "system_prompt_leak", Severity: "critical",
-				Confidence: 1.0, Match: g.canary, ScannerVersion: scanner.ScannerVersion,
-			})
+			g.findings = append(g.findings, canaryLeakFinding())
 		}
 		if g.canaryBlocks {
 			g.stopReason = "system_prompt_leak"

@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"strings"
 	"sync"
+
+	"github.com/yatuk/tamga/internal/scanner"
 )
 
 // Canary tokens detect system-prompt leakage. Before forwarding, a unique
@@ -62,6 +64,25 @@ func canaryTokenFor(cfg HandlerConfig, orgID, keyID string) string {
 	mac := hmac.New(sha256.New, canaryKey(cfg))
 	mac.Write([]byte(orgID + "|" + keyID))
 	return canaryMarkerPrefix + hex.EncodeToString(mac.Sum(nil)[:8])
+}
+
+// canaryMasked is the match of every leak finding. The token is a secret of
+// the deployment: whoever knows it can ask a model to leave it out of what it
+// recites. A finding goes to the event stream, the database, alert
+// destinations and the console, so it holds no character of the token.
+const canaryMasked = "[canary token]"
+
+// canaryLeakFinding is the finding raised when the token is seen in a
+// response. It is built without the token so that no path can carry it out.
+func canaryLeakFinding() scanner.Finding {
+	return scanner.Finding{
+		Type:           "system_prompt_leak",
+		Category:       "system_prompt_leak",
+		Severity:       "critical",
+		Confidence:     1.0,
+		Match:          canaryMasked,
+		ScannerVersion: scanner.ScannerVersion,
+	}
 }
 
 // canaryMarker is the exact string injected into (and detected in) the prompt.

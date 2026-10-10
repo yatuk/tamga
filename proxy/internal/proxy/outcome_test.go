@@ -315,8 +315,8 @@ func TestRequestEvent_OrgVerifiedByKey(t *testing.T) {
 	}
 }
 
-// The canary token is the one match that is not masked where it is found.
-// It is masked before it is recorded.
+// A canary finding is recorded with the fixed marker whatever its match was:
+// no character of the token, at either end.
 func TestRequestOutcome_CanaryMatchIsMasked(t *testing.T) {
 	o := &requestOutcome{}
 	token := "tamga-canary-0123456789abcdef"
@@ -325,8 +325,8 @@ func TestRequestOutcome_CanaryMatchIsMasked(t *testing.T) {
 	o.recordOutput(nil, policy.ActionPass, true)
 	var e events.Event
 	o.fill(&e)
-	if len(e.OutputFindings) != 1 || strings.Contains(e.OutputFindings[0].Match, token) || e.OutputFindings[0].Match == "" {
-		t.Errorf("recorded match = %+v, want the token masked", e.OutputFindings)
+	if len(e.OutputFindings) != 1 || e.OutputFindings[0].Match != canaryMasked {
+		t.Errorf("recorded match = %+v, want %q", e.OutputFindings, canaryMasked)
 	}
 	if e.OutputAction != "BLOCK" || !e.OutputScanned {
 		t.Errorf("output action = %q, scanned %v", e.OutputAction, e.OutputScanned)
