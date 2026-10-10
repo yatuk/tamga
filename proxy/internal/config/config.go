@@ -207,24 +207,6 @@ type Config struct {
 	// _WEBHOOK_URL, that a rule's notify value may refer to as "${NAME}".
 	// Set via TAMGA_NOTIFY_URL_ENVS as a comma-separated list of exact names.
 	NotifyURLEnvs []string
-
-	// --- Vault / KMS ---
-	// VaultEnabled enables HashiCorp Vault integration. When true, secrets are
-	// resolved from Vault with env-var fallback. When false (default), env vars
-	// are used directly (backward compatible). Set via TAMGA_VAULT_ADDR.
-	VaultEnabled bool
-	// VaultAddr is the Vault server URL (e.g. "https://vault.internal:8200").
-	// Setting this enables Vault integration. Set via TAMGA_VAULT_ADDR.
-	VaultAddr string
-	// VaultToken is a static Vault token for authentication.
-	// Set via TAMGA_VAULT_TOKEN.
-	VaultToken string
-	// VaultTokenFile is a path to a file containing the Vault token
-	// (Kubernetes service account pattern). Set via TAMGA_VAULT_TOKEN_FILE.
-	VaultTokenFile string
-	// VaultSecretPath is the KV v2 mount path prefix (default "secret/tamga").
-	// Set via TAMGA_VAULT_PATH_PREFIX.
-	VaultSecretPath string
 }
 
 // Load reads configuration from environment variables and returns a validated Config.
@@ -317,11 +299,6 @@ func Load() (*Config, error) {
 		MTLSClientCAFile:         envOrDefault("TAMGA_MTLS_CLIENT_CA_FILE", ""),
 		MTLSStrictVerify:         envOrDefaultBool("TAMGA_MTLS_STRICT_VERIFY", false),
 		IPAllowlist:              envOrDefault("TAMGA_IP_ALLOWLIST", ""),
-		VaultAddr:                envOrDefault("TAMGA_VAULT_ADDR", ""),
-		VaultEnabled:             envOrDefault("TAMGA_VAULT_ADDR", "") != "",
-		VaultToken:               envOrDefault("TAMGA_VAULT_TOKEN", ""),
-		VaultTokenFile:           envOrDefault("TAMGA_VAULT_TOKEN_FILE", ""),
-		VaultSecretPath:          envOrDefault("TAMGA_VAULT_PATH_PREFIX", "secret/tamga"),
 	}, nil
 }
 

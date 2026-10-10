@@ -37,7 +37,6 @@ import (
 	"github.com/yatuk/tamga/internal/redisx"
 	"github.com/yatuk/tamga/internal/scanner"
 	"github.com/yatuk/tamga/internal/scanner/operator_state"
-	"github.com/yatuk/tamga/internal/secrets"
 	"github.com/yatuk/tamga/internal/store"
 	"github.com/yatuk/tamga/internal/telemetry"
 	"github.com/yatuk/tamga/internal/tier"
@@ -80,27 +79,6 @@ func main() {
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to load config")
 	}
-
-	// Secrets provider — Vault integration (optional, disabled by default).
-	// When TAMGA_VAULT_ADDR is set, creates a VaultProvider with env-var fallback.
-	// When empty (default), uses EnvProvider (os.Getenv) — backward compatible.
-	secretProvider, secretsErr := secrets.NewFromConfig()
-	if secretsErr != nil {
-		log.Fatal().Err(secretsErr).Msg("failed to initialize secrets provider")
-	}
-	if secretProvider.Enabled() {
-		log.Info().Str("vault_addr", cfg.VaultAddr).Msg("vault secrets provider enabled — secrets will be resolved from Vault")
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		if err := secretProvider.HealthCheck(ctx); err != nil {
-			log.Warn().Err(err).Msg("vault unreachable at startup — falling back to env vars")
-		}
-		cancel()
-	}
-	defer func() {
-		if err := secretProvider.Close(); err != nil {
-			log.Warn().Err(err).Msg("secrets provider close")
-		}
-	}()
 
 	// What a policy may ask of the proxy's environment and network: which
 	// variables a provider pool or a notify value may name, and where a pool
