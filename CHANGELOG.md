@@ -3,6 +3,40 @@
 ## v0.9.0 (unreleased)
 
 ### Security
+- **The management API allowed whatever it had not thought about.** A route
+  with no declared permission was open to every authenticated caller, and
+  the check that a read-only caller cannot write ran for API keys only. A
+  signed-in viewer could run retention, reset a circuit, change incidents
+  and saved hunts, and call the SCIM routes. Every route now declares the
+  permission it needs, one check applies it to every kind of credential, and
+  a route that declares nothing is refused to everyone. A test fails when a
+  route is added without a declaration.
+  **What existing callers lose:** viewers (read keys, viewer users) lose the
+  event export, the audit log, the API key list, the webhook list and a
+  person's data; analysts (write keys) lose policy reload, retention,
+  circuit reset, the API key list, the webhook list and a person's data. See
+  "Who may call what" in the operations guide.
+- **Any GitHub account could sign in as a viewer.** An account with no role
+  became a viewer and could read events, the policy and, until this release,
+  alert destinations with their tokens. A GitHub account now needs a role
+  before it can sign in; give the first with the admin key.
+- `GET /api/v1/webhooks` returned each destination's token, headers and full
+  URL to any authenticated caller. It is admin-only and returns none of them.
+- A key in the query string was accepted on every route. `?key=` now works
+  only on `GET /api/v1/live/events`. **Scripts and links that passed the key
+  in the URL must send the header.**
+- A user's role was fixed in the session token for 24 hours. It is read on
+  every request. Nobody can change their own role, and the last admin cannot
+  be demoted.
+- `X-Tamga-User-Id` sent without a credential told a caller whether an id
+  existed and whether it was an admin. It is no longer read.
+- Saved hunts, `/mttr` and `/budget/stats` took the organisation from the
+  caller; `/mttr` without one covered every organisation. They use the
+  install's organisation.
+- The admin key is compared in constant time.
+- Audit entries for team roles, API keys, alert destinations, patterns and
+  incidents name who did it; retention runs, circuit resets and saved-hunt
+  changes are now recorded.
 - **Who changed the policy was whatever the caller said.** `X-Tamga-Actor`
   and `X-Tamga-User-Id` set the author of a proposal, its approver and the
   actor in the audit log, so the author of a proposal could approve it under

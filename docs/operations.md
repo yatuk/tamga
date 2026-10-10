@@ -244,7 +244,7 @@ for changes made through the API and the console.
 | Role | May change |
 |---|---|
 | admin (the admin key, a user with the admin role) | everything |
-| analyst (an API key of scope `write`) | `rules` except a rule's `notify`, `output_rules`, `custom_entities`, `competitors`, `name`, `version` |
+| analyst (an API key of scope `write`, a user with the analyst role) | `rules` except a rule's `notify`, `output_rules`, `custom_entities`, `competitors`, `name`, `version` |
 
 Everything else needs the admin role: `providers`, `exceptions`,
 `governance`, `data`, `pricing`, `vault`, `cache`, `body_limits`,
@@ -797,13 +797,53 @@ that names a decision can outlive a change to that decision by up to the TTL.
 
 The proxy serves a management API on the same port (`:8443`).
 
+### Who may call what
+
+A caller is the admin key, an API key, or a signed-in user, and has one of
+three roles. The admin key is an admin; an API key of scope `admin`, `write`
+or `read` is an admin, an analyst or a viewer; a key of scope `proxy` is
+refused. A signed-in user has the role set under Team, read on every
+request, so a change takes effect at once.
+
+| Role | May |
+|---|---|
+| viewer | read the summary, events, incidents, the policy and its history, patterns, metrics and costs |
+| analyst | also triage incidents, keep saved hunts, export events, read the audit log, edit the open sections of the policy and propose changes, edit patterns |
+| admin | also API keys, alert destinations, team roles, SSO and SCIM, a person's data (`/events/subject`), reload and rollback of the policy, retention and circuit reset |
+
+Every route states the permission it needs, and a route that states none is
+refused to everyone: a new route is closed until someone decides who may
+call it. A refusal is a 403 that names the permission:
+`{"error":"role viewer lacks incidents:write","code":"permission_denied","required_permission":"incidents:write"}`.
+Without a valid credential every path answers 401, whether it exists or not.
+The role each operation needs is in `proxy/docs/openapi.yaml` as
+`x-required-role`.
+
+Things that follow from this:
+
+- A key in the query string (`?key=`) is accepted only by
+  `GET /api/v1/live/events`, where a browser's event stream cannot send a
+  header. Everywhere else send `X-Tamga-Admin-Key`.
+- `GET /api/v1/webhooks` is for admins and never returns a destination's
+  token, its header values or the path of its URL.
+- The organisation is the install's own. `X-Tamga-Org-Id` on saved hunts,
+  `?org_id=` on `/mttr` and `?org=` on `/budget/stats` are ignored.
+- GitHub sign-in is for accounts that have been given a role. The first one
+  is given with the admin key: `PUT /api/v1/team/{github user id}/role`; a
+  refused sign-in answers with that id. An account without a role is refused,
+  it does not become a viewer. Clerk sign-in still makes an unknown account a
+  viewer: there the Clerk tenant decides who can sign in.
+- Nobody can change their own role, and the last admin cannot be demoted.
+- A viewer can read the policy, including a literal webhook URL written in a
+  rule's `notify`. Write those as `${NAME_WEBHOOK_URL}` references.
+
 | Method | Path | Auth | Description |
 |---|---|---|---|
 | `GET` | `/health` | — | Liveness |
 | `GET` | `/api/v1/health/detailed` | — for up or down; a management key for the rest | Without a key: `proxy`, `status`, scan latency. With one: database, Redis, scanner count, uptime, provider pools |
-| `GET` | `/api/v1/stats?range=` | Admin | Summary of the asked range, from the stored request logs when there is a database |
-| `GET` | `/api/v1/events?page=&limit=` | Admin | Security event feed |
-| `GET` | `/api/v1/policies` | Admin | Active policy as JSON |
+| `GET` | `/api/v1/stats?range=` | Viewer | Summary of the asked range, from the stored request logs when there is a database |
+| `GET` | `/api/v1/events?page=&limit=` | Viewer | Security event feed |
+| `GET` | `/api/v1/policies` | Viewer | Active policy as JSON |
 | `POST` | `/api/v1/policies/reload` | Admin | Hot-reload policy from disk |
 | `POST` | `/api/v1/scan` | Any Tamga key, or admin | Policy verdict for a text, nothing forwarded |
 
@@ -816,7 +856,7 @@ curl -s http://localhost:8443/api/v1/health/detailed | jq .
 curl -s -H "X-Tamga-Admin-Key: $TAMGA_ADMIN_KEY" \
   http://localhost:8443/api/v1/health/detailed | jq .
 
-# Stats: requires admin key
+# Stats: any management credential, the viewer role is enough
 curl -s -H "X-Tamga-Admin-Key: $TAMGA_ADMIN_KEY" \
   http://localhost:8443/api/v1/stats | jq .
 ```
