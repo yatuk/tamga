@@ -135,6 +135,27 @@ def _mock_empty_scan_result(scanner_name: str = "test"):
 class TestAnalyzeEndpoint:
     """Tests for POST /api/v1/analyze."""
 
+    def test_analyze_blocked_request_never_reaches_the_judge(self):
+        """A request marked as blocked is not handed to the LLM judge."""
+        with (
+            patch("app.main.deep_pii.scan", new_callable=AsyncMock) as mock_pii,
+            patch("app.main.injection.scan", new_callable=AsyncMock) as mock_inj,
+        ):
+            mock_pii.return_value = _mock_empty_scan_result("pii_deep")
+            mock_inj.return_value = _mock_injection_scan_result()
+
+            payload = {
+                "request_id": "req-blocked",
+                "content": "text the proxy refused to forward",
+                "scan_types": ["pii", "injection"],
+                "metadata": {"action": "BLOCK"},
+            }
+            response = client.post("/api/v1/analyze", json=payload)
+
+            assert response.status_code == 200
+            mock_inj.assert_not_awaited()
+            assert response.json()["findings"] == []
+
     def test_analyze_basic_pii_request(self):
         """Happy path: PII scan returns findings for content containing personal data."""
         with (

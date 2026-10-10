@@ -12,7 +12,14 @@ type Config struct {
 	PolicyPath      string
 	AnalyzerAddr    string // gRPC address for Python analyzer (e.g. "analyzer:50051")
 	AnalyzerHTTPURL string // HTTP base URL for Python analyzer REST API (e.g. "http://analyzer:8444")
-	DatabaseURL     string
+	// AnalyzerSendContent lets the text of a request go to the analyzer for
+	// its after-the-fact analysis (TAMGA_ANALYZER_SEND_CONTENT). Off unless
+	// set: an address for the analyzer is needed for the PDF reports too, and
+	// does not by itself say that prompts may be copied to another service.
+	// When on, the analyzer gets the request as it was forwarded (masked or
+	// stripped where the policy did that) and never one that was blocked.
+	AnalyzerSendContent bool
+	DatabaseURL         string
 	// DefaultOrgID is used when X-Tamga-Org-Id is absent (UUID string, e.g. dev org from migrations).
 	DefaultOrgID string
 	RedisURL     string
@@ -250,6 +257,7 @@ func Load() (*Config, error) {
 		PolicyPath:               envOrDefault("TAMGA_POLICY_PATH", "./tamga-policy.yaml"),
 		AnalyzerAddr:             envOrDefault("TAMGA_ANALYZER_ADDR", "localhost:50051"),
 		AnalyzerHTTPURL:          envOrDefault("TAMGA_ANALYZER_HTTP_URL", "http://localhost:8444"),
+		AnalyzerSendContent:      envOrDefaultBool("TAMGA_ANALYZER_SEND_CONTENT", false),
 		DatabaseURL:              envOrDefault("TAMGA_DB_URL", ""),
 		DefaultOrgID:             envOrDefault("TAMGA_ORG_ID", ""),
 		RedisURL:                 envOrDefault("REDIS_URL", ""),

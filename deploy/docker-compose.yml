@@ -39,6 +39,10 @@ services:
       - TAMGA_ANALYZER_ADDR=analyzer:50051
       # The analyzer's HTTP API, where the PDF reports are generated.
       - TAMGA_ANALYZER_HTTP_URL=http://analyzer:8444
+      # Off unless set to true: copy the text of forwarded requests to the
+      # analyzer for analysis after the decision. A blocked request's text
+      # is never copied.
+      - TAMGA_ANALYZER_SEND_CONTENT=${TAMGA_ANALYZER_SEND_CONTENT:-false}
       # Inline prompt-injection classifier. Empty unless the classifier
       # profile is in use: set TAMGA_CLASSIFIER_ADDR=classifier:50052 in .env.
       - TAMGA_CLASSIFIER_ADDR=${TAMGA_CLASSIFIER_ADDR:-}
@@ -85,6 +89,9 @@ services:
       - TAMGA_ANALYZER_PORT=8444
       - TAMGA_GRPC_PORT=50051
       - TAMGA_ANALYZER_WORKERS=${TAMGA_ANALYZER_WORKERS:-2}
+      # The LLM judge sends request text to Anthropic. It is off unless
+      # TAMGA_LLM_JUDGE=anthropic is set; the key alone does not turn it on.
+      - TAMGA_LLM_JUDGE=${TAMGA_LLM_JUDGE:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - DATABASE_URL=postgresql://${POSTGRES_USER:-tamga}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-tamga}

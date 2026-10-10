@@ -24,6 +24,7 @@ from pydantic import BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.scanners.base import BaseScanner, Finding, ScanResult
+from app.scanners.egress import content_is_blocked, judge_stats
 from app.scanners.pii_deep import DeepPIIScanner
 from app.scanners.injection_llm import LLMInjectionScanner
 from app.scanners.toxicity import ToxicityScanner
@@ -41,14 +42,19 @@ class Settings(BaseSettings):
 
     port: int = 8444
     anthropic_api_key: str = ""
+    # Read and not used: nothing in the analyzer calls OpenAI.
     openai_api_key: str = ""
     database_url: str = ""
+    # TAMGA_LLM_JUDGE turns the LLM judge on, by naming its provider
+    # ("anthropic"). Empty means off, whatever keys are in the environment:
+    # the judge sends request text to that provider.
+    tamga_llm_judge: str = ""
 
 
 settings = Settings()
 
 deep_pii = DeepPIIScanner()
-injection = LLMInjectionScanner(api_key=settings.anthropic_api_key)
+injection = LLMInjectionScanner(api_key=settings.anthropic_api_key, judge=settings.tamga_llm_judge)
 toxicity = ToxicityScanner()
 
 # Custom scanner SDK — auto-discovered from TAMGA_CUSTOM_SCANNERS_DIR.
@@ -157,7 +163,10 @@ async def health():
         "llm_guard_available": llm_guard_ok,
         "scanners": {
             "pii_deep": True,
-            "injection_llm": True,
+            # True only when the judge was turned on (TAMGA_LLM_JUDGE) with
+            # a key: it is the one scanner that sends text to a provider.
+            "injection_llm": getattr(injection, "enabled", False) is True,
+            "injection_llm_egress": judge_stats(),
             "toxicity": llm_guard_ok,
             "custom_count": len(_custom_scanner_instances),
             "custom_names": [s.name for s in _custom_scanner_instances],
@@ -190,7 +199,8 @@ async def analyze(req: AnalyzeRequest, background_tasks: BackgroundTasks):
     if "pii" in scan_types:
         tasks.append(asyncio.ensure_future(deep_pii.scan(req.content)))
         task_labels.append("pii")
-    if "injection" in scan_types:
+    # The LLM judge is never asked about a request the proxy blocked.
+    if "injection" in scan_types and not content_is_blocked(req.metadata):
         tasks.append(asyncio.ensure_future(injection.scan(req.content)))
         task_labels.append("injection")
 

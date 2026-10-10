@@ -24,7 +24,10 @@ type Event struct {
 	OutputFindings []scanner.Finding // findings from response body scan (Faz 1A)
 	OutputAction   string            // action taken on response (PASS/REDACT/BLOCK)
 	Action         string
-	Body           []byte // optional copy for deep analysis (may be nil)
+	// Body is the request as it was forwarded, for the analyzer's deep
+	// analysis. It is nil unless TAMGA_ANALYZER_SEND_CONTENT is on, and
+	// always nil for a request that was blocked.
+	Body           []byte
 	ContentType    string // e.g. response Content-Type for output_scan_hint
 	Endpoint       string
 	ScanLatencyMs  float64

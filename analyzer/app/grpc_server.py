@@ -32,6 +32,7 @@ from analyzer.v1.tamga_pb2_grpc import (  # type: ignore[import-untyped]
 
 from app.scanners.base import BaseScanner, Finding as AppFinding
 from app.scanners.base import ScanResult
+from app.scanners.egress import content_is_blocked
 from app.scanners.pii_deep import DeepPIIScanner
 from app.scanners.injection_llm import LLMInjectionScanner
 from app.scanners.toxicity import ToxicityScanner
@@ -94,7 +95,10 @@ class AnalyzerServicer(AnalyzerServiceServicer):
         if "pii" in scan_types:
             tasks.append(asyncio.ensure_future(self._pii.scan(request.content)))
             task_labels.append("pii")
-        if "injection" in scan_types:
+        # The injection scanner is the LLM judge: when it is on, it sends the
+        # text to a model provider. It is never asked about a request the
+        # proxy blocked (see app.scanners.egress).
+        if "injection" in scan_types and not content_is_blocked(request.metadata):
             tasks.append(asyncio.ensure_future(self._injection.scan(request.content)))
             task_labels.append("injection")
 

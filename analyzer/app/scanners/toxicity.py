@@ -49,6 +49,17 @@ def _is_llm_guard_available() -> bool:
         return False
 
 
+def _ban_topics_from_env() -> list[str]:
+    """The topics BanTopics looks for: TAMGA_BAN_TOPICS, comma-separated.
+
+    Empty by default, and the scanner is then not loaded.
+    """
+    import os
+
+    raw = os.environ.get("TAMGA_BAN_TOPICS", "")
+    return [t.strip() for t in raw.split(",") if t.strip()]
+
+
 def _init_llm_guard_worker() -> None:
     """Initialiser called once per worker process.
 
@@ -67,7 +78,11 @@ def _init_llm_guard_worker() -> None:
     _toxicity_scanner = Toxicity()
     _no_refusal_scanner = NoRefusal()
     _ban_code_scanner = BanCode()
-    _ban_topics_scanner = BanTopics()
+    # BanTopics has no default list: it classifies against the topics it is
+    # given, and constructing it without any raises, which took the whole
+    # worker down. It is loaded only when topics are configured.
+    topics = _ban_topics_from_env()
+    _ban_topics_scanner = BanTopics(topics=topics) if topics else None
 
     print("[llm_guard worker] LLM Guard models loaded", flush=True)
 
@@ -130,21 +145,22 @@ def _sync_scan(content: str) -> list[dict[str, Any]]:
     except Exception:
         pass
 
-    # BanTopics
-    try:
-        _sanitized, is_valid, risk_score = _ban_topics_scanner.scan(
-            prompt="", output=content,
-        )
-        if not is_valid:
-            findings.append({
-                "type": "toxicity",
-                "category": "banned_topics",
-                "severity": "high",
-                "match": content[:200],
-                "confidence": round(float(risk_score) if risk_score else 0.90, 2),
-            })
-    except Exception:
-        pass
+    # BanTopics (loaded only when topics are configured)
+    if _ban_topics_scanner is not None:
+        try:
+            _sanitized, is_valid, risk_score = _ban_topics_scanner.scan(
+                prompt="", output=content,
+            )
+            if not is_valid:
+                findings.append({
+                    "type": "toxicity",
+                    "category": "banned_topics",
+                    "severity": "high",
+                    "match": content[:200],
+                    "confidence": round(float(risk_score) if risk_score else 0.90, 2),
+                })
+        except Exception:
+            pass
 
     return findings
 

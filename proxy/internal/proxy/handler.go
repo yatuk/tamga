@@ -2287,7 +2287,7 @@ func publishEvent(ctx context.Context, cfg HandlerConfig, r *http.Request, reque
 		EventType:      eventType,
 		Findings:       findings,
 		Action:         string(action),
-		Body:           copyBodyOptional(body),
+		Body:           analyzerContent(cfg, body, action, eventType),
 		Endpoint:       endpoint,
 		ScanLatencyMs:  scanLatencyMs,
 		TotalLatencyMs: totalLatencyMs,
@@ -2451,6 +2451,27 @@ func extractModelFamily(model string) string {
 func genericModelFamily(m string) string {
 	if m == "" {
 		return ""
+// analyzerContent is the text of a request that its event may carry. The
+// event's body has one reader, the handler that hands requests to the
+// analyzer for deep analysis after the fact, and the analyzer is another
+// service that may itself call a model provider (its LLM judge). So:
+//
+//   - nothing, unless the operator turned it on (TAMGA_ANALYZER_SEND_CONTENT);
+//   - nothing for a request that was blocked: text the proxy refused to send
+//     to a provider is not sent anywhere else either;
+//   - otherwise the body as it was forwarded. Every caller passes the body
+//     after the action was applied, so what REDACT masked or STRIP removed
+//     is not in it.
+func analyzerContent(cfg HandlerConfig, body []byte, action policy.Action, eventType string) []byte {
+	if cfg.Config == nil || !cfg.Config.AnalyzerSendContent {
+		return nil
+	}
+	if action == policy.ActionBlock || eventType == "request_blocked" {
+		return nil
+	}
+	return copyBodyOptional(body)
+}
+
 	}
 	parts := familySeparator.Split(m, -1)
 	for i, part := range parts {

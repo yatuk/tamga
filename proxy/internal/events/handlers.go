@@ -107,14 +107,26 @@ type AnalyzerClient interface {
 	Analyze(ctx context.Context, req *pb.AnalyzeRequest) (*pb.AnalyzeResponse, error)
 }
 
-// AnalyzerHandler fans scan_complete events to the Python analyzer over gRPC (fail-open).
+// AnalyzerHandler hands requests that were forwarded to the Python analyzer over gRPC (fail-open).
 // Hybrid routing: skips dispatch when input risk is outside [hybridSkipLow, hybridSkipHigh].
+// It sends nothing for a blocked request, and nothing at all unless the event
+// carries the request's text, which it does only when the operator turned
+// that on (see Event.Body). What comes back is logged; it changes no verdict
+// and is not stored.
 func AnalyzerHandler(client AnalyzerClient) func(Event) {
 	return func(e Event) {
 		if client == nil || !client.Enabled() {
 			return
 		}
-		if e.EventType != "request_scanned" && e.EventType != "request_blocked" {
+		if e.EventType != "request_scanned" {
+			return
+		}
+		// A request the proxy blocked is not analysed further. The analyzer
+		// is another service and can call a model provider of its own (its
+		// LLM judge): text that was refused to one provider is not handed
+		// on towards another. The proxy does not put a blocked request's
+		// text on its event; this holds whatever published the event.
+		if e.Action == "BLOCK" {
 			return
 		}
 
@@ -144,6 +156,10 @@ func AnalyzerHandler(client AnalyzerClient) func(Event) {
 		_, sp := telemetry.Tracer().Start(ctx, "analyzer.deep_scan")
 		defer sp.End()
 
+		// The body is on the event only when the operator turned content
+		// analysis on (TAMGA_ANALYZER_SEND_CONTENT), and is then the request
+		// as it was forwarded: masked or stripped where the policy did that.
+		// Without it there is nothing for the analyzer to read.
 		content := string(e.Body)
 		if content == "" {
 			return
@@ -160,6 +176,8 @@ func AnalyzerHandler(client AnalyzerClient) func(Event) {
 				"endpoint":   e.Endpoint,
 				"direction":  "input",
 				"input_risk": fmt.Sprintf("%.3f", risk),
+				// What the content is: the request as the provider got it.
+				"content": "forwarded",
 			},
 			PreScanned: true,
 		}
@@ -219,9 +237,14 @@ func OperatorStateAnalyzerHandler(client AnalyzerClient) func(Event) {
 		decisionRefs, _ := json.Marshal(req.DecisionRefs)
 		noteRefs, _ := json.Marshal(req.NoteRefs)
 		fastFindings, _ := json.Marshal(req.FastFindings)
+		// The prompt is not sent. This event is published while the request
+		// is still being scanned, before anyone knows whether it will be
+		// blocked, and the analyzer has no operator-state judge that would
+		// read it (see above). It gets the decision references and the
+		// fast tier's findings.
 		resp, err := client.Analyze(ctx, &pb.AnalyzeRequest{
 			RequestId: req.RequestID,
-			Content:   req.Prompt,
+			Content:   "",
 			ScanTypes: []string{"operator_state"},
 			Metadata: map[string]string{
 				"scan_type":     req.ScanType,

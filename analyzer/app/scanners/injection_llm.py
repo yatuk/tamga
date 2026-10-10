@@ -14,6 +14,7 @@ import structlog
 from jinja2 import Environment, FileSystemLoader
 
 from app.scanners.base import BaseScanner, Finding, ScanResult
+from app.scanners.egress import content_is_blocked, record_judge_call
 
 logger = structlog.get_logger()
 
@@ -45,11 +46,42 @@ def _parse_judge_response(text: str) -> dict[str, Any] | None:
         return None
 
 
+# The judge sends request text to a model provider outside this deployment.
+# That is an egress of prompt content, so it happens only when the operator
+# asked for it by name: TAMGA_LLM_JUDGE=anthropic, together with a key.
+JUDGE_ANTHROPIC = "anthropic"
+
+# How much of a text the judge is sent.
+JUDGE_MAX_CHARS = 2000
+
+# What an ANTHROPIC_API_KEY holds when nobody put a key there: the text of
+# an example file. A key is in the analyzer's environment in many
+# deployments for other reasons (one .env for every service), so its
+# presence says nothing; a value like these says it is not a key at all.
+# The marks are long enough that a real key, which is random letters and
+# digits, does not hold one by chance.
+_PLACEHOLDER_MARKS = (
+    "replace_me", "replace-me", "replaceme", "your_", "your-", "yourkey",
+    "changeme", "change_me", "change-me", "example", "placeholder",
+    "dummy", "xxxxx", "<", ">", "...",
+)
+
+def looks_like_placeholder(api_key: str) -> bool:
+    """True for a value that is plainly not an API key."""
+    key = api_key.strip()
+    if len(key) < 20 or any(c.isspace() for c in key):
+        return True
+    lowered = key.lower()
+    return any(mark in lowered for mark in _PLACEHOLDER_MARKS)
+
+
 class LLMInjectionScanner(BaseScanner):
     """Uses Claude Haiku for semantic prompt injection classification.
 
-    Falls back to mock mode (empty findings) when ANTHROPIC_API_KEY is absent
-    or the API call fails — never blocks proxy traffic.
+    Off unless turned on by name (``judge="anthropic"``, from
+    TAMGA_LLM_JUDGE) with a real key: a key alone does not turn it on. When
+    off, or when the API call fails, it returns no findings — it never
+    blocks proxy traffic.
     """
 
     name: str = "injection_llm"
@@ -58,16 +90,50 @@ class LLMInjectionScanner(BaseScanner):
     _TIMEOUT = 8.0  # seconds
     _RETRY_ATTEMPTS = 2
 
-    def __init__(self, api_key: str = ""):
-        self._enabled = bool(api_key)
+    def __init__(self, api_key: str = "", judge: str = ""):
+        self._enabled = False
         self._client = None
-        if self._enabled:
-            try:
-                import anthropic  # local import so tests work without the package
-                self._client = anthropic.AsyncAnthropic(api_key=api_key)
-            except ImportError:
-                logger.warning("injection_llm: anthropic package not found — mock mode")
-                self._enabled = False
+        self.disabled_reason = ""
+
+        judge = (judge or "").strip().lower()
+        if judge in ("", "off", "none", "false", "0"):
+            self.disabled_reason = "TAMGA_LLM_JUDGE is not set"
+            if api_key:
+                logger.info(
+                    "injection_llm: an Anthropic key is present and the judge is off; "
+                    "set TAMGA_LLM_JUDGE=anthropic to send request text to Anthropic"
+                )
+            return
+        if judge != JUDGE_ANTHROPIC:
+            self.disabled_reason = "TAMGA_LLM_JUDGE names an unknown provider"
+            logger.warning("injection_llm: unknown TAMGA_LLM_JUDGE value — judge off")
+            return
+        if not api_key:
+            self.disabled_reason = "ANTHROPIC_API_KEY is empty"
+            logger.warning("injection_llm: TAMGA_LLM_JUDGE=anthropic without ANTHROPIC_API_KEY — judge off")
+            return
+        if looks_like_placeholder(api_key):
+            self.disabled_reason = "ANTHROPIC_API_KEY is a placeholder"
+            logger.warning("injection_llm: ANTHROPIC_API_KEY looks like a placeholder — judge off")
+            return
+
+        try:
+            import anthropic  # local import so tests work without the package
+            self._client = anthropic.AsyncAnthropic(api_key=api_key)
+        except ImportError:
+            self.disabled_reason = "the anthropic package is not installed"
+            logger.warning("injection_llm: anthropic package not found — judge off")
+            return
+        self._enabled = True
+        logger.warning(
+            "injection_llm: judge ON — up to %d characters of a request the proxy "
+            "forwards are sent to Anthropic (%s) when the proxy asks for an injection scan",
+            JUDGE_MAX_CHARS, self._MODEL,
+        )
+
+    @property
+    def enabled(self) -> bool:
+        return bool(self._enabled and self._client is not None)
 
     async def _call_judge_once(self, prompt: str) -> dict[str, Any] | None:
         """Single attempt to call Claude Haiku. Returns parsed JSON or None."""
@@ -114,8 +180,20 @@ class LLMInjectionScanner(BaseScanner):
 
         if not self._enabled or self._client is None:
             return ScanResult(scanner=self.name, findings=[], duration_ms=0.0)
+        # The servers do not ask for a blocked request's text to be judged;
+        # a caller that passes the request's metadata gets the same answer.
+        if content_is_blocked(config):
+            return ScanResult(scanner=self.name, findings=[], duration_ms=0.0)
 
-        prompt = _JUDGE_TEMPLATE.render(content=content[:2000])
+        sent = content[:JUDGE_MAX_CHARS]
+        prompt = _JUDGE_TEMPLATE.render(content=sent)
+        # Request text leaves for the provider here. Said in the log each
+        # time, by size and never by content, and counted for /health.
+        record_judge_call(len(sent))
+        logger.info(
+            "injection_llm: sending %d characters of request text to Anthropic (%s)",
+            len(sent), self._MODEL,
+        )
         parsed = await self._call_judge_with_retry(prompt)
 
         duration = (time.monotonic() - t0) * 1000

@@ -190,6 +190,35 @@ class TestAnalyzeRPC:
         pii.scan.assert_awaited_once_with("test content")
         inj.scan.assert_awaited_once_with("test content")
 
+    def test_analyze_blocked_request_never_reaches_the_judge(self):
+        """The injection scanner is the LLM judge; it is not asked about a blocked request."""
+        for metadata in ({"action": "BLOCK"}, {"action": "block"}, {"content": "blocked"}):
+            pii = MagicMock()
+            pii.scan = AsyncMock(return_value=_make_empty_scan_result("pii_deep"))
+            inj = MagicMock()
+            inj.scan = AsyncMock(return_value=_make_injection_scan_result())
+            servicer = _build_servicer(pii_scanner=pii, injection_scanner=inj)
+            req = AnalyzeRequest(
+                request_id="req-blocked", content="text the proxy refused to forward",
+                scan_types=["pii", "injection"], metadata=metadata,
+            )
+
+            response: AnalyzeResponse = asyncio.run(servicer.Analyze(req, _mock_context()))
+
+            inj.scan.assert_not_awaited()
+            assert all(f.type != "injection" for f in response.findings)
+
+        # The same request without that mark is judged, as before.
+        inj = MagicMock()
+        inj.scan = AsyncMock(return_value=_make_empty_scan_result("injection_llm"))
+        servicer = _build_servicer(injection_scanner=inj)
+        req = AnalyzeRequest(
+            request_id="req-fwd", content="text that went on",
+            scan_types=["injection"], metadata={"action": "REDACT", "content": "forwarded"},
+        )
+        asyncio.run(servicer.Analyze(req, _mock_context()))
+        inj.scan.assert_awaited_once_with("text that went on")
+
     def test_analyze_empty_scan_types(self):
         """Empty scan_types list — returns empty AnalyzeResponse, no error."""
         servicer = _build_servicer()
