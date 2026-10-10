@@ -3,6 +3,17 @@
 ## v0.9.0 (unreleased)
 
 ### Security
+- A key in the query string is no longer read anywhere. The live stream was
+  the last route that took `?key=`; the console sends the header there too.
+  **A client that opened `/api/v1/live/events?key=…` must send
+  `X-Tamga-Admin-Key`.**
+- The live stream sends a `: ping` comment every 15 seconds while it is
+  quiet. The console reopens a stream that has gone silent for 45 seconds;
+  before, a connection whose other end had gone looked like a quiet proxy.
+- **The dashboard image ignored `NEXT_PUBLIC_API_URL`.** Compose passed it
+  to the running container, where it does nothing: the value is compiled
+  into the page at build time, so the console always called
+  `http://localhost:8443`. It is now a build argument.
 - **The console's live feed asked for no credential.** A route of the
   dashboard opened the proxy's event stream with a key held on the server, so
   anyone who could reach the console saw scanned and stopped requests with

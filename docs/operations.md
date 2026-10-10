@@ -821,11 +821,11 @@ The role each operation needs is in `proxy/docs/openapi.yaml` as
 
 Things that follow from this:
 
-- A key in the query string (`?key=`) is accepted only by
-  `GET /api/v1/live/events`, for clients that use a browser `EventSource`,
-  which cannot send a header. The console does not use it: it reads the
-  stream with `fetch` and sends the header. Everywhere else send
-  `X-Tamga-Admin-Key`.
+- A key in the query string (`?key=`) is not read on any route, the live
+  stream included: a URL ends up in access logs and in browser history. Send
+  `X-Tamga-Admin-Key`. A browser reads `GET /api/v1/live/events` with
+  `fetch`, as the console does, since `EventSource` cannot send a header.
+  The stream carries a `: ping` comment every 15 seconds while it is quiet.
 - The console holds no key. Each person enters the admin key or an API key of
   scope `read`, `write` or `admin` under Settings; it is kept in that browser
   and sent with every call. The browser calls the proxy directly, so
@@ -833,6 +833,10 @@ Things that follow from this:
   `NEXT_PUBLIC_ADMIN_KEY` is for `next dev` only: a value under that name is
   written into the JavaScript every visitor downloads, and a production
   build of the dashboard stops when it is set.
+- The address the console calls the proxy at, `NEXT_PUBLIC_API_URL`, is
+  written into the page the same way, when the dashboard image is built. It
+  is the address the browser can reach, not the proxy's name inside the
+  compose network, and changing it needs a rebuild of the image.
 - `GET /api/v1/webhooks` is for admins and never returns a destination's
   token, its header values or the path of its URL.
 - The organisation is the install's own. `X-Tamga-Org-Id` on saved hunts,
