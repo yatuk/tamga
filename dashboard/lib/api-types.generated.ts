@@ -1315,17 +1315,16 @@ export interface paths {
          * @description text/event-stream yanıt; `request_scanned` ve `request_blocked`
          *     event tiplerini yayınlar. Bağlantı client kapatana kadar açık kalır.
          *
-         *     Only events of the deployment's organisation are sent. This is the
-         *     one route that reads the key from `?key=` when the
-         *     `X-Tamga-Admin-Key` header is absent: a browser EventSource cannot
-         *     set a header. A server-side caller should send the header.
+         *     Only events of the deployment's organisation are sent. The key is
+         *     sent in the header, as everywhere else; a browser reads the stream
+         *     with `fetch`, since EventSource cannot set one. While there is
+         *     nothing to send the stream carries a comment line, `: ping`, every
+         *     15 seconds, so that a client can tell a quiet proxy from a
+         *     connection whose other end is gone.
          */
         get: {
             parameters: {
-                query?: {
-                    /** @description The admin key or a scoped API key, for EventSource only. Prefer the header. */
-                    key?: string;
-                };
+                query?: never;
                 header?: never;
                 path?: never;
                 cookie?: never;

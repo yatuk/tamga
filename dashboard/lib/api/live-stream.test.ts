@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { openLiveStream, retryDelay, type LiveEvent, type LiveStreamStatus } from "@/lib/api/live-stream";
+import { SILENCE_MS, openLiveStream, retryDelay, type LiveEvent, type LiveStreamStatus } from "@/lib/api/live-stream";
 
 const KEY = "stream-test-key";
 const encoder = new TextEncoder();
@@ -201,8 +201,8 @@ describe("openLiveStream", () => {
     close();
     expect(signal?.aborted).toBe(true);
     const seen = [...w.statuses];
-    s.send("event: request_scanned\ndata: {}\n\n");
-    s.end();
+    // Closing cancels the read as well, so the body no longer takes anything.
+    expect(() => s.send("event: request_scanned\ndata: {}\n\n")).toThrow();
     await vi.advanceTimersByTimeAsync(60_000);
     expect(w.statuses).toEqual(seen);
     expect(w.events).toEqual([]);
@@ -238,5 +238,48 @@ describe("openLiveStream", () => {
 describe("retryDelay", () => {
   it("doubles from one second and stops at thirty", () => {
     expect([0, 1, 2, 3, 4, 5, 6, 50].map(retryDelay)).toEqual([1_000, 2_000, 4_000, 8_000, 16_000, 30_000, 30_000, 30_000]);
+  });
+});
+
+describe("a stream that goes silent", () => {
+  it("is opened again when a proxy that sends heartbeats stops sending anything", async () => {
+    const first = stream();
+    const second = stream();
+    fetchMock.mockResolvedValueOnce(first.response).mockResolvedValueOnce(second.response);
+    const w = watch();
+    const close = openLiveStream(KEY, w.handlers);
+    await settle();
+    first.send(": tamga-live\n\n: ping\n\n");
+    await settle();
+
+    // Heartbeats keep it open past the limit.
+    await vi.advanceTimersByTimeAsync(SILENCE_MS - 1_000);
+    first.send(": ping\n\n");
+    await settle();
+    await vi.advanceTimersByTimeAsync(SILENCE_MS - 1_000);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(w.statuses.at(-1)).toBe("open");
+
+    // Then nothing: the attempt is given up and another is made.
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(w.statuses.at(-1)).toBe("error");
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(w.statuses.at(-1)).toBe("open");
+    close();
+  });
+
+  it("is left alone when the proxy has never sent a heartbeat", async () => {
+    const only = stream();
+    fetchMock.mockResolvedValueOnce(only.response);
+    const w = watch();
+    const close = openLiveStream(KEY, w.handlers);
+    await settle();
+    only.send(": tamga-live\n\n");
+    await settle();
+    await vi.advanceTimersByTimeAsync(SILENCE_MS * 4);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(w.statuses.at(-1)).toBe("open");
+    close();
   });
 });

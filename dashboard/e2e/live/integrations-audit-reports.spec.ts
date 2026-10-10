@@ -204,7 +204,7 @@ test.describe("Integrations", () => {
     await expect(row).toBeVisible();
     await expect(row).toContainText("Generic Webhook");
     // The list shows where a destination is, not the path, which can carry a secret.
-    await expect(row).toContainText("https://example.invalid/");
+    await expect(row).toContainText("example.invalid");
     await expect(row).not.toContainText("invalid/e2e-live");
     await expect(row).toContainText("Never");
 
@@ -369,8 +369,9 @@ test.describe("Audit log", () => {
       await page.locator("#audit-actor").selectOption(actor);
       await expect(page).toHaveURL(/[?&]actor=/);
       const [byActor] = await shown(page);
-      await expect(rows(page)).toHaveCount(byActor);
-      await expect(rows(page).filter({ hasText: actor })).toHaveCount(byActor);
+      // Entries name who made them now, so one actor can fill more than a page.
+      await expect(rows(page)).toHaveCount(Math.min(byActor, 50));
+      await expect(rows(page).filter({ hasText: actor })).toHaveCount(Math.min(byActor, 50));
       await page.getByRole("button", { name: "Clear filters" }).click();
     }
 

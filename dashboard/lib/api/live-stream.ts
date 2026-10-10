@@ -36,6 +36,13 @@ const FIRST_DELAY_MS = 1_000;
 const MAX_DELAY_MS = 30_000;
 /** A stream that held this long was a working one: the next drop starts the waits over. */
 const STABLE_MS = 5_000;
+/**
+ * The proxy sends a comment every 15 seconds when it has nothing else to say.
+ * Once one has been seen, this long without a byte means the other end is
+ * gone, whatever the socket says, and the stream is opened again. A proxy
+ * that sends none (an older one) is never judged by its silence.
+ */
+export const SILENCE_MS = 45_000;
 /** No event is near this size. A stream that sends this much without a line break is not the feed. */
 const MAX_BUFFER = 1_000_000;
 
@@ -84,14 +91,21 @@ export function openLiveStream(adminKey: string, { onEvent, onStatus }: LiveStre
     if (stopped) return;
     if (failures === 0) say("connecting");
 
+    // One controller per attempt, so that a silent stream can be given up
+    // without closing the feed for good.
+    const attempt = new AbortController();
+    const giveUp = () => attempt.abort();
+    abort.signal.addEventListener("abort", giveUp, { once: true });
+
     let res: Response;
     try {
       res = await fetch(`${API_BASE}${LIVE_PATH}`, {
         headers: { Accept: "text/event-stream", "X-Tamga-Admin-Key": adminKey },
         cache: "no-store",
-        signal: abort.signal,
+        signal: attempt.signal,
       });
     } catch {
+      abort.signal.removeEventListener("abort", giveUp);
       // Not reachable, or aborted by close(); retry() does nothing after close.
       return retry();
     }
@@ -107,13 +121,30 @@ export function openLiveStream(adminKey: string, { onEvent, onStatus }: LiveStre
 
     say("open");
     const openedAt = Date.now();
+    let heartbeats = false;
+    let silence: ReturnType<typeof setTimeout> | undefined;
+    const heard = () => {
+      if (!heartbeats) return;
+      if (silence !== undefined) clearTimeout(silence);
+      silence = setTimeout(giveUp, SILENCE_MS);
+    };
     try {
-      await readEvents(res.body, (event) => {
-        if (!stopped) onEvent(event);
-      });
+      await readEvents(
+        res.body,
+        (event) => {
+          if (!stopped) onEvent(event);
+        },
+        heard,
+        () => {
+          heartbeats = true;
+        },
+        attempt.signal,
+      );
     } catch {
-      // The connection broke mid-stream, or close() aborted it.
+      // The connection broke mid-stream, went silent, or close() aborted it.
     }
+    if (silence !== undefined) clearTimeout(silence);
+    abort.signal.removeEventListener("abort", giveUp);
     if (Date.now() - openedAt >= STABLE_MS) failures = 0;
     retry();
   }
@@ -128,8 +159,17 @@ export function openLiveStream(adminKey: string, { onEvent, onStatus }: LiveStre
 }
 
 /** Reads a text/event-stream body to its end, handing over each event that carries data. */
-async function readEvents(body: ReadableStream<Uint8Array>, onEvent: (event: LiveEvent) => void): Promise<void> {
+async function readEvents(
+  body: ReadableStream<Uint8Array>,
+  onEvent: (event: LiveEvent) => void,
+  onBytes: () => void,
+  onHeartbeat: () => void,
+  signal: AbortSignal,
+): Promise<void> {
   const reader = body.getReader();
+  // Giving up on the attempt ends the read, whether or not the transport
+  // has noticed that the request was aborted.
+  signal.addEventListener("abort", () => void reader.cancel().catch(() => {}), { once: true });
   const decoder = new TextDecoder();
   let buffer = "";
   let type = "message";
@@ -156,8 +196,12 @@ async function readEvents(body: ReadableStream<Uint8Array>, onEvent: (event: Liv
         data = [];
         continue;
       }
-      // A comment: the proxy opens the stream with one.
-      if (line.startsWith(":")) continue;
+      // A comment: the proxy opens the stream with one, and sends
+      // ": ping" at an interval while it has nothing else to say.
+      if (line.startsWith(":")) {
+        if (line.slice(1).trim() === "ping") onHeartbeat();
+        continue;
+      }
 
       const colon = line.indexOf(":");
       const field = colon < 0 ? line : line.slice(0, colon);
@@ -165,5 +209,6 @@ async function readEvents(body: ReadableStream<Uint8Array>, onEvent: (event: Liv
       if (field === "event") type = text;
       else if (field === "data") data.push(text);
     }
+    onBytes();
   }
 }
