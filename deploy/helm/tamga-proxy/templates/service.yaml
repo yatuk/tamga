@@ -7,7 +7,7 @@ spec:
   type: {{ .Values.service.type }}
   ports:
     - port: {{ .Values.service.port }}
-      targetPort: http
+      targetPort: {{ include "tamga-proxy.portName" . }}
       protocol: TCP
-      name: http
+      name: {{ include "tamga-proxy.portName" . }}
   selector: {{- include "tamga-proxy.selectorLabels" . | nindent 4 }}

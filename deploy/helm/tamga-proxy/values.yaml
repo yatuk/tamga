@@ -14,6 +14,8 @@ imagePullSecrets: []
 replicaCount: 2
 
 # The port the proxy listens on. The chart passes it as TAMGA_PROXY_PORT.
+# The port is named "https" on the container and the Service when
+# env.TAMGA_TLS_CERT and env.TAMGA_TLS_KEY are both set, and "http" otherwise.
 containerPort: 8443
 
 service:
@@ -45,12 +47,28 @@ secrets:
 # and the render fails if it finds one.
 env: {}
   # TAMGA_CORS_ORIGINS: "https://console.example.com"
-  # TAMGA_ANALYZER_ADDR: "analyzer.tamga.svc:50051"
   # TAMGA_NATS_URL: "nats://nats.tamga.svc:4222"
   # TAMGA_OTEL_ENDPOINT: "http://otel-collector.observability.svc:4318"
   # TAMGA_REGION: "eu"
   # TAMGA_TLS_CERT: "/etc/tamga-tls/tls.crt"
   # TAMGA_TLS_KEY: "/etc/tamga-tls/tls.key"
+
+# Where the analyzer is. The chart does not deploy one: run it yourself (it is
+# built from analyzer/Dockerfile) and give its addresses here.
+# Left empty, the proxy falls back to its built-in defaults, localhost:50051
+# and http://localhost:8444, where nothing listens inside the pod. Then:
+#   - the PDF reports (GET /api/v1/reports/owasp/pdf and
+#     /api/v1/reports/incident/pdf) answer 503, because the proxy fetches them
+#     from the analyzer over HTTP;
+#   - nothing the proxy sends to the analyzer over gRPC is analysed.
+# The inline scanners, the policy and the proxying itself do not need it.
+analyzer:
+  # gRPC address, host:port. Passed as TAMGA_ANALYZER_ADDR.
+  # e.g. analyzer.tamga.svc:50051
+  grpcAddr: ""
+  # HTTP base URL. Passed as TAMGA_ANALYZER_HTTP_URL.
+  # e.g. http://analyzer.tamga.svc:8444
+  httpUrl: ""
 
 policy:
   # Empty: the proxy uses the policy built into the image
@@ -105,6 +123,14 @@ serviceAccount:
   create: true
   name: ""
 
+# A PodDisruptionBudget keeps minAvailable pods up during voluntary
+# disruptions such as a node drain. One that leaves no pod free to evict
+# blocks the drain for ever, so the chart renders the budget only when the
+# lowest replica count (replicaCount, or autoscaling.minReplicas when
+# autoscaling is on) is above minAvailable. With the defaults (2 replicas,
+# minAvailable 1) it is rendered; with replicaCount: 1 it is left out, and a
+# drain then takes the only pod down until it is rescheduled.
+# A percentage ("50%") is rendered as given; check it yourself.
 podDisruptionBudget:
   enabled: true
   minAvailable: 1

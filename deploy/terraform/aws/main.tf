@@ -32,6 +32,16 @@ variable "cluster_name" {
   default     = "tamga"
 }
 
+variable "cluster_version" {
+  type        = string
+  description = "Kubernetes version of the EKS cluster, as major.minor (for example the newest version listed as in standard support at https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html). There is no default on purpose: EKS retires versions, and a default written into this file goes stale."
+
+  validation {
+    condition     = can(regex("^1[.][0-9]+$", var.cluster_version))
+    error_message = "cluster_version must be a Kubernetes minor version such as 1.33."
+  }
+}
+
 variable "tamga_admin_key" {
   type        = string
   sensitive   = true
@@ -49,6 +59,19 @@ variable "proxy_image_tag" {
   description = "Tag of the image you pushed."
 }
 
+# The zones the account can use in the region, in name order. Zone suffixes
+# differ between regions (not every region has a, b and c), so the names are
+# read from AWS and not built from the region name. Local Zones and
+# Wavelength Zones need an opt-in and are left out.
+data "aws_availability_zones" "available" {
+  state = "available"
+
+  filter {
+    name   = "opt-in-status"
+    values = ["opt-in-not-required"]
+  }
+}
+
 module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
   version = "~> 5.8"
@@ -56,7 +79,9 @@ module "vpc" {
   name = "${var.cluster_name}-vpc"
   cidr = "10.30.0.0/16"
 
-  azs             = ["${var.region}a", "${var.region}b", "${var.region}c"]
+  # Three subnets of each kind, so three zones. A region with fewer than
+  # three such zones fails here, at plan time.
+  azs             = slice(data.aws_availability_zones.available.names, 0, 3)
   private_subnets = ["10.30.1.0/24", "10.30.2.0/24", "10.30.3.0/24"]
   public_subnets  = ["10.30.101.0/24", "10.30.102.0/24", "10.30.103.0/24"]
 
@@ -74,7 +99,7 @@ module "eks" {
   version = "~> 20.8"
 
   cluster_name    = var.cluster_name
-  cluster_version = "1.30"
+  cluster_version = var.cluster_version
 
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnets

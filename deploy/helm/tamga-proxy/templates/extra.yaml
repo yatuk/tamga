@@ -6,7 +6,7 @@ metadata:
   labels: {{- include "tamga-proxy.labels" . | nindent 4 }}
 {{- end }}
 ---
-{{- if .Values.podDisruptionBudget.enabled }}
+{{- if eq (include "tamga-proxy.pdbEnabled" .) "true" }}
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:

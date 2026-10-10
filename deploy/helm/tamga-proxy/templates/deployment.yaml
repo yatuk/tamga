@@ -4,6 +4,13 @@
 {{- fail (printf "env.%s: the chart sets this variable itself; use secrets.*, containerPort or policy.inline" $name) }}
 {{- end }}
 {{- end }}
+{{- $analyzer := .Values.analyzer | default dict -}}
+{{- if and (get $analyzer "grpcAddr") (hasKey $env "TAMGA_ANALYZER_ADDR") }}
+{{- fail "analyzer.grpcAddr and env.TAMGA_ANALYZER_ADDR are both set; keep one" }}
+{{- end }}
+{{- if and (get $analyzer "httpUrl") (hasKey $env "TAMGA_ANALYZER_HTTP_URL") }}
+{{- fail "analyzer.httpUrl and env.TAMGA_ANALYZER_HTTP_URL are both set; keep one" }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -42,7 +49,7 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           securityContext: {{- toYaml .Values.securityContext | nindent 12 }}
           ports:
-            - name: http
+            - name: {{ include "tamga-proxy.portName" . }}
               containerPort: {{ .Values.containerPort }}
               protocol: TCP
           env:
@@ -69,6 +76,14 @@ spec:
                   name: {{ include "tamga-proxy.secretName" . }}
                   key: REDIS_URL
                   optional: true
+            {{- with (get $analyzer "grpcAddr") }}
+            - name: TAMGA_ANALYZER_ADDR
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with (get $analyzer "httpUrl") }}
+            - name: TAMGA_ANALYZER_HTTP_URL
+              value: {{ . | quote }}
+            {{- end }}
             {{- range $k, $v := $env }}
             {{- if ne (toString $v) "" }}
             - name: {{ $k }}
@@ -80,14 +95,14 @@ spec:
           livenessProbe:
             httpGet:
               path: /health
-              port: http
+              port: {{ include "tamga-proxy.portName" . }}
               scheme: {{ include "tamga-proxy.scheme" . }}
             initialDelaySeconds: 5
             periodSeconds: 10
           readinessProbe:
             httpGet:
               path: /health
-              port: http
+              port: {{ include "tamga-proxy.portName" . }}
               scheme: {{ include "tamga-proxy.scheme" . }}
             initialDelaySeconds: 2
             periodSeconds: 5

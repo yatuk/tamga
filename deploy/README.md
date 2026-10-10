@@ -18,10 +18,11 @@ The chart installs the proxy only:
 
 - a `Deployment` (non-root user 1001, read-only root filesystem, all
   capabilities dropped), listening on port 8443,
-- a `Service` (ClusterIP, port 8443),
+- a `Service` (ClusterIP, port 8443); the port is named `http`, or `https`
+  when the proxy serves TLS,
 - a `Secret` with the credentials, unless you supply your own,
 - a `ServiceAccount`,
-- a `PodDisruptionBudget`,
+- a `PodDisruptionBudget`, when it leaves a pod free to evict (see below),
 - a `HorizontalPodAutoscaler` when `autoscaling.enabled` is true,
 - a `ConfigMap` with the policy when `policy.inline` is set.
 
@@ -68,6 +69,8 @@ and cache state.
 | `replicaCount` | `2` | Replicas, when autoscaling is off. |
 | `containerPort` | `8443` | The port the proxy listens on, passed as `TAMGA_PROXY_PORT`. |
 | `service.type`, `service.port` | `ClusterIP`, `8443` | The Service. |
+| `analyzer.grpcAddr`, `analyzer.httpUrl` | empty | The analyzer's gRPC address (`TAMGA_ANALYZER_ADDR`) and HTTP base URL (`TAMGA_ANALYZER_HTTP_URL`). See [Analyzer](#analyzer). |
+| `podDisruptionBudget.enabled`, `.minAvailable` | `true`, `1` | See [Disruption budget](#disruption-budget). |
 | `env` | `{}` | Other proxy environment variables, by the names in [docs/operations.md](../docs/operations.md#configuration). |
 | `policy.inline` | empty | A complete policy document. Empty uses the policy built into the image. |
 | `extraVolumes`, `extraVolumeMounts` | empty | For example a TLS certificate. |
@@ -98,11 +101,48 @@ logs `policy history disabled` and runs without it. Give it a database, or set
 The resources are named after the release: `<release>-tamga-proxy`, or just
 the release name when it already contains `tamga-proxy`.
 
+### Analyzer
+
+The chart does not deploy the analyzer. Run it yourself (the image is built
+from `analyzer/Dockerfile`; it listens on 50051 for gRPC and 8444 for HTTP)
+and tell the proxy where it is:
+
+```bash
+  --set analyzer.grpcAddr=analyzer.tamga.svc:50051 \
+  --set analyzer.httpUrl=http://analyzer.tamga.svc:8444
+```
+
+With both left empty the proxy uses its built-in defaults, `localhost:50051`
+and `http://localhost:8444`, and nothing listens there inside the pod. What
+does not work then:
+
+- The PDF reports, `GET /api/v1/reports/owasp/pdf` and
+  `GET /api/v1/reports/incident/pdf`, answer 503: the proxy fetches them from
+  the analyzer over HTTP.
+- Nothing the proxy hands to the analyzer over gRPC is analysed.
+
+Proxying, the inline scanners and the policy do not depend on the analyzer.
+The render fails when an address is given both here and under `env`.
+
+### Disruption budget
+
+A `PodDisruptionBudget` with `minAvailable: 1` over a single replica allows no
+eviction at all, and `kubectl drain` on that pod's node waits until someone
+deletes the budget. The chart therefore renders the budget only when it cannot
+block: when the lowest replica count (`replicaCount`, or
+`autoscaling.minReplicas` when autoscaling is on) is greater than
+`podDisruptionBudget.minAvailable`. With the defaults (two replicas,
+`minAvailable: 1`) it is rendered. With `replicaCount: 1` it is not, and a
+drain takes the only pod down until it is rescheduled. A `minAvailable` given
+as a percentage is rendered as it is. `podDisruptionBudget.enabled: false`
+leaves it out in every case.
+
 ### Probes
 
 Liveness and readiness both call `GET /health`, which needs no key and does
 not depend on the database, Redis or the analyzer. They use HTTPS when
-`env.TAMGA_TLS_CERT` and `env.TAMGA_TLS_KEY` are both set. With
+`env.TAMGA_TLS_CERT` and `env.TAMGA_TLS_KEY` are both set; the port is then
+named `https` on the container and the Service, and `http` otherwise. With
 `TAMGA_MTLS_STRICT_VERIFY=true` the kubelet has no client certificate and the
 probes fail; the chart has no answer to that.
 
@@ -130,14 +170,15 @@ database, no Redis and the image's built-in policy whatever the values said.
 ## Terraform (AWS EKS)
 
 `terraform/aws/main.tf` creates a VPC with three private and three public
-subnets and one NAT gateway, an EKS cluster (Kubernetes 1.30) with a managed
-node group of two to ten `t3.large` nodes, a `tamga` namespace, and a Helm
+subnets and one NAT gateway, an EKS cluster (the Kubernetes version you pass
+as `cluster_version`) with a managed node group of two to ten `t3.large` nodes, a `tamga` namespace, and a Helm
 release of the chart above.
 
 ```bash
 cd terraform/aws
 terraform init
 terraform apply \
+  -var="cluster_version=<a version EKS supports>" \
   -var="tamga_admin_key=$(openssl rand -hex 32)" \
   -var="proxy_image_repository=registry.example.com/tamga" \
   -var="proxy_image_tag=<your tag>"
@@ -145,6 +186,7 @@ terraform apply \
 
 | Variable | Default | Meaning |
 |---|---|---|
+| `cluster_version` | none, required | Kubernetes version of the cluster, as `major.minor`. Take one that is in standard support in the [EKS version list](https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html). It has no default because EKS retires versions and a default in the file goes stale. |
 | `tamga_admin_key` | none, required | The management API key. Passed to the chart as `secrets.adminKey`. |
 | `proxy_image_tag` | none, required | Tag of the image you pushed. |
 | `proxy_image_repository` | `ghcr.io/yatuk/tamga` | Repository of that image. |
@@ -152,6 +194,18 @@ terraform apply \
 | `cluster_name` | `tamga` | Name of the cluster and prefix of the VPC. |
 
 Outputs: `cluster_endpoint` and `kubeconfig_command`.
+
+The three subnets of each kind go into the first three availability zones
+that AWS reports for the region (`aws_availability_zones`, Local Zones left
+out); a region with fewer than three fails at plan time.
+
+`.terraform.lock.hcl` pins the providers (aws, kubernetes and helm, and the
+four the VPC and EKS modules bring: cloudinit, null, time, tls) to
+exact versions with their checksums for Linux (amd64, arm64), macOS (arm64)
+and Windows (amd64). `terraform init` uses those; `terraform init -upgrade`
+moves them within the constraints in `main.tf` and rewrites the file. The two
+registry modules (VPC, EKS) are not covered by the lock file: they follow
+their `~>` constraints.
 
 Things to know before applying:
 

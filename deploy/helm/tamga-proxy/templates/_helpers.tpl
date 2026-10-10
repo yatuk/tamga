@@ -45,3 +45,37 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- $env := .Values.env | default dict -}}
 {{- if and (get $env "TAMGA_TLS_CERT") (get $env "TAMGA_TLS_KEY") -}}HTTPS{{- else -}}HTTP{{- end -}}
 {{- end -}}
+
+{{/*
+The name of the one port, on the container and on the Service: "https" when
+the proxy serves TLS, "http" when it does not. The probes and the Service's
+targetPort refer to the port by this name, so the name always says what the
+port speaks (service meshes read the protocol from it).
+*/}}
+{{- define "tamga-proxy.portName" -}}
+{{- include "tamga-proxy.scheme" . | lower -}}
+{{- end -}}
+
+{{/*
+The lowest number of replicas the Deployment is meant to have: the
+autoscaler's floor when autoscaling is on, replicaCount otherwise.
+*/}}
+{{- define "tamga-proxy.minReplicas" -}}
+{{- if .Values.autoscaling.enabled -}}{{- .Values.autoscaling.minReplicas -}}{{- else -}}{{- .Values.replicaCount -}}{{- end -}}
+{{- end -}}
+
+{{/*
+"true" when a PodDisruptionBudget should be rendered. A budget whose
+minAvailable is not below the number of replicas allows no voluntary eviction
+at all, so `kubectl drain` waits for ever: with an integer minAvailable the
+budget is rendered only when the lowest replica count is above it. A
+percentage is rendered as given; the chart cannot evaluate it.
+*/}}
+{{- define "tamga-proxy.pdbEnabled" -}}
+{{- if .Values.podDisruptionBudget.enabled -}}
+{{- $min := .Values.podDisruptionBudget.minAvailable -}}
+{{- if kindIs "string" $min -}}
+{{- if hasSuffix "%" $min -}}true{{- else if gt (include "tamga-proxy.minReplicas" . | int) ($min | int) -}}true{{- end -}}
+{{- else if gt (include "tamga-proxy.minReplicas" . | int) ($min | int) -}}true{{- end -}}
+{{- end -}}
+{{- end -}}
