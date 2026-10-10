@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -19,6 +20,16 @@ import (
 const (
 	defaultCleanupEvery = 10 * time.Minute
 	defaultIdleTTL      = 10 * time.Minute
+	// defaultStatsIdleTTL is how long a key that sends nothing keeps its
+	// request count. It is longer than a bucket's: a bucket that is dropped
+	// comes back full, a count that is dropped is gone from the stats.
+	defaultStatsIdleTTL = 24 * time.Hour
+	// defaultMaxKeys is how many keys each of the limiter's maps holds. A
+	// caller is counted under a name it chooses in part (any provider key
+	// it sends, any address it comes from), so the time a key has been idle
+	// cannot be the only bound: the names can arrive faster than they age.
+	// Past this many the ones used longest ago are dropped, idle or not.
+	defaultMaxKeys = 50_000
 )
 
 // AllowResult is the outcome of a single Check (one request).
@@ -72,20 +83,30 @@ type StatsSnapshot struct {
 type Limiter struct {
 	getPolicy    func() *policy.Policy
 	m            sync.Map // string -> *keyedEntry
+	buckets      atomic.Int64
 	cleanupEvery time.Duration
 	idleTTL      time.Duration
-	done         chan struct{}
-	closeOnce    sync.Once
-	wg           sync.WaitGroup
-	rdx          redisx.Client
+	statsIdleTTL time.Duration
+	// maxKeys bounds each of m, perKeyRequests and dailyTokens.
+	maxKeys int
+	// now is the clock the idle times are read from. Tests set it.
+	now func() time.Time
+	// full asks the cleanup goroutine to run now: a map went over maxKeys.
+	full      chan struct{}
+	done      chan struct{}
+	closeOnce sync.Once
+	wg        sync.WaitGroup
+	rdx       redisx.Client
 	// lifetime counters
 	totalRequests   atomic.Int64
 	limitedRequests atomic.Int64
-	perKeyRequests  sync.Map // string -> *atomic.Int64
+	// perKeyRequests counts the requests of each key that was active within
+	// statsIdleTTL.
+	perKeyRequests counters
 	// dailyTokens are the local daily token totals, by "dtq:<key>:<date>".
 	// They are apart from perKeyRequests: a token total is not a request
 	// count, and the stats report request counts.
-	dailyTokens sync.Map // string -> *atomic.Int64
+	dailyTokens counters
 
 	// orgID enables tenant-scoped Redis keys for multi-tenant isolation.
 	orgID string
@@ -108,7 +129,8 @@ func (l *Limiter) SetRedis(c redisx.Client) {
 
 func (l *Limiter) redisEnabled() bool { return l.rdx != nil && l.rdx.Enabled() }
 
-// NewLimiter starts background cleanup (every 10m, evict idle 10m).
+// NewLimiter starts background cleanup: every 10 minutes, and at once when
+// a map goes over its bound (see evictIdle). Close stops it.
 func NewLimiter(getPolicy func() *policy.Policy) *Limiter {
 	return newLimiter(getPolicy, defaultCleanupEvery, defaultIdleTTL)
 }
@@ -118,6 +140,10 @@ func newLimiter(getPolicy func() *policy.Policy, cleanupEvery, idleTTL time.Dura
 		getPolicy:    getPolicy,
 		cleanupEvery: cleanupEvery,
 		idleTTL:      idleTTL,
+		statsIdleTTL: defaultStatsIdleTTL,
+		maxKeys:      defaultMaxKeys,
+		now:          time.Now,
+		full:         make(chan struct{}, 1),
 		done:         make(chan struct{}),
 	}
 	l.wg.Add(1)
@@ -159,12 +185,12 @@ func (l *Limiter) GetOrCreate(key string) *rate.Limiter {
 	e := l.getOrCreateEntry(key, rpm)
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	e.lastUsed = time.Now()
+	e.lastUsed = l.now()
 	return e.lim
 }
 
 func (l *Limiter) getOrCreateEntry(key string, rpm int) *keyedEntry {
-	now := time.Now()
+	now := l.now()
 	if v, ok := l.m.Load(key); ok {
 		e := v.(*keyedEntry)
 		e.mu.Lock()
@@ -192,14 +218,54 @@ func (l *Limiter) getOrCreateEntry(key string, rpm int) *keyedEntry {
 		existing.mu.Unlock()
 		return existing
 	}
+	if l.buckets.Add(1) > int64(l.maxKeys) {
+		l.cleanupNow()
+	}
 	return e
 }
 
 // incrKey increments the per-key request counter.
 func (l *Limiter) incrKey(apiKey string) {
-	v, _ := l.perKeyRequests.LoadOrStore(apiKey, &atomic.Int64{})
-	v.(*atomic.Int64).Add(1)
+	l.count(&l.perKeyRequests, apiKey).n.Add(1)
+}
 
+// counter is one key's running total and when it last changed.
+type counter struct {
+	n        atomic.Int64
+	lastUsed atomic.Int64 // unix nanoseconds
+}
+
+// counters is a set of counters by key that knows its size, so that going
+// over the bound is noticed when it happens and not at the next cleanup.
+type counters struct {
+	m    sync.Map // string -> *counter
+	size atomic.Int64
+}
+
+// count returns the counter of key, made if there is none, and marks it
+// used.
+func (l *Limiter) count(cs *counters, key string) *counter {
+	now := l.now().UnixNano()
+	v, ok := cs.m.Load(key)
+	if !ok {
+		var loaded bool
+		v, loaded = cs.m.LoadOrStore(key, &counter{})
+		if !loaded && cs.size.Add(1) > int64(l.maxKeys) {
+			l.cleanupNow()
+		}
+	}
+	c := v.(*counter)
+	c.lastUsed.Store(now)
+	return c
+}
+
+// cleanupNow wakes the cleanup goroutine. It never waits: when a cleanup is
+// already asked for, that one will do.
+func (l *Limiter) cleanupNow() {
+	select {
+	case l.full <- struct{}{}:
+	default:
+	}
 }
 
 // Check runs one Allow for the API key and returns limiter metadata for HTTP headers.
@@ -218,7 +284,7 @@ func (l *Limiter) Check(apiKey string) AllowResult {
 	e := l.getOrCreateEntry(apiKey, rpm)
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	e.lastUsed = time.Now()
+	e.lastUsed = l.now()
 
 	if e.lim.Allow() {
 		rem := int(math.Floor(e.lim.Tokens()))
@@ -324,9 +390,7 @@ func (l *Limiter) CheckDailyTokenQuota(apiKey string, estimatedTokens int) Daily
 	// Local in-memory counter (per-process only — not suitable for
 	// multi-replica deployments without Redis).
 	localKey := fmt.Sprintf("dtq:%s:%s", apiKey, today)
-	v, _ := l.dailyTokens.LoadOrStore(localKey, &atomic.Int64{})
-
-	used := v.(*atomic.Int64).Add(int64(estimatedTokens))
+	used := l.count(&l.dailyTokens, localKey).n.Add(int64(estimatedTokens))
 
 	if used > maxTokens {
 		l.limitedRequests.Add(1)
@@ -347,12 +411,16 @@ func (l *Limiter) CheckDailyTokenQuota(apiKey string, estimatedTokens int) Daily
 }
 
 // TopKeysLimit is how many keys a snapshot names: the ones with the most
-// requests. The limiter counts every key it has seen since the process
-// started, one per client address for callers without a key, and a snapshot
-// of all of them has no upper size.
+// requests. The limiter counts every key that sent a request in the last
+// 24 hours (defaultStatsIdleTTL), one per client address for callers
+// without a key, up to defaultMaxKeys of them; a snapshot of all of them
+// would be that large.
 const TopKeysLimit = 20
 
-// GetStats returns a point-in-time snapshot of lifetime counters.
+// GetStats returns a point-in-time snapshot of the counters. The totals are
+// for the life of the process. A key's count starts over when the key was
+// dropped in between: after 24 hours without a request, or as one of the
+// keys used longest ago when there were more than defaultMaxKeys.
 //
 // A key in TopKeys is the bucket a caller is counted in, as the proxy names
 // it: "tk:<id>" for a Tamga key (the id of its record), "key:<16 hex>" for
@@ -364,8 +432,8 @@ func (l *Limiter) GetStats() StatsSnapshot {
 		n   int64
 	}
 	var all []keyCount
-	l.perKeyRequests.Range(func(k, v any) bool {
-		all = append(all, keyCount{k.(string), v.(*atomic.Int64).Load()})
+	l.perKeyRequests.m.Range(func(k, v any) bool {
+		all = append(all, keyCount{k.(string), v.(*counter).n.Load()})
 		return true
 	})
 	sort.Slice(all, func(i, j int) bool {
@@ -399,27 +467,105 @@ func (l *Limiter) cleanupLoop() {
 		case <-l.done:
 			return
 		case <-ticker.C:
-			l.evictIdle(time.Now())
+		case <-l.full:
 		}
+		l.evictIdle(l.now())
 	}
 }
 
+// evictIdle drops what has not been used for its time, and then, from a map
+// that still holds more than maxKeys, the keys used longest ago.
+//
+//   - A token bucket goes after idleTTL. By then it has refilled, so the
+//     key gets from a new bucket what it would have got from the old one.
+//   - A request count goes after statsIdleTTL.
+//   - A daily token total goes when its day (UTC) is over: its key has the
+//     date in it and is never read again.
+//
+// Dropping a key that is in use, which only the bound on the number of keys
+// does, gives that key a full bucket or a day's tokens again. It is the
+// keys used longest ago that go, and a caller who can make that many names
+// had a full bucket under each of them already.
 func (l *Limiter) evictIdle(now time.Time) {
 	cutoff := now.Add(-l.idleTTL)
-	var stale []any
+	var bucketsLeft []keyAge
 	l.m.Range(func(k, v any) bool {
 		e := v.(*keyedEntry)
 		e.mu.Lock()
-		staleKey := e.lastUsed.Before(cutoff)
+		last := e.lastUsed
 		e.mu.Unlock()
-		if staleKey {
-			stale = append(stale, k)
+		if last.Before(cutoff) {
+			l.dropBucket(k)
+		} else {
+			bucketsLeft = append(bucketsLeft, keyAge{k, last.UnixNano()})
 		}
 		return true
 	})
-	for _, k := range stale {
-		l.m.Delete(k)
+	for _, k := range oldestOver(bucketsLeft, l.maxKeys) {
+		l.dropBucket(k)
 	}
+
+	statsCutoff := now.Add(-l.statsIdleTTL).UnixNano()
+	l.perKeyRequests.evict(l.maxKeys, func(_ string, lastUsed int64) bool {
+		return lastUsed < statsCutoff
+	})
+
+	today := ":" + now.UTC().Format("2006-01-02")
+	l.dailyTokens.evict(l.maxKeys, func(key string, _ int64) bool {
+		return !strings.HasSuffix(key, today)
+	})
+}
+
+func (l *Limiter) dropBucket(key any) {
+	if _, ok := l.m.LoadAndDelete(key); ok {
+		l.buckets.Add(-1)
+	}
+}
+
+// evict drops the counters stale says are stale, and then the ones used
+// longest ago until at most max are left.
+func (cs *counters) evict(max int, stale func(key string, lastUsed int64) bool) {
+	var left []keyAge
+	cs.m.Range(func(k, v any) bool {
+		last := v.(*counter).lastUsed.Load()
+		if stale(k.(string), last) {
+			cs.drop(k)
+		} else {
+			left = append(left, keyAge{k, last})
+		}
+		return true
+	})
+	for _, k := range oldestOver(left, max) {
+		cs.drop(k)
+	}
+}
+
+func (cs *counters) drop(key any) {
+	if _, ok := cs.m.LoadAndDelete(key); ok {
+		cs.size.Add(-1)
+	}
+}
+
+type keyAge struct {
+	key      any
+	lastUsed int64
+}
+
+// oldestOver returns the keys to drop from a map that holds more than max:
+// the ones used longest ago, and enough of them that a tenth of max is free
+// afterwards. Without that margin a map at its bound would be sorted again
+// for every key that arrives.
+func oldestOver(keys []keyAge, max int) []any {
+	if len(keys) <= max {
+		return nil
+	}
+	sort.Slice(keys, func(i, j int) bool { return keys[i].lastUsed < keys[j].lastUsed })
+	n := len(keys) - (max - max/10)
+	out := make([]any, n)
+	for i := range out {
+		out[i] = keys[i].key
+	}
+	return out
 }
 
 // Close stops the cleanup goroutine.
