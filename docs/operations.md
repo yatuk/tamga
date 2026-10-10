@@ -35,7 +35,7 @@ Essential environment variables:
 | `TAMGA_DB_URL` | — | PostgreSQL DSN (empty = DB logging off) |
 | `REDIS_URL` | — | Redis connection string |
 | `TAMGA_ANALYZER_ADDR` | `localhost:50051` | gRPC address of the analyzer |
-| `TAMGA_ANALYZER_HTTP_URL` | `http://localhost:8000` | HTTP base URL of the analyzer. The PDF reports are fetched from it |
+| `TAMGA_ANALYZER_HTTP_URL` | `http://localhost:8444` | HTTP base URL of the analyzer (`http://analyzer:8444` under Compose). The PDF reports are fetched from it; when it is unreachable they answer 503 |
 | `TAMGA_MAX_BODY_BYTES` | `1048576` | Max request body size (1 MB) |
 | `TAMGA_MOCK_UPSTREAM` | `false` | Demo mode without real providers |
 | `TAMGA_STRICT_MODE` | `false` | Ignore all policy exceptions |
@@ -88,7 +88,6 @@ Access:
 | `TAMGA_CORS_ALLOWED_METHODS` | `GET,POST,PUT,PATCH,DELETE,OPTIONS` | Value of `Access-Control-Allow-Methods` |
 | `TAMGA_CORS_CREDENTIALS` | `false` | Send `Access-Control-Allow-Credentials: true`. Honoured only when `TAMGA_CORS_ORIGINS` is set |
 | `TAMGA_CORS_MAX_AGE` | `86400` | Seconds a browser may cache a preflight answer |
-| `TAMGA_TIER` | `community` | `community`, `team`, `business` or `enterprise`. Used with the policy's `pricing` section; a mismatch with its active tier is logged at startup |
 | `TAMGA_REGION` | empty | `eu`, `tr` or `us`. Compared with `data.residency` in the policy at startup; a mismatch is logged, nothing is refused |
 
 TLS:
@@ -117,8 +116,6 @@ Storage and events:
 | `TAMGA_POLICY_HISTORY_DIR` | `./data/policy-history` | Where policy history is kept when there is no database |
 | `TAMGA_RETENTION_ENABLED` | off | `true` or `1` runs the retention job once a day. Needs a database |
 | `TAMGA_RETENTION_REQUEST_LOGS_DAYS` | `30` | Days request logs are kept |
-| `TAMGA_RETENTION_ALERTS_DAYS` | `90` | Days alerts are kept |
-| `TAMGA_RETENTION_DAILY_STATS_DAYS` | `365` | Days daily statistics are kept |
 | `TAMGA_RETENTION_AUDIT_DAYS` | `365` | Days the audit log is kept |
 | `TAMGA_RETENTION_INCIDENT_CLOSED_DAYS` | `0` | Days closed incidents are kept |
 
@@ -134,21 +131,12 @@ Tracing:
 | `TAMGA_OTEL_URL_PATH` | `/v1/traces` | Path of the collector's trace endpoint |
 | `TAMGA_TRACE_UI_URL` | empty | Address of a trace viewer, reported in the runtime health detail for the console to link to |
 
-HashiCorp Vault. These are separate from `TAMGA_VAULT_KEY` and
-`TAMGA_VAULT_TTL_SECONDS`, which belong to PII tokenization (see
-[Vault](#vault--reversible-pii-tokenization)). With `TAMGA_VAULT_ADDR` set
-the proxy connects to Vault at startup and checks that it answers. No setting
-is read from Vault yet: every value above still comes from the environment.
-
-| Variable | Default | Description |
-|---|---|---|
-| `TAMGA_VAULT_ADDR` | empty | Vault server URL. Setting it enables the connection |
-| `TAMGA_VAULT_AUTH_METHOD` | `token` | `token`, `approle` or `kubernetes` |
-| `TAMGA_VAULT_TOKEN`, `TAMGA_VAULT_TOKEN_FILE` | empty | A token, or a file that holds one. `VAULT_TOKEN` is read when neither gives one |
-| `TAMGA_VAULT_ROLE_ID`, `TAMGA_VAULT_SECRET_ID` | empty | AppRole credentials |
-| `TAMGA_VAULT_K8S_ROLE` | `tamga-proxy` | Role for Kubernetes auth |
-| `TAMGA_VAULT_PATH_PREFIX` | `secret/tamga` | KV v2 path prefix |
-| `TAMGA_VAULT_CACERT`, `TAMGA_VAULT_CLIENT_CERT`, `TAMGA_VAULT_CLIENT_KEY` | empty | CA bundle and client certificate for the connection to Vault |
+Secrets come from the environment only. The proxy does not read settings from
+HashiCorp Vault or another secrets manager: have your platform put them into
+the environment (a Kubernetes Secret, the Vault agent injector, External
+Secrets). `TAMGA_VAULT_KEY` and `TAMGA_VAULT_TTL_SECONDS` are unrelated to
+HashiCorp Vault; they belong to PII tokenization (see
+[Vault](#vault--reversible-pii-tokenization)).
 
 See also [proxy/README.md](../proxy/README.md#ortam-değişkenleri-seçilmiş).
 
@@ -351,7 +339,7 @@ for changes made through the API and the console.
 | analyst (an API key of scope `write`, a user with the analyst role) | `rules` except a rule's `notify`, `output_rules`, `custom_entities`, `competitors`, `name`, `version` |
 
 Everything else needs the admin role: `providers`, `exceptions`,
-`governance`, `data`, `pricing`, `vault`, `cache`, `body_limits`,
+`governance`, `data`, `vault`, `cache`, `body_limits`,
 `rate_limit`, `cost`, `scan`, `operator_state`, `canary`, and where a rule
 sends its alerts. A write that touches one of these with an analyst key is
 refused whole with 403, and the body lists the sections under
@@ -490,7 +478,6 @@ Limits:
 - A body of at most 256 KB (413), sent as `application/json` (415).
 - A few scans at a time, about half the processors. When all are busy the
   answer is 503 with `Retry-After`, so that scans cannot slow the proxy path.
-- Scans do not count against the plan's monthly request cap.
 - A request from a web page is refused (403) unless its origin is in
   `TAMGA_CORS_ORIGINS`. A browser extension's background worker is not a web
   page and is let in.
@@ -652,6 +639,16 @@ Migration `018_drop_tenant_rls` removes the row-level security policy on
 tenant it compared against, and the proxy connects as the owner of the
 tables. What keeps organisations apart is the `org_id` condition in each
 query.
+
+Migration `019_drop_unused_tables` drops `api_keys`, `policies`, `alerts`,
+`daily_stats` and `event_outbox`. No version of the proxy or the analyzer
+writes to them, so they are expected to be empty; if you put rows into one
+yourself, dump it first (the command is in the file's header). Run it after
+the proxy is upgraded: an older proxy's retention job deletes from `alerts`
+and `daily_stats` and fails its purge step once they are gone.
+`TAMGA_RETENTION_ALERTS_DAYS` and `TAMGA_RETENTION_DAILY_STATS_DAYS` are no
+longer read. To roll back past `018`, run `019`'s down first: it recreates
+the tables, empty.
 
 Without a database the request logs are not kept at all and the console shows
 the last 1000 requests from memory. Policy history is then a file next to the

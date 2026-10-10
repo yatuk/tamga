@@ -2,6 +2,39 @@
 
 ## v0.9.0 (unreleased)
 
+### Licence
+- **Tamga is open source only: AGPL-3.0, and nothing else.** There is no
+  commercial licence and no paid edition. `LICENSE-COMMERCIAL.md` is removed,
+  and so is the commercial appendix that followed the AGPL text in `LICENSE`.
+  Packages declare `AGPL-3.0-only`.
+- **The plan layer is gone.** A `pricing:` section in the policy selected a
+  tier with a monthly request cap and a switch for custom entities. Nothing
+  is limited by plan any more: the 429 `monthly_request_limit_exceeded`, the
+  403 for custom entities on a tier, the `X-Tamga-Tier` headers, the `tier`
+  fields in the health detail and `TAMGA_TIER` no longer exist. **A policy
+  that still has a `pricing:` section is refused at load, with a message
+  saying to remove it.** Limits are set under `rate_limit` and `cost`, as
+  before.
+
+### Deployment and operations
+- **The PDF reports did not work in the compose stack**: the proxy looked
+  for the analyzer on a port nothing listens on. `TAMGA_ANALYZER_HTTP_URL`
+  now defaults to `http://localhost:8444` and compose sets it. Report errors
+  carry a `code`; a timeout is 504 and a bad analyzer answer 502 (both were
+  503). The caller's query is no longer passed on as written.
+- **Migration 019 drops five unused tables** (`api_keys`, `policies`,
+  `alerts`, `event_outbox`, `daily_stats`). **Upgrade the proxy first**, then
+  apply it. `TAMGA_RETENTION_ALERTS_DAYS` and
+  `TAMGA_RETENTION_DAILY_STATS_DAYS` are no longer read.
+- The HashiCorp Vault settings (`TAMGA_VAULT_ADDR` and the others; not
+  `TAMGA_VAULT_KEY`) are no longer read. The proxy connected to Vault and
+  resolved nothing through it.
+- The Helm chart was checked with Helm itself. Resource names are no longer
+  doubled for a release called `tamga-proxy`, **which renames the resources
+  of an existing release of that name**.
+- CI runs on `main`; it triggered on a branch that does not exist, and the
+  integration smoke test had never run.
+
 ### Security
 - The Redis and NATS URLs were written to the log at startup with their
   passwords. Only the host is logged.
@@ -12,8 +45,7 @@
   or `secrets.existingSecret`) and fails to render without an admin key;
   the port is 8443. **Values files written for the old chart must be
   changed: `env.TAMGA_ADMIN_KEY`, `env.TAMGA_POSTGRES_URL` and
-  `env.TAMGA_REDIS_URL` are gone.** The chart has not been rendered with
-  Helm in this repository's checks; run `helm lint` before relying on it.
+  `env.TAMGA_REDIS_URL` are gone.**
 - The proxy image's health check calls `/health`. It called the detailed
   endpoint and marked the container unhealthy when a dependency was down.
 - **SDKs, breaking.** Python: `get_mttr` and `get_budget_stats` no longer

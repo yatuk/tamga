@@ -355,32 +355,31 @@ graph TB
 
 ## Database schema
 
-PostgreSQL is optional. The schema is the 18 numbered migrations in
+PostgreSQL is optional. The schema is the 19 numbered migrations in
 [`deploy/migrations/`](../../deploy/migrations/); read them for the columns.
 The tables they create:
 
 | Table | Migration | Holds |
 |---|---|---|
 | `organizations` | 001 | Organisations; request rows refer to one |
-| `api_keys`, `policies`, `alerts` | 001 | Tables of the first schema. No query in the proxy or the analyzer reads or writes them; the retention job deletes old `alerts` rows |
 | `request_logs` | 001, 003, 006, 017 | One row per request: metadata, action and masked findings. Partitioned by month on `created_at`, with a default partition |
-| `daily_stats` | 001 | Per-day counters per organisation |
 | `audit_log` | 004 | The hash-chained log of administrative actions |
 | `policy_revisions`, `policy_proposals` | 004 | Policy history and two-person proposals |
 | `retention_run_log` | 005 | One row per run of the retention job |
 | `analyzer_findings` | 007 | Findings the analyzer adds after the decision |
 | `model_pricing` | 008, 009 | Price per model, used for cost |
-| `event_outbox` | 010 | Created as an outbox for NATS delivery. No code in the proxy or the analyzer reads or writes it |
 | `incident_lifecycle` | 012, 014 | Triage state of incidents |
 | `saved_hunts` | 013 | Saved event queries |
 | `virtual_keys` | 015 | Tamga's own API keys, as a SHA-256 hash and a prefix |
 | `stored_documents` | 016 | Custom patterns, team roles, SSO settings and webhooks, one JSON document each |
 
 Migration 011 added row-level security to `request_logs` and `daily_stats`
-and 018 removed it; it never had an effect. See
+and 018 removed it; it never had an effect. Migration 019 dropped five tables
+that nothing read or wrote: `api_keys`, `policies`, `alerts` and `daily_stats`
+from 001 and `event_outbox` from 010. See
 [Upgrading the database](../operations.md#upgrading-the-database).
 
 Retention: with `TAMGA_RETENTION_ENABLED=true` a daily job creates the monthly
 partitions of `request_logs` and drops old data. Request logs are kept 30
-days by default, alerts 90, daily statistics and the audit log 365
+days by default and the audit log 365
 (`TAMGA_RETENTION_*_DAYS`).
