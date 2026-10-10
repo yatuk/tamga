@@ -3,6 +3,23 @@
 ## v0.9.0 (unreleased)
 
 ### Security
+- The Redis and NATS URLs were written to the log at startup with their
+  passwords. Only the host is logged.
+- **Helm chart 0.2.0.** The chart set variables the proxy does not read, so
+  an install had no database, and shipped a default policy the proxy refuses
+  to start with. It now takes the admin key, database URL and Redis URL from
+  a Secret (`secrets.adminKey`, `secrets.databaseUrl`, `secrets.redisUrl`,
+  or `secrets.existingSecret`) and fails to render without an admin key;
+  the port is 8443. **Values files written for the old chart must be
+  changed: `env.TAMGA_ADMIN_KEY`, `env.TAMGA_POSTGRES_URL` and
+  `env.TAMGA_REDIS_URL` are gone.** The chart has not been rendered with
+  Helm in this repository's checks; run `helm lint` before relying on it.
+- The proxy image's health check calls `/health`. It called the detailed
+  endpoint and marked the container unhealthy when a dependency was down.
+- **SDKs, breaking.** Python: `get_mttr` and `get_budget_stats` no longer
+  take an organisation. TypeScript: `exportEvents` returns text,
+  `openLiveEvents` is an async generator, and `updateWebhook`, `getSession`
+  and `exportEventsUrl` are removed; none of the three reached anything.
 - The Team list says whether an account's role was given by an admin
   (`assigned`) or is only the default for accounts without one. An account
   whose role was removed stays listed for 30 days, marked `role_removed`,
