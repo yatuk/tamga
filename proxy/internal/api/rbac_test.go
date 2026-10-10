@@ -32,6 +32,8 @@ func TestRouteScope(t *testing.T) {
 		{"GET patterns no scope", "GET", "/api/v1/patterns", ""},
 		{"GET team admin", "GET", "/api/v1/team", scopeTeamAdmin},
 		{"PUT team admin", "PUT", "/api/v1/team/1/role", scopeTeamAdmin},
+		{"PUT sso settings admin", "PUT", "/api/v1/settings/sso", scopeSSOAdmin},
+		{"GET sso settings no scope", "GET", "/api/v1/settings/sso", ""},
 		{"DELETE subject erase", "DELETE", "/api/v1/events/subject", scopePrivacyErase},
 		{"GET events no scope", "GET", "/api/v1/events", ""},
 		{"GET stats no scope", "GET", "/api/v1/stats", ""},

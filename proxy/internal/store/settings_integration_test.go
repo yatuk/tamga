@@ -103,6 +103,36 @@ func TestPG_SettingsSurviveARestart(t *testing.T) {
 		}
 	})
 
+	t.Run("sso settings", func(t *testing.T) {
+		table := docstore.NewTable(pool, "sso_settings", nil)
+		a := NewMemorySSOSettingsStore()
+		if err := a.Persist(table); err != nil {
+			t.Fatal(err)
+		}
+		if err := a.Set("org-1", SSOSettings{ProviderType: "saml", MetadataURL: "https://idp.example.com/metadata", Domain: "example.com", Enabled: true, AttributeMapping: map[string]string{"email": "mail"}}); err != nil {
+			t.Fatal(err)
+		}
+
+		b := NewMemorySSOSettingsStore()
+		if err := b.Persist(table); err != nil {
+			t.Fatal(err)
+		}
+		if got := b.Get("org-1"); got.ProviderType != "saml" || got.MetadataURL != "https://idp.example.com/metadata" || got.Domain != "example.com" || !got.Enabled || got.AttributeMapping["email"] != "mail" {
+			t.Fatalf("after restart: %+v", got)
+		}
+
+		// A change on one replica reaches the other on its next reload.
+		if err := a.Set("org-1", SSOSettings{ProviderType: "saml", MetadataURL: "https://idp.example.com/metadata", Domain: "example.com"}); err != nil {
+			t.Fatal(err)
+		}
+		if err := b.Reload(); err != nil {
+			t.Fatal(err)
+		}
+		if b.Get("org-1").Enabled {
+			t.Fatal("after reload: SSO is still enabled on the other replica")
+		}
+	})
+
 	t.Run("webhooks are encrypted", func(t *testing.T) {
 		const url = "https://hooks.slack.example/services/T000/B000/secretpath"
 		const token = "pd-routing-key-123"

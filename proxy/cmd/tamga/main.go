@@ -382,12 +382,12 @@ func main() {
 	// A pattern that arrives from another replica has to be compiled here
 	// too. Without this the store would name it (and the cache key with it)
 	// while the scanner went on without it.
-	persistSettings(cfg, pgStore, patternStore, userStore, webhookStore, func() {
+	ssoStore := store.NewMemorySSOSettingsStore()
+	persistSettings(cfg, pgStore, patternStore, userStore, webhookStore, ssoStore, func() {
 		if customScanner != nil {
 			customScanner.Refresh()
 		}
 	})
-	ssoStore := store.NewMemorySSOSettingsStore()
 	clerkClient := users.NewClerkClient(cfg.ClerkSecretKey)
 	var policyHistory policyhistory.Store
 	if pgStore != nil {
@@ -1014,6 +1014,12 @@ func floatField(m map[string]any, key string) float64 {
 	return 0
 }
 
+	// The SSO settings hold no secret (see store.SSOSettings), so like the
+	// team roles they are stored as they are and need no vault key.
+	if err := sso.Persist(docstore.NewTable(pool, "sso_settings", nil)); err != nil {
+		log.Warn().Err(err).Msg("settings: SSO settings could not be loaded")
+	}
+	live = append(live, sso)
 func intField(m map[string]any, key string) int {
 	if v, ok := m[key]; ok {
 		switch n := v.(type) {
@@ -1031,24 +1037,24 @@ func retentionSchedulerEnabled() bool {
 	return e == "1" || strings.EqualFold(e, "true")
 }
 
-// settingsReloadInterval is how long a change to patterns, team roles or
-// webhooks made on one replica takes to reach the others.
+// settingsReloadInterval is how long a change to patterns, team roles,
+// SSO settings or webhooks made on one replica takes to reach the others.
 const settingsReloadInterval = 30 * time.Second
 
-// persistSettings puts the database behind the pattern, team-role and
+// persistSettings puts the database behind the pattern, team-role, SSO and
 // webhook stores, so they survive a restart and agree across replicas.
 // Without a database they stay in memory, as before.
 //
 // afterReload runs after each periodic reload, for whoever keeps something
 // compiled from these stores.
-func persistSettings(cfg *config.Config, pg *store.PostgresStore, pats *patterns.MemoryStore, team *users.MemoryStore, hooks *webhooks.MemoryStore, afterReload func()) {
+func persistSettings(cfg *config.Config, pg *store.PostgresStore, pats *patterns.MemoryStore, team *users.MemoryStore, hooks *webhooks.MemoryStore, sso *store.MemorySSOSettingsStore, afterReload func()) {
 	if pg == nil {
-		log.Warn().Msg("settings: no database configured, custom patterns, team roles and webhooks are kept in memory and lost on restart")
+		log.Warn().Msg("settings: no database configured, custom patterns, team roles, SSO settings and webhooks are kept in memory and lost on restart")
 		return
 	}
 	pool := pg.Pool()
 	if err := docstore.Init(context.Background(), pool); err != nil {
-		log.Warn().Err(err).Msg("settings: database unavailable, custom patterns, team roles and webhooks are kept in memory and lost on restart")
+		log.Warn().Err(err).Msg("settings: database unavailable, custom patterns, team roles, SSO settings and webhooks are kept in memory and lost on restart")
 		return
 	}
 	type reloadable interface{ Reload() error }

@@ -1,8 +1,19 @@
 package store
 
-import "sync"
+import (
+	"encoding/json"
+	"sync"
+
+	"github.com/yatuk/tamga/internal/docstore"
+)
 
 // SSOSettings represents the SAML/OIDC configuration for an organisation.
+//
+// None of these fields is a secret (the metadata URL is the identity
+// provider's public document), so the record is stored and returned as it
+// is. A field that is one (a client secret, a SCIM token, a signing key)
+// must not simply be added here: the record would then have to be stored
+// encrypted, as webhooks are, and the field kept out of the GET response.
 type SSOSettings struct {
 	ProviderType     string            `json:"provider_type"`
 	MetadataURL      string            `json:"metadata_url"`
@@ -12,19 +23,60 @@ type SSOSettings struct {
 }
 
 // SSOSettingsStore persists enterprise SSO configuration per organisation.
-// The default implementation is in-memory; a future Postgres-backed
-// implementation can be swapped in by satisfying this interface.
 type SSOSettingsStore interface {
 	Get(orgID string) *SSOSettings
-	Set(orgID string, cfg SSOSettings)
+	// Set fails when the change could not be stored, and then changes
+	// nothing.
+	Set(orgID string, cfg SSOSettings) error
 }
 
 // MemorySSOSettingsStore is an in-memory implementation of SSOSettingsStore.
 // It is safe for concurrent use and returns a copy on reads to prevent
-// accidental mutation by callers.
+// accidental mutation by callers. With a Persister attached it is loaded
+// from and written through to the database, one document per organisation.
 type MemorySSOSettingsStore struct {
-	mu   sync.RWMutex
-	data map[string]SSOSettings
+	// wmu serialises changes, so a slow write to the database never holds
+	// the lock readers take.
+	wmu     sync.Mutex
+	mu      sync.RWMutex
+	data    map[string]SSOSettings
+	persist docstore.Persister
+}
+
+// Persist attaches backing storage and loads what it holds. From then on a
+// change is written there before it is applied here.
+func (m *MemorySSOSettingsStore) Persist(p docstore.Persister) error {
+	m.wmu.Lock()
+	m.persist = p
+	m.wmu.Unlock()
+	return m.Reload()
+}
+
+// Reload replaces the working copy with what the backing storage holds,
+// which is how a change made on another replica arrives. The copy is swapped
+// whole: a reader sees the settings from before or after, never a mix.
+func (m *MemorySSOSettingsStore) Reload() error {
+	m.wmu.Lock()
+	defer m.wmu.Unlock()
+	if m.persist == nil {
+		return nil
+	}
+	fresh := make(map[string]SSOSettings)
+	err := m.persist.All(func(id string, raw []byte) error {
+		var s SSOSettings
+		if err := json.Unmarshal(raw, &s); err != nil {
+			return err
+		}
+		fresh[id] = s
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	m.mu.Lock()
+	m.data = fresh
+	m.mu.Unlock()
+	return nil
 }
 
 // NewMemorySSOSettingsStore is used for test injection.
@@ -54,10 +106,26 @@ func (m *MemorySSOSettingsStore) Get(orgID string) *SSOSettings {
 }
 
 // Set stores the SSO configuration for orgID.
-func (m *MemorySSOSettingsStore) Set(orgID string, cfg SSOSettings) {
+func (m *MemorySSOSettingsStore) Set(orgID string, cfg SSOSettings) error {
+	// The caller's map is not kept: it could change it afterwards.
+	if cfg.AttributeMapping != nil {
+		mapping := make(map[string]string, len(cfg.AttributeMapping))
+		for k, v := range cfg.AttributeMapping {
+			mapping[k] = v
+		}
+		cfg.AttributeMapping = mapping
+	}
+	m.wmu.Lock()
+	defer m.wmu.Unlock()
+	if m.persist != nil {
+		if err := m.persist.Put(orgID, cfg); err != nil {
+			return err
+		}
+	}
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	m.data[orgID] = cfg
+	m.mu.Unlock()
+	return nil
 }
 
 // NoopSSOSettingsStore returns default settings for every org and discards
@@ -78,4 +146,4 @@ func (n *NoopSSOSettingsStore) Get(_ string) *SSOSettings {
 }
 
 // Set discards the configuration (no-op).
-func (n *NoopSSOSettingsStore) Set(_ string, _ SSOSettings) {}
+func (n *NoopSSOSettingsStore) Set(_ string, _ SSOSettings) error { return nil }

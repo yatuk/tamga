@@ -14,6 +14,7 @@ const (
 	scopePatternsWrite = "patterns:write"
 	scopeTeamAdmin     = "team:admin"
 	scopePrivacyErase  = "privacy:erase"
+	scopeSSOAdmin      = "sso:admin" // who may sign in, and through whom
 )
 
 // roleScopes maps a RBAC role to the set of scopes it carries. `admin`
@@ -21,7 +22,7 @@ const (
 var roleScopes = map[string][]string{
 	"admin": {
 		scopePoliciesWrite, scopePoliciesAdmin, scopeAPIKeysWrite, scopeWebhooksWrite,
-		scopePatternsWrite, scopeTeamAdmin, scopePrivacyErase,
+		scopePatternsWrite, scopeTeamAdmin, scopePrivacyErase, scopeSSOAdmin,
 	},
 	"analyst": {
 		scopePoliciesWrite, scopePatternsWrite,
@@ -53,6 +54,10 @@ func routeScope(method, path string) string {
 		return scopePatternsWrite
 	case strings.HasPrefix(path, "/team"):
 		return scopeTeamAdmin
+	// Reading the SSO settings is open like the other settings; changing
+	// which identity provider is trusted is for an admin.
+	case method != http.MethodGet && strings.HasPrefix(path, "/settings/sso"):
+		return scopeSSOAdmin
 	}
 	return ""
 }

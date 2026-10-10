@@ -2,10 +2,12 @@ package api
 
 import (
 	"encoding/json"
+	"maps"
 	"net/http"
 	"net/url"
 	"strings"
 
+	"github.com/yatuk/tamga/internal/incidents"
 	"github.com/yatuk/tamga/internal/store"
 )
 
@@ -16,6 +18,28 @@ func (cfg Config) ssoSettingsSafe() store.SSOSettingsStore {
 		return cfg.SSOSettings
 	}
 	return store.NewNoopSSOSettingsStore()
+}
+
+// ssoChangedFields lists, by their JSON names, the settings that differ
+// between two configurations.
+func ssoChangedFields(a, b store.SSOSettings) []string {
+	changed := make([]string, 0, 5)
+	if a.ProviderType != b.ProviderType {
+		changed = append(changed, "provider_type")
+	}
+	if a.MetadataURL != b.MetadataURL {
+		changed = append(changed, "metadata_url")
+	}
+	if !maps.Equal(a.AttributeMapping, b.AttributeMapping) {
+		changed = append(changed, "attribute_mapping")
+	}
+	if a.Enabled != b.Enabled {
+		changed = append(changed, "enabled")
+	}
+	if a.Domain != b.Domain {
+		changed = append(changed, "domain")
+	}
+	return changed
 }
 
 // handleSSOGet returns the SSO configuration for the default organisation.
@@ -90,7 +114,22 @@ func (cfg Config) handleSSOPut(w http.ResponseWriter, r *http.Request) {
 	}
 
 	st := cfg.ssoSettingsSafe()
-	st.Set(orgID, body)
+	before := st.Get(orgID)
+	if err := st.Set(orgID, body); err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	// Who may sign in is decided here, so the change is on the audit trail
+	// with who made it. The entry names the fields that changed, not what
+	// they were set to.
+	if changed := ssoChangedFields(*before, body); cfg.Audit != nil && len(changed) > 0 {
+		cfg.Audit.Append(incidents.AuditEntry{
+			Kind:   "sso.update",
+			Target: orgID,
+			Actor:  actorFromRequest(r),
+			Detail: map[string]interface{}{"changed": changed},
+		})
+	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"ok":     true,
