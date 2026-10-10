@@ -3,7 +3,6 @@ import { Archivo, Atkinson_Hyperlegible_Mono, Atkinson_Hyperlegible_Next } from 
 import "./tamga.css";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { QueryProvider } from "@/lib/query-provider";
-import { ClerkBoundary } from "@/components/clerk-boundary";
 import { Toaster } from "@/components/console/toaster";
 
 // Atkinson Hyperlegible for text: it was drawn to keep 0/O and 1/l/I apart,
@@ -81,25 +80,15 @@ export const viewport: Viewport = { themeColor: "#f4f4f4" };
 /* eslint-enable tamga/no-hardcoded-color */
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const pk = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || "";
-  const clerkEnabled = pk && !pk.toLowerCase().includes("placeholder");
-
-  const tree = (
-    <>
-      <NuqsAdapter>
-        <QueryProvider>{children}</QueryProvider>
-      </NuqsAdapter>
-      <Toaster />
-    </>
-  );
-
-  // Clerk is only loaded when a real publishable key is configured.
-  const body = clerkEnabled ? <ClerkBoundary>{tree}</ClerkBoundary> : tree;
-
   return (
     <html lang="en">
       {/* The body only carries the font variables; colours and faces are set in tamga.css. */}
-      <body className={`${atkinson.variable} ${archivo.variable} ${atkinsonMono.variable}`}>{body}</body>
+      <body className={`${atkinson.variable} ${archivo.variable} ${atkinsonMono.variable}`}>
+        <NuqsAdapter>
+          <QueryProvider>{children}</QueryProvider>
+        </NuqsAdapter>
+        <Toaster />
+      </body>
     </html>
   );
 }

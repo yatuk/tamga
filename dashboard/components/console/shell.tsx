@@ -21,7 +21,6 @@ import { Search } from "@carbon/icons-react";
 import { EXPRESSIVE, Motion } from "./motion";
 import { findNavItem, navGroups } from "./nav";
 import { useProxyHealth } from "./use-proxy-health";
-import { UserMenu } from "./user-menu";
 
 // The palette is only needed once it is opened.
 const CommandPalette = dynamic(() => import("./palette").then((m) => m.CommandPalette), { ssr: false });
@@ -86,9 +85,6 @@ export function TamgaShell({ children }: { children: ReactNode }) {
               >
                 <Search size={20} />
               </HeaderGlobalAction>
-              <span className="t-user">
-                <UserMenu />
-              </span>
             </HeaderGlobalBar>
           </Header>
         </Theme>

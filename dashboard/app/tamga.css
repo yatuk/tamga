@@ -183,11 +183,6 @@ html {
   0% { transform: scale(1); opacity: 0.9; }
   60%, 100% { transform: scale(3.2); opacity: 0; }
 }
-.tamga .t-user {
-  display: flex;
-  align-items: center;
-  padding: 0 0.75rem 0 0.25rem;
-}
 
 /* Sections. Carbon's side nav frame, our own items: one mark that travels to
    the page you open. */

@@ -20,7 +20,6 @@
     "@carbon/icons-react": "^11.90.0",
     "@carbon/react": "^1.118.0",
     "@carbon/styles": "^1.117.0",
-    "@clerk/nextjs": "^6.0.0",
     "@codemirror/lang-json": "^6.0.2",
     "@codemirror/language": "^6.12.4",
     "@codemirror/view": "^6.43.13",
