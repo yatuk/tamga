@@ -36,6 +36,37 @@
   integration smoke test had never run.
 
 ### Security
+- **A rule that said REDACT could forward the value unmasked.** On a request
+  only PII and custom-entity findings were masked. A secret, a competitor
+  name, or a custom entity reached through a `custom` rule went to the
+  provider as it was, with no warning. Every finding that has a place in the
+  text is now masked, with a marker that holds no part of the value. A
+  secret or a competitor name is never put in the vault, so it is not
+  restored in the answer. If a REDACT verdict cannot be carried out, the
+  request is blocked, not forwarded.
+  **A policy that asks REDACT for a finding with nothing to mask (an
+  injection, content moderation, operator state) no longer loads**, and says
+  which actions are possible. The same for `output_rules.redact_on` naming
+  such a kind.
+- **The analyzer's LLM judge could send the text of a blocked request to
+  Anthropic.** The proxy copied request bodies to the analyzer, blocked ones
+  as they arrived, and the judge called out whenever a key was present,
+  a placeholder included. The proxy now sends the analyzer no request text
+  unless `TAMGA_ANALYZER_SEND_CONTENT=true`, never a blocked request, and
+  only the body as forwarded. The judge runs only with
+  `TAMGA_LLM_JUDGE=anthropic` and a real key. **Both are off by default: a
+  deployment that relied on the analyzer's deep scan or the judge has to turn
+  them on.** `.env.example` no longer ships a placeholder key.
+- **A competitor entry's `action` decided nothing**, and an unknown `action`
+  on a custom entity acted as PASS. Both are applied now; with a `custom` or
+  `competitor` rule as well, the stronger wins. An `action` that is not an
+  action name stops the load. **A competitor entry written with
+  `action: block` now blocks.**
+- STRIP replaced only the first part of an instruction split over two content
+  parts, and stripped the wrong part for a finding tied to no segment. Both
+  parts are stripped; an unlocated finding blocks.
+- An answer masked in a stream could keep the part of a value that only one
+  of two overlapping findings covered.
 - **Erasing a person's data could erase everyone's.** The national-id hash
   selector of `DELETE /api/v1/events/subject` was matched as a pattern, so a
   selector of `%` deleted every stored request of the organisation. It must

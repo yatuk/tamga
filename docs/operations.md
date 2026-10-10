@@ -36,6 +36,7 @@ Essential environment variables:
 | `REDIS_URL` | — | Redis connection string |
 | `TAMGA_ANALYZER_ADDR` | `localhost:50051` | gRPC address of the analyzer |
 | `TAMGA_ANALYZER_HTTP_URL` | `http://localhost:8444` | HTTP base URL of the analyzer (`http://analyzer:8444` under Compose). The PDF reports are fetched from it; when it is unreachable they answer 503 |
+| `TAMGA_ANALYZER_SEND_CONTENT` | `false` | Copy the text of forwarded requests to the analyzer. Off, the analyzer reads no request text. See [Analyzer](#analyzer) |
 | `TAMGA_MAX_BODY_BYTES` | `1048576` | Max request body size (1 MB) |
 | `TAMGA_MOCK_UPSTREAM` | `false` | Demo mode without real providers |
 | `TAMGA_STRICT_MODE` | `false` | Ignore all policy exceptions |
@@ -188,6 +189,46 @@ Define your own PII patterns two ways:
   section — persisted in the policy. Test either against the active policy with
   `POST /api/v1/policies/simulate` (empty `yaml` = active policy).
 
+An entry under `custom_entities` or `competitors` may set an `action` of its
+own, and every match of that entry gets it. A rule keyed `custom` or
+`competitor` (or `custom_detection`, `competitor_detection`) applies to those
+findings like any other rule, with `types` naming entries. When an entry's
+action and a rule both apply, the stronger one wins (BLOCK, STRIP, REDACT,
+WARN, LOG, PASS, strongest first), as between the two rule keys of a type.
+`scan.default_action` covers a competitor match that neither an action nor a
+rule decided about; it does not cover custom findings. An exception waives a
+rule, not an entry's own action. The action is one of those six names in
+either case of letters; any other value does not load.
+
+### What REDACT and STRIP can act on
+
+REDACT cuts a value out of the text and puts `[<kind>_REDACTED]` in its
+place, so it needs a finding that is a value with a place in the text: PII,
+a secret, a custom entity, a competitor's name. Each finding whose rule (or
+entry) says REDACT is masked; so is every PII and custom-entity finding in a
+request that is being masked anyway. The marker names the category
+(`[aws_access_key_REDACTED]`), or for a competitor the type
+(`[competitor_REDACTED]`), since its category is the name being removed.
+
+An injection, a content-moderation or an operator-state finding is a verdict
+on a piece of text, not a value in it. A rule that asks REDACT for one of
+them does not load (`rules.injection.action: REDACT cannot be carried
+out…`); use BLOCK, STRIP, WARN, LOG or PASS. The same for
+`output_rules.redact_on`: `injection`, `content_moderation`, `code_leak` and
+`operator_state` are refused there; name them in `block_on`.
+
+A REDACT that cannot be carried out for a request blocks it, and
+`X-Tamga-Redact-Fallback` says why: `block:unplaced` (the value was found
+only in a normalised view of the text, so there is no place to cut),
+`block:unmaskable` (a finding under REDACT turned out to be a verdict, for
+instance from a `confidence_based` rule), `block:rewrite_failed`. A body the
+proxy does not read by message (`X-Tamga-Scan-Mode: raw`) is masked in its
+bytes, and refused if a JSON body would no longer be JSON afterwards.
+
+STRIP replaces the whole message part a finding is in, so it works for every
+kind of finding in a request read by message, and blocks
+(`X-Tamga-Strip-Fallback`) where there is no part to replace.
+
 ### Vault — reversible PII tokenization
 
 By default REDACT masks PII irreversibly, so the user loses the original data.
@@ -195,11 +236,20 @@ With the vault enabled, PII that would be REDACTed is instead replaced with
 numbered placeholders on the way to the provider and restored in the response:
 
 ```
-prompt    "Ahmet için özet, TC 12345678950"
-forwarded "[TAMGA_PERSON_1] için özet, TC [TAMGA_TC_KIMLIK_1]"
-response  "[TAMGA_PERSON_1] için 3 aylık özet ..."
-client    "Ahmet için 3 aylık özet ..."
+prompt    "ayse@example.com için özet, TC 12345678950"
+forwarded "[TAMGA_EMAIL_1] için özet, TC [TAMGA_TC_KIMLIK_1]"
+response  "[TAMGA_EMAIL_1] için 3 aylık özet ..."
+client    "ayse@example.com için 3 aylık özet ..."
 ```
+
+A placeholder is made for what the scanners find. They find identifiers
+(e-mail, phone, TC Kimlik, IBAN, card numbers and the like), not people's
+names or addresses, so a name in a prompt is sent as it is.
+
+The vault holds PII and custom entities only. A secret or a competitor's
+name under a REDACT rule is masked with the fixed marker also when the vault
+is on, and is not put back in the response: a key that came back in the
+answer would have been masked for nothing.
 
 Enable it in policy and move the identifiers you want tokenized (rather than
 blocked) into the REDACT rule:
@@ -260,6 +310,7 @@ output_rules:
   redact_on: [email, phone_tr]
   streaming:
     enabled: true
+    max_buffer_bytes: 8192
 ```
 
 A streamed response reaches the client as it is produced, and the provider
@@ -317,8 +368,11 @@ response has, and the scanners now keep to it.
 
 Also refused at load: a rule `action` or `override_action` that is not
 exactly `BLOCK`, `STRIP`, `REDACT`, `WARN`, `LOG` or `PASS` (a lower-case
-`block` used to load and let everything through); `minimum_confidence` over
-100; negative rate-limit or cost values; a body limit over 64 MiB; an
+`block` used to load and let everything through); an `action` of a custom
+entity or a competitor that is not one of those names (in either case); a
+REDACT where nothing can be masked (see
+[What REDACT and STRIP can act on](#what-redact-and-strip-can-act-on));
+`minimum_confidence` over 100; negative rate-limit or cost values; a body limit over 64 MiB; an
 enabled `output_rules.buffer_bytes` under 1024 or over 64 MiB; a pool
 `timeout` under 100 ms; classifier `timeout_ms` under 10 or `max_chars`
 under 16; a second YAML document in the file. `data.retention_days`,
@@ -559,6 +613,48 @@ thresholds.
 
 The classifier service has no authentication of its own and receives prompt
 text in the clear. Keep it on the internal network, next to the proxy.
+
+## Analyzer
+
+The analyzer is a separate Python service. It does two things: it renders
+the PDF reports, and it can look again, after the decision, at requests the
+proxy forwarded. Nothing it finds changes a verdict, and the proxy does not
+store it: the proxy logs how many findings came back.
+
+**What the proxy sends it.** Nothing, unless `TAMGA_ANALYZER_SEND_CONTENT=true`.
+With it on, the proxy sends over gRPC the body of a request (up to 65,536
+bytes) when the request was forwarded and its risk score is between 0.15 and
+0.90. The body is the one the provider got: masked where REDACT masked it,
+with the placeholder where STRIP removed a part. A request that was blocked
+is never sent. The proxy asks for the Presidio scan (`pii`), and from a risk
+of 0.45 also for the injection judge. It never asks for the toxicity
+classifiers; those run only for a caller of the analyzer's own
+`POST /api/v1/analyze`.
+
+**What leaves the analyzer.** One thing, and only when turned on: the LLM
+judge. With `TAMGA_LLM_JUDGE=anthropic` and a real `ANTHROPIC_API_KEY` in the
+analyzer's environment, each injection scan sends up to the first 2,000
+characters of the request text to Anthropic (model
+`claude-haiku-4-5-20251001`). A key without the setting does nothing; a
+placeholder key is refused; a request marked as blocked is not judged. Each
+call is logged by size, without content, and counted under
+`scanners.injection_llm_egress` in the analyzer's `/health`. To turn it off,
+leave `TAMGA_LLM_JUDGE` empty, which is the default. `OPENAI_API_KEY` is read
+by the analyzer and used for nothing.
+
+**Models.** The spaCy model `en_core_web_sm` is installed when the image is
+built. Presidio is started without naming a model and so asks for
+`en_core_web_lg`, which it downloads on the first PII scan of each worker if
+the image does not have it. The LLM Guard classifiers download their models
+from the Hugging Face Hub the first time a toxicity scan runs, which proxy
+traffic never causes; its banned-topics classifier is loaded only when
+`TAMGA_BAN_TOPICS` lists topics. On a host without internet access the PII scan fails
+and returns nothing until that model is in the image. The inline
+classifier (above) loads its model from a mounted directory and downloads
+nothing.
+
+The analyzer has no authentication of its own. Keep it on the internal
+network.
 
 ## What survives a restart
 

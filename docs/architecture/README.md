@@ -14,7 +14,7 @@ View the [D2 source](tamga.d2).
 | Proxy | Go | Inline scanners, policy engine, reverse proxy, rate limiter, management API. One listener for all of it | `8443` |
 | Scanner service | Go | Optional. Runs the stateless scanners over gRPC when `TAMGA_SCANNER_SERVICE_ADDR` is set | `50052` |
 | Classifier | Python | Optional. Local prompt-injection model, asked inline when the rules did not block | `50052` |
-| Analyzer | Python | Deep PII/injection/toxicity analysis after the decision, compliance reports | `50051` gRPC, `8444` HTTP |
+| Analyzer | Python | The PDF compliance reports. Optionally (`TAMGA_ANALYZER_SEND_CONTENT`) a second look at forwarded requests after the decision: Presidio NER, and an LLM judge when `TAMGA_LLM_JUDGE` turns it on. Its findings are logged as a count; they change no verdict and are not stored | `50051` gRPC, `8444` HTTP |
 | Dashboard | Next.js | The console. It runs in the browser and calls the proxy's management API directly | `3000` |
 | PostgreSQL | — | Optional persistent telemetry and audit storage | `5432` |
 | Redis | — | Rate limiting, caching, distributed counters | `6379` |
@@ -152,8 +152,8 @@ sequenceDiagram
     end
 
     Proxy->>DB: Persist request_log (batched)
-    Proxy-)Analyzer: Event (async, after the response)
-    Note over Analyzer: Presidio NER, LLM-as-judge<br/>adds findings to the record,<br/>never changes the verdict
+    Proxy-)Analyzer: Forwarded request, if content analysis is on (async, after the response)
+    Note over Analyzer: Presidio NER, optional LLM judge<br/>findings are logged as a count,<br/>not stored, never change the verdict
 ```
 
 Scan overhead is a small fraction of total request time — provider latency
@@ -366,7 +366,7 @@ The tables they create:
 | `audit_log` | 004 | The hash-chained log of administrative actions |
 | `policy_revisions`, `policy_proposals` | 004 | Policy history and two-person proposals |
 | `retention_run_log` | 005 | One row per run of the retention job |
-| `analyzer_findings` | 007 | Findings the analyzer adds after the decision |
+| `analyzer_findings` | 007 | Written only by a direct call of the analyzer's `POST /api/v1/analyze` with `DATABASE_URL` set. Nothing the proxy sends the analyzer is stored here |
 | `model_pricing` | 008, 009 | Price per model, used for cost |
 | `incident_lifecycle` | 012, 014 | Triage state of incidents |
 | `saved_hunts` | 013 | Saved event queries |

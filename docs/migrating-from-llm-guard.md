@@ -104,9 +104,11 @@ exactly what it is used for.
 
 - The proxy, which makes every decision, is written in Go and does not use
   LLM Guard.
-- The `analyzer` is a separate Python service. The proxy sends it a copy of
-  some requests after the decision has been made and acted on
-  (`proxy/internal/events/handlers.go`, `AnalyzerHandler`). What the analyzer
+- The `analyzer` is a separate Python service. With
+  `TAMGA_ANALYZER_SEND_CONTENT=true` (off by default) the proxy sends it a
+  copy of some forwarded requests, as forwarded, after the decision has been
+  made and acted on (`proxy/internal/events/handlers.go`, `AnalyzerHandler`).
+  A request the proxy blocked is never sent. What the analyzer
   finds never changes a verdict. In the gRPC path the proxy uses, the proxy
   writes the number of findings to its log and does nothing else with them.
 - `analyzer/app/scanners/toxicity.py` imports four LLM Guard output scanners:
@@ -152,7 +154,7 @@ box nothing is scanned in responses.
 |---|---|---|---|---|
 | `Anonymize` | Finds PII with Presidio and NER models, replaces it with placeholders such as `[REDACTED_PERSON_1]`, keeps the originals in a `Vault` | PII scanner (`proxy/internal/scanner/pii.go`), rules `pii_detection` and `pii` with `action: REDACT`, plus `vault.enabled: true` | **partial.** Patterns, no model: no person names, no organisation names, no crypto wallets, no UUIDs, no US bank numbers, no URLs. Types: `credit_card`, `ssn`, `tc_kimlik`, `iban`, `email`, `phone_tr`, `phone`, `vkn`, `passport_number`, `date_of_birth`, `medical_record`, `npi_number`, `dea_number`, `ip_public`, `ip_private`. See [vault](#anonymize-deanonymize-and-the-vault) | Requests and responses |
 | `BanCode` | Detects code in the prompt with a classifier model and rejects it | none. The code-leak scanner reads responses only | **none** | — |
-| `BanCompetitors` | Finds organisation names with an NER model, checks them against your list, flags or redacts | Competitor scanner (`competitor.go`), policy section `competitors` (regular expressions per competitor, matched case-insensitively), decided by a `competitor` rule or `scan.default_action` | **partial.** A pattern match on the names you list, no NER. On a request a competitor name cannot be redacted, only blocked, warned or logged. The `action` field of a competitor entry does not decide anything; the rule does | Requests and responses |
+| `BanCompetitors` | Finds organisation names with an NER model, checks them against your list, flags or redacts | Competitor scanner (`competitor.go`), policy section `competitors` (regular expressions per competitor, matched case-insensitively), decided by the entry's own `action`, a `competitor` rule (the stronger of the two wins) or, with neither, `scan.default_action` | **partial.** A pattern match on the names you list, no NER. A name can be blocked, masked (`[competitor_REDACTED]`), warned about or logged | Requests and responses |
 | `BanSubstrings` | Rejects or redacts text containing any (or all) of a list of substrings, by word or by string | `custom_entities` (one regular expression each, with its own action), or `competitors` | **partial.** You write each substring as a pattern. No "must contain all of them" mode. At most 100 custom entities, 1024 bytes per pattern | Requests and responses |
 | `BanTopics` | Rejects prompts about topics you name, using a zero-shot classifier | none. The content-moderation scanner has a fixed list of phrases about weapons, self-harm and drugs; you cannot name a topic | **none** | — |
 | `Code` | Detects code in the prompt and allows or bans it by programming language | none | **none** | — |
@@ -162,7 +164,7 @@ box nothing is scanned in responses.
 | `Language` | Detects the language with a model and rejects prompts outside your list | none | **none** | — |
 | `PromptInjection` | Classifies the prompt with a DeBERTa model against a threshold | Injection and jailbreak scanners (`injection*.go`, `jailbreak.go`), rules `injection_detection` and `injection`; and the optional inline classifier, `scan.classifier`, off by default | **equivalent**, by different means. By default Tamga matches wording: a phrase list in English, Turkish, German and Russian, plus rules for role spoofing, encoded payloads and paraphrases. A model reads the text only when you run the classifier service and download a model for it; none ships. The classifier is asked about `user` and `tool` text only | Patterns: requests and responses. Classifier: requests |
 | `Regex` | Matches your regular expressions; treats a match as bad or as required; can redact | `custom_entities` | **partial.** A match is always a finding: there is no "valid only if it matches" mode and no full-match switch. Go RE2 syntax (no lookaround or backreferences); a pattern that can match the empty string is refused | Requests and responses |
-| `Secrets` | Finds secrets with the `detect-secrets` library, including high-entropy strings, and redacts them | Secret scanner (`secrets.go`), rule `secret_detection` | **partial.** A fixed set of formats: AWS access and secret keys, GitHub, OpenAI, Anthropic, Stripe, Slack tokens and webhooks, Google API keys, Twilio SIDs, JWTs, private keys, connection strings, basic auth, stated passwords, `.env` assignments, and a generic `key = value` form. No high-entropy detector. On a request a secret can be blocked, not redacted: `REDACT` masks only PII and custom-entity findings | Requests and responses |
+| `Secrets` | Finds secrets with the `detect-secrets` library, including high-entropy strings, and redacts them | Secret scanner (`secrets.go`), rule `secret_detection` | **partial.** A fixed set of formats: AWS access and secret keys, GitHub, OpenAI, Anthropic, Stripe, Slack tokens and webhooks, Google API keys, Twilio SIDs, JWTs, private keys, connection strings, basic auth, stated passwords, `.env` assignments, and a generic `key = value` form. No high-entropy detector. A secret under `REDACT` is masked with a fixed marker and is never put in the vault, so it is not restored in the answer | Requests and responses |
 | `Sentiment` | Scores sentiment with NLTK and rejects prompts below a threshold | none | **none** | — |
 | `TokenLimit` | Counts tokens with `tiktoken` and rejects prompts over a limit | `body_limits` (bytes of the whole request body, 413 when over) and `rate_limit.max_tokens_per_day` (per key, per day) | **partial.** A size cap in bytes on the whole body, not a token count on the prompt. Nothing is counted in tokens per request | Requests |
 | `Toxicity` | Scores the toxicity of the prompt against a threshold | Content-moderation scanner (`content_moderation.go`), rule `content_moderation` | **partial.** A short fixed list of English and Turkish phrases (threats, slurs, profanity), no model and no score. The shipped policy has no rule for it, so its findings get `scan.default_action`, which is `WARN` there | Requests and responses |
@@ -247,10 +249,10 @@ text and there is no order to configure.
 | A scanner in the list | A rule under `rules`, keyed by finding type: `pii`, `secret`, `injection`, `content_moderation`, `competitor`, `operator_state`. Each type has two keys, `<type>` and `<type>_detection`; both are evaluated and the stronger action wins, which lets you redact some categories and block others |
 | A scanner left out | No rule for that type and `scan.default_action: PASS` (or no `default_action`). With `default_action: WARN`, as shipped, findings of a type without a rule are warned about |
 | `is_valid == False`, and your code decides | The rule's `action`, upper case: `BLOCK` (403), `STRIP`, `REDACT`, `WARN`, `LOG`, `PASS`. The strongest across all findings is the verdict |
-| `redact=True` on a scanner | `action: REDACT`, which masks `pii` and `custom` findings as `[<category>_REDACTED]`. Secrets, injections and competitor names are not masked in a request |
+| `redact=True` on a scanner | `action: REDACT`, which masks PII, secrets, custom entities and competitor names with a `[<kind>_REDACTED]` marker. A finding with no span to mask (an injection, content moderation) cannot be redacted: a policy that asks for it does not load, and names the actions that are possible |
 | Entity types of `Anonymize` | `types:` on the rule, naming categories from the table above |
-| `Regex(patterns=…)`, `BanSubstrings(substrings=…)` | Entries under `custom_entities`, each with `name`, `pattern`, `severity`, `action`, `confidence`. The entity's own `action` decides; `rules` are not consulted |
-| `BanCompetitors(competitors=…)` | Entries under `competitors`, each with `name`, `patterns`, `severity`, `enabled`, and a `competitor` rule for the action |
+| `Regex(patterns=…)`, `BanSubstrings(substrings=…)` | Entries under `custom_entities`, each with `name`, `pattern`, `severity`, `action`, `confidence`. The entity's own `action` applies; a `custom` rule applies too, and the stronger wins |
+| `BanCompetitors(competitors=…)` | Entries under `competitors`, each with `name`, `patterns`, `severity`, `enabled` and `action`; a `competitor` rule is optional |
 | Output scanners | `output_rules` with `enabled: true`. `block_on` and `redact_on` list finding types (`secret`, `pii`, `code_leak`) or categories (`email`, `refusal`, an entity's name). There are no per-type rules on this side and no `WARN` |
 | `fail_fast` | none. A finding does not stop the other scanners. The classifier is asked only about requests the rules did not block |
 | Which messages are scanned (your code chooses) | `applies_to` on a rule |
@@ -512,22 +514,20 @@ you send real traffic:
 - **The analyzer's LLM judge.** `analyzer/app/scanners/injection_llm.py` sends
   the first 2000 characters of a request body to Anthropic
   (`claude-haiku-4-5-20251001`) and asks whether it is an injection. It does
-  so when all of these hold: the analyzer is running and the proxy can reach
-  it (`TAMGA_ANALYZER_ADDR`); the analyzer's `ANTHROPIC_API_KEY` is not
-  empty; the body is at most 65,536 bytes; and the request's risk score is
-  between 0.45 and 0.90. A request Tamga **blocked** can be among them, and
-  for a blocked request the copy sent to the analyzer is the body as it
-  arrived, not a redacted one. In the Compose stack the analyzer starts by
-  default and takes `ANTHROPIC_API_KEY` from `.env`. `.env.example` puts a
-  placeholder there, and the analyzer treats any non-empty value as a key and
-  makes the call. **Set `ANTHROPIC_API_KEY=` (empty) in `.env` unless you
-  want the judge.** With it empty the judge returns nothing and calls nobody.
-  The judge's answer does not change a verdict.
+  so only when all of these hold: the proxy is set to send request text to
+  the analyzer (`TAMGA_ANALYZER_SEND_CONTENT=true`); the analyzer has
+  `TAMGA_LLM_JUDGE=anthropic` and an `ANTHROPIC_API_KEY` that is not a
+  placeholder; the body is at most 65,536 bytes; and the request's risk score
+  is between 0.45 and 0.90. All of that is off by default. A request Tamga
+  blocked is never sent, and what is sent is the body as forwarded, so masked
+  or stripped where the policy said so. Each call is logged by size and
+  counted in the analyzer's `/health`. The judge's answer does not change a
+  verdict.
 - **The classifier**, if you turn it on, receives prompt text over gRPC with
   no authentication of its own. It is a local service; keep it on the
   internal network.
 
-Presidio in the analyzer runs locally and calls nobody.
+Presidio in the analyzer scans locally. On the first PII scan of each worker it looks for the spaCy model `en_core_web_lg` and downloads it if it is missing; the image ships `en_core_web_sm` only.
 
 ### Languages
 
@@ -569,8 +569,7 @@ anything. Do it against a staging copy of your application first.
    docker compose --env-file .env -f deploy/docker-compose.yml up -d
    ```
 
-   In `.env`, set `TAMGA_ADMIN_KEY`, and set `ANTHROPIC_API_KEY=` to empty
-   (see [where data goes](#where-secrets-and-data-go)). To try it with no
+   In `.env`, set `TAMGA_ADMIN_KEY`. To try it with no
    provider at all, set `TAMGA_MOCK_UPSTREAM=true`. The proxy listens on
    `http://localhost:8443`, the console on `http://localhost:3000`.
 
@@ -665,8 +664,6 @@ and did is stored with the request.
   Presidio or an NER model finds that has no fixed format.
 - Model-based toxicity scoring.
 - A token count per prompt.
-- Redaction of secrets and competitor names in requests (they can be
-  blocked).
 - A numeric risk score per scanner, and scanner-by-scanner ordering.
 - A vault you hold and can use across turns, and fuzzy or case-insensitive
   restoring.
