@@ -27,8 +27,9 @@ variable "region" {
 }
 
 variable "cluster_name" {
-  type    = string
-  default = "tamga"
+  type        = string
+  description = "Name of the EKS cluster and prefix of the VPC."
+  default     = "tamga"
 }
 
 variable "tamga_admin_key" {
@@ -79,6 +80,11 @@ module "eks" {
   subnet_ids = module.vpc.private_subnets
 
   cluster_endpoint_public_access = true
+
+  # Without this the identity that runs Terraform has no access to the
+  # cluster it just created, and the namespace and the Helm release below
+  # are refused.
+  enable_cluster_creator_admin_permissions = true
 
   eks_managed_node_groups = {
     default = {
@@ -162,9 +168,11 @@ resource "helm_release" "tamga_proxy" {
 }
 
 output "cluster_endpoint" {
-  value = module.eks.cluster_endpoint
+  description = "URL of the cluster's Kubernetes API."
+  value       = module.eks.cluster_endpoint
 }
 
 output "kubeconfig_command" {
-  value = "aws eks update-kubeconfig --name ${module.eks.cluster_name} --region ${var.region}"
+  description = "Command that adds the cluster to your kubeconfig."
+  value       = "aws eks update-kubeconfig --name ${module.eks.cluster_name} --region ${var.region}"
 }

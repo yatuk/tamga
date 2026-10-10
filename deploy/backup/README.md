@@ -6,7 +6,7 @@ with `pg_dump` and `pg_restore`.
 ## What is and is not backed up
 
 Backed up: one database, schema and data. That includes `request_logs` with
-all of its monthly partitions, `daily_stats`, `audit_log`, the policy history
+all of its monthly partitions, `audit_log`, the policy history
 (`policy_revisions`, `policy_proposals`), `incident_lifecycle`, `saved_hunts`,
 API keys and the other tables created by `deploy/migrations/`.
 
@@ -132,11 +132,13 @@ first.
    Do not loop over all of them: `001`, `010` and `011` fail when run a
    second time. `017` adds the `policy_name`, `policy_version` and
    `output_risk` columns and an index to `request_logs`; `018` removes the
-   row-level security that `011` added.
+   row-level security that `011` added; `019` drops five tables nothing used
+   (`api_keys`, `policies`, `alerts`, `daily_stats`, `event_outbox`).
 
    ```bash
    psql "$TAMGA_DB_URL" -v ON_ERROR_STOP=1 -f migrations/017_request_record.up.sql
    psql "$TAMGA_DB_URL" -v ON_ERROR_STOP=1 -f migrations/018_drop_tenant_rls.up.sql
+   psql "$TAMGA_DB_URL" -v ON_ERROR_STOP=1 -f migrations/019_drop_unused_tables.up.sql
    ```
 
 5. Check the row counts:
@@ -157,6 +159,6 @@ first.
 
 - [ ] `backup.sh` writes a dump that `pg_restore --list` can read
 - [ ] `restore.sh` restores it into an empty database
-- [ ] Row counts of `request_logs`, `daily_stats` and `audit_log` match the source
+- [ ] Row counts of `request_logs` and `audit_log` match the source
 - [ ] `\d+ request_logs` lists the same partitions as the source
 - [ ] The proxy starts against the restored database and `GET /api/v1/health/detailed`, called with the admin key, reports `database: "connected"`

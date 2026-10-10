@@ -210,3 +210,7 @@ except TamgaError as e:
 
 The constructor raises `ValueError` when `base_url` or `admin_key` is empty.
 Requests time out after 30 seconds.
+
+## License
+
+[AGPL-3.0](../../LICENSE), as for the rest of the repository.

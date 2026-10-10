@@ -18,6 +18,7 @@ spec:
   template:
     metadata:
       labels: {{- include "tamga-proxy.selectorLabels" . | nindent 8 }}
+      {{- if or .Values.policy.inline (not .Values.secrets.existingSecret) .Values.podAnnotations }}
       annotations:
         {{- if .Values.policy.inline }}
         checksum/policy: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
@@ -28,6 +29,7 @@ spec:
         {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
+      {{- end }}
     spec:
       serviceAccountName: {{ include "tamga-proxy.serviceAccountName" . }}
       securityContext: {{- toYaml .Values.podSecurityContext | nindent 8 }}

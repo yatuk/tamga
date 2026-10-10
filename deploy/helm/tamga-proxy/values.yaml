@@ -56,8 +56,12 @@ policy:
   # Empty: the proxy uses the policy built into the image
   # (proxy/tamga-policy.yaml, at /app/tamga-policy.yaml).
   # Otherwise a complete policy document. It is mounted read-only from a
-  # ConfigMap at /etc/tamga/policy.yaml, so the console can show it and cannot
-  # save changes to it. The proxy refuses to start on a policy it cannot parse.
+  # ConfigMap at /etc/tamga/policy.yaml. The proxy refuses to start on a policy
+  # it cannot parse.
+  # Either way the console can show the policy and cannot save changes to it:
+  # the ConfigMap mount is read-only, and so is the image's own copy under
+  # securityContext.readOnlyRootFilesystem. Change the policy by changing this
+  # value (or the image) and upgrading the release.
   inline: ""
 
 # Extra volumes and mounts, for example a TLS certificate Secret.

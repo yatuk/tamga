@@ -2,13 +2,14 @@
   "name": "@tamga/client",
   "version": "0.1.1",
   "description": "TypeScript SDK for Tamga AI Security Proxy",
+  "license": "AGPL-3.0-only",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     }
   },
   "scripts": {

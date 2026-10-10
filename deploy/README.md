@@ -76,10 +76,27 @@ The chart sets `TAMGA_ADMIN_KEY`, `TAMGA_DB_URL`, `REDIS_URL`,
 `TAMGA_PROXY_PORT` and `TAMGA_POLICY_PATH` itself and refuses them under
 `env`.
 
-A policy given in `policy.inline` is mounted read-only at
-`/etc/tamga/policy.yaml`: the console can show it and cannot save changes to
-it. The proxy does not start on a policy it cannot parse, so check the
-document first with `POST /api/v1/policies/validate` on a running proxy.
+A policy given in `policy.inline` is mounted from a ConfigMap at
+`/etc/tamga/policy.yaml`. The proxy does not start on a policy it cannot
+parse, so check the document first with `POST /api/v1/policies/validate` on a
+running proxy.
+
+The console can show the policy and cannot save changes to it, with or without
+`policy.inline`: the ConfigMap mount is read-only, and the image's own copy
+sits on the read-only root filesystem. A save is answered with 409
+`policy_read_only`. Change the policy by changing `policy.inline` and
+upgrading the release; the pods restart because the ConfigMap's checksum is a
+pod annotation.
+
+The only writable path in the pod is `/tmp` (an `emptyDir`). Without
+`TAMGA_DB_URL` the proxy keeps policy history in files under
+`./data/policy-history`, which the read-only root filesystem refuses, so it
+logs `policy history disabled` and runs without it. Give it a database, or set
+`env.TAMGA_POLICY_HISTORY_DIR` to a directory on a volume you mount with
+`extraVolumes`.
+
+The resources are named after the release: `<release>-tamga-proxy`, or just
+the release name when it already contains `tamga-proxy`.
 
 ### Probes
 
@@ -140,6 +157,12 @@ Things to know before applying:
 
 - The admin key is stored in the Terraform state. Protect the state.
 - The cluster's API endpoint is public (`cluster_endpoint_public_access`).
+- The identity that runs Terraform becomes a cluster administrator
+  (`enable_cluster_creator_admin_permissions`); the namespace and the Helm
+  release are created as that identity, through `aws eks get-token`, so the
+  AWS CLI must be installed where Terraform runs.
+- The release is named `tamga-proxy`, and so are the Deployment and the
+  Service: `tamga-proxy.tamga.svc:8443`.
 - The release sets only the admin key and the image. The proxy therefore runs
   with no database and no Redis; add them and extend the release, or install
   the chart yourself with a values file.
@@ -168,8 +191,11 @@ nothing records which ones a database has had.
 To roll one back, run its `.down.sql`:
 
 ```bash
-psql "$TAMGA_DB_URL" -f migrations/018_drop_tenant_rls.down.sql
+psql "$TAMGA_DB_URL" -f migrations/019_drop_unused_tables.down.sql
 ```
 
-Upgrade order and the notes on `017` and `018` are in
+Roll back in reverse order. `019` drops tables that the down files of `002`,
+`011` and `018` refer to, so those need `019` rolled back first.
+
+Upgrade order and the notes on `017`, `018` and `019` are in
 [docs/operations.md](../docs/operations.md#upgrading-the-database).

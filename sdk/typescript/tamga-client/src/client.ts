@@ -67,7 +67,7 @@ export class TamgaClient {
   }
 
   /**
-   * Runtime profile (version, policy, TLS, mTLS, Redis, database, tier).
+   * Runtime profile (version, policy, TLS, mTLS, Redis, database).
    * With a key the proxy does not accept, the body is only
    * `{ proxy: "up", authenticated: false }`.
    */

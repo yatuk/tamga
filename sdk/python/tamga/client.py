@@ -132,7 +132,7 @@ class TamgaClient:
         return self._request("GET", "/api/v1/health/detailed")
 
     def health_detail(self) -> dict:
-        """Runtime profile (version, policy, TLS, mTLS, Redis, database, tier).
+        """Runtime profile (version, policy, TLS, mTLS, Redis, database).
 
         Corresponds to ``GET /api/v1/health/detail``. With a key the proxy
         does not accept, the body is only ``{"proxy": "up",
