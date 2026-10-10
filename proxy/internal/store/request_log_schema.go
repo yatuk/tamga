@@ -197,8 +197,13 @@ const ensureLockTimeout = "5s"
 //
 // On error the table is as it was, and the store works with the columns it has.
 func (s *PostgresStore) EnsureRequestLogColumns(ctx context.Context) error {
-	has := s.requestLogSchema(ctx).has
-	if has["policy_name"] && has["policy_version"] && has["output_risk"] {
+	// Asked directly, not through requestLogSchema: that one warns about a
+	// table it finds short, which is what is about to be put right.
+	var present int
+	if err := s.pool.QueryRow(ctx, `
+SELECT count(*) FROM information_schema.columns
+WHERE table_schema = current_schema() AND table_name = 'request_logs'
+  AND column_name IN ('policy_name', 'policy_version', 'output_risk')`).Scan(&present); err == nil && present == 3 {
 		return nil
 	}
 	ctx2, cancel := context.WithTimeout(ctx, insertTimeout)
