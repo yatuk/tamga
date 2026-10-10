@@ -7,7 +7,7 @@
     "dev": "next dev --turbopack --port 3000",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint app components lib",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
     "test:run": "vitest run",

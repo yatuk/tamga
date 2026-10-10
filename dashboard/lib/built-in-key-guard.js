@@ -6,6 +6,12 @@
  * built with it would hand the admin key to anyone who can load the page.
  * next.config.js calls this with the phase Next.js is in, after the .env
  * files have been read.
+ *
+ * The phase is the only thing it looks at, and nothing in the environment or
+ * on the command line switches it off. `next lint` loads next.config.js under
+ * the production-build phase too, so it stopped here on a machine with a
+ * development key; `npm run lint` therefore runs the ESLint CLI, which does
+ * not load next.config.js at all.
  */
 const PRODUCTION_BUILD = "phase-production-build";
 

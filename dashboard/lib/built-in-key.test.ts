@@ -50,6 +50,44 @@ describe("the build guard", () => {
     expect(() => refuseBuiltInKey(PHASE_PRODUCTION_BUILD, { NEXT_PUBLIC_ADMIN_KEY: SECRET })).toThrow(MESSAGE);
   });
 
+  it("cannot be switched off by the environment a build runs in", () => {
+    // Lint is kept away from the guard by not loading next.config.js, never
+    // by teaching the guard to stand down: a build started from any npm
+    // script, in CI or with any NODE_ENV, is still refused.
+    for (const extra of [
+      { npm_lifecycle_event: "lint" },
+      { npm_lifecycle_script: "eslint app components lib" },
+      { npm_lifecycle_event: "build", CI: "true" },
+      { NODE_ENV: "development" },
+      { NODE_ENV: "test" },
+      { NEXT_PHASE: "phase-development-server" },
+    ]) {
+      expect(() => refuseBuiltInKey("phase-production-build", { ...extra, NEXT_PUBLIC_ADMIN_KEY: SECRET })).toThrow(MESSAGE);
+    }
+  });
+
+  it("reads the phase and the variable, and nothing else", () => {
+    const source = readFileSync("lib/built-in-key-guard.js", "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(source).not.toMatch(/process\.argv|npm_lifecycle|NODE_ENV/);
+    // Variables are upper case; the message's ".env.local" is a file name.
+    expect(source.match(/\benv\.[A-Z][A-Z_]*/g)).toEqual(["env.NEXT_PUBLIC_ADMIN_KEY"]);
+  });
+
+  it("is not in the way of lint, which does not load next.config.js", () => {
+    const { scripts } = JSON.parse(readFileSync("package.json", "utf8")) as { scripts: Record<string, string> };
+    // `next lint` loads the configuration as a production build would, so
+    // with a development key in .env.local it stopped at the guard.
+    expect(scripts.lint).not.toMatch(/\bnext\b/);
+    // The directories `next lint` checked by default, of those that exist.
+    expect(scripts.lint).toBe("eslint app components lib");
+    // The build is still `next build`, which does load it.
+    expect(scripts.build).toBe("next build");
+    const ci = readFileSync("../.github/workflows/dashboard-tests.yml", "utf8");
+    expect(ci).not.toMatch(/next lint/);
+    expect(ci).toMatch(/run: npm run lint/);
+    expect(ci).toMatch(/run: npx next build/);
+  });
+
   it("is what next.config.js runs before it hands over the configuration", () => {
     const config = readFileSync("next.config.js", "utf8");
     expect(config).toContain('require("./lib/built-in-key-guard")');

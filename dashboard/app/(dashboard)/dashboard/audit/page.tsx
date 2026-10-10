@@ -28,7 +28,7 @@ import { useEscape, usePanelFocus, useRows, useSwap } from "@/components/console
 import { useAdminKey } from "@/hooks/useAdminKey";
 import { useStringParam } from "@/hooks/useUrlState";
 import { api, type AuditEntry } from "@/lib/api";
-import { humanizeAuditKind } from "@/lib/humanize";
+import { humanizeAuditKind, refusalFacts, refusalSummary } from "@/lib/humanize";
 
 /**
  * An entry is known by its hash in the chain. Its place in the list is no use:
@@ -224,7 +224,7 @@ export default function AuditPage() {
                     <TableCell>{it.actor || <span className="t-note">Not recorded</span>}</TableCell>
                     {open ? null : (
                       <TableCell className="t-clip" title={it.target}>
-                        <span className="t-data">{it.target || ""}</span>
+                        <span className="t-data">{it.target || refusalSummary(it.kind, it.detail)}</span>
                       </TableCell>
                     )}
                   </TableRow>
@@ -272,6 +272,8 @@ export default function AuditPage() {
                       <dd>{open.actor || "Not recorded"}</dd>
                       <dt>To</dt>
                       <dd className="t-data">{open.target || "Not recorded"}</dd>
+                      {/* A refused request: the reason and the source in words. The record itself is below. */}
+                      {refusalFacts(open.kind, open.detail).flatMap(([label, value]) => [<dt key={label}>{label}</dt>, <dd key={`${label}-value`}>{value}</dd>])}
                     </dl>
                   </div>
                 </section>
