@@ -1,3 +1,9 @@
+{{- $env := .Values.env | default dict -}}
+{{- range $name := list "TAMGA_ADMIN_KEY" "TAMGA_DB_URL" "REDIS_URL" "TAMGA_PROXY_PORT" "TAMGA_POLICY_PATH" }}
+{{- if hasKey $env $name }}
+{{- fail (printf "env.%s: the chart sets this variable itself; use secrets.*, containerPort or policy.inline" $name) }}
+{{- end }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -13,7 +19,12 @@ spec:
     metadata:
       labels: {{- include "tamga-proxy.selectorLabels" . | nindent 8 }}
       annotations:
+        {{- if .Values.policy.inline }}
         checksum/policy: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- end }}
+        {{- if not .Values.secrets.existingSecret }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- end }}
         {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -30,34 +41,77 @@ spec:
           securityContext: {{- toYaml .Values.securityContext | nindent 12 }}
           ports:
             - name: http
-              containerPort: 8080
+              containerPort: {{ .Values.containerPort }}
               protocol: TCP
           env:
-            {{- range $k, $v := .Values.env }}
+            - name: TAMGA_PROXY_PORT
+              value: {{ .Values.containerPort | quote }}
+            {{- if .Values.policy.inline }}
+            - name: TAMGA_POLICY_PATH
+              value: /etc/tamga/policy.yaml
+            {{- end }}
+            - name: TAMGA_ADMIN_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "tamga-proxy.secretName" . }}
+                  key: TAMGA_ADMIN_KEY
+            - name: TAMGA_DB_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "tamga-proxy.secretName" . }}
+                  key: TAMGA_DB_URL
+                  optional: true
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "tamga-proxy.secretName" . }}
+                  key: REDIS_URL
+                  optional: true
+            {{- range $k, $v := $env }}
+            {{- if ne (toString $v) "" }}
             - name: {{ $k }}
               value: {{ $v | quote }}
             {{- end }}
+            {{- end }}
+          # GET /health is the liveness endpoint: it needs no key and does not
+          # depend on the database, Redis or the analyzer.
           livenessProbe:
-            httpGet: { path: /health, port: http }
+            httpGet:
+              path: /health
+              port: http
+              scheme: {{ include "tamga-proxy.scheme" . }}
             initialDelaySeconds: 5
             periodSeconds: 10
           readinessProbe:
-            httpGet: { path: /health, port: http }
+            httpGet:
+              path: /health
+              port: http
+              scheme: {{ include "tamga-proxy.scheme" . }}
             initialDelaySeconds: 2
             periodSeconds: 5
           resources: {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            {{- if .Values.policy.inline }}
             - name: policy
               mountPath: /etc/tamga
               readOnly: true
-            - name: tmp
-              mountPath: /tmp
+            {{- end }}
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
       volumes:
+        - name: tmp
+          emptyDir: {}
+        {{- if .Values.policy.inline }}
         - name: policy
           configMap:
             name: {{ include "tamga-proxy.fullname" . }}-policy
-        - name: tmp
-          emptyDir: {}
+        {{- end }}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector: {{- toYaml . | nindent 8 }}
       {{- end }}

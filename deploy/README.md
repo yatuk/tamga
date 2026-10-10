@@ -1,50 +1,175 @@
-# Tamga Deploy
+# Deployment
 
-Production-ready deployment için üç artefakt vardır.
+| Path | What it is |
+|---|---|
+| `docker-compose.yml` | The full stack on one host: proxy, analyzer, scanner service, console, PostgreSQL, Redis, NATS, Jaeger. See the [root README](../README.md#quick-start). |
+| `helm/tamga-proxy/` | A Helm chart for the proxy alone. |
+| `terraform/aws/` | An EKS cluster on AWS with that chart installed in it. |
+| `migrations/` | The PostgreSQL schema. |
+| `backup/` | Database backup and restore scripts. See [backup/README.md](backup/README.md). |
+
+No container image is published. For Helm and Terraform, build the proxy
+image from `proxy/Dockerfile`, push it to a registry your cluster can pull
+from, and pass its repository and tag.
 
 ## Helm
+
+The chart installs the proxy only:
+
+- a `Deployment` (non-root user 1001, read-only root filesystem, all
+  capabilities dropped), listening on port 8443,
+- a `Service` (ClusterIP, port 8443),
+- a `Secret` with the credentials, unless you supply your own,
+- a `ServiceAccount`,
+- a `PodDisruptionBudget`,
+- a `HorizontalPodAutoscaler` when `autoscaling.enabled` is true,
+- a `ConfigMap` with the policy when `policy.inline` is set.
+
+It does not install PostgreSQL, Redis, the analyzer, NATS or the console, and
+it has no Ingress or NetworkPolicy.
 
 ```bash
 helm upgrade --install tamga-proxy ./helm/tamga-proxy \
   --namespace tamga --create-namespace \
-  --set image.tag=0.5.0 \
-  --set env.TAMGA_ADMIN_KEY=$(openssl rand -hex 32)
+  --set image.repository=registry.example.com/tamga \
+  --set image.tag=<your tag> \
+  --set secrets.adminKey="$(openssl rand -hex 32)"
 ```
 
-Helm chart şu bileşenleri kurar:
+The render fails when no admin key is given.
 
-- `Deployment` — read-only root filesystem, drop-ALL kabiliyet seti, non-root user
-- `Service` (ClusterIP)
-- `ConfigMap` — `policy.yaml` inline
-- `ServiceAccount`
-- `PodDisruptionBudget`
-- `HorizontalPodAutoscaler` (opsiyonel)
+### Credentials
 
-## Terraform — AWS EKS (Frankfurt)
+`TAMGA_ADMIN_KEY`, `TAMGA_DB_URL` and `REDIS_URL` reach the pod from a Secret.
+Choose one:
+
+- Set `secrets.adminKey`, and `secrets.databaseUrl` and `secrets.redisUrl` if
+  you use them. The chart creates the Secret. The values then also sit in the
+  Helm release, so prefer the next option for production.
+- Create a Secret yourself with the keys `TAMGA_ADMIN_KEY` and, if used,
+  `TAMGA_DB_URL` and `REDIS_URL`, and set `secrets.existingSecret` to its
+  name. The other `secrets.*` values are then ignored.
+
+  ```bash
+  kubectl -n tamga create secret generic tamga-proxy-credentials \
+    --from-literal=TAMGA_ADMIN_KEY="$(openssl rand -hex 32)" \
+    --from-literal=TAMGA_DB_URL='postgresql://tamga:<password>@postgres:5432/tamga'
+  ```
+
+Without `TAMGA_DB_URL` the proxy stores nothing and shows recent requests
+from memory. Without `REDIS_URL` each replica keeps its own rate-limit, budget
+and cache state.
+
+### Other settings
+
+| Value | Default | Meaning |
+|---|---|---|
+| `image.repository`, `image.tag` | `ghcr.io/yatuk/tamga`, the chart's `appVersion` | The image to run. Nothing is published at the default; set both. |
+| `replicaCount` | `2` | Replicas, when autoscaling is off. |
+| `containerPort` | `8443` | The port the proxy listens on, passed as `TAMGA_PROXY_PORT`. |
+| `service.type`, `service.port` | `ClusterIP`, `8443` | The Service. |
+| `env` | `{}` | Other proxy environment variables, by the names in [docs/operations.md](../docs/operations.md#configuration). |
+| `policy.inline` | empty | A complete policy document. Empty uses the policy built into the image. |
+| `extraVolumes`, `extraVolumeMounts` | empty | For example a TLS certificate. |
+
+The chart sets `TAMGA_ADMIN_KEY`, `TAMGA_DB_URL`, `REDIS_URL`,
+`TAMGA_PROXY_PORT` and `TAMGA_POLICY_PATH` itself and refuses them under
+`env`.
+
+A policy given in `policy.inline` is mounted read-only at
+`/etc/tamga/policy.yaml`: the console can show it and cannot save changes to
+it. The proxy does not start on a policy it cannot parse, so check the
+document first with `POST /api/v1/policies/validate` on a running proxy.
+
+### Probes
+
+Liveness and readiness both call `GET /health`, which needs no key and does
+not depend on the database, Redis or the analyzer. They use HTTPS when
+`env.TAMGA_TLS_CERT` and `env.TAMGA_TLS_KEY` are both set. With
+`TAMGA_MTLS_STRICT_VERIFY=true` the kubelet has no client certificate and the
+probes fail; the chart has no answer to that.
+
+`GET /api/v1/health/detailed` is not used as a probe: it answers 503 when any
+dependency is down, which would take every replica out of the Service at once.
+
+### Changes from chart 0.1.0
+
+Chart 0.1.0 set variables the proxy does not read, so an install ran with no
+database, no Redis and the image's built-in policy whatever the values said.
+
+| 0.1.0 | 0.2.0 |
+|---|---|
+| `env.TAMGA_ADMIN_KEY` (default `change-me`) | `secrets.adminKey` or `secrets.existingSecret`; no default |
+| `env.TAMGA_POSTGRES_URL` | `secrets.databaseUrl` (`TAMGA_DB_URL`) |
+| `env.TAMGA_REDIS_URL` | `secrets.redisUrl` (`REDIS_URL`) |
+| `env.TAMGA_POLICY_FILE` | set by the chart (`TAMGA_POLICY_PATH`) when `policy.inline` is given |
+| `env.TAMGA_MTLS_CLIENT_CA` | `env.TAMGA_MTLS_CLIENT_CA_FILE` |
+| `env.TAMGA_LOG_LEVEL` | removed; the proxy reads no such variable |
+| container and Service port 8080 | 8443 |
+| `policy.inline` default in a format the proxy rejects | empty |
+| `podSecurityContext.runAsUser: 65532` | `1001`, the user in `proxy/Dockerfile` |
+| `ingress.*`, `networkPolicy.*` | removed; no template used them |
+
+## Terraform (AWS EKS)
+
+`terraform/aws/main.tf` creates a VPC with three private and three public
+subnets and one NAT gateway, an EKS cluster (Kubernetes 1.30) with a managed
+node group of two to ten `t3.large` nodes, a `tamga` namespace, and a Helm
+release of the chart above.
 
 ```bash
 cd terraform/aws
 terraform init
 terraform apply \
   -var="tamga_admin_key=$(openssl rand -hex 32)" \
-  -var="region=eu-central-1"
+  -var="proxy_image_repository=registry.example.com/tamga" \
+  -var="proxy_image_tag=<your tag>"
 ```
 
-`eu-central-1` Türkiye için en düşük gecikmeli AWS bölgesidir. KVKK uyumu için
-veri ikametgahını `tr` olarak işaretleyen policy kullanılır.
+| Variable | Default | Meaning |
+|---|---|---|
+| `tamga_admin_key` | none, required | The management API key. Passed to the chart as `secrets.adminKey`. |
+| `proxy_image_tag` | none, required | Tag of the image you pushed. |
+| `proxy_image_repository` | `ghcr.io/yatuk/tamga` | Repository of that image. |
+| `region` | `eu-central-1` | AWS region. |
+| `cluster_name` | `tamga` | Name of the cluster and prefix of the VPC. |
 
-## SQL Migrations
+Outputs: `cluster_endpoint` and `kubeconfig_command`.
 
-Migrations follow the `golang-migrate` format (`NNN_name.up.sql` + `NNN_name.down.sql`).
+Things to know before applying:
 
-```bash
-# Every migration, in order. The proxy reads the same address from TAMGA_DB_URL.
-for f in migrations/*.up.sql; do psql "$TAMGA_DB_URL" -v ON_ERROR_STOP=1 -f "$f"; done
-```
+- The admin key is stored in the Terraform state. Protect the state.
+- The cluster's API endpoint is public (`cluster_endpoint_public_access`).
+- The release sets only the admin key and the image. The proxy therefore runs
+  with no database and no Redis; add them and extend the release, or install
+  the chart yourself with a values file.
+- The region does not make a deployment compliant with any regulation. The
+  proxy's own residency check is `TAMGA_REGION` against `data.residency` in
+  the policy, and it only logs a mismatch at startup.
 
-They are written to be run again without harm. To roll one back, run its
-`.down.sql`:
+## SQL migrations
+
+`migrations/` holds numbered pairs, `NNN_name.up.sql` and `NNN_name.down.sql`.
+Nothing in the repository applies them for you outside Docker Compose, and
+nothing records which ones a database has had.
+
+- Docker Compose mounts every `.up.sql` into the PostgreSQL image's init
+  directory, so a new, empty data volume gets the whole schema. An existing
+  volume is not touched.
+- On an empty database of your own, run them all in order:
+
+  ```bash
+  for f in migrations/*.up.sql; do psql "$TAMGA_DB_URL" -v ON_ERROR_STOP=1 -f "$f"; done
+  ```
+
+- On a database that already has the schema, run only the files that are new
+  to it. `001`, `010` and `011` fail when run a second time.
+
+To roll one back, run its `.down.sql`:
 
 ```bash
 psql "$TAMGA_DB_URL" -f migrations/018_drop_tenant_rls.down.sql
 ```
+
+Upgrade order and the notes on `017` and `018` are in
+[docs/operations.md](../docs/operations.md#upgrading-the-database).

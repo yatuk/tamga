@@ -22,7 +22,7 @@ provider "aws" {
 
 variable "region" {
   type        = string
-  description = "AWS region (eu-central-1 önerilir; Türkiye için en düşük gecikme)."
+  description = "AWS region."
   default     = "eu-central-1"
 }
 
@@ -32,13 +32,20 @@ variable "cluster_name" {
 }
 
 variable "tamga_admin_key" {
-  type      = string
-  sensitive = true
+  type        = string
+  sensitive   = true
+  description = "Management API key of the proxy (TAMGA_ADMIN_KEY). The chart stores it in a Secret."
+}
+
+variable "proxy_image_repository" {
+  type        = string
+  default     = "ghcr.io/yatuk/tamga"
+  description = "Image to run. No public image is published: build one from proxy/Dockerfile and push it to a registry the cluster can pull from."
 }
 
 variable "proxy_image_tag" {
-  type    = string
-  default = "0.5.0"
+  type        = string
+  description = "Tag of the image you pushed."
 }
 
 module "vpc" {
@@ -139,8 +146,13 @@ resource "helm_release" "tamga_proxy" {
   depends_on = [module.eks]
 
   set_sensitive {
-    name  = "env.TAMGA_ADMIN_KEY"
+    name  = "secrets.adminKey"
     value = var.tamga_admin_key
+  }
+
+  set {
+    name  = "image.repository"
+    value = var.proxy_image_repository
   }
 
   set {

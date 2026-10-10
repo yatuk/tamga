@@ -1,28 +1,68 @@
+# This chart deploys the proxy only. PostgreSQL, Redis, the analyzer, NATS and
+# the console are not part of it; point the proxy at them with the values below.
+
 # No public image is published yet. Build one from proxy/Dockerfile, push it to
-# a registry your cluster can pull from, and set repository/tag accordingly.
+# a registry your cluster can pull from, and set repository and tag.
 image:
   repository: ghcr.io/yatuk/tamga
-  tag: "0.7.0"
+  # Empty uses the chart's appVersion.
+  tag: ""
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
 
 replicaCount: 2
 
+# The port the proxy listens on. The chart passes it as TAMGA_PROXY_PORT.
+containerPort: 8443
+
 service:
   type: ClusterIP
-  port: 8080
+  port: 8443
 
-ingress:
-  enabled: false
-  className: ""
-  annotations: {}
-  hosts:
-    - host: tamga.example.com
-      paths:
-        - path: /
-          pathType: Prefix
-  tls: []
+# Credentials reach the pod from a Secret, never as plain values in the pod
+# spec. Either:
+#   - set existingSecret to the name of a Secret you created, holding the key
+#     TAMGA_ADMIN_KEY and, if used, TAMGA_DB_URL and REDIS_URL; or
+#   - set adminKey (and databaseUrl, redisUrl if used) and the chart creates
+#     the Secret.
+# The render fails when existingSecret and adminKey are both empty.
+secrets:
+  existingSecret: ""
+  # TAMGA_ADMIN_KEY: the management API key. Generate one: openssl rand -hex 32
+  adminKey: ""
+  # TAMGA_DB_URL, e.g. postgresql://user:password@host:5432/tamga
+  # Empty: nothing is stored; the proxy keeps recent events in memory only.
+  databaseUrl: ""
+  # REDIS_URL, e.g. redis://:password@host:6379
+  # Empty: each replica keeps its own budget, cache and rate-limit state.
+  redisUrl: ""
+
+# Other environment variables of the proxy, as name: value. Use the names the
+# proxy reads; docs/operations.md lists them.
+# An empty value is not passed on. Do not put TAMGA_ADMIN_KEY, TAMGA_DB_URL,
+# REDIS_URL, TAMGA_PROXY_PORT or TAMGA_POLICY_PATH here: the chart sets them,
+# and the render fails if it finds one.
+env: {}
+  # TAMGA_CORS_ORIGINS: "https://console.example.com"
+  # TAMGA_ANALYZER_ADDR: "analyzer.tamga.svc:50051"
+  # TAMGA_NATS_URL: "nats://nats.tamga.svc:4222"
+  # TAMGA_OTEL_ENDPOINT: "http://otel-collector.observability.svc:4318"
+  # TAMGA_REGION: "eu"
+  # TAMGA_TLS_CERT: "/etc/tamga-tls/tls.crt"
+  # TAMGA_TLS_KEY: "/etc/tamga-tls/tls.key"
+
+policy:
+  # Empty: the proxy uses the policy built into the image
+  # (proxy/tamga-policy.yaml, at /app/tamga-policy.yaml).
+  # Otherwise a complete policy document. It is mounted read-only from a
+  # ConfigMap at /etc/tamga/policy.yaml, so the console can show it and cannot
+  # save changes to it. The proxy refuses to start on a policy it cannot parse.
+  inline: ""
+
+# Extra volumes and mounts, for example a TLS certificate Secret.
+extraVolumes: []
+extraVolumeMounts: []
 
 resources:
   limits:
@@ -38,10 +78,11 @@ autoscaling:
   maxReplicas: 10
   targetCPUUtilizationPercentage: 70
 
+# 1001 is the user proxy/Dockerfile creates.
 podSecurityContext:
   runAsNonRoot: true
-  runAsUser: 65532
-  fsGroup: 65532
+  runAsUser: 1001
+  fsGroup: 1001
   seccompProfile:
     type: RuntimeDefault
 
@@ -50,41 +91,6 @@ securityContext:
   readOnlyRootFilesystem: true
   capabilities:
     drop: ["ALL"]
-
-env:
-  TAMGA_ADMIN_KEY: "change-me"
-  TAMGA_LOG_LEVEL: "info"
-  TAMGA_POLICY_FILE: "/etc/tamga/policy.yaml"
-  TAMGA_TLS_CERT: ""
-  TAMGA_TLS_KEY: ""
-  TAMGA_MTLS_CLIENT_CA: ""
-  TAMGA_POSTGRES_URL: ""
-  TAMGA_REDIS_URL: ""
-  TAMGA_OTEL_ENDPOINT: ""
-
-policy:
-  inline: |
-    version: "1"
-    name: default-tr
-    rules:
-      pii_tckn:
-        scanner: pii
-        action: redact
-      pii_iban:
-        scanner: pii
-        action: redact
-      secrets:
-        scanner: secrets
-        action: block
-      jailbreak:
-        scanner: jailbreak
-        action: block
-    data:
-      residency: "tr"
-      retention_days: 30
-    cost:
-      max_tokens_per_day: 10000000
-      max_cost_usd_per_day: 500
 
 podAnnotations: {}
 nodeSelector: {}
@@ -98,7 +104,3 @@ serviceAccount:
 podDisruptionBudget:
   enabled: true
   minAvailable: 1
-
-networkPolicy:
-  enabled: false
-  allowedNamespaces: []

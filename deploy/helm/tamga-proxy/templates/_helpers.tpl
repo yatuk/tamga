@@ -31,3 +31,13 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- default "default" .Values.serviceAccount.name -}}
 {{- end -}}
 {{- end -}}
+
+{{- define "tamga-proxy.secretName" -}}
+{{- default (include "tamga-proxy.fullname" .) .Values.secrets.existingSecret -}}
+{{- end -}}
+
+{{/* The proxy serves HTTPS when both TLS variables are set, and the probes must follow. */}}
+{{- define "tamga-proxy.scheme" -}}
+{{- $env := .Values.env | default dict -}}
+{{- if and (get $env "TAMGA_TLS_CERT") (get $env "TAMGA_TLS_KEY") -}}HTTPS{{- else -}}HTTP{{- end -}}
+{{- end -}}

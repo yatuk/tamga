@@ -1,19 +1,21 @@
 apiVersion: v2
 name: tamga-proxy
-description: Tamga AI Security Proxy — LLM firewall with PII/secret/jailbreak scanning, KVKK/GDPR tooling and policy versioning.
+description: The Tamga proxy as a Deployment and Service. PostgreSQL, Redis, the analyzer and the console are not included.
 type: application
-version: 0.1.0
-appVersion: "0.5.0"
-home: https://tamga.io
-icon: https://tamga.io/logo.png
-maintainers:
-  - name: Tamga Security
-    email: security@tamga.io
+# Chart version. 0.2.0 renamed the environment variables to the names the
+# proxy reads and moved the credentials into a Secret; values files written
+# for 0.1.0 need the changes listed in deploy/README.md.
+version: 0.2.0
+# The version of the repository this chart was written against (see
+# CHANGELOG.md). No image is published under this tag: build your own and set
+# image.repository and image.tag.
+appVersion: "0.9.0"
+home: https://github.com/yatuk/tamga
+sources:
+  - https://github.com/yatuk/tamga
 keywords:
   - llm
   - security
-  - firewall
-  - kvkk
-  - gdpr
+  - proxy
   - pii
   - dlp
