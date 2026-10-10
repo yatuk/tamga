@@ -102,14 +102,38 @@ func TestRemoveKeepsTheRevocation(t *testing.T) {
 	if _, ok := s.Role("u1"); ok {
 		t.Fatal("the role is still there")
 	}
-	for _, m := range s.List() {
-		if m.UserID == "u1" {
-			t.Fatal("a member without a role is listed")
-		}
-	}
 	removedAt := s.SessionsValidFrom("u1")
 	if removedAt == 0 {
 		t.Fatal("removing the role revoked nothing")
+	}
+	// It is listed as an account that lost its role, not as a member.
+	listed := func() (Member, bool) {
+		for _, m := range s.List() {
+			if m.UserID == "u1" {
+				return m, true
+			}
+		}
+		return Member{}, false
+	}
+	if m, ok := listed(); !ok || m.Role != "" || m.Assigned || !m.RoleRemoved || m.SessionsValidFrom != removedAt {
+		t.Fatalf("the removed account in the list = %+v, %v", m, ok)
+	}
+	for _, m := range s.List() {
+		if m.UserID == "admin-1" && (!m.Assigned || m.RoleRemoved) {
+			t.Errorf("a member with a role = %+v", m)
+		}
+	}
+	// Not for ever: the record stays, the list forgets it.
+	s.mu.Lock()
+	old := s.data["u1"]
+	old.UpdatedAt = time.Now().Add(-removedListedFor - time.Minute)
+	s.data["u1"] = old
+	s.mu.Unlock()
+	if _, ok := listed(); ok {
+		t.Error("an account removed long ago is still listed")
+	}
+	if s.SessionsValidFrom("u1") != removedAt {
+		t.Error("the list forgetting the account lost its revocation")
 	}
 	if err := s.Remove("u1"); !errors.Is(err, ErrNotFound) {
 		t.Errorf("removing it twice: %v, want ErrNotFound", err)
@@ -119,6 +143,9 @@ func TestRemoveKeepsTheRevocation(t *testing.T) {
 	}
 	if got := s.SessionsValidFrom("u1"); got <= removedAt {
 		t.Errorf("after assigning again: valid from %d, want after %d", got, removedAt)
+	}
+	if m, ok := listed(); !ok || m.Role != RoleViewer || !m.Assigned || m.RoleRemoved {
+		t.Errorf("after assigning again, in the list = %+v, %v", m, ok)
 	}
 	// Delete, the older name for the same thing, keeps it too.
 	s.Delete("u1")
@@ -180,6 +207,26 @@ func TestRevocationReachesOtherReplicas(t *testing.T) {
 	}
 	if role, _ := restarted.Role("u1"); role != RoleAdmin {
 		t.Errorf("after a restart the role is %q", role)
+	}
+	// So is what the list says of an account: that it was given a role, or
+	// that the role was removed.
+	_, _ = a.Set("u2", RoleViewer)
+	_, _ = a.Set("u3", RoleViewer)
+	if err := a.Remove("u3"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.Reload(); err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]Member{}
+	for _, m := range b.List() {
+		seen[m.UserID] = m
+	}
+	if m := seen["u2"]; !m.Assigned || m.RoleRemoved {
+		t.Errorf("an assigned account after reload = %+v", m)
+	}
+	if m, ok := seen["u3"]; !ok || m.Assigned || !m.RoleRemoved || m.Role != "" || m.SessionsValidFrom == 0 {
+		t.Errorf("a removed account after reload = %+v, %v", m, ok)
 	}
 
 	// A write that fails changes nothing here either.

@@ -128,6 +128,23 @@ func (f *sessFixture) token(githubID string) string {
 	return tok
 }
 
+// teamList returns the members GET /team lists, by user id.
+func (f *sessFixture) teamList(token string) map[string]map[string]interface{} {
+	f.t.Helper()
+	list := f.call("GET", "/team", token, "")
+	if list.status != http.StatusOK {
+		f.t.Fatalf("team list: %d %s", list.status, list.raw)
+	}
+	out := map[string]map[string]interface{}{}
+	items, _ := list.body["items"].([]interface{})
+	for _, it := range items {
+		if m, ok := it.(map[string]interface{}); ok {
+			out[fmt.Sprint(m["user_id"])] = m
+		}
+	}
+	return out
+}
+
 func (f *sessFixture) lastAudit(kind string) (incidents.AuditEntry, bool) {
 	for _, e := range f.audit.List(0) {
 		if e.Kind == kind {
@@ -287,6 +304,39 @@ func TestUnassignedClerkAccount(t *testing.T) {
 		if roles[clerkID] != tc.wantRole || roles["user_2assigned"] != "analyst" {
 			t.Errorf("default %q: team roles = %v", tc.defaultRole, roles)
 		}
+		// And says which role an admin gave: a default viewer is not a
+		// viewer someone assigned.
+		members := f.teamList("admin-key")
+		if members[clerkID]["assigned"] != false || members["user_2assigned"]["assigned"] != true {
+			t.Errorf("default %q: assigned = %v and %v, want false and true",
+				tc.defaultRole, members[clerkID]["assigned"], members["user_2assigned"]["assigned"])
+		}
+		if _, ok := members[clerkID]["sessions_valid_from"]; ok {
+			t.Errorf("default %q: an account nobody signed out has %v", tc.defaultRole, members[clerkID])
+		}
+
+		// Ending the sessions of the unassigned account assigns nothing,
+		// and the list shows the moment.
+		revoked := f.call("POST", "/team/"+clerkID+"/sessions/revoke", "admin-key", "")
+		if revoked.status != http.StatusOK || revoked.body["assigned"] != false {
+			t.Fatalf("default %q: revoke %d %s, want assigned false", tc.defaultRole, revoked.status, revoked.raw)
+		}
+		m := f.teamList("admin-key")[clerkID]
+		if m["assigned"] != false || m["role"] != tc.wantRole || m["sessions_valid_from"] != revoked.body["sessions_valid_from"] {
+			t.Errorf("default %q: after the revocation the list has %v", tc.defaultRole, m)
+		}
+
+		// An assigned account whose role is removed is listed like the
+		// unassigned one, with the moment its sessions ended.
+		removed := f.call("DELETE", "/team/user_2assigned/role", "admin-key", "")
+		if removed.status != http.StatusOK {
+			t.Fatalf("default %q: remove %d %s", tc.defaultRole, removed.status, removed.raw)
+		}
+		m = f.teamList("admin-key")["user_2assigned"]
+		if m["assigned"] != false || m["role"] != tc.wantRole || m["role_removed"] != true ||
+			m["sessions_valid_from"] != removed.body["sessions_valid_from"] || m["name"] != "Bo" {
+			t.Errorf("default %q: after the removal the list has %v", tc.defaultRole, m)
+		}
 	}
 }
 
@@ -322,6 +372,10 @@ func TestRevokedSessionIsRefused(t *testing.T) {
 	res := f.call("POST", "/team/100/sessions/revoke", "admin-key", "")
 	if res.status != http.StatusOK || res.body["user_id"] != "100" {
 		t.Fatalf("revoke: %d %s", res.status, res.raw)
+	}
+	// The role stays, so the account is still an assigned one.
+	if res.body["assigned"] != true || res.body["sessions_valid_from"] != float64(f.users.SessionsValidFrom("100")) {
+		t.Errorf("revoke answered %s, want assigned true and the moment", res.raw)
 	}
 	if e, ok := f.lastAudit("team.sessions.revoke"); !ok || e.Actor != ActorAdminKey || e.Target != "100" {
 		t.Errorf("audit entry = %+v", e)
@@ -422,8 +476,15 @@ func TestRoleRemovalEndsAccess(t *testing.T) {
 		t.Errorf("removing a role nobody has: %d %s", res.status, res.raw)
 	}
 
-	if res := f.call("DELETE", "/team/100/role", admin, ""); res.status != http.StatusOK {
-		t.Fatalf("remove: %d %s", res.status, res.raw)
+	// The answer says when the sessions ended, as a revocation's does.
+	removed := f.call("DELETE", "/team/100/role", admin, "")
+	if removed.status != http.StatusOK {
+		t.Fatalf("remove: %d %s", removed.status, removed.raw)
+	}
+	endedAt := float64(f.users.SessionsValidFrom("100"))
+	if endedAt == 0 || removed.body["sessions_valid_from"] != endedAt || removed.body["assigned"] != false ||
+		removed.body["ok"] != true || removed.body["user_id"] != "100" {
+		t.Errorf("remove answered %s, want the moment %v and assigned false", removed.raw, endedAt)
 	}
 	if e, ok := f.lastAudit("team.role.remove"); !ok || e.Actor != "user:1" || e.Target != "100" {
 		t.Errorf("audit entry = %+v", e)
@@ -434,14 +495,27 @@ func TestRoleRemovalEndsAccess(t *testing.T) {
 	if res := f.signIn("100"); res.status != http.StatusForbidden || res.code() != codeAccountNotAssigned {
 		t.Errorf("sign-in after the removal: %d %s", res.status, res.raw)
 	}
-	list := f.call("GET", "/team", admin, "")
-	if strings.Contains(list.raw, `"user_id":"100"`) {
-		t.Errorf("the removed member is still listed: %s", list.raw)
+	// The Team page still shows the account, as one without a role whose
+	// sessions were ended, so that an admin can give it a role again.
+	members := f.teamList("admin-key")
+	if m := members["100"]; m == nil || m["role"] != "" || m["assigned"] != false || m["role_removed"] != true ||
+		m["sessions_valid_from"] != endedAt {
+		t.Errorf("the removed account in the list = %v, want no role, not assigned, sessions ended at %v", m, endedAt)
+	}
+	if m := members["1"]; m == nil || m["role"] != "admin" || m["assigned"] != true || m["role_removed"] != nil {
+		t.Errorf("the admin in the list = %v", m)
 	}
 
 	// Given a role again, the token from before stays dead.
-	if res := f.call("PUT", "/team/100/role", admin, `{"role":"admin"}`); res.status != http.StatusOK {
-		t.Fatalf("assign again: %d %s", res.status, res.raw)
+	assigned := f.call("PUT", "/team/100/role", admin, `{"role":"admin"}`)
+	if assigned.status != http.StatusOK {
+		t.Fatalf("assign again: %d %s", assigned.status, assigned.raw)
+	}
+	if assigned.body["assigned"] != true || assigned.body["role"] != "admin" || assigned.body["role_removed"] != nil {
+		t.Errorf("assign answered %s, want an assigned admin", assigned.raw)
+	}
+	if m := f.teamList("admin-key")["100"]; m == nil || m["assigned"] != true || m["role_removed"] != nil {
+		t.Errorf("the account given a role again, in the list = %v", m)
 	}
 	if res := f.call("GET", "/stats", tok, ""); res.status != http.StatusUnauthorized {
 		t.Errorf("old token after the role came back: %d %s", res.status, res.raw)
@@ -470,6 +544,10 @@ func TestRoleRemovalUnderTheDefaultRole(t *testing.T) {
 	}
 	if res := f.call("GET", "/team", again, ""); res.status != http.StatusForbidden {
 		t.Errorf("the default viewer on an admin route: %d %s", res.status, res.raw)
+	}
+	// The list shows the role the account has now, and that nobody gave it.
+	if m := f.teamList("admin-key")["100"]; m == nil || m["role"] != "viewer" || m["assigned"] != false || m["role_removed"] != true {
+		t.Errorf("the removed account in the list = %v, want an unassigned viewer", m)
 	}
 }
 

@@ -50,7 +50,20 @@ type Member struct {
 	// tokens are revoked. It moves when the role changes or is removed, on
 	// an admin's request and when the user signs out.
 	SessionsValidFrom int64 `json:"sessions_valid_from,omitempty"`
+	// Assigned says an admin gave this account the role shown. False when
+	// the role is only the operator's default for accounts without one, or
+	// when the account has no access. The store keeps it equal to "the
+	// record has a role".
+	Assigned bool `json:"assigned"`
+	// RoleRemoved says the account had a role and an admin took it away.
+	// It tells such a record from one that only holds a revocation time,
+	// like that of an account which signed out without ever having a role.
+	RoleRemoved bool `json:"role_removed,omitempty"`
 }
+
+// removedListedFor is how long List shows an account after its role was
+// removed. The record itself stays: it holds the revocation time.
+const removedListedFor = 30 * 24 * time.Hour
 
 var (
 	ErrNotFound = errors.New("member not found")
@@ -61,6 +74,9 @@ var (
 type Store interface {
 	Role(userID string) (string, bool)
 	Set(userID, role string) (Member, error)
+	// List returns the members that have a role and, for removedListedFor,
+	// the accounts whose role was removed: those have an empty Role and
+	// RoleRemoved set.
 	List() []Member
 	Delete(userID string)
 
@@ -84,8 +100,9 @@ type Store interface {
 //
 // A member whose role was removed is kept as a record without a role, so
 // that the moment its sessions were revoked outlives the role: assigning a
-// role again must not bring a token from before back to life. Role and List
-// do not show such a record.
+// role again must not bring a token from before back to life. Role does not
+// know such a record, and no count of admins includes it; List shows it,
+// without a role, for removedListedFor.
 //
 // Across replicas a change, a revocation included, is seen by the others at
 // their next reload (main.settingsReloadInterval, 30 s). Until then another
@@ -126,6 +143,7 @@ func (s *MemoryStore) reloadLocked() error {
 		if err := json.Unmarshal(raw, &m); err != nil {
 			return err
 		}
+		m.Assigned = m.Role != ""
 		fresh[id] = m
 		return nil
 	})
@@ -172,9 +190,13 @@ func revokedNow(m Member, now time.Time) int64 {
 // put writes m to the backing storage and then to the working copy. The
 // caller holds wmu.
 func (s *MemoryStore) put(m Member) error {
+	m.Assigned = m.Role != ""
 	if s.persist != nil {
 		// Only the assignment is stored; name and email come from Clerk.
-		stored := Member{UserID: m.UserID, Role: m.Role, UpdatedAt: m.UpdatedAt, SessionsValidFrom: m.SessionsValidFrom}
+		stored := Member{
+			UserID: m.UserID, Role: m.Role, UpdatedAt: m.UpdatedAt, SessionsValidFrom: m.SessionsValidFrom,
+			Assigned: m.Assigned, RoleRemoved: m.RoleRemoved,
+		}
 		if err := s.persist.Put(m.UserID, stored); err != nil {
 			return err
 		}
@@ -256,6 +278,7 @@ func (s *MemoryStore) assign(userID, role string, keepAnAdmin bool) (Member, err
 		m.SessionsValidFrom = revokedNow(m, now)
 	}
 	m.UserID, m.Role, m.UpdatedAt = userID, role, now
+	m.Assigned, m.RoleRemoved = true, false
 	if err := s.put(m); err != nil {
 		return Member{}, err
 	}
@@ -291,6 +314,7 @@ func (s *MemoryStore) remove(userID string, keepAnAdmin bool) error {
 	}
 	now := time.Now().UTC()
 	m.Role = ""
+	m.Assigned, m.RoleRemoved = false, true
 	m.SessionsValidFrom = revokedNow(m, now)
 	m.UpdatedAt = now
 	return s.put(m)
@@ -321,11 +345,15 @@ func (s *MemoryStore) List() []Member {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	out := make([]Member, 0, len(s.data))
+	listedSince := time.Now().Add(-removedListedFor)
 	for _, v := range s.data {
-		// A record kept for its revocation time only is not a member.
-		if v.Role == "" {
+		// A record kept for its revocation time only is not a member. One
+		// whose role was removed is shown for a while, without a role, so
+		// that an admin sees it happened and can assign a role again.
+		if v.Role == "" && (!v.RoleRemoved || v.UpdatedAt.Before(listedSince)) {
 			continue
 		}
+		v.Assigned = v.Role != ""
 		out = append(out, v)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].UpdatedAt.After(out[j].UpdatedAt) })

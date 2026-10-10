@@ -20,9 +20,15 @@ func (cfg Config) handleTeamList(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
+	// The store lists the accounts that have a role and, for a while, those
+	// whose role was removed. The latter are shown with the role they have
+	// now: none, or the operator's default.
 	stored := cfg.Users.List()
 	roleByID := make(map[string]users.Member, len(stored))
-	for _, m := range stored {
+	for i, m := range stored {
+		if m.Role == "" {
+			stored[i].Role = cfg.defaultRole()
+		}
 		roleByID[m.UserID] = m
 	}
 
@@ -43,9 +49,16 @@ func (cfg Config) handleTeamList(w http.ResponseWriter, r *http.Request) {
 					// empty, or the operator's default for accounts without
 					// one.
 					Role: cfg.defaultRole(),
+					// Set for an account without a role too, when it signed
+					// out or an admin ended its sessions.
+					SessionsValidFrom: cfg.Users.SessionsValidFrom(cu.ID),
 				}
 				if existing, ok := roleByID[cu.ID]; ok {
-					m.Role = existing.Role
+					if existing.Assigned {
+						m.Role = existing.Role
+					}
+					m.Assigned = existing.Assigned
+					m.RoleRemoved = existing.RoleRemoved
 					m.UpdatedAt = existing.UpdatedAt
 				}
 				items = append(items, m)
@@ -170,7 +183,8 @@ func (cfg Config) teamTarget(w http.ResponseWriter, r *http.Request) (string, bo
 
 // handleTeamRoleDelete serves DELETE /team/{id}/role: the account keeps no
 // role. Its sessions end, and it cannot sign in again unless the operator
-// set a default role for accounts without one.
+// set a default role for accounts without one. The answer carries the moment
+// the sessions ended, as that of a revocation does.
 func (cfg Config) handleTeamRoleDelete(w http.ResponseWriter, r *http.Request) {
 	id, ok := cfg.teamTarget(w, r)
 	if !ok {
@@ -195,14 +209,23 @@ func (cfg Config) handleTeamRoleDelete(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	// The moment the removal ended the account's sessions, or a later one
+	// if they were ended again since.
+	from := cfg.Users.SessionsValidFrom(id)
 	if cfg.Audit != nil {
 		cfg.Audit.Append(incidents.AuditEntry{
 			Kind:   "team.role.remove",
 			Target: id,
 			Actor:  actorFromRequest(r),
+			Detail: map[string]interface{}{"sessions_valid_from": from},
 		})
 	}
-	writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "user_id": id})
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"ok":                  true,
+		"user_id":             id,
+		"assigned":            false,
+		"sessions_valid_from": from,
+	})
 }
 
 // handleTeamSessionsRevoke serves POST /team/{id}/sessions/revoke: every
@@ -231,9 +254,12 @@ func (cfg Config) handleTeamSessionsRevoke(w http.ResponseWriter, r *http.Reques
 			Detail: map[string]interface{}{"sessions_valid_from": from},
 		})
 	}
+	// The role is not touched, so the account is as assigned as it was.
+	_, assigned := cfg.Users.Role(id)
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"ok":                  true,
 		"user_id":             id,
+		"assigned":            assigned,
 		"sessions_valid_from": from,
 	})
 }

@@ -2225,6 +2225,15 @@ paths:
         Being listed by Clerk assigns nothing. An account nobody assigned a
         role is listed with `role` equal to `default_role`: empty (it has no
         access) unless the operator set `TAMGA_SSO_DEFAULT_ROLE=viewer`.
+        `assigned` tells the two apart: it is true only when an admin gave
+        the account the role shown.
+
+        An account whose role was removed stays in the list for 30 days,
+        with or without Clerk, as an unassigned one: `assigned: false`,
+        `role_removed: true`, `role` equal to `default_role`, and the
+        moment its sessions ended in `sessions_valid_from`. An account that
+        only signed out, or whose sessions an admin ended, without ever
+        having a role is listed only when Clerk lists it.
       responses:
         "200":
           description: OK
@@ -2308,6 +2317,8 @@ paths:
         operator set `TAMGA_SSO_DEFAULT_ROLE=viewer`, in which case it signs
         in as a viewer. A role assigned later does not bring back a token
         from before. Written to the audit log as `team.role.remove`.
+
+        The account stays in `GET /api/v1/team` for 30 days, without a role.
       parameters:
         - in: path
           name: id
@@ -2323,6 +2334,13 @@ paths:
                 properties:
                   ok: { type: boolean }
                   user_id: { type: string }
+                  assigned:
+                    type: boolean
+                    description: Always false. No admin-given role is left.
+                  sessions_valid_from:
+                    type: integer
+                    format: int64
+                    description: Unix seconds. The moment the account's sessions ended; a token issued at or before it is refused.
         "400":
           description: Invalid user id
         "403":
@@ -2370,6 +2388,9 @@ paths:
                 properties:
                   ok: { type: boolean }
                   user_id: { type: string }
+                  assigned:
+                    type: boolean
+                    description: Whether the account has a role an admin gave it. Revoking sessions does not change that.
                   sessions_valid_from:
                     type: integer
                     format: int64
@@ -3538,12 +3559,21 @@ components:
         name: { type: string }
         image_url: { type: string }
         role:
-          description: Empty for an account listed by Clerk that nobody assigned a role and that gets none by default.
+          description: The role the account has now. Empty for an account that nobody assigned a role, or whose role was removed, and that gets none by default.
           oneOf:
             - $ref: "#/components/schemas/TeamRole"
             - type: string
               enum: [""]
-        updated_at: { type: string, format: date-time }
+        assigned:
+          type: boolean
+          description: True when an admin gave this account the role shown. False when the role is only `default_role`, the one of accounts without an assignment, or when the account has no access. Always present.
+        role_removed:
+          type: boolean
+          description: True when the account had a role and an admin removed it. Absent otherwise.
+        updated_at:
+          type: string
+          format: date-time
+          description: When the role was last assigned or removed. The zero time (`0001-01-01T00:00:00Z`) for an account without a record.
         sessions_valid_from:
           type: integer
           format: int64
