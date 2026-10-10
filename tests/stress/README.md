@@ -76,6 +76,8 @@ Results are written to `tests/stress/results/<YYYYMMDD-HHMMSS>/`:
 | `adversarial_injection_bypass.json` | Injection test vectors |
 | `adversarial_secret_bypass.json` | Secret test vectors |
 | `adversarial_policy_bypass.json` | Policy test vectors |
+| `adversarial_operator_state_bypass.json` | Operator-state test vectors |
+| `adversarial_structure_bypass.json` | Request-structure test vectors |
 | `adversarial_results.json` | Merged adversarial summary |
 | `load_test_100rps.json` | k6 summary for 100 RPS |
 | `load_test_500rps.json` | k6 summary for 500 RPS |
@@ -125,7 +127,12 @@ python check_regression.py --results-dir results/... --baseline baseline.json --
 | **PII** | 17 | Unicode evasion (math bold, fullwidth), homoglyphs, zero-width chars, base64, HTML entities, Turkish word-to-number, indirect description |
 | **Injection** | 22 | Prompt injection variants, role confusion, encoding tricks, delimiter injection, context manipulation |
 | **Secret** | 12 | API key fragments, obfuscated tokens, multi-line secrets, environment variable leaks |
-| **Policy** | 11 | Provider allowlist bypass, rate limit evasion, budget overflow, rule precedence edge cases |
+| **Policy** | 11 (4 of them controls) | Provider allowlist bypass, rate limit evasion, budget overflow, rule precedence edge cases |
+| **Operator state** | 7 | Contradicting a locked decision, unknown references, stale locks, unauthorized transitions, paraphrased contradictions |
+| **Request structure** | 19, plus 5 controls | The same plain attack moved around the JSON: `\u` escapes, split content parts, tool results, tool call arguments, tool descriptions, attachments, duplicate keys |
+
+The counts are the ones in `baseline.json`. The chaos scripts in
+[`chaos/`](chaos/README.md) are separate and are not run by the suite.
 
 Each test script supports `--json` for machine-readable output and `--output-dir` for custom result paths.
 
@@ -217,7 +224,9 @@ Ensure no other process is using port 8443. The proxy must be reachable at `http
 
 These are NOT run by the suite (too long for CI, suitable for nightly/manual):
 
-- 2000 and 5000 RPS load tests (`baseline_2000rps.js`)
+- The 250 and 2000 RPS load tests (`baseline_250rps.js`, `baseline_2000rps.js`)
 - Soak test (2-hour constant load, `soak_constant.js`)
 - Connection exhaustion test (`connection_exhaustion.js`)
-- Endpoint mix test (`endpoint_mix.js`)
+- Endpoint mix test (`endpoint_mix.js`) and the PII workload (`pii_workload.js`)
+- The LLM judge stress script (`adversarial/llm_judge_stress.py`)
+- The chaos scripts (`chaos/`)

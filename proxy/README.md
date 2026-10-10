@@ -4,11 +4,11 @@ OpenAI/Anthropic trafiği için güvenlik tarayıcıları ve YAML politikası uy
 
 ## Sprint 2 özellikleri
 
-- **Politika hot-reload**: `PolicyStore` + dosya watcher; çalışma zamanında YAML yeniden yüklenir (veya `POST /api/v1/policies/reload` ile manuel).
+- **Politika hot-reload**: `PolicyStore` + dosya watcher; çalışma zamanında YAML yeniden yüklenir (veya `POST /api/v1/policies/reload` ile manuel; admin rolü gerekir).
 - **Event bus**: Tarama / blok / çıktı ipuçları için buffered publish–subscribe; metrik, log, analyzer, DB ve dashboard buffer handler’ları.
 - **Opsiyonel PostgreSQL logging**: `TAMGA_DB_URL` ile istek telemetrisi; kapalıyken no-op store.
 - **Rate limiting**: Politikadaki `rate_limit` ile API anahtarı başına token bucket (farklı anahtarlar bağımsız sayaçlar).
-- **Dashboard REST API**: Aynı port üzerinde `/api/v1/*` (admin anahtarı + CORS).
+- **Dashboard REST API**: Aynı port üzerinde `/api/v1/*` (admin anahtarı + CORS). Roller: admin, analyst, viewer; her route hangi yetkiyi istediğini `internal/api/routes.go` içinde belirtir.
 
 ## Sprint 3 (demo-ready) eklemeleri
 
@@ -44,7 +44,7 @@ TAMGA_MOCK_UPSTREAM=true go run ./cmd/tamga
 
 ## Gereksinimler
 
-- Go 1.22+
+- Go 1.25+ (`go.mod`: 1.25.4)
 
 ## Hızlı başlangıç
 
@@ -72,11 +72,15 @@ Aynı HTTP sunucusu üzerinde; geliştirme için CORS varsayılan `*` (`TAMGA_CO
 |--------|-----|----------|
 | `GET` | `/api/v1/health/detailed` | Anahtarsız: yalnızca proxy ayakta mı ve tarama süreleri. Yönetim anahtarıyla: DB, tarayıcı sayısı, uptime, sağlayıcı havuzları |
 | `GET` | `/api/v1/stats` | Son 7 gün özeti (DB veya bellek metrikleri) |
-| `GET` | `/api/v1/events?page=&limit=` | Güvenlik olayları (DB veya son ~100 bellek) |
+| `GET` | `/api/v1/events?page=&limit=` | Güvenlik olayları (DB veya bellekteki son 1000 istek) |
 | `GET` | `/api/v1/policies` | Aktif politika JSON |
-| `POST` | `/api/v1/policies/reload` | Politika dosyasını diskten yeniden yükle |
+| `POST` | `/api/v1/policies/reload` | Politika dosyasını diskten yeniden yükle (admin rolü) |
 
-Korumalı route’lar için header: **`X-Tamga-Admin-Key`** (`TAMGA_ADMIN_KEY`). Anahtar boşsa korumalı endpoint’ler **401** döner.
+Bu tablo bir seçkidir. Tüm route’lar ve her birinin istediği rol (`x-required-role`): [`docs/openapi.yaml`](docs/openapi.yaml).
+
+Korumalı route’lar için header: **`X-Tamga-Admin-Key`**. Değeri `TAMGA_ADMIN_KEY` (admin) ya da `read` / `write` / `admin` kapsamlı bir API anahtarıdır (viewer / analyst / admin). Anahtar yalnızca bu header’dan okunur; URL’deki `?key=` hiçbir route’ta okunmaz. Anahtar boşsa ya da geçersizse korumalı endpoint’ler **401**, rol yetmiyorsa **403** döner.
+
+`GET /health` anahtarsız canlılık kontrolüdür. `/api/v1/health/detailed` bir bağımlılık (DB, Redis, analyzer) düştüğünde **503** döner.
 
 Örnek:
 
@@ -95,21 +99,27 @@ curl -s -H "X-Tamga-Admin-Key: $TAMGA_ADMIN_KEY" http://localhost:8443/api/v1/st
 | `TAMGA_ORG_ID` | DB sorgularında varsayılan org (dashboard/istatistik) |
 | `TAMGA_ADMIN_KEY` | Dashboard API admin anahtarı |
 | `TAMGA_CORS_ORIGIN` | CORS `Access-Control-Allow-Origin` |
-| `TAMGA_ANALYZER_URL` | Analyzer servis tabanı |
+| `TAMGA_ANALYZER_ADDR` | Analyzer gRPC adresi (varsayılan `localhost:50051`) |
+| `TAMGA_ANALYZER_HTTP_URL` | Analyzer HTTP tabanı (varsayılan `http://localhost:8000`); PDF raporları buradan alınır |
+| `REDIS_URL` | Redis (boş = her kopya kendi belleğindeki sayaçları kullanır) |
+
+Tam liste: [`docs/operations.md`](../docs/operations.md#configuration).
 
 ## Docker Compose ile çalıştırma
 
-Tam yığın (proxy, analyzer, postgres, redis, dashboard) `tamga/deploy` altında tanımlıdır:
+Tam yığın (proxy, analyzer, scanner-service, postgres, redis, nats, jaeger, dashboard) `deploy/` altında tanımlıdır. Depo kökünden:
 
 ```bash
-cd deploy
-docker compose up --build
+cp .env.example .env
+docker compose --env-file .env -f deploy/docker-compose.yml up -d --build
 ```
 
-Proxy **8443**, analyzer **8444**, dashboard **3000** portlarında açılır. Proxy için örnek ortam:
+`--env-file .env` gereklidir: Compose yalnızca compose dosyasının yanındaki `.env` dosyasını kendiliğinden okur.
+
+Proxy **8443**, dashboard **3000** portlarında host’a açılır; analyzer (**8444**), postgres ve redis yalnızca iç ağdadır. Proxy için örnek ortam:
 
 - `TAMGA_POLICY_PATH=/app/tamga-policy.yaml` (volume ile bağlanır)
-- İsteğe bağlı: `TAMGA_ADMIN_KEY`, `TAMGA_ORG_ID` (dashboard API + DB satırları için)
+- `TAMGA_ADMIN_KEY` (yönetim API’si için; boşsa korumalı route’lar 401 döner), isteğe bağlı `TAMGA_ORG_ID`
 
 Compose dosyası: [`deploy/docker-compose.yml`](../deploy/docker-compose.yml).
 
@@ -135,21 +145,7 @@ go test ./internal/scanner/ -bench=. -benchmem -count=3
 go test ./internal/scanner/ "-bench=." -benchmem -count=3
 ```
 
-### Örnek benchmark çıktısı (referans)
-
-Aşağıdaki tablo tek bir geliştirme makinesinde (Windows, Go `test -bench=. -benchmem -count=3`) alınmış özet değerlerdir; donanıma göre değişir.
-
-| Benchmark | Tipik süre / iterasyon | Not |
-|-----------|-------------------------|-----|
-| `BenchmarkScanAll_SmallPrompt` (~100 B içerik) | ~0.27 ms | Düz metin |
-| `BenchmarkScanAll_MediumPrompt` (~1 KB) | ~1.0 ms | |
-| `BenchmarkScanAll_LargePrompt` (~10 KB) | ~19 ms | |
-| `BenchmarkScanAll_WithPII` (~1 KB, e-posta + kart) | ~1.2 ms | PII yoğun |
-| `BenchmarkScanAll_WithSecrets` (~500 B, API anahtarı) | ~0.55 ms | |
-| `BenchmarkScanAll_WithInjection` (~500 B) | ~0.50 ms | Enjeksiyon kalıbı |
-| `BenchmarkScanAll_MixedThreats` | ~0.38 ms | PII + secret + injection |
-
-Üretim öncesi kendi ortamınızda `go test ./internal/scanner/ "-bench=." -benchmem -count=5` ile ölçün.
+Bu dosyada ölçüm değeri tutulmaz; sonuç donanıma göre değişir. Yayınlanan ölçümler ve yöntem: [`docs/benchmarks/README.md`](../docs/benchmarks/README.md). Üretim öncesi kendi ortamınızda `go test ./internal/scanner/ "-bench=." -benchmem -count=5` ile ölçün.
 
 ## Docker (yalnızca proxy imajı)
 

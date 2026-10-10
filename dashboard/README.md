@@ -43,7 +43,7 @@ and run against `next dev`, where the built-in key still applies.
 Types are generated from the proxy OpenAPI spec:
 
 ```bash
-cd tamga/dashboard
+cd dashboard
 npm run gen:api-types
 ```
 

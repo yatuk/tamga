@@ -11,19 +11,25 @@ View the [D2 source](tamga.d2).
 
 | Component | Language | Role | Port |
 |---|---|---|---|
-| Proxy | Go | Inline scanners, policy engine, reverse proxy, rate limiter, REST API | `8443` |
+| Proxy | Go | Inline scanners, policy engine, reverse proxy, rate limiter, management API. One listener for all of it | `8443` |
+| Scanner service | Go | Optional. Runs the stateless scanners over gRPC when `TAMGA_SCANNER_SERVICE_ADDR` is set | `50052` |
 | Classifier | Python | Optional. Local prompt-injection model, asked inline when the rules did not block | `50052` |
-| Analyzer | Python | Deep PII/injection/toxicity analysis after the decision, compliance reports | `8444` |
-| Dashboard | Next.js | Admin UI, incident hunting, integrations, OWASP coverage | `3000` |
+| Analyzer | Python | Deep PII/injection/toxicity analysis after the decision, compliance reports | `50051` gRPC, `8444` HTTP |
+| Dashboard | Next.js | The console. It runs in the browser and calls the proxy's management API directly | `3000` |
 | PostgreSQL | — | Optional persistent telemetry and audit storage | `5432` |
 | Redis | — | Rate limiting, caching, distributed counters | `6379` |
-| Jaeger | — | OpenTelemetry tracing (optional) | `16686` |
+| NATS | — | Optional JetStream event stream, used when `TAMGA_NATS_URL` is set | `4222` |
+| Jaeger | — | OpenTelemetry tracing (optional) | `16686` UI, `4318` OTLP |
 
 ## Deployment topology
 
-Six services on an internal `tamga_default` bridge network. Only Proxy
-(`:8443`) and Dashboard (`:3000`) are exposed externally; all inter-service
-communication stays inside Docker's network namespace.
+`deploy/docker-compose.yml` puts every service on one internal bridge network
+(`deploy_internal`). The proxy (`:8443`) and the dashboard (`:3000`) are
+published to the host for use; the file also publishes the Jaeger UI
+(`:16686`) and the NATS monitoring page (`:8222`) for local development.
+PostgreSQL, Redis, the analyzer and the scanner service are reachable only
+inside the network. The diagram leaves out NATS, the scanner service and the
+optional classifier.
 
 ```mermaid
 %%{init: {
@@ -44,7 +50,7 @@ graph TB
 
     subgraph "Tamga Stack (docker-compose)"
         subgraph "Edge"
-            Proxy[Tamga Proxy<br/>:8443 TLS<br/>:8080 metrics]
+            Proxy[Tamga Proxy<br/>:8443]
         end
 
         subgraph "Inspection"
@@ -57,7 +63,7 @@ graph TB
         end
 
         subgraph "Observability"
-            Jaeger[Jaeger<br/>:16686 UI<br/>:4317 OTLP]
+            Jaeger[Jaeger<br/>:16686 UI<br/>:4318 OTLP]
         end
 
         subgraph "Management"
@@ -65,13 +71,12 @@ graph TB
         end
     end
 
-    Client -->|HTTPS| Proxy
+    Client -->|HTTP, or HTTPS with TAMGA_TLS_CERT| Proxy
     Proxy -->|gRPC| Analyzer
     Proxy -->|SQL| Postgres
     Proxy -->|cache + rate limit| Redis
     Proxy -->|OTLP traces| Jaeger
-    Dashboard -->|REST API| Proxy
-    Dashboard -->|read events| Postgres
+    Dashboard -->|management API, from the browser| Proxy
 
     classDef edge fill:#1e3a5f,stroke:#3b82f6,color:#dbeafe
     classDef inspection fill:#0d3a3a,stroke:#14b8a6,color:#ccfbf1
@@ -159,9 +164,10 @@ View the [D2 source](request-lifecycle.d2) or [full-size SVG](request-lifecycle.
 
 ## Scanner pipeline
 
-Seven inline scanners run on every request. Hybrid design: fast scanners
-run sequentially to avoid goroutine overhead, while slower scanners run in
-parallel to hide their latency.
+Seven inline scanners run on every request, and `operator_state` as an eighth
+when it is configured. In the default `adaptive` mode the fast scanners run in
+sequence and the slow ones in parallel. The diagram gives no timings; see
+[benchmarks](../benchmarks/README.md) for measured numbers.
 
 ```mermaid
 %%{init: {
@@ -181,14 +187,14 @@ graph LR
     Normalize --> Fast{Fast<br/>Scanners}
     Normalize --> Slow{Slow<br/>Scanners}
 
-    Fast -.->|0.3ms| PII[PII<br/>email, TC, IBAN]
-    Fast -.->|0.3ms| Secret[Secrets<br/>API keys, tokens]
-    Fast -.->|0.2ms| Comp[Competitor<br/>brand names]
-    Fast -.->|0.2ms| Custom[Custom Entity<br/>policy-driven]
+    Fast -.-> PII[PII<br/>email, TC, IBAN]
+    Fast -.-> Secret[Secrets<br/>API keys, tokens]
+    Fast -.-> Comp[Competitor<br/>brand names]
+    Fast -.-> Custom[Custom Entity<br/>policy-driven]
 
-    Slow -.->|1.5ms| Inject[Injection<br/>DFA + LLM judge]
-    Slow -.->|1.2ms| Mod[Moderation<br/>toxicity, hate]
-    Slow -.->|0.6ms| Jail[Jailbreak<br/>DAN, STAN]
+    Slow -.-> Inject[Injection<br/>phrases and patterns]
+    Slow -.-> Mod[Moderation<br/>toxicity, hate]
+    Slow -.-> Jail[Jailbreak<br/>DAN, STAN]
 
     PII --> Merge[Findings<br/>Aggregator]
     Secret --> Merge
@@ -214,7 +220,9 @@ graph LR
 ## Policy decisions
 
 How Tamga determines whether to block, redact, warn, or pass a request.
-Decision order matters: the earliest deny wins.
+Three checks come before any scanning and do not depend on findings: the
+provider allowlist, the daily budget and the rate limit. The policy rules are
+applied to the findings after that.
 
 ```mermaid
 %%{init: {
@@ -229,51 +237,46 @@ Decision order matters: the earliest deny wins.
   }
 }}%%
 flowchart TD
-    Start([Request received]) --> HasFindings{Any findings?}
+    Start([Request received]) --> CheckProvider{Provider<br/>allowed?}
+
+    CheckProvider -->|No| Block403([403<br/>provider_not_allowed])
+    CheckProvider -->|Yes| CheckBudget{Daily budget<br/>OK?}
+
+    CheckBudget -->|Exceeded| Block402([402<br/>budget_exceeded])
+    CheckBudget -->|OK| CheckRate{Rate limit<br/>OK?}
+
+    CheckRate -->|Exceeded| Block429([429<br/>Rate limited])
+    CheckRate -->|OK| Scan[Scan] --> HasFindings{Any findings?}
 
     HasFindings -->|No| Pass([PASS<br/>Forward to LLM])
-    HasFindings -->|Yes| CheckProvider{Provider<br/>allowed?}
+    HasFindings -->|Yes| EvalRules{Match policy<br/>rules?}
 
-    CheckProvider -->|No| Block403([BLOCK 403<br/>Provider not allowed])
-    CheckProvider -->|Yes| EvalRules{Match policy<br/>rules?}
-
-    EvalRules -->|No rule matched| DefaultAction([Apply default action<br/>usually PASS])
+    EvalRules -->|No rule matched| DefaultAction([No rule for the finding<br/>forward])
     EvalRules -->|Rule matched| RuleAction{Rule action?}
 
     RuleAction -->|block| Block403b([BLOCK 403<br/>Policy violation])
-    RuleAction -->|redact| Mask[Mask findings in payload<br/>e.g. 4532 -> masked]
-    RuleAction -->|warn| Webhook[Queue alert<br/>continue request]
-    RuleAction -->|pass| PassRule([PASS])
-
-    Mask --> CheckBudget{Daily budget<br/>OK?}
-    Webhook --> CheckBudget
-    PassRule --> CheckBudget
-
-    CheckBudget -->|Exceeded| Block429([BLOCK 429<br/>Budget exceeded])
-    CheckBudget -->|OK| CheckRate{Rate limit<br/>OK?}
-
-    CheckRate -->|Exceeded| Block429b([BLOCK 429<br/>Rate limited])
-    CheckRate -->|OK| Forward([Forward to LLM])
+    RuleAction -->|redact| Mask[Mask findings in payload] --> Forward([Forward to LLM])
+    RuleAction -->|warn| Webhook[Queue alert<br/>continue request] --> Forward
+    RuleAction -->|pass| Forward
 
     classDef pass fill:#0d3a3a,stroke:#14b8a6,color:#ccfbf1
     classDef block fill:#3a0d0d,stroke:#ef4444,color:#fecaca
     classDef warn fill:#3a2d0a,stroke:#f59e0b,color:#fef3c7
 
-    class Pass,PassRule,Forward pass
-    class Block403,Block403b,Block429,Block429b block
+    class Pass,Forward,DefaultAction pass
+    class Block403,Block403b,Block402,Block429 block
     class Mask,Webhook warn
 ```
 
-Decision order (first match wins):
+Order of the checks, as `handleProxy` in `proxy/internal/proxy/handler.go`
+makes them:
 
-1. Provider allowed? Not in allowlist: BLOCK 403
-2. Policy rules matched? No rule: default action
-3. Rule action block (critical PII, secrets): BLOCK 403
-4. Rule action redact: mask and continue
-5. Rule action warn: pass. Block, strip and warn each queue an alert
-6. Daily budget exceeded: BLOCK 429
-7. Rate limit exceeded: BLOCK 429
-8. Default: PASS
+1. The caller's key, when one is sent or `TAMGA_REQUIRE_KEY=true`: 401 if it is refused
+2. Provider not allowed by the policy: 403 `provider_not_allowed`
+3. Daily token or cost budget of the organisation exceeded: 402 `budget_exceeded`
+4. Rate limit exceeded: 429, when `rate_limit.action_on_exceed` is to block
+5. Scan, then the policy rules on the findings: block (403), redact (mask and
+   forward), warn (forward), pass. Block, strip and warn each queue an alert
 
 ## Integrations
 
@@ -299,12 +302,11 @@ sent, next to sign-in and observability:
 graph TB
     subgraph "Identity Providers"
         Github[GitHub OAuth]
-        SAML[SAML / OIDC<br/>Enterprise]
     end
 
     subgraph "Tamga Core"
         Proxy[Tamga Proxy]
-        Auth[Auth Layer<br/>JWT + Bearer]
+        Auth[Management API auth<br/>admin key, API key or session token]
     end
 
     subgraph "SIEM / Security Tools"
@@ -321,12 +323,11 @@ graph TB
 
     subgraph "Observability"
         OTLP[OTLP Collector]
-        Prometheus[Prometheus /metrics]
+        Prometheus[Prometheus<br/>GET /api/v1/metrics, with a key]
         Jaeger[Jaeger UI]
     end
 
     Github --> Auth
-    SAML --> Auth
     Auth --> Proxy
 
     Proxy -.->|JSON or CEF over HEC| Splunk
@@ -346,7 +347,7 @@ graph TB
     classDef notif fill:#3a2d0a,stroke:#f59e0b,color:#fef3c7
     classDef obs fill:#0d3a3a,stroke:#14b8a6,color:#ccfbf1
 
-    class Github,SAML idp
+    class Github idp
     class Splunk,Sentinel,Datadog siem
     class Slack,Teams,PagerDuty notif
     class OTLP,Prometheus,Jaeger obs
@@ -354,101 +355,32 @@ graph TB
 
 ## Database schema
 
-Tamga uses PostgreSQL 16 with 13 migrations. Core tables and their
-relationships:
+PostgreSQL is optional. The schema is the 18 numbered migrations in
+[`deploy/migrations/`](../../deploy/migrations/); read them for the columns.
+The tables they create:
 
-```mermaid
-erDiagram
-    request_logs ||--o{ findings : "has many"
-    request_logs ||--o| incidents : "may trigger"
-    request_logs }o--|| api_keys : "authenticated by"
-    request_logs }o--|| model_pricing : "priced by"
+| Table | Migration | Holds |
+|---|---|---|
+| `organizations` | 001 | Organisations; request rows refer to one |
+| `api_keys`, `policies`, `alerts` | 001 | Tables of the first schema. No query in the proxy or the analyzer reads or writes them; the retention job deletes old `alerts` rows |
+| `request_logs` | 001, 003, 006, 017 | One row per request: metadata, action and masked findings. Partitioned by month on `created_at`, with a default partition |
+| `daily_stats` | 001 | Per-day counters per organisation |
+| `audit_log` | 004 | The hash-chained log of administrative actions |
+| `policy_revisions`, `policy_proposals` | 004 | Policy history and two-person proposals |
+| `retention_run_log` | 005 | One row per run of the retention job |
+| `analyzer_findings` | 007 | Findings the analyzer adds after the decision |
+| `model_pricing` | 008, 009 | Price per model, used for cost |
+| `event_outbox` | 010 | Created as an outbox for NATS delivery. No code in the proxy or the analyzer reads or writes it |
+| `incident_lifecycle` | 012, 014 | Triage state of incidents |
+| `saved_hunts` | 013 | Saved event queries |
+| `virtual_keys` | 015 | Tamga's own API keys, as a SHA-256 hash and a prefix |
+| `stored_documents` | 016 | Custom patterns, team roles, SSO settings and webhooks, one JSON document each |
 
-    api_keys ||--o{ rate_limits : "tracks usage"
+Migration 011 added row-level security to `request_logs` and `daily_stats`
+and 018 removed it; it never had an effect. See
+[Upgrading the database](../operations.md#upgrading-the-database).
 
-    policies ||--o{ policy_history : "versioned"
-    policies ||--o{ custom_entities : "defines"
-
-    audit_log ||--o| policy_history : "tracks changes"
-
-    incidents ||--o{ incident_events : "audit trail"
-
-    request_logs {
-        uuid id PK
-        text request_id UK
-        text api_key_id FK
-        text provider
-        text model
-        text action "block redact warn pass"
-        int input_tokens
-        int output_tokens
-        decimal cost_usd
-        jsonb findings
-        timestamptz created_at
-    }
-
-    findings {
-        uuid id PK
-        uuid request_log_id FK
-        text type "pii secret injection..."
-        text category
-        text match "redacted or hashed"
-        text severity
-        decimal confidence
-        text scanner
-        text dataset_version
-    }
-
-    api_keys {
-        text id PK
-        text name
-        text key_hash UK
-        text tier "community team business enterprise"
-        int rate_limit
-        timestamptz created_at
-        timestamptz expires_at
-    }
-
-    model_pricing {
-        int id PK
-        text provider
-        text model_family
-        text model_version
-        decimal input_per_1k
-        decimal output_per_1k
-        char currency
-        timestamptz effective_from
-        timestamptz effective_to "NULL=active"
-    }
-
-    policies {
-        int id PK
-        text version
-        jsonb config
-        boolean active
-        timestamptz created_at
-    }
-
-    incidents {
-        uuid id PK
-        text request_id FK
-        text severity
-        text status "open ack resolved closed"
-        text assignee
-        text tags
-    }
-
-    audit_log {
-        uuid id PK
-        text actor
-        text action
-        text resource_type
-        jsonb before
-        jsonb after
-        text hash "chain"
-        timestamptz created_at
-    }
-```
-
-Retention: `request_logs` partitioned by month, default 90-day retention,
-configurable per tier.
+Retention: with `TAMGA_RETENTION_ENABLED=true` a daily job creates the monthly
+partitions of `request_logs` and drops old data. Request logs are kept 30
+days by default, alerts 90, daily statistics and the audit log 365
+(`TAMGA_RETENTION_*_DAYS`).

@@ -7,18 +7,21 @@ the operator-facing summary.
 ## Production deployment (Kubernetes)
 
 ```bash
-helm install tamga ./deploy/helm/tamga-proxy -n security --create-namespace
+helm install tamga ./deploy/helm/tamga-proxy -n security --create-namespace \
+  --set image.repository=registry.example.com/tamga \
+  --set image.tag=<your tag> \
+  --set secrets.adminKey="$(openssl rand -hex 32)"
 ```
 
-Edit `values.yaml` to configure your providers, resource limits, and
-autoscaling. The chart contains a Deployment, a Service, a ConfigMap for the
-policy, a ServiceAccount, a PodDisruptionBudget, a HorizontalPodAutoscaler,
-and pod and container security context defaults. `values.yaml` also has
-`networkPolicy:` and `ingress:` keys that no template reads: the chart
-creates no NetworkPolicy and no Ingress. Nothing in this repository lints,
-renders or installs the chart, and its version fields are behind the release
-(`appVersion` 0.5.0, image tag 0.7.0). Read the templates before you rely on
-it.
+The chart installs the proxy only: a Deployment, a Service on port 8443, a
+Secret for the admin key and the database and Redis URLs, a ServiceAccount, a
+PodDisruptionBudget, an optional HorizontalPodAutoscaler, and a ConfigMap for
+the policy when `policy.inline` is set. It creates no NetworkPolicy and no
+Ingress, and it does not install PostgreSQL, Redis, the analyzer or the
+console. No image is published: build one from `proxy/Dockerfile`. The render
+fails without an admin key. Nothing in this repository's CI lints, renders or
+installs the chart. The values are described in
+[deploy/README.md](../deploy/README.md#helm).
 
 ## Configuration
 
@@ -31,7 +34,8 @@ Essential environment variables:
 | `TAMGA_ADMIN_KEY` | — | Admin API auth key (required for protected routes) |
 | `TAMGA_DB_URL` | — | PostgreSQL DSN (empty = DB logging off) |
 | `REDIS_URL` | — | Redis connection string |
-| `TAMGA_ANALYZER_URL` | — | Analyzer service base URL |
+| `TAMGA_ANALYZER_ADDR` | `localhost:50051` | gRPC address of the analyzer |
+| `TAMGA_ANALYZER_HTTP_URL` | `http://localhost:8000` | HTTP base URL of the analyzer. The PDF reports are fetched from it |
 | `TAMGA_MAX_BODY_BYTES` | `1048576` | Max request body size (1 MB) |
 | `TAMGA_MOCK_UPSTREAM` | `false` | Demo mode without real providers |
 | `TAMGA_STRICT_MODE` | `false` | Ignore all policy exceptions |
@@ -43,11 +47,110 @@ Essential environment variables:
 | `TAMGA_NOTIFY_URL_ENVS` | — | Further environment variable names a rule's `notify:` may refer to |
 | `TAMGA_ALERT_ALLOW_PRIVATE` | — | Internal receivers alerts may be sent to: comma-separated CIDR ranges, addresses and exact host names. Empty: internal addresses are refused. See [Alerts](#where-alerts-may-go) |
 | `TAMGA_TRUSTED_PROXIES` | — | Comma-separated IPs and CIDR ranges of the load balancers or reverse proxies in front of Tamga. Only a connection from one of them may supply the client address through `X-Forwarded-For`; the address used is the first one from the right that is not itself a trusted proxy. Empty: the header is ignored and the connecting address is used, so behind a load balancer every caller without a key shares one rate-limit bucket and `TAMGA_IP_ALLOWLIST` sees the load balancer. An invalid entry stops startup |
-| `TAMGA_OTLP_ENDPOINT` | — | OpenTelemetry collector endpoint |
+| `TAMGA_OTEL_ENDPOINT` | — | OpenTelemetry (OTLP over HTTP) collector endpoint. Setting it turns tracing on. `TAMGA_OTLP_ENDPOINT` is read when this one is empty |
 | `ANTHROPIC_API_KEY` | — | Anthropic provider key |
 | `OPENAI_API_KEY` | — | OpenAI provider key |
 
-Full reference: [proxy/README.md](../proxy/README.md#ortam-değişkenleri-seçilmiş).
+The proxy also reads the variables below. An empty default means unset.
+
+Scanning:
+
+| Variable | Default | Description |
+|---|---|---|
+| `TAMGA_CLASSIFIER_ADDR` | empty | gRPC address of the inline classifier. The policy's `scan.classifier` turns it on. See [Inline classifier](#inline-classifier) |
+| `TAMGA_SCANNER_SERVICE_ADDR` | empty | gRPC address of the scanner service, for the stateless scanners. Empty: everything is scanned in-process |
+| `TAMGA_SCANNER_PIPELINE_MODE` | `adaptive` | `adaptive` (fast scanners in sequence, slow ones in parallel), `sync`, `async`, or `workerpool` |
+| `TAMGA_SCANNER_PIPELINE_TIMEOUT_MS` | `5000` | Time limit of one request's scan in the `async` and `adaptive` modes |
+| `TAMGA_SCANNER_WORKER_POOL_SIZE` | `0` | Goroutines in the worker pool. `0`: no pool |
+| `TAMGA_SCANNER_WORKER_QUEUE_SIZE` | `0` | Capacity of the worker pool's queue. `0`: twice the pool size |
+| `TAMGA_SCANNER_LOAD_SHED_ENABLED` | `false` | Skip non-critical scanners when the pool's queue is above 80% full, and all of them above 95% |
+| `TAMGA_BIN_DB_PATH` | `./data/bins.csv` | Card BIN list, read only when the list built into the binary fails to load |
+| `TAMGA_OPERATOR_STATE_DECISIONS_PATH` | empty | Decisions JSONL file for the `operator_state` scanner. Setting this or the notes path enables the scanner |
+| `TAMGA_OPERATOR_STATE_NOTES_PATH` | empty | Notes JSONL file for the `operator_state` scanner |
+| `TAMGA_OPERATOR_STATE_POLL_INTERVAL_MS` | `1000` | How often those files are checked where file notifications are not used |
+| `TAMGA_OPERATOR_STATE_FORCE_POLL` | empty | Any value: poll the files instead of using file notifications |
+| `TAMGA_OPERATOR_STATE_REDIS` | `true` | `false` keeps operator-state decisions out of Redis |
+
+Access:
+
+| Variable | Default | Description |
+|---|---|---|
+| `TAMGA_ORG_ID` | empty | UUID of the organisation used when a request names none |
+| `TAMGA_DEV_MODE` | `false` | Every caller of the management API is treated as admin, with no key. Local development only |
+| `TAMGA_JWT_SECRET` | empty | HMAC key that signs session tokens. Needed for GitHub sign-in |
+| `TAMGA_GITHUB_CLIENT_ID`, `TAMGA_GITHUB_CLIENT_SECRET` | empty | Credentials of the GitHub OAuth app |
+| `TAMGA_GITHUB_OAUTH_CALLBACK_URL` | empty | Redirect URI registered with that app, ending in `/api/v1/auth/github/callback` |
+| `TAMGA_CLERK_SECRET_KEY` | empty | Clerk Backend API key. Used only to list names and email addresses on the Team page; nobody is signed in with it |
+| `TAMGA_CLERK_CALLBACK_URL` | empty | Read and used by nothing |
+| `TAMGA_IP_ALLOWLIST` | empty | Comma-separated CIDR ranges. When set, a proxy request from any other address gets 403 |
+| `TAMGA_CORS_ORIGINS` | empty | Comma-separated origins allowed to call the proxy from a browser, matched exactly. Empty: `Access-Control-Allow-Origin: *` |
+| `TAMGA_CORS_ORIGIN` | `*` | Deprecated single origin; use `TAMGA_CORS_ORIGINS` |
+| `TAMGA_CORS_ALLOWED_METHODS` | `GET,POST,PUT,PATCH,DELETE,OPTIONS` | Value of `Access-Control-Allow-Methods` |
+| `TAMGA_CORS_CREDENTIALS` | `false` | Send `Access-Control-Allow-Credentials: true`. Honoured only when `TAMGA_CORS_ORIGINS` is set |
+| `TAMGA_CORS_MAX_AGE` | `86400` | Seconds a browser may cache a preflight answer |
+| `TAMGA_TIER` | `community` | `community`, `team`, `business` or `enterprise`. Used with the policy's `pricing` section; a mismatch with its active tier is logged at startup |
+| `TAMGA_REGION` | empty | `eu`, `tr` or `us`. Compared with `data.residency` in the policy at startup; a mismatch is logged, nothing is refused |
+
+TLS:
+
+| Variable | Default | Description |
+|---|---|---|
+| `TAMGA_TLS_CERT`, `TAMGA_TLS_KEY` | empty | Certificate and key files. The proxy serves HTTPS when both are set |
+| `TAMGA_MTLS_STRICT_VERIFY` | `false` | Require a client certificate on the HTTPS listener |
+| `TAMGA_MTLS_CLIENT_CA_FILE` | empty | CA bundle that client certificates are checked against. Required when strict verify is on |
+
+Upstreams:
+
+| Variable | Default | Description |
+|---|---|---|
+| `TAMGA_<PROVIDER>_URL` | empty | Base URL of a provider route in place of the vendor's, for example `TAMGA_OPENAI_URL` or `TAMGA_LOCAL_URL` |
+| `TAMGA_UPSTREAM_MAX_RETRIES` | `1` | Retries of an upstream call that failed in a retryable way |
+| `TAMGA_BREAKER_FAILURE_THRESHOLD` | `3` | Consecutive failures of a provider before its circuit opens |
+| `TAMGA_BREAKER_COOLDOWN_MS` | `10000` | How long a circuit stays open before one request is let through to test it |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `AWS_REGION` (or `AWS_DEFAULT_REGION`) | empty | Credentials and region the Bedrock route signs requests with |
+
+Storage and events:
+
+| Variable | Default | Description |
+|---|---|---|
+| `TAMGA_NATS_URL` | empty | NATS server for JetStream event streaming, for example `nats://localhost:4222`. Empty: off |
+| `TAMGA_POLICY_HISTORY_DIR` | `./data/policy-history` | Where policy history is kept when there is no database |
+| `TAMGA_RETENTION_ENABLED` | off | `true` or `1` runs the retention job once a day. Needs a database |
+| `TAMGA_RETENTION_REQUEST_LOGS_DAYS` | `30` | Days request logs are kept |
+| `TAMGA_RETENTION_ALERTS_DAYS` | `90` | Days alerts are kept |
+| `TAMGA_RETENTION_DAILY_STATS_DAYS` | `365` | Days daily statistics are kept |
+| `TAMGA_RETENTION_AUDIT_DAYS` | `365` | Days the audit log is kept |
+| `TAMGA_RETENTION_INCIDENT_CLOSED_DAYS` | `0` | Days closed incidents are kept |
+
+Tracing:
+
+| Variable | Default | Description |
+|---|---|---|
+| `TAMGA_OTEL_ENABLED` | unset | `false` or `0` turns tracing off even with an endpoint set; `true` or `1` turns it on |
+| `TAMGA_OTEL_SAMPLE_RATE` | `0.05` | Share of requests traced, from 0 to 1 |
+| `TAMGA_OTEL_ENVIRONMENT` | `development` | Environment name attached to traces |
+| `TAMGA_OTEL_INSECURE` | `true` | `false` or `0` sends traces over TLS |
+| `TAMGA_OTEL_HEADERS` | empty | Headers added to each export request |
+| `TAMGA_OTEL_URL_PATH` | `/v1/traces` | Path of the collector's trace endpoint |
+| `TAMGA_TRACE_UI_URL` | empty | Address of a trace viewer, reported in the runtime health detail for the console to link to |
+
+HashiCorp Vault. These are separate from `TAMGA_VAULT_KEY` and
+`TAMGA_VAULT_TTL_SECONDS`, which belong to PII tokenization (see
+[Vault](#vault--reversible-pii-tokenization)). With `TAMGA_VAULT_ADDR` set
+the proxy connects to Vault at startup and checks that it answers. No setting
+is read from Vault yet: every value above still comes from the environment.
+
+| Variable | Default | Description |
+|---|---|---|
+| `TAMGA_VAULT_ADDR` | empty | Vault server URL. Setting it enables the connection |
+| `TAMGA_VAULT_AUTH_METHOD` | `token` | `token`, `approle` or `kubernetes` |
+| `TAMGA_VAULT_TOKEN`, `TAMGA_VAULT_TOKEN_FILE` | empty | A token, or a file that holds one. `VAULT_TOKEN` is read when neither gives one |
+| `TAMGA_VAULT_ROLE_ID`, `TAMGA_VAULT_SECRET_ID` | empty | AppRole credentials |
+| `TAMGA_VAULT_K8S_ROLE` | `tamga-proxy` | Role for Kubernetes auth |
+| `TAMGA_VAULT_PATH_PREFIX` | `secret/tamga` | KV v2 path prefix |
+| `TAMGA_VAULT_CACERT`, `TAMGA_VAULT_CLIENT_CERT`, `TAMGA_VAULT_CLIENT_KEY` | empty | CA bundle and client certificate for the connection to Vault |
+
+See also [proxy/README.md](../proxy/README.md#ortam-değişkenleri-seçilmiş).
 
 ### Sample policy (YAML)
 

@@ -17,7 +17,9 @@ Output: 453201******0366
 
 **Rule:** First 6 digits (BIN/IIN) + last 4 digits preserved. Middle digits replaced with `*`.
 
-This complies with PCI-DSS v4.0 Requirement 3.4 which mandates that PANs be rendered unreadable anywhere they are stored. The first 6 / last 4 format is the industry standard for audit trails and supports BIN-based issuer identification.
+PCI-DSS v4.0 Requirement 3.4 asks that a PAN be unreadable wherever it is stored. First 6 / last 4 is the truncation format commonly used for audit trails, and it keeps the BIN for issuer identification. This document describes what the code does; whether a deployment meets PCI-DSS is for its assessor to decide.
+
+The masking applies to card numbers the PII scanner detects. A number the scanner does not recognise is not masked.
 
 ## Scope
 
@@ -25,8 +27,10 @@ This policy applies to:
 - **PostgreSQL audit log** (`request_logs.findings` JSONB column)
 - **SIEM webhook payloads** (Splunk, Sentinel, QRadar, etc.)
 - **Dashboard display** (React UI — findings match field)
-- **API responses** (`/api/v1/events`, `/api/v1/analyze`)
-- **Log files** (structured JSON logs)
+- **API responses** of the proxy that return findings (`/api/v1/events` and the event detail)
+- **Logs** (the proxy writes its log to standard error; in a container that is the container log)
+
+The analyzer is a separate service with its own endpoint (`/api/v1/analyze`); this policy describes the proxy.
 
 ## Technical Implementation
 
@@ -47,9 +51,9 @@ Fallback: If a card number is shorter than 13 digits (invalid PAN), generic `mas
 ## Audit Verification
 
 To verify compliance:
-1. Search all log files for un-masked PANs: `grep -E '\b[34]\d{12,18}\b' /var/log/tamga/*.log`
+1. Search the proxy's logs for un-masked PANs. The proxy writes its log to standard error, so search wherever you collect it, for example: `docker compose --env-file .env -f deploy/docker-compose.yml logs proxy | grep -P '\b[3-6]\d{12,18}\b'`
 2. Query PostgreSQL for un-masked PANs: `SELECT findings FROM request_logs WHERE findings::text ~ '\d{13,19}'`
-3. Verify maskPAN output: `go test -run TestMaskPAN ./internal/scanner/`
+3. Verify maskPAN output, from `proxy/`: `go test -run MaskPAN ./internal/scanner/`
 
 ## Change History
 

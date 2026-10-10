@@ -8,11 +8,14 @@ Repository layout, local commands, and the adversarial test suite.
 tamga/
 ├── proxy/          Go reverse proxy + scanners + policy engine
 ├── analyzer/       Python deep analysis service
+├── classifier/     Optional Python prompt-injection classifier service
 ├── dashboard/      Next.js management UI
-├── deploy/         Docker Compose, Helm, Terraform, SQL migrations
+├── sdk/            Python and TypeScript clients for the management API
+├── deploy/         Docker Compose, Helm, Terraform, SQL migrations, backup scripts
 ├── docs/           Architecture, benchmarks, compliance, OWASP coverage
-├── proto/          Protobuf service definitions
-├── scripts/        Load testing (k6), smoke tests, adversarial tests
+├── proto/          Protobuf service definitions (analyzer, classifier, scanner)
+├── scripts/        k6 load tests, a smoke test, BIN data check
+├── tests/stress/   Adversarial vectors, k6 profiles, chaos scripts, regression gate
 └── .env.example    Environment variable template
 ```
 
@@ -33,7 +36,9 @@ pytest tests/ -v
 cd dashboard
 npm run dev                                     # Dev server
 npm run build                                   # Production build
-npm run lint                                    # Lint + typecheck
+npm run lint                                    # ESLint
+npm run type-check                              # tsc --noEmit
+npm run test:run                                # Unit tests (vitest)
 
 # Top-level convenience
 make help                                       # Show all targets
@@ -75,7 +80,7 @@ Full docs: [tests/stress/README.md](../tests/stress/README.md).
 |---|---|
 | Core Proxy | Go 1.25+ — Aho-Corasick DFA, regex hybrid scanning |
 | Deep Analysis | Python 3.11+ — FastAPI, Presidio, LLM Guard |
-| Dashboard | Next.js 15, TypeScript 5, Tailwind 4 |
+| Dashboard | Next.js 15, TypeScript 5, Carbon (`@carbon/react`) |
 | Storage | PostgreSQL 16, Redis 7 |
 | Observability | OpenTelemetry, Jaeger 1.54 |
 | Deployment | Docker Compose, Helm, Terraform (AWS) |
@@ -107,8 +112,8 @@ Tamga stands on open-source foundations:
 | [k6](https://k6.io) | Load testing and stress benchmarks |
 | [OpenTelemetry](https://opentelemetry.io) | Distributed tracing (OTLP export) |
 | [Next.js](https://nextjs.org) | Dashboard framework |
-| [TanStack Table/Query](https://tanstack.com) | Virtual scrolling, server-state sync |
-| [Tailwind CSS](https://tailwindcss.com) | Utility-first design system |
+| [TanStack Query](https://tanstack.com/query) | Server-state fetching and caching in the dashboard |
+| [Carbon](https://carbondesignsystem.com) | Dashboard components |
 | [NATS JetStream](https://nats.io) | Optional async event stream, used when `TAMGA_NATS_URL` is set |
 | [PostgreSQL 16](https://www.postgresql.org) | Audit storage, policies, billing |
 | [Redis 7](https://redis.io) | Rate limiting, caching, counters |

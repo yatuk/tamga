@@ -1,18 +1,18 @@
 # Tamga public benchmark
 
-This folder publishes the raw output of `tamga/proxy/cmd/redteam` so anyone can
+This folder publishes the raw output of `proxy/cmd/redteam` so anyone can
 verify Tamga's accuracy claims without running the project locally.
 
 Every report is produced by the same, checked-in command:
 
 ```bash
-# from tamga/proxy
+# from proxy/
 go run ./cmd/redteam \
     -in   ./testdata/redteam/prompts.csv \
     -json ../docs/benchmarks/redteam_latest.json
 ```
 
-The corpus at `tamga/proxy/testdata/redteam/prompts.csv` is the exact set the
+The corpus at `proxy/testdata/redteam/prompts.csv` is the exact set the
 runtime scanners are gated on in CI — it is not a "marketing" dataset. Benign
 samples, obfuscated jailbreaks, Turkish/English PII, BIN-validated credit
 cards, and secret-format tokens are all mixed in.
@@ -182,7 +182,7 @@ publishes.
   It still gates CI: a change that lowers it is a regression.
 - **Scanner stack.** PII + Secrets + Prompt Injection + Jailbreak + Canary
   scanners, with the Aho-Corasick DFA compiled once at process start.
-  See `tamga/proxy/internal/scanner/`.
+  See `proxy/internal/scanner/`.
 - **Policy.** When a `tamga-policy.yaml` is present the runner evaluates
   through it; otherwise a default severity→action map is used (critical→
   BLOCK, high→REDACT, medium→WARN, else→LOG). The default map is

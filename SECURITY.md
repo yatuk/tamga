@@ -20,6 +20,18 @@ within 14 days for critical issues.
 | 0.7.x   | ✅ |
 | < 0.7.0 | ❌ |
 
+## Management API
+
+`/api/v1/*` is opened by `TAMGA_ADMIN_KEY` (role admin), by an API key of
+scope read, write or admin (viewer, analyst, admin), or by a session token.
+The key is read from the `X-Tamga-Admin-Key` header only, never from the
+URL. Every route names the permission it needs; a role that lacks it gets
+403. `GET /health` is public. `GET /api/v1/health/detailed` and
+`/api/v1/health/detail` answer anyone, but describe the deployment
+(database, Redis, analyzer, scanner count, provider pools) only to a caller
+with a management credential. See
+[Who may call what](docs/operations.md#who-may-call-what).
+
 ## Trust Assumptions
 
 Callers on the proxy path are authenticated only when they send a Tamga key
@@ -90,9 +102,10 @@ release notes.
 
 ## EU Cyber Resilience Act
 
-Tamga complies with the EU Cyber Resilience Act (effective 11 September 2026).
-See [ENISA Vulnerability Disclosure](docs/ENISA_VULNERABILITY_DISCLOSURE.md) for
-our coordinated vulnerability disclosure procedure.
+The coordinated vulnerability disclosure procedure written for the EU Cyber
+Resilience Act's reporting obligations is in
+[ENISA Vulnerability Disclosure](docs/ENISA_VULNERABILITY_DISCLOSURE.md). It is
+a procedure, not a statement that Tamga has been assessed against the Act.
 
 ## Security Advisory Archive
 

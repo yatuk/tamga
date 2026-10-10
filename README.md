@@ -330,7 +330,7 @@ unknown or misplaced key is a load error, not a silent no-op.
 | Variable | Default | Purpose |
 |---|---|---|
 | `TAMGA_PROXY_PORT` | `8443` | Listen port (proxy and management API) |
-| `TAMGA_POLICY_PATH` | `./tamga-policy.yaml` | Policy file |
+| `TAMGA_POLICY_PATH` | `./tamga-policy.yaml` | Policy file. The default is relative to the proxy's working directory; the file in this repository is `proxy/tamga-policy.yaml` |
 | `TAMGA_ADMIN_KEY` | — | Key for the management API |
 | `TAMGA_DB_URL` | — | PostgreSQL DSN; empty disables persistence |
 | `REDIS_URL` | — | Rate limiting, cache, vault store |
@@ -466,9 +466,12 @@ vector as a pull request. For anything exploitable, follow
 
 ## License
 
-The proxy, scanners and dashboard are [AGPL-3.0](LICENSE). Enterprise features
-(multi-region replication, SSO/SCIM, custom roles, SLA support) are offered
-under a separate [commercial license](LICENSE-COMMERCIAL.md).
+The proxy, scanners and dashboard are [AGPL-3.0](LICENSE). A separate
+[commercial license](LICENSE-COMMERCIAL.md) can be agreed with the author. The
+items it names are not in this repository: there is no multi-region
+replication, no SSO sign-in beyond GitHub OAuth (SSO settings are stored and
+used by no sign-in; the SCIM routes have no store behind them) and no custom
+roles. They and SLA-backed support are what such an agreement would cover.
 
 <div align="center">
 <br/>

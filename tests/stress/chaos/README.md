@@ -1,242 +1,228 @@
-# Tamga Chaos Engineering Scripts
+# Chaos scripts
 
-This directory contains chaos engineering scripts that test the Tamga proxy's
-resilience against infrastructure component failures. Each script kills or
-isolates a specific component and verifies the proxy continues to serve traffic
-(fail-open), then restores the component and verifies recovery.
+Each script stops or isolates one dependency of the proxy in a local Docker
+Compose stack and prints what the proxy reports. They are for a development
+stack only.
+
+The scripts print; they do not assert. None of them exits non-zero because
+the proxy misbehaved, so read the output against the "Expected output"
+sections below.
 
 ## Prerequisites
 
-- **Docker** and **Docker Compose** installed and running.
-- The Tamga stack deployed via `deploy/docker-compose.yml` from the repo root.
-- `curl` available on the host.
-- `python` available for JSON parsing in the health-check one-liners (Python 3).
-- All commands must be run from the repository root (so `deploy/docker-compose.yml`
-  resolves correctly).
-- **Linux or macOS** host (the scripts use `docker` commands; on Windows, use
-  WSL2 with Docker Desktop).
+- Docker with Docker Compose, and the stack from `deploy/docker-compose.yml`
+  running, started from the repository root:
+
+  ```bash
+  docker compose --env-file .env -f deploy/docker-compose.yml up -d
+  ```
+
+- Run every script from the repository root. Compose names the project
+  `deploy` after the directory of the compose file, which is where the
+  hard-coded names `deploy-postgres-1`, `deploy-redis-1` and
+  `deploy_internal` come from.
+- `TAMGA_ADMIN_KEY` exported in the shell, set to the key the proxy was
+  started with:
+
+  ```bash
+  export TAMGA_ADMIN_KEY=...   # the value in your .env
+  ```
+
+  `kill_analyzer.sh`, `kill_postgres.sh`, `kill_redis.sh` and
+  `network_partition.sh` read `GET /api/v1/health/detailed` and send the key
+  in the `X-Tamga-Admin-Key` header. Without a key that endpoint returns only
+  `proxy`, `status` and scan latency, not `database`, `redis`, `analyzer` or
+  `scanner_count`. These four scripts stop with
+  `set TAMGA_ADMIN_KEY: the health detail needs it` when the variable is unset.
+- `curl`, and `python` (Python 3) on the `PATH`: the scripts use it to read
+  the JSON.
+- A shell with `bash`. On Windows use WSL2 or Git Bash.
+- `kill_nats.sh` and `kill_scanner_service.sh` call
+  `docker compose -f deploy/docker-compose.yml` without `--env-file`. Export
+  the variables of your `.env` first (for example `set -a; . ./.env; set +a`),
+  otherwise Compose substitutes empty values when it brings the service back.
+
+## What the health endpoint reports
+
+With the key, `GET /api/v1/health/detailed` returns among others:
+
+| Field | Values |
+|---|---|
+| `status` | `ok`, or `degraded` when the database, Redis or the analyzer is down |
+| `database` | `connected`, `disconnected`, `not_configured` |
+| `redis` | `connected`, `disconnected`, `not_configured` |
+| `analyzer` | `reachable`, `unreachable`, `not_configured` |
+| `scanner_count` | number of registered scanners |
+
+The HTTP status is 503 while `status` is `degraded`. The scripts call `curl`
+without `-f`, so they print the field in either case.
+
+`GET /health` is the liveness check. It needs no key and does not look at any
+dependency.
+
+## The requests the scripts send
+
+Several scripts send `POST http://localhost:8443/v1/messages` with the header
+`x-api-key: test-key` and print the HTTP status and the time taken. The
+status is whatever the proxy answered for that request and that key; the
+scripts do not check it. Compare the line printed during the outage with the
+same request sent before it.
 
 ## Scripts
 
-### 1. kill_analyzer.sh
+### kill_analyzer.sh
 
-**Purpose:** Kill the analyzer container and verify the proxy continues
-processing requests in fail-open mode (without analyzer risk scoring).
+Does not stop anything. It prints `scanner_count` and sends three requests
+that contain an email address. Stop the analyzer yourself first to see the
+proxy without it:
 
-**Expected behavior:**
-- The `/health/detailed` endpoint reports `analyzer: "unreachable"` (HTTP 503 status).
-- Proxy requests still succeed (HTTP 200), falling back to local DFA-only
-  scanning with no analyzer enrichment.
-- PII detection continues via the local scanner pool.
-
-**How to run:**
 ```bash
+docker compose --env-file .env -f deploy/docker-compose.yml stop analyzer
 bash tests/stress/chaos/kill_analyzer.sh
+docker compose --env-file .env -f deploy/docker-compose.yml start analyzer
 ```
 
-**Recovery:**
-- The analyzer is not restarted by this script. To restore:
-  ```bash
-  docker compose -f deploy/docker-compose.yml up -d analyzer
-  ```
+Expected output:
 
-**Verification:**
-- Check `/health/detailed` for `analyzer: "reachable"` after restart.
-- Send PII requests; confirm risk scores return in event detail.
-
----
-
-### 2. kill_nats.sh
-
-**Purpose:** Kill the NATS container and verify the proxy continues using the
-in-memory event bus as a fallback without JetStream persistence.
-
-**Arguments:**
-- `$1` -- wait time in seconds (default: 30). Controls how long the script
-  pauses before checking proxy health.
-
-**Expected behavior:**
-- Proxy health check passes (`curl -sf http://localhost:8443/health` returns 0).
-- Events dispatched during the outage are handled by the in-memory bus
-  (LogHandler, MetricsHandler, RecentBuffer, liveBroker).
-- Events are NOT persisted to JetStream until NATS recovers.
-
-**How to run:**
-```bash
-# Default 30-second wait
-bash tests/stress/chaos/kill_nats.sh
-
-# Custom wait time
-bash tests/stress/chaos/kill_nats.sh 60
+```
+=== CHAOS: Kill Analyzer ===
+Before:
+Scanners: <number>
+Sending PII requests with analyzer down...
+Request 1: HTTP <code> | <seconds>s
+Request 2: HTTP <code> | <seconds>s
+Request 3: HTTP <code> | <seconds>s
 ```
 
-**Recovery:**
-- The script automatically restarts NATS after the health check:
-  ```bash
-  docker compose -f deploy/docker-compose.yml up -d nats
-  ```
+While the analyzer is stopped, `/api/v1/health/detailed` reports
+`analyzer: "unreachable"` and answers 503.
 
-**Verification:**
-- Check `docker compose ps nats` -- status should be "running" after script completes.
-- Watch proxy logs for `nats publish failed` during outage and
-  `creating NATS stream` on reconnect.
+### kill_postgres.sh
 
----
+Stops `deploy-postgres-1`, prints the database status before, during and
+after, sends three requests during the outage, then starts the container
+again.
 
-### 3. kill_postgres.sh
-
-**Purpose:** Kill the PostgreSQL container and verify the proxy continues
-serving requests without database persistence (in-memory fallback).
-
-**Expected behavior:**
-- `/health/detailed` reports `database: "disconnected"` (HTTP 503 status).
-- Proxy requests still succeed (HTTP 200), falling back to the in-memory
-  RecentBuffer for event storage and in-memory counters for stats.
-- Dashboard endpoints (`/stats`, `/events`) return in-memory data only.
-
-**How to run:**
 ```bash
 bash tests/stress/chaos/kill_postgres.sh
 ```
 
-**Recovery:**
-- The script automatically restarts PostgreSQL:
-  ```bash
-  POSTGRES_PASSWORD=test docker start deploy-postgres-1
-  ```
-- Waits 3 seconds, then re-checks `/health/detailed` for `database: "connected"`.
+Expected output:
 
-**Verification:**
-- During outage: `/health/detailed` returns `database: "disconnected"`, proxy returns 200.
-- After recovery: `/health/detailed` returns `database: "connected"`, proxy returns 200.
-- Dashboard queries that rely on DB return real data again.
+```
+Before:
+DB: connected
+After PostgreSQL kill:
+DB: disconnected
+Test requests during DB outage:
+Request 1: HTTP <code> | <seconds>s
+...
+Recovery:
+DB: connected
+```
 
----
+The last line is read three seconds after `docker start`. If it still says
+`disconnected`, query the endpoint again a few seconds later.
 
-### 4. kill_redis.sh
+### kill_redis.sh
 
-**Purpose:** Kill the Redis container and verify the proxy continues serving
-requests without Redis (rate limiting and caching disabled, fail-open).
+Stops `deploy-redis-1`, prints the Redis status before, during and after,
+sends one request during the outage and prints how long it took, then starts
+the container again.
 
-**Expected behavior:**
-- `/health/detailed` reports `redis: "disconnected"` (HTTP 503 status if Redis
-  is the only unhealthy component, HTTP 503 overall).
-- Proxy requests still succeed (HTTP 200) -- rate limiting is bypassed (no Redis
-  means no token bucket state), caching misses are passed through to upstream.
-- Request wall-clock time may increase if Redis was absorbing cache traffic.
-
-**How to run:**
 ```bash
 bash tests/stress/chaos/kill_redis.sh
 ```
 
-**Recovery:**
-- The script automatically restarts Redis:
-  ```bash
-  REDIS_PASSWORD=test docker start deploy-redis-1
-  ```
-- Waits 2 seconds, re-checks `/health/detailed` for `redis: "connected"`.
+Expected output:
 
-**Verification:**
-- During outage: `/health/detailed` returns `redis: "disconnected"`, proxy returns 200.
-- After recovery: `/health/detailed` returns `redis: "connected"`.
-- Rate limiting resumes after Redis recovery (subsequent requests count toward
-  rate limits again).
+```
+Before:
+Redis: connected
+After Redis kill:
+Redis: disconnected
+Test request during Redis outage:
+HTTP <code> | <seconds>s
+Request took <n> seconds wall-clock
+Recovery:
+Redis: connected
+```
 
----
+If the proxy runs without `REDIS_URL`, every line says `not_configured` and
+the script tests nothing.
 
-### 5. kill_scanner_service.sh
+### network_partition.sh
 
-**Purpose:** Kill the scanner-service gRPC container and verify the proxy
-falls back to its local scanner registry (in-process DFA scanners).
+Disconnects `deploy-postgres-1` from the Docker network, waits 30 seconds,
+and reconnects it. The container keeps running, so this exercises connection
+timeouts rather than a refused connection.
 
-**Arguments:**
-- `$1` -- container name (default: `tamga-scanner-service-1`).
-- `$2` -- wait time in seconds (default: 30).
-
-**Expected behavior:**
-- Proxy health check passes (`curl -sf http://localhost:8443/health` returns 0).
-- Scanning continues using the **local** scanner registry compiled into the
-  proxy binary (Aho-Corasick DFA, custom entity scanners, competitor check).
-- gRPC-based scanners (if any are external-only) are unavailable; the proxy
-  transparently skips them and uses local equivalents.
-- The `scanner_count` on `/health/detailed` reflects only in-process scanners.
-
-**How to run:**
 ```bash
-# Default settings
+bash tests/stress/chaos/network_partition.sh            # network deploy_internal
+bash tests/stress/chaos/network_partition.sh my_network
+```
+
+Expected output:
+
+```
+DB: disconnected, Proxy: up
+Waiting 30s...
+Reconnecting...
+DB: connected, Proxy: up
+```
+
+### kill_nats.sh
+
+Kills the `nats` service, waits (30 seconds, or the first argument), checks
+`GET /health`, and brings NATS back with `up -d`.
+
+```bash
+bash tests/stress/chaos/kill_nats.sh
+bash tests/stress/chaos/kill_nats.sh 60
+```
+
+Expected output: a line ending in
+`PASS: proxy healthy after NATS kill (in-memory fallback)`, then
+`NATS restarted`. The check is the liveness endpoint only: it shows that the
+process still answers, not that events were delivered. During the outage the
+proxy logs `nats publish failed` for each event it could not publish.
+
+### kill_scanner_service.sh
+
+Kills the `scanner-service` service, waits (30 seconds, or the second
+argument), checks `GET /health`, and brings the service back.
+
+```bash
 bash tests/stress/chaos/kill_scanner_service.sh
-
-# Custom container name and wait
-bash tests/stress/chaos/kill_scanner_service.sh my-scanner-svc 45
+bash tests/stress/chaos/kill_scanner_service.sh ignored 45
 ```
 
-**Recovery:**
-- The script automatically restarts the service:
+The first argument is only printed; the script always kills the Compose
+service `scanner-service`.
+
+The proxy uses the scanner service only when `TAMGA_SCANNER_SERVICE_ADDR` is
+set (for example `scanner-service:50052`). Without it the proxy scans
+in-process and this script tests nothing. With it, a failed gRPC call falls
+back to in-process scanning.
+
+Expected output: a line ending in
+`PASS: proxy healthy after scanner-service kill`, then
+`scanner-service restarted`. As with NATS, the check is the liveness endpoint
+only.
+
+## Notes
+
+- Run the scripts one at a time.
+- `kill_postgres.sh`, `kill_redis.sh` and `network_partition.sh` restore what
+  they changed only if they run to the end. If one is interrupted, restore the
+  stack:
+
   ```bash
-  docker compose -f deploy/docker-compose.yml up -d scanner-service
+  docker compose --env-file .env -f deploy/docker-compose.yml up -d
   ```
 
-**Verification:**
-- Send scan requests during outage; confirm findings appear in events.
-- After restart, gRPC-based scanners are available again.
-- Check proxy logs for gRPC connection errors during outage and
-  successful reconnection after restart.
+- Follow the proxy log while a script runs:
 
----
-
-### 6. network_partition.sh
-
-**Purpose:** Disconnect PostgreSQL from the Docker network (simulating a
-network partition) and verify the proxy handles the isolation gracefully,
-then reconnect and verify recovery.
-
-**Arguments:**
-- `$1` -- Docker network name (default: `deploy_internal`).
-
-**Expected behavior:**
-- After disconnect: `/health/detailed` reports `database: "disconnected"`.
-- Proxy continues serving on the in-memory path.
-- After reconnect: `/health/detailed` reports `database: "connected"`.
-
-**How to run:**
-```bash
-# Default network
-bash tests/stress/chaos/network_partition.sh
-
-# Custom network
-bash tests/stress/chaos/network_partition.sh my_custom_network
-```
-
-**Recovery:**
-- The script automatically reconnects PostgreSQL after a 30-second wait:
   ```bash
-  docker network connect $NETWORK deploy-postgres-1
-  ```
-
-**Verification:**
-- During partition: proxy returns 200 for API requests, DB shows disconnected.
-- After reconnection: DB shows connected within a few seconds.
-- This test differs from `kill_postgres.sh` because the container is still
-  running but inaccessible -- exercises TCP connection timeout handling in pgx.
-
----
-
-## General Notes
-
-- All kill scripts are **safe for development environments** -- they target
-  containers by name and restart them automatically (except `kill_analyzer.sh`
-  which leaves the analyzer stopped for manual verification).
-- The proxy is designed to **fail open**: when any backend component is
-  unavailable, the proxy continues serving LLM traffic without blocking or
-  crashing. This is a core architectural property validated by these tests.
-- Run these scripts **sequentially**, not in parallel, to isolate each
-  component's failure mode.
-- Monitor proxy logs during chaos testing:
-  ```bash
-  docker compose -f deploy/docker-compose.yml logs -f proxy
-  ```
-- To reset all components to a known good state:
-  ```bash
-  docker compose -f deploy/docker-compose.yml up -d
+  docker compose --env-file .env -f deploy/docker-compose.yml logs -f proxy
   ```

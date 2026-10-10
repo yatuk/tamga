@@ -49,12 +49,12 @@ cd proxy
 go mod download
 go run ./cmd/tamga
 
-# Python analyzer (separate terminal)
+# Python analyzer (separate terminal, from the repo root)
 cd analyzer
 pip install -r requirements.txt
 uvicorn app.main:app --port 8444
 
-# Next.js dashboard (separate terminal)
+# Next.js dashboard (separate terminal, from the repo root)
 cd dashboard
 npm ci --legacy-peer-deps
 npm run dev
@@ -71,10 +71,10 @@ docker compose --env-file .env -f deploy/docker-compose.yml up -d
 
 1. **Fork** the repository on GitHub
 2. **Clone** your fork locally
-3. **Branch** off `dev` for all work:
+3. **Branch** off `main` for all work:
    ```bash
-   git checkout dev
-   git pull origin dev
+   git checkout main
+   git pull origin main
    git checkout -b feat/your-feature-name
    ```
 4. **Write code** following our [code style](#code-style) guidelines
@@ -183,16 +183,19 @@ async def scan_text(request: ScanRequest) -> ScanResponse:
 - Follow the project's ESLint flat config (`eslint.config.mjs`)
 - Run `npx tsc --noEmit` before committing — zero errors
 - Components use functional style with hooks; no class components
-- Use Tailwind CSS utility classes; avoid inline styles
-- `use client` / `use server` directives at the top of each file
-- Form handling: `react-hook-form` + `zod` validation
-- TanStack Query for server state; React Context only for UI state
-- i18n: all user-facing strings go through `useDictionary()` / `t()`
+- Build the interface from Carbon components (`@carbon/react`); the project's own styles are in `app/tamga.css`
+- Use the colour tokens in `app/tamga.css` (`--tamga-*`, `--cds-*`); the `tamga/no-hardcoded-color` lint rule reports a literal colour
+- A file that uses hooks or browser APIs starts with the `"use client"` directive
+- TanStack Query for server state
+- The console is in English only; there is no translation layer
+- Calls to the proxy go through the `api` object exported from `lib/api.ts` (helpers in `lib/api/`); their types come from `proxy/docs/openapi.yaml` (`npm run gen:api-types`)
 
 ```tsx
-// Good: typed hook with proper i18n
-const { t } = useDictionary();
-const { data, isLoading } = useQuery({ queryKey: ['keys'], queryFn: () => api.getApiKeys() });
+// Good: typed query through the API helper
+const detail = useQuery({
+  queryKey: ["tamga-open-event", adminKey, openId],
+  queryFn: () => api.getEventDetail(adminKey, openId),
+});
 ```
 
 ## Testing
@@ -206,14 +209,16 @@ go test -race ./... -count=1         # Race detector
 go test ./internal/scanner/ -bench=. # Benchmarks
 ```
 
-Coverage thresholds: new packages should have >70% statement coverage.
+CI runs the suite with the race detector and uploads a coverage profile; it does not enforce a coverage threshold.
 
 ### Python
 
+`pytest` is not in `analyzer/requirements.txt`; install it first.
+
 ```bash
 cd analyzer
+pip install pytest
 pytest tests/ -v
-pytest tests/ --cov=app --cov-report=term
 ```
 
 ### Dashboard
@@ -223,14 +228,14 @@ cd dashboard
 npm run test:run       # Unit tests (vitest)
 npm run lint           # ESLint
 npx tsc --noEmit       # Type check
-npx playwright test    # E2E tests (requires running dev server)
+npx playwright test    # E2E tests; starts `npm run dev` itself unless CI is set
 ```
 
 All tests must pass. Add tests for new functionality.
 
 ## Pull Request Process
 
-1. **Create** a PR from your feature branch to `dev`
+1. **Create** a PR from your feature branch to `main`
 2. **Fill out** the PR template completely
 3. **Ensure** all CI checks pass (tests, lint, type check, build)
 4. **Link** related issues using GitHub keywords (`Closes #123`)
@@ -240,7 +245,7 @@ All tests must pass. Add tests for new functionality.
 
 ### PR checklist
 
-- [ ] Branch is up to date with `dev`
+- [ ] Branch is up to date with `main`
 - [ ] Conventional commit messages used
 - [ ] Tests added/updated for all changed code
 - [ ] Go: `go vet ./...` clean, `go test ./...` passes
@@ -277,18 +282,19 @@ Open an issue using the **Feature Request** template. Describe:
 
 - API changes must update `proxy/docs/openapi.yaml`
 - New environment variables must be added to `.env.example`
+- After changing `proxy/docs/openapi.yaml`, run `npm run gen:api-types` in `dashboard/` and commit `lib/api-types.generated.ts`; CI fails when the committed file is out of date
+- New environment variables that an operator sets must also be added to the table in `docs/operations.md`
 - Architecture changes must update the Mermaid diagram in `README.md`
-- Major features should include a demo script entry in `docs/DEMO_SCRIPT_W2.md`
+- A change a user would notice gets an entry in the unreleased section at the top of `CHANGELOG.md`
 
 ## License
 
-Tamga is **open-core** under the [GNU AGPL v3.0](LICENSE).
+Tamga is licensed under the [GNU AGPL v3.0](LICENSE).
 
 By contributing code, you agree that your contributions will be licensed under
-the same terms. Enterprise features are available under a separate commercial
-license — see [LICENSE](LICENSE) for details.
+the same terms. A separate commercial licence is described in
+[LICENSE-COMMERCIAL.md](LICENSE-COMMERCIAL.md).
 
 ---
 
-**Questions?** Open a [GitHub Discussion](https://github.com/tamga/tamga/discussions)
-or reach out to the team.
+**Questions?** Open an [issue](https://github.com/yatuk/tamga/issues).

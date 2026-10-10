@@ -1,30 +1,36 @@
-# Tamga Backup & Restore
+# Backup and restore
 
-PostgreSQL backup and disaster recovery for Tamga proxy.
+`backup.sh` and `restore.sh` dump and restore the proxy's PostgreSQL database
+with `pg_dump` and `pg_restore`.
 
-## Quick Start
+## What is and is not backed up
 
-```bash
-# 1. Set database password
-export TAMGA_DB_PASSWORD="your-db-password"
+Backed up: one database, schema and data. That includes `request_logs` with
+all of its monthly partitions, `daily_stats`, `audit_log`, the policy history
+(`policy_revisions`, `policy_proposals`), `incident_lifecycle`, `saved_hunts`,
+API keys and the other tables created by `deploy/migrations/`.
 
-# 2. Run backup
-./backup.sh
+Not backed up by these scripts:
 
-# 3. Verify
-ls -lh dumps/
-```
+- the policy file the proxy reads (`TAMGA_POLICY_PATH`),
+- Redis (rate-limit, budget and cache state),
+- NATS streams,
+- environment variables and secrets.
 
-## Backup (`backup.sh`)
+## Requirements
 
-Creates a compressed, timestamped `pg_dump` in `dumps/`.
+- `pg_dump`, `pg_restore`, `dropdb` and `createdb` on the `PATH`, from a
+  PostgreSQL client at least as new as the server (the Compose stack runs
+  PostgreSQL 16).
+- Network access to the database. In `deploy/docker-compose.yml` PostgreSQL is
+  on the internal network only and is not published to the host, so
+  `localhost:5432` does not reach it. Publish the port, or run the scripts
+  from a container on that network.
+- For `restore.sh`: a role that may drop and create the database.
 
-**Usage:**
-```bash
-./backup.sh [--db tamga] [--host localhost] [--port 5432] [--user tamga]
-```
+## Settings
 
-**Environment variables:**
+Both scripts read the same environment variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -32,67 +38,125 @@ Creates a compressed, timestamped `pg_dump` in `dumps/`.
 | `TAMGA_DB_HOST` | `localhost` | PostgreSQL host |
 | `TAMGA_DB_PORT` | `5432` | PostgreSQL port |
 | `TAMGA_DB_USER` | `tamga` | Database user |
-| `TAMGA_DB_PASSWORD` | (empty) | Database password |
-| `BACKUP_RETENTION_DAYS` | `7` | Days to keep |
+| `TAMGA_DB_PASSWORD` | (empty) | Database password, passed as `PGPASSWORD` |
+| `BACKUP_RETENTION_DAYS` | `7` | `backup.sh` only: how many dumps to keep |
 
-**Automation (cron):**
-```cron
-# Daily at 2:00 AM
-0 2 * * * cd /opt/tamga/deploy/backup && TAMGA_DB_PASSWORD=xyz ./backup.sh
-```
+These are the scripts' own variables. The proxy does not read them; it takes
+its connection string from `TAMGA_DB_URL`.
 
-## Restore (`restore.sh`)
+`restore.sh` also accepts `--db`, `--host`, `--port` and `--user` after the
+dump file. `backup.sh` takes no arguments (the usage line in its header
+mentions flags it does not parse); use the environment variables.
 
-Restores a database from a `pg_dump` custom-format file.
+## Backup
 
-**Usage:**
 ```bash
-./restore.sh dumps/tamga-20260617-020000.sql.gz [--db tamga] [--host localhost]
+export TAMGA_DB_PASSWORD="..."
+./backup.sh
+ls -lh dumps/
 ```
 
-**WARNING:** This DROPS and RECREATES the target database. All current data will be permanently lost. The script requires typing `yes` to confirm.
+The script writes `dumps/tamga-YYYYMMDD-HHMMSS.sql.gz` next to itself and
+appends to `backup.log` in the same directory. On a `pg_dump` failure it
+removes the partial file and exits with status 2.
 
-## Dump Format
+After a successful dump it deletes all but the newest
+`BACKUP_RETENTION_DAYS` dump files. The number counts files, not days: with
+one backup a day the default keeps a week, with two a day it keeps three and
+a half days.
 
-- **Format:** `pg_dump` custom format (`.sql.gz`) — compressed, supports parallel restore
-- **Contents:** Schema + data, no ownership/ACL statements (safe to restore to different user)
-- **Naming:** `tamga-YYYYMMDD-HHMMSS.sql.gz`
-- **Retention:** 7 daily backups by default (configurable via `BACKUP_RETENTION_DAYS`)
+### The dump format
 
-## Disaster Recovery Procedure
+The file is in `pg_dump` custom format (`--format=custom --compress=9`,
+`--no-owner --no-acl`). Despite the `.sql.gz` name it is neither plain SQL nor
+a gzip file: `gunzip` and `psql` cannot read it. Read it with `pg_restore`:
 
-1. **Verify the backup is intact:**
+```bash
+pg_restore --list dumps/tamga-YYYYMMDD-HHMMSS.sql.gz | head -20
+```
+
+### Scheduling
+
+```cron
+# Daily at 02:00. Keep the password out of the crontab: read it from a file
+# only the backup user can read.
+0 2 * * * cd /opt/tamga/deploy/backup && TAMGA_DB_PASSWORD="$(cat /etc/tamga/db-password)" ./backup.sh
+```
+
+The paths are examples.
+
+## Restore
+
+```bash
+export TAMGA_DB_PASSWORD="..."
+./restore.sh dumps/tamga-YYYYMMDD-HHMMSS.sql.gz [--db tamga] [--host localhost] [--port 5432] [--user tamga]
+```
+
+Run without arguments, it lists the ten newest dumps.
+
+**This drops the target database and creates it again. Everything in it is
+lost.** The script prints the target and asks you to type `yes` first.
+
+It then runs `dropdb --if-exists`, `createdb --owner=<user>`, and
+`pg_restore --clean --if-exists --no-owner --no-acl --single-transaction`.
+The restore is one transaction and the script runs with `set -e`: at the
+first error it stops and the database is left empty.
+
+`dropdb` fails while anything is connected to the database, so stop the proxy
+first.
+
+## Recovery procedure
+
+1. Check that the dump is readable:
+
    ```bash
-   gunzip -c dumps/tamga-YYYYMMDD-HHMMSS.sql.gz | head -20
-   # Should show valid SQL with CREATE/COPY statements
+   pg_restore --list dumps/tamga-YYYYMMDD-HHMMSS.sql.gz | head -20
    ```
 
-2. **Provision a new PostgreSQL instance** (or use the existing one if only data was lost).
+2. Stop the proxy. With the Compose stack, from the repository root:
 
-3. **Restore:**
    ```bash
-   export TAMGA_DB_PASSWORD="your-db-password"
+   docker compose --env-file .env -f deploy/docker-compose.yml stop proxy
+   ```
+
+3. Restore:
+
+   ```bash
+   export TAMGA_DB_PASSWORD="..."
    ./restore.sh dumps/tamga-YYYYMMDD-HHMMSS.sql.gz
    ```
 
-4. **Verify the restore:**
+4. If the dump was taken by an older version, apply the migrations that were
+   added since, in order, from `deploy/`. Nothing records which migrations a
+   database has had, so you need to know the version the dump came from.
+   Do not loop over all of them: `001`, `010` and `011` fail when run a
+   second time. `017` adds the `policy_name`, `policy_version` and
+   `output_risk` columns and an index to `request_logs`; `018` removes the
+   row-level security that `011` added.
+
    ```bash
-   PGPASSWORD="$TAMGA_DB_PASSWORD" psql -h localhost -U tamga -d tamga -c "SELECT count(*) FROM request_log;"
+   psql "$TAMGA_DB_URL" -v ON_ERROR_STOP=1 -f migrations/017_request_record.up.sql
+   psql "$TAMGA_DB_URL" -v ON_ERROR_STOP=1 -f migrations/018_drop_tenant_rls.up.sql
    ```
 
-5. **Restart the proxy** so it reconnects to the restored database:
+5. Check the row counts:
+
    ```bash
-   docker compose restart tamga-proxy
-   # or
-   systemctl restart tamga-proxy
+   PGPASSWORD="$TAMGA_DB_PASSWORD" psql -h localhost -U tamga -d tamga \
+     -c "SELECT count(*) FROM request_logs;" \
+     -c "SELECT count(*) FROM audit_log;"
    ```
 
-## Validation Checklist
+6. Start the proxy:
 
-Run these after any backup/restore change:
+   ```bash
+   docker compose --env-file .env -f deploy/docker-compose.yml start proxy
+   ```
 
-- [ ] `backup.sh` produces a non-empty `.sql.gz` file in `dumps/`
-- [ ] `restore.sh` successfully restores to a fresh database
-- [ ] Row counts match between source and restored DB for key tables (`request_log`, `security_events`, `audit_log`)
-- [ ] Proxy starts and serves requests against the restored database
-- [ ] Cron or scheduled backup is configured and tested
+## Checklist after changing either script
+
+- [ ] `backup.sh` writes a dump that `pg_restore --list` can read
+- [ ] `restore.sh` restores it into an empty database
+- [ ] Row counts of `request_logs`, `daily_stats` and `audit_log` match the source
+- [ ] `\d+ request_logs` lists the same partitions as the source
+- [ ] The proxy starts against the restored database and `GET /api/v1/health/detailed`, called with the admin key, reports `database: "connected"`

@@ -37,7 +37,7 @@ for some members of it.
 | Rate Limiting | Per-API-key token bucket (requests/min, tokens/day) | `BLOCK` |
 | Provider Control | Allow/block specific LLM providers per policy | — |
 | Body Limits | Per-provider request size caps with `413` response | — |
-| Policy Hot-Reload | Edit YAML, reload in-place or via `POST /api/v1/policies/reload` | — |
+| Policy Hot-Reload | Edit YAML, reload in-place or via `POST /api/v1/policies/reload` (admin role) | — |
 | Event Bus | Buffered in-process pub/sub that feeds metrics, logs and the database writer | async |
 | REST API | Stats, events, health, policy management | `:8443/api/v1` |
 | Audit Logging | Optional PostgreSQL request log: request metadata, token counts, latency and masked findings, not prompt or response bodies. The hash-chained audit log covers administrative actions only | — |

@@ -9,8 +9,9 @@
 
 This runbook documents the end-to-end process for adding, modifying, or
 removing injection detection patterns in Tamga. Patterns live in
-`internal/scanner/injection.go:injectionPatterns` and are compiled into a
-shared Aho-Corasick DFA at proxy startup.
+`internal/scanner/injection.go:injectionPatterns`, with the Turkish, German
+and Russian additions in `internal/scanner/injection_i18n.go`, and are
+compiled into a shared Aho-Corasick DFA at proxy startup.
 
 Every pattern change must go through **proposal → review → test → deploy**
 to prevent false-positive regressions in production.
@@ -21,7 +22,8 @@ to prevent false-positive regressions in production.
 
 ### 1.1 Submission
 
-Open a GitHub Issue using the **Pattern Proposal Template**:
+Open a GitHub issue with the content below. The repository has no issue
+template for it; paste the text.
 
 ```markdown
 ### Pattern
@@ -107,15 +109,15 @@ See `internal/scanner/patterns/README.md` for current category ranges.
 
 ## 3. Confidence Ranges
 
-| Category | Min | Max | Notes |
-|----------|-----|-----|-------|
-| instruction_override | 0.85 | 0.92 | High precision — matches are almost certainly malicious |
-| role_manipulation | 0.70 | 0.88 | `act as` (0.72) anchors low end — common in benign prompts |
-| delimiter_injection | 0.35 | 0.48 | Always low — cumulative scoring only. Never raise above 0.50 |
-| context_manipulation | 0.60 | 0.82 | Context-dependent; "the user said" can be benign |
-| jailbreak | 0.65 | 0.92 | High recall, very low FP in practice |
-| tool_fetch | 0.72 | 0.90 | `execute:` (low) vs `rm -rf` (high) |
-| indirect_injection | 0.78 | 0.90 | Structural markers; rarely appear in legitimate prompts |
+The lowest and highest confidence in use per category are listed in the
+[pattern catalogue](../internal/scanner/patterns/README.md#categories), which
+is written from the code. Keep a new pattern inside its category's range
+unless the pull request says why not. Two things to know:
+
+- `delimiter_injection` is low on purpose (0.35 to 0.45): ordinary Markdown
+  matches it. Do not raise it above 0.50.
+- `act as` (0.72) and `disregard` (0.72) are the low ends of their categories
+  because both appear in benign prompts.
 
 ---
 
@@ -179,32 +181,30 @@ All must pass before merging.
 
 Pattern changes are compiled into the binary. Deployment follows the normal CI/CD pipeline:
 
-1. PR merged to `dev`
-2. CI: govulncheck, gosec, SBOM, fuzz (15min), benchmark regression
-3. Docker image built and tagged
-4. Canary: deploy to staging, observe for 24h
-5. Production: rolling deploy
+1. Pull request merged to `main`.
+2. CI (`.github/workflows/proxy-ci.yml`) runs govulncheck, gosec, the SBOM
+   job, `go test -race` and the scanner benchmarks. The fuzz job runs only
+   on the weekly schedule or when started by hand. The adversarial gate
+   (`adversarial-gate.yml`) runs on pull requests that touch `proxy/`.
+3. No workflow in this repository builds an image or deploys. Build the
+   image from `proxy/Dockerfile` and roll it out the way you deploy the proxy.
 
 ### 5.2 Emergency deployment (P0)
 
 For CVE or active-exploitation patterns:
 
-1. Add pattern directly to `dev` branch (no PR for speed)
+1. Add pattern directly to `main` (no PR for speed)
 2. CI green → build emergency release
 3. Deploy to production within 24h
 4. Backfill PR and review checklist within 48h
 
 ### 5.3 Hot-reload (future)
 
-Currently, patterns are compiled into the binary and require a restart.
-The DFA hot-reload infrastructure (`scanner.ReloadDFA()`) is in place for
-future pattern file support. When patterns are externalized to a YAML/JSON
-file, they will be reloadable without restart via:
-
-```bash
-curl -X POST http://localhost:8443/api/v1/policies/reload \
-  -H "X-Tamga-Admin-Key: $TAMGA_ADMIN_KEY"
-```
+Patterns are compiled into the binary: a new pattern needs a new build and a
+restart. `scanner.ReloadDFA()` exists and the proxy calls it when the policy
+file changes, but it rebuilds the automaton from the same compiled-in list,
+so it does not bring in new patterns. Reloading patterns from a file is not
+implemented.
 
 ---
 
@@ -230,12 +230,18 @@ curl -X POST http://localhost:8443/api/v1/policies/reload \
 
 After deployment, monitor:
 
-| Metric | Dashboard | Alert Threshold |
-|--------|-----------|-----------------|
-| Injection block rate | `tamga_injection_blocks_total` | Spike > 3σ from 7-day baseline |
-| False-positive reports | User feedback / support tickets | Any report → investigate within 24h |
-| DFA compile time | `tamga_dfa_build_seconds` | > 5s (soft limit: 10K patterns) |
-| DFA memory | `tamga_dfa_pattern_bytes` | > 50MB (soft limit) |
+The proxy exposes these at `GET /api/v1/metrics` (viewer role):
+
+| What | Metric |
+|------|--------|
+| DFA compile time | `tamga_dfa_build_seconds` |
+| Approximate size of the patterns | `tamga_dfa_pattern_bytes` |
+| Number of patterns in the DFA | `tamga_dfa_patterns_total` |
+
+There is no metric for injection blocks alone and the repository ships no
+alert rules. Blocked requests are in the event list (`GET /api/v1/events`)
+with their findings. The DFA refuses to build above 50,000 patterns and logs
+a warning above 10,000.
 
 ### 7.1 False-positive triage
 
