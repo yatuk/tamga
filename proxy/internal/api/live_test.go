@@ -88,11 +88,8 @@ func TestLiveEvents_Unauthorized(t *testing.T) {
 // A stream with no traffic still says something at an interval, so that the
 // client can tell a quiet proxy from a connection whose other end is gone.
 func TestLiveEvents_SendsAHeartbeatWhenQuiet(t *testing.T) {
-	old := liveHeartbeat
-	liveHeartbeat = 20 * time.Millisecond
-	defer func() { liveHeartbeat = old }()
-
-	cfg := Config{AdminKey: "test-key", Broker: events.NewBroker(8), DefaultOrgID: "org-1", Started: time.Now()}
+	cfg := Config{AdminKey: "test-key", Broker: events.NewBroker(8), DefaultOrgID: "org-1", Started: time.Now(),
+		LiveHeartbeat: 20 * time.Millisecond}
 	ts := httptest.NewServer(testMux(cfg))
 	defer ts.Close()
 

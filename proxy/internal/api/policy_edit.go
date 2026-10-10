@@ -163,11 +163,26 @@ func (cfg Config) handlePolicyPut(w http.ResponseWriter, r *http.Request) {
 
 // A simulation takes a policy of up to 256 KiB, as PUT /policies does, and a
 // sample text of up to 256 KiB, as POST /api/v1/scan does. The built-in
-// scanners need about a second for that much text on one core.
+// scanners run one after another here and need about a second and a half
+// for that much text on an idle core, more on a busy one.
 const (
 	maxSimulateBodyBytes = 512 << 10
 	maxSimulateTextBytes = 256 << 10
 )
+
+// defaultSimulateTimeout is the scan time a simulation gets. It is the
+// proxy's own default for a scan (TAMGA_SCANNER_PIPELINE_TIMEOUT_MS): two
+// seconds, the limit before, was less than the largest allowed sample needs
+// on a machine that is doing anything else, and the endpoint then answered
+// 503 for a request it had accepted.
+const defaultSimulateTimeout = 5 * time.Second
+
+func (cfg Config) simulateTimeout() time.Duration {
+	if cfg.SimulateTimeout > 0 {
+		return cfg.SimulateTimeout
+	}
+	return defaultSimulateTimeout
+}
 
 // maxEntityBodyBytes bounds the body of a custom entity create.
 const maxEntityBodyBytes = 16 << 10
@@ -258,7 +273,7 @@ func (cfg Config) handlePolicySimulate(w http.ResponseWriter, r *http.Request) {
 		}
 		registry.Register(scanner.NewCompetitorScanner(func() []scanner.CompetitorSpec { return compSpecs }))
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), cfg.simulateTimeout())
 	defer cancel()
 	findings, err := registry.ScanAll(ctx, []byte(body.SampleText))
 	if err != nil {

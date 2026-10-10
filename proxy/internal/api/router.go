@@ -32,6 +32,13 @@ import (
 
 // Config wires dashboard API dependencies.
 type Config struct {
+	// SimulateTimeout is how long POST /policies/simulate may scan its
+	// sample. Zero means defaultSimulateTimeout.
+	SimulateTimeout time.Duration
+	// LiveHeartbeat is how often the live stream sends a comment while it
+	// has nothing else to say. Zero means defaultLiveHeartbeat.
+	LiveHeartbeat time.Duration
+
 	AdminKey           string
 	CORSOrigin         string // Deprecated: use CORSOrigins
 	CORSOrigins        string // comma-separated allowlist, empty = wildcard "*"

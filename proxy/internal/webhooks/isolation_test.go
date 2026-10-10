@@ -190,12 +190,21 @@ func TestDispatcher_DestinationStateIsReleased(t *testing.T) {
 	if !destKnown(d, destKey) || !destKnown(d, ruleKey) {
 		t.Fatal("a failing destination should be remembered")
 	}
-	d.destMu.Lock()
-	remembered := len(d.dests)
-	d.destMu.Unlock()
-	if remembered != 2 {
-		t.Fatalf("%d destinations are remembered, want the two that fail: the healthy one leaves nothing behind", remembered)
-	}
+	// The healthy one leaves nothing behind. A delivery is counted before its
+	// worker comes back to the destination's state, so the counts above say
+	// only that this is about to happen. Wait for it: the healthy one's state
+	// released, and the two that fail no longer in flight, which the sweep
+	// below would otherwise pass over.
+	waitFor(t, "only the two failing destinations to be remembered, at rest", func() bool {
+		d.destMu.Lock()
+		defer d.destMu.Unlock()
+		for _, st := range d.dests {
+			if st.inflight > 0 || len(st.pending) > 0 {
+				return false
+			}
+		}
+		return len(d.dests) == 2
+	})
 
 	// The saved destination is deleted: the next sweep lets its state go.
 	// The rule's URL is still within its idle time and stays.

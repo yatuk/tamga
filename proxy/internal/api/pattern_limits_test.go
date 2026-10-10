@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/yatuk/tamga/internal/patterns"
 	"github.com/yatuk/tamga/internal/policy"
@@ -168,15 +169,19 @@ func TestSimulateRefusesCostlyPatterns(t *testing.T) {
 
 func TestSimulateBodyLimit(t *testing.T) {
 	cfg := simulateConfig()
+	// This is a test of the size limit, not of how fast the machine is: the
+	// scan of a text this size gets all the time it needs.
+	cfg.SimulateTimeout = 2 * time.Minute
 	ts := httptest.NewServer(testMux(cfg))
 	defer ts.Close()
 
 	fits := map[string]string{"sample_text": strings.Repeat("a", maxSimulateTextBytes)}
-	if status, out := send(t, "POST", ts.URL+"/api/v1/policies/simulate", cfg.AdminKey, fits); status != http.StatusOK {
+	status, out := send(t, "POST", ts.URL+"/api/v1/policies/simulate", cfg.AdminKey, fits)
+	if status != http.StatusOK {
 		t.Errorf("a text of exactly the limit: status %d: %.200s", status, out)
 	}
 	over := map[string]string{"sample_text": strings.Repeat("a", maxSimulateTextBytes+1)}
-	status, out := send(t, "POST", ts.URL+"/api/v1/policies/simulate", cfg.AdminKey, over)
+	status, out = send(t, "POST", ts.URL+"/api/v1/policies/simulate", cfg.AdminKey, over)
 	if status != http.StatusRequestEntityTooLarge || !strings.Contains(out, "262144") {
 		t.Errorf("a text one byte over the limit: status %d, want 413: %.200s", status, out)
 	}
