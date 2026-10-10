@@ -504,7 +504,9 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 		if segs != nil {
 			return reg.ScanSegments(scanCtx, segs, pipelineCfg)
 		}
-		return reg.ScanAllWithConfig(scanCtx, body, pipelineCfg)
+		// A body the extractor does not know is scanned as one text, and
+		// its findings settled as a segment's are (scanner.ScanRaw).
+		return reg.ScanRaw(scanCtx, body, pipelineCfg)
 	}
 	var findings []scanner.Finding
 	if cfg.ScannerClient != nil && cfg.ScannerClient.Enabled() {
@@ -518,6 +520,9 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 			}
 		} else {
 			findings, err = cfg.ScannerClient.Scan(scanCtx, body)
+			if err == nil {
+				findings = scanner.SettleRaw(findings, body)
+			}
 		}
 		if err != nil {
 			logger.Warn().Err(err).Msg("gRPC scanner failed, falling back to local registry")
@@ -682,31 +687,24 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 	var vaultMapping map[string]string
 	vaultOn := pol != nil && pol.Vault != nil && pol.Vault.Enabled
 
-	// For a request scanned by segment the redaction is worked out here,
-	// before the action is acted on. If it cannot be done — a value found
-	// only in a normalised view has no position to cut at, or the rewritten
-	// body does not read back as intended — the request is blocked: sending
-	// it on unredacted is the one outcome REDACT must never have.
+	// The redaction is worked out here, before the action is acted on, for a
+	// request scanned by segment and for one scanned raw alike. If it cannot
+	// be done — a value found only in a normalised view has no position to
+	// cut at, a finding under a REDACT rule is a verdict on the text and not
+	// a span in it, or the rewritten body does not read back as intended —
+	// the request is blocked: sending it on unredacted is the one outcome
+	// REDACT must never have. See redact.go.
+	actionOf := func(f scanner.Finding) policy.Action { return pol.FindingAction(f, userRole, strictMode) }
 	var redactedBody []byte
-	if action == policy.ActionRedact && segs != nil {
-		reason := ""
-		if n := scanner.UnplacedRedactions(findings); n > 0 {
-			reason = "unplaced"
-		} else {
-			var edits []extract.Edit
-			if vaultOn {
-				edits, vaultMapping = vault.TokenizeEdits(segs, findings)
-			} else {
-				edits = scanner.RedactEdits(findings)
-			}
-			rewritten, rwErr := extract.RewriteChecked(provider, body, segs, edits)
-			if rwErr != nil {
-				logger.Error().Err(rwErr).Msg("redaction could not be applied")
-				reason = "rewrite_failed"
-				vaultMapping = nil
-			} else {
-				redactedBody = rewritten
-			}
+	var redactTargeted []scanner.Finding
+	if action == policy.ActionRedact {
+		masked, mapping, targets, reason, rwErr := redactRequest(provider, body, segs, findings, actionOf, vaultOn)
+		if rwErr != nil {
+			// The error names a path in the body, never text from it.
+			logger.Error().Err(rwErr).Msg("redaction could not be applied")
+		}
+		if reason == "" {
+			redactedBody, vaultMapping, redactTargeted = masked, mapping, targets
 		}
 		if reason != "" {
 			logger.Warn().Str("reason", reason).Msg("REDACT not possible, blocking instead")
@@ -721,13 +719,9 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 	// could not be, the request is blocked.
 	var stripped stripResult
 	if action == policy.ActionStrip {
-		actionOf := func(f scanner.Finding) policy.Action { return pol.FindingAction(f, userRole, strictMode) }
 		res, stripErr := stripSegments(provider, body, segs, findings, actionOf, vaultOn)
 		if stripErr != nil {
-			reason := "rewrite_failed"
-			if errors.Is(stripErr, errStripRaw) || errors.Is(stripErr, errStripUnplaced) {
-				reason = stripErr.Error()
-			}
+			reason := stripFailure(stripErr)
 			logger.Warn().Err(stripErr).Str("reason", reason).Msg("STRIP not possible, blocking instead")
 			scanner.RecordDegraded("strip_" + reason)
 			w.Header().Set("X-Tamga-Strip-Fallback", "block:"+reason)
@@ -795,21 +789,15 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 		return
 
 	case policy.ActionRedact:
-		redactFindings := filterRedactFindings(findings)
-		redactedCount = len(redactFindings)
+		// The body was rewritten above, and a REDACT that could not be
+		// carried out became a BLOCK there: redactedBody is set here. With
+		// the vault on, PII and custom entities went out as numbered
+		// placeholders that are put back in the response (ModifyResponse /
+		// mock path); everything else is masked for good.
+		redactFindings := filterRedactFindings(redactTargeted)
+		redactedCount = scanner.PlacedRedactions(redactTargeted)
 		redactedTypes = uniqueRedactCategoriesInOrder(redactFindings)
-		switch {
-		case redactedBody != nil:
-			// Scanned by segment: the body was rewritten and verified above.
-			body = redactedBody
-			redactedCount = scanner.PlacedRedactions(findings)
-		case vaultOn:
-			// Reversible tokenization: forward numbered placeholders, restore
-			// the originals in the response (ModifyResponse / mock path).
-			body, vaultMapping = vault.Tokenize(body, findings)
-		default:
-			body = scanner.RedactContent(body, findings)
-		}
+		body = redactedBody
 		vaultActive = len(vaultMapping) > 0
 		if vaultActive && cfg.VaultStore != nil && cfg.VaultStore.Enabled() {
 			if err := cfg.VaultStore.Save(scanCtx, requestID, vaultMapping); err != nil {
@@ -1763,10 +1751,12 @@ func scoreProximityBySegment(segs []extract.Segment, findings []scanner.Finding)
 	}
 }
 
+// filterRedactFindings orders the findings a REDACT masked (redactTargets)
+// by position, for the log line that names their kinds.
 func filterRedactFindings(findings []scanner.Finding) []scanner.Finding {
 	var out []scanner.Finding
 	for _, f := range findings {
-		if f.Type == "pii" || f.Type == "custom" {
+		if scanner.MaskableType(f.Type) {
 			out = append(out, f)
 		}
 	}
@@ -2451,6 +2441,16 @@ func extractModelFamily(model string) string {
 func genericModelFamily(m string) string {
 	if m == "" {
 		return ""
+	}
+	parts := familySeparator.Split(m, -1)
+	for i, part := range parts {
+		if strings.ContainsAny(part, "0123456789") {
+			return strings.Join(parts[:i+1], "-")
+		}
+	}
+	return parts[0]
+}
+
 // analyzerContent is the text of a request that its event may carry. The
 // event's body has one reader, the handler that hands requests to the
 // analyzer for deep analysis after the fact, and the analyzer is another
@@ -2470,16 +2470,6 @@ func analyzerContent(cfg HandlerConfig, body []byte, action policy.Action, event
 		return nil
 	}
 	return copyBodyOptional(body)
-}
-
-	}
-	parts := familySeparator.Split(m, -1)
-	for i, part := range parts {
-		if strings.ContainsAny(part, "0123456789") {
-			return strings.Join(parts[:i+1], "-")
-		}
-	}
-	return parts[0]
 }
 
 func copyBodyOptional(body []byte) []byte {

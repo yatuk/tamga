@@ -253,8 +253,13 @@ func (s *SecretScanner) Scan(ctx context.Context, content []byte) ([]Finding, er
 	if st.stopped() {
 		return findings, st.err
 	}
-	findings = append(findings, scanConnectionStrings(normBytes)...)
-	findings = append(findings, scanDotenvLines(normBytes)...)
+	// Their positions are offsets into the normalised text, like those of the
+	// patterns above, and are marked the same way: a mask put at them would
+	// land somewhere else in the text as written.
+	for _, f := range append(scanConnectionStrings(normBytes), scanDotenvLines(normBytes)...) {
+		f.Metadata = map[string]string{"detected_via": "unicode_normalization"}
+		findings = append(findings, f)
+	}
 
 	return findings, nil
 }

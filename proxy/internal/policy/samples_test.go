@@ -11,12 +11,36 @@ import (
 
 // policyTopLevelKeys are the keys a policy document may start with. A fenced
 // block in the docs whose top-level keys are all among them is a policy
-// sample.
+// sample. So is one that has a key only a policy has (policyOnlyKeys) next
+// to a key no policy has: that is a sample with a mistake in it, and
+// leaving it out would be the one way a wrong sample passed.
 var policyTopLevelKeys = map[string]bool{
 	"version": true, "name": true, "rules": true, "output_rules": true, "rate_limit": true,
 	"providers": true, "custom_entities": true, "competitors": true, "governance": true,
 	"data": true, "cost": true, "cache": true, "body_limits": true,
 	"exceptions": true, "operator_state": true, "vault": true, "canary": true, "scan": true,
+}
+
+// policyOnlyKeys are top-level keys that say "this is a policy" on their
+// own. version and name are not among them: a compose file and a workflow
+// start with those too.
+var policyOnlyKeys = map[string]bool{
+	"output_rules": true, "custom_entities": true, "competitors": true,
+	"body_limits": true, "operator_state": true, "vault": true, "canary": true,
+	"exceptions": true, "rate_limit": true,
+}
+
+// docFilesWithSamples are the documents an operator copies policy from. The
+// walk below reads every Markdown file under docs/ and the README; these are
+// named so that moving or renaming one cannot quietly take its samples out
+// of the test. The number is the least count of policy samples in it.
+var docFilesWithSamples = map[string]int{
+	"README.md":                   1,
+	"docs/operations.md":          1,
+	"docs/agents.md":              1,
+	"docs/faq.md":                 0,
+	"docs/use-cases.md":           0,
+	"docs/architecture/README.md": 0,
 }
 
 type docSample struct {
@@ -59,13 +83,16 @@ func docPolicySamples(t *testing.T) []docSample {
 			if err := yaml.Unmarshal([]byte(text), &top); err != nil || len(top) == 0 {
 				continue
 			}
-			isPolicy := true
+			isPolicy, policyOnly := true, false
 			for k := range top {
 				if !policyTopLevelKeys[k] {
 					isPolicy = false
 				}
+				if policyOnlyKeys[k] {
+					policyOnly = true
+				}
 			}
-			if isPolicy {
+			if isPolicy || policyOnly {
 				out = append(out, docSample{file: f, line: start, text: text})
 			}
 		}
@@ -74,16 +101,40 @@ func docPolicySamples(t *testing.T) []docSample {
 }
 
 // Every policy sample in the documentation must still load: a bound that
-// refuses what the docs tell operators to write would stop their proxy.
+// refuses what the docs tell operators to write would stop their proxy. It
+// must also pass the checks an installed policy passes (ValidateSemantics):
+// a sample the editor would refuse is as wrong as one that does not parse.
 func TestDocPolicySamplesLoad(t *testing.T) {
 	samples := docPolicySamples(t)
 	if len(samples) == 0 {
 		t.Skip("no docs directory next to the module")
 	}
+	root := filepath.Join("..", "..", "..")
+	perFile := map[string]int{}
 	for _, s := range samples {
-		if _, err := LoadFromBytes([]byte(s.text)); err != nil {
+		rel, _ := filepath.Rel(root, s.file)
+		perFile[filepath.ToSlash(rel)]++
+		p, err := LoadFromBytes([]byte(s.text))
+		if err != nil {
 			t.Errorf("%s:%d does not load: %v", s.file, s.line, err)
+			continue
+		}
+		for _, is := range ValidateSemantics(p) {
+			// A sample is often a part of a policy, and a part has no name.
+			if is.Severity != "error" || (is.Field == "name" && is.Rule == "required") {
+				continue
+			}
+			t.Errorf("%s:%d is refused by validation: %s: %s", s.file, s.line, is.Field, is.Message)
 		}
 	}
-	t.Logf("%d policy samples loaded", len(samples))
+	for file, least := range docFilesWithSamples {
+		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(file))); err != nil {
+			t.Errorf("%s is not where this test reads it: %v", file, err)
+			continue
+		}
+		if perFile[file] < least {
+			t.Errorf("%s: %d policy samples found, expected at least %d", file, perFile[file], least)
+		}
+	}
+	t.Logf("%d policy samples loaded: %v", len(samples), perFile)
 }

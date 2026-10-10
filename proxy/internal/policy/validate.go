@@ -248,7 +248,9 @@ func ValidateSemantics(p *Policy) []ValidationIssue {
 		}
 	}
 
-	// Validate competitor severity and action values.
+	// Validate competitor severity values. A competitor's action, like a
+	// custom entity's, is judged with the bounds (entryActionIssues): a value
+	// that is not an action fails the load.
 	for i, c := range p.Competitors {
 		if c.Severity != "" && !isValidSeverity(c.Severity) {
 			issues = append(issues, ValidationIssue{
@@ -257,19 +259,6 @@ func ValidateSemantics(p *Policy) []ValidationIssue {
 				Message:  fmt.Sprintf("unknown severity %q (use critical, high, medium, or low)", c.Severity),
 				Severity: "warning",
 			})
-		}
-		if c.Action != "" {
-			a := Action(strings.ToUpper(strings.TrimSpace(c.Action)))
-			switch a {
-			case ActionBlock, ActionStrip, ActionRedact, ActionWarn, ActionLog, ActionPass:
-			default:
-				issues = append(issues, ValidationIssue{
-					Field:    fmt.Sprintf("competitors[%d].action", i),
-					Rule:     "enum",
-					Message:  fmt.Sprintf("unknown action %q (use BLOCK, REDACT, WARN, LOG, PASS)", c.Action),
-					Severity: "error",
-				})
-			}
 		}
 	}
 

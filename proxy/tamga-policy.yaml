@@ -80,6 +80,11 @@ canary:
   block_on_leak: true
   providers: []
 
+# An entry here (and under "competitors") sets its own action. A rule keyed
+# "custom" or "competitor" applies to the matches as well, and the stronger
+# of the two wins. REDACT masks a match as [<name>_REDACTED]; it can be asked
+# of PII, secrets, custom entities and competitor names, and not of an
+# injection or content-moderation rule, which have no span to mask.
 custom_entities:
   - name: "musteri_no"
     pattern: "MN-\\d{8}"

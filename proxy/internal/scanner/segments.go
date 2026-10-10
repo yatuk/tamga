@@ -37,8 +37,9 @@ func (r *Registry) ScanSegments(ctx context.Context, segs []extract.Segment, cfg
 	return all, firstErr
 }
 
-// dropEchoes removes the unpositioned PII findings that are only another
-// view of a positioned one.
+// dropEchoes removes the unpositioned findings of a maskable type (PII,
+// secrets, custom entities, competitor names) that are only another view of
+// a positioned one.
 //
 // The scanners read the text as written and several transformed views of it
 // (folded letters, separators removed, digits reversed, ROT13). A value in
@@ -322,24 +323,27 @@ func (r *Registry) scanAcrossSegments(ctx context.Context, segs []extract.Segmen
 	return out, deg.result()
 }
 
-// redactable reports whether a finding is one that REDACT removes.
-func redactable(f Finding) bool { return f.Type == "pii" || f.Type == "custom" }
+// redactable reports whether a finding is of a type REDACT can mask: one
+// whose findings are values with a span (see maskableTypes).
+func redactable(f Finding) bool { return maskableTypes[f.Type] }
 
-// RedactEdits turns the positioned PII findings of a segment scan into the
-// edits that mask them.
+// RedactEdits turns the positioned findings of a segment scan into the edits
+// that mask them. It masks every finding it is given that can be masked; the
+// caller decides which findings the policy wants masked. A finding of a type
+// without spans gets no edit: its position is not one to cut at.
 func RedactEdits(findings []Finding) []extract.Edit {
 	var edits []extract.Edit
 	for _, f := range findings {
 		if redactable(f) && f.Placed() {
-			edits = append(edits, extract.Edit{Seg: f.Seg, From: f.StartPos, To: f.EndPos, Replacement: "[" + f.Category + "_REDACTED]"})
+			edits = append(edits, extract.Edit{Seg: f.Seg, From: f.StartPos, To: f.EndPos, Replacement: MaskMarker(f)})
 		}
 	}
 	return edits
 }
 
-// UnplacedRedactions counts the PII findings that have no position and so
-// cannot be masked. A request with any of them cannot be redacted, only
-// blocked or let through whole.
+// UnplacedRedactions counts the findings of a maskable type that have no
+// position and so cannot be masked. A request with any of them cannot be
+// redacted, only blocked or let through whole.
 func UnplacedRedactions(findings []Finding) int {
 	n := 0
 	for _, f := range findings {
@@ -350,7 +354,7 @@ func UnplacedRedactions(findings []Finding) int {
 	return n
 }
 
-// PlacedRedactions counts the PII findings RedactEdits masks.
+// PlacedRedactions counts the findings RedactEdits masks.
 func PlacedRedactions(findings []Finding) int {
 	n := 0
 	for _, f := range findings {

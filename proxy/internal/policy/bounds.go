@@ -86,6 +86,8 @@ func boundsIssues(p *Policy) []ValidationIssue {
 	var issues []ValidationIssue
 	issues = append(issues, patternIssues(p)...)
 	issues = append(issues, ruleBoundIssues(p)...)
+	issues = append(issues, entryActionIssues(p)...)
+	issues = append(issues, maskIssues(p)...)
 	issues = append(issues, limitIssues(p)...)
 	issues = append(issues, outputBoundIssues(p)...)
 	issues = append(issues, poolTimeoutIssues(p)...)

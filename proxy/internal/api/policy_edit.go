@@ -292,10 +292,10 @@ func (cfg Config) handlePolicySimulate(w http.ResponseWriter, r *http.Request) {
 	out := make([]map[string]interface{}, 0, len(findings))
 	topAction := policy.ActionPass
 	for _, f := range findings {
-		act := policy.ActionPass
-		if rule, ok := pol.MatchedRule(f); ok {
-			act = rule.Action
-		}
+		// The action the engine gives the finding: the stronger of its two
+		// rule keys and, for a custom entity or a competitor, the entry's
+		// own action. No role is given, so no exception applies.
+		act := pol.FindingAction(f, "", true)
 		if policyActionSeverity(act) > policyActionSeverity(topAction) {
 			topAction = act
 		}
@@ -385,6 +385,10 @@ func (cfg Config) handleCustomEntityCreate(w http.ResponseWriter, r *http.Reques
 	}
 	entity.Name = strings.TrimSpace(entity.Name)
 	entity.Pattern = strings.TrimSpace(entity.Pattern)
+	// The console sends the action in lower case. It is written to the file
+	// under its name; a value that is no action is refused when the policy
+	// with the entity in it is loaded, below.
+	entity.Action = strings.ToUpper(strings.TrimSpace(entity.Action))
 	if entity.Name == "" || entity.Pattern == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name and pattern are required"})
 		return

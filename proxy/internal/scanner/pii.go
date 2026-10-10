@@ -875,15 +875,23 @@ func maskContent(s string) string {
 	return string(runes)
 }
 
-// RedactContent replaces PII matches in content with placeholder tokens.
+// RedactContent replaces the matches of the given findings in content with
+// placeholder tokens. It masks every finding it is given that can be masked
+// (see maskableTypes); the caller decides which the policy wants masked.
 // It builds the redacted output from scratch by walking findings in ascending
 // StartPos order, copying non-finding regions and inserting placeholders.
 // This eliminates index-drift bugs caused by in-place replacement on a
 // changing buffer where stale original offsets were used.
+//
+// Findings that overlap are one stretch of text and get one placeholder, the
+// first one's: the same value reported twice used to be masked twice, and a
+// finding starting inside another left the tail of the first in the output.
+// A finding made on a normalised view is skipped: its offsets are not
+// offsets into content.
 func RedactContent(content []byte, findings []Finding) []byte {
 	var redactFindings []Finding
 	for _, f := range findings {
-		if f.Type != "pii" && f.Type != "custom" {
+		if !redactable(f) || f.Metadata["detected_via"] != "" {
 			continue
 		}
 		if f.StartPos < 0 || f.EndPos < 0 || f.StartPos >= f.EndPos || f.EndPos > len(content) {
@@ -898,17 +906,25 @@ func RedactContent(content []byte, findings []Finding) []byte {
 		return out
 	}
 
-	sort.Slice(redactFindings, func(i, j int) bool {
-		return redactFindings[i].StartPos < redactFindings[j].StartPos
+	sort.SliceStable(redactFindings, func(i, j int) bool {
+		if redactFindings[i].StartPos != redactFindings[j].StartPos {
+			return redactFindings[i].StartPos < redactFindings[j].StartPos
+		}
+		return redactFindings[i].EndPos > redactFindings[j].EndPos
 	})
 
 	var buf bytes.Buffer
 	pos := 0
-	for _, f := range redactFindings {
-		if f.StartPos > pos {
-			buf.Write(content[pos:f.StartPos])
+	for i, f := range redactFindings {
+		if i > 0 && f.StartPos < pos {
+			// Overlaps what was just masked: the mask grows to cover it.
+			if f.EndPos > pos {
+				pos = f.EndPos
+			}
+			continue
 		}
-		buf.WriteString("[" + f.Category + "_REDACTED]")
+		buf.Write(content[pos:f.StartPos])
+		buf.WriteString(MaskMarker(f))
 		pos = f.EndPos
 	}
 	if pos < len(content) {

@@ -222,3 +222,17 @@ func rewriteChecked(extractFn func(string, []byte) (*Result, bool), provider str
 	}
 	return out, nil
 }
+
+// ApplyEdits applies edits to one text and returns the result. It is what
+// Rewrite does to the text of a segment, for a body that has no segments: Seg
+// is not looked at, and edits that overlap are merged as they are there.
+func ApplyEdits(text string, edits []Edit) string {
+	list := make([]Edit, 0, len(edits))
+	for _, e := range edits {
+		if e.From < 0 || e.To > len(text) || e.From >= e.To {
+			continue
+		}
+		list = append(list, e)
+	}
+	return applyEdits(text, list)
+}

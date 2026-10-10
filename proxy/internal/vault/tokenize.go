@@ -34,7 +34,7 @@ import (
 func Tokenize(content []byte, findings []scanner.Finding) ([]byte, map[string]string) {
 	var redactable []scanner.Finding
 	for _, f := range findings {
-		if f.Type != "pii" && f.Type != "custom" {
+		if !Tokenizable(f) {
 			continue
 		}
 		if f.StartPos < 0 || f.EndPos < 0 || f.StartPos >= f.EndPos || f.EndPos > len(content) {

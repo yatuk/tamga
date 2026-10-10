@@ -311,7 +311,7 @@ func TestRedactContent_MultipleFindings(t *testing.T) {
 		{Type: "pii", Category: "email", StartPos: 5, EndPos: 11},            // "a@b.co"
 		{Type: "pii", Category: "credit_card", StartPos: 27, EndPos: 43},     // "4532015112830366"
 		{Type: "pii", Category: "tc_kimlik", StartPos: 53, EndPos: 64},       // "10000000146"
-		{Type: "secret", Category: "", StartPos: 0, EndPos: 3, Match: "foo"}, // non-pii, should be ignored
+		{Type: "injection", Category: "", StartPos: 0, EndPos: 3, Match: ""}, // a verdict, not a span: ignored
 	}
 
 	out := RedactContent(content, findings)

@@ -135,7 +135,7 @@ type Competitor struct {
 	Name        string   `yaml:"name" json:"name"`               // e.g. "Lakera Guard"
 	Patterns    []string `yaml:"patterns" json:"patterns"`       // regex patterns to match (case-insensitive)
 	Severity    string   `yaml:"severity" json:"severity"`       // "low" | "medium" | "high"
-	Action      string   `yaml:"action" json:"action"`           // "log" | "warn" | "block"
+	Action      string   `yaml:"action" json:"action"`           // BLOCK, STRIP, REDACT, WARN, LOG or PASS; see entry_action.go
 	Description string   `yaml:"description" json:"description"` // human-readable note
 	Enabled     bool     `yaml:"enabled" json:"enabled"`         // per-competitor toggle
 }
@@ -313,13 +313,10 @@ func (p *Policy) EvaluateWithRole(findings []scanner.Finding, role string, stric
 	maxAction := ActionPass
 
 	for _, f := range findings {
-		if f.Type == "custom" {
-			if a, ok := p.ActionForCustomCategory(f.Category); ok {
-				if actionSeverity(a) > actionSeverity(maxAction) {
-					maxAction = a
-				}
-			}
-			continue
+		// A custom entity's or a competitor's own action; the rules below
+		// apply to it as well, and the stronger wins (entry_action.go).
+		if a, ok := p.entryAction(f); ok && actionSeverity(a) > actionSeverity(maxAction) {
+			maxAction = a
 		}
 
 		ruleKeys := []string{f.Type + "_detection", f.Type}
@@ -431,6 +428,10 @@ func (p *Policy) unruledAction(f scanner.Finding) (Action, bool) {
 		if _, ok := p.Rules[key]; ok {
 			return ActionPass, false
 		}
+	}
+	// A competitor entry with an action of its own has been decided about.
+	if _, ok := p.entryAction(f); ok {
+		return ActionPass, false
 	}
 	return ParseAction(p.Scan.DefaultAction), true
 }
@@ -770,13 +771,10 @@ func (p *Policy) Evaluate(findings []scanner.Finding) Action {
 	maxAction := ActionPass
 
 	for _, f := range findings {
-		if f.Type == "custom" {
-			if a, ok := p.ActionForCustomCategory(f.Category); ok {
-				if actionSeverity(a) > actionSeverity(maxAction) {
-					maxAction = a
-				}
-			}
-			continue
+		// A custom entity's or a competitor's own action; the rules below
+		// apply to it as well, and the stronger wins (entry_action.go).
+		if a, ok := p.entryAction(f); ok && actionSeverity(a) > actionSeverity(maxAction) {
+			maxAction = a
 		}
 
 		// A finding of type "pii" is scored against both the "pii_detection"
@@ -908,16 +906,6 @@ func actionSeverity(a Action) int {
 // MatchedRule returns the policy rule that applies to a finding, if any.
 // Lookup order matches Evaluate: "<type>_detection" then "<type>".
 func (p *Policy) MatchedRule(f scanner.Finding) (Rule, bool) {
-	if f.Type == "custom" {
-		if ce := p.CustomEntityByName(f.Category); ce != nil {
-			return Rule{
-				Action:      ParseAction(ce.Action),
-				Sensitivity: "low",
-			}, true
-		}
-		return Rule{}, false
-	}
-
 	keys := []string{f.Type + "_detection", f.Type}
 	for _, key := range keys {
 		rule, ok := p.Rules[key]
@@ -934,6 +922,15 @@ func (p *Policy) MatchedRule(f scanner.Finding) (Rule, bool) {
 			continue
 		}
 		return rule, true
+	}
+	// No rule covers it: a custom entity or a competitor may still set an
+	// action of its own.
+	if a, ok := p.entryAction(f); ok {
+		return Rule{Action: a, Sensitivity: "low"}, true
+	}
+	if f.Type == "custom" && p.CustomEntityByName(f.Category) != nil {
+		// An entity of the policy without an action: known, and let through.
+		return Rule{Action: ActionPass, Sensitivity: "low"}, true
 	}
 	if a, ok := p.unruledAction(f); ok {
 		return Rule{Action: a, Sensitivity: "low"}, true
@@ -1050,10 +1047,6 @@ func (p *Policy) FindingAction(f scanner.Finding, role string, strictMode bool) 
 	if p == nil {
 		return ActionPass
 	}
-	if f.Type == "custom" {
-		a, _ := p.ActionForCustomCategory(f.Category)
-		return a
-	}
 	exempt := func(key string) bool {
 		if strictMode || role == "" {
 			return false
@@ -1070,7 +1063,8 @@ func (p *Policy) FindingAction(f scanner.Finding, role string, strictMode bool) 
 		}
 		return false
 	}
-	max := ActionPass
+	// An entry's own action first; an exception waives rules, not that.
+	max, _ := p.entryAction(f)
 	for _, key := range []string{f.Type + "_detection", f.Type} {
 		rule, ok := p.Rules[key]
 		if !ok || exempt(key) {

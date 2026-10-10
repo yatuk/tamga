@@ -316,8 +316,9 @@ func (g *streamGuard) release(ch *streamChannel, final bool) (released string, s
 					scanner.RecordDegraded("redact_stream_incomplete_" + scanner.IncompleteReason(err))
 					return "", true
 				}
-				if !placed {
-					// Found only in a transformed view of the text: there is
+				if !placed || !scanner.MaskableType(f.Type) {
+					// Found only in a transformed view of the text, or a
+					// verdict on the text and not a span in it: there is
 					// nowhere to put the mask, and sending it is not an option.
 					g.findings = append(g.findings, f)
 					g.stopReason = "redact_unplaced"
@@ -333,23 +334,46 @@ func (g *streamGuard) release(ch *streamChannel, final bool) (released string, s
 				if from < ctxLen {
 					from = ctxLen
 				}
-				masks = append(masks, mask{from: from, to: f.EndPos, with: "[" + f.Category + "_REDACTED]"})
+				masks = append(masks, mask{from: from, to: f.EndPos, with: scanner.MaskMarker(f)})
 				g.findings = append(g.findings, f)
 			}
 		}
 	}
 
-	// Masks go in from the right so earlier positions stay valid. One that
-	// reaches into the held part waits for the next round.
-	sort.Slice(masks, func(i, j int) bool { return masks[i].from > masks[j].from })
-	lastFrom := len(window) + 1
+	// Masks that overlap are one stretch of text and become one mask, the
+	// leftmost one's: applying one and dropping the other left the part
+	// only the dropped one covered in the text that went out.
+	sort.Slice(masks, func(i, j int) bool {
+		if masks[i].from != masks[j].from {
+			return masks[i].from < masks[j].from
+		}
+		return masks[i].to > masks[j].to
+	})
+	merged := masks[:0]
 	for _, m := range masks {
-		if m.to > holdFrom || m.to > lastFrom {
-			continue // overlaps the held part or a mask already applied
+		if n := len(merged); n > 0 && m.from < merged[n-1].to {
+			if m.to > merged[n-1].to {
+				merged[n-1].to = m.to
+			}
+			continue
+		}
+		merged = append(merged, m)
+	}
+	// A mask that reaches into the held part waits for the next round, and
+	// so does the text it starts in: the hold moves back to where it begins.
+	for i := len(merged) - 1; i >= 0; i-- {
+		if merged[i].to > holdFrom && merged[i].from < holdFrom {
+			holdFrom = merged[i].from
+		}
+	}
+	// Masks go in from the right so earlier positions stay valid.
+	for i := len(merged) - 1; i >= 0; i-- {
+		m := merged[i]
+		if m.to > holdFrom {
+			continue // in the held part
 		}
 		window = window[:m.from] + m.with + window[m.to:]
 		holdFrom += len(m.with) - (m.to - m.from)
-		lastFrom = m.from
 		g.redacted++
 	}
 	pending := window[ctxLen:]

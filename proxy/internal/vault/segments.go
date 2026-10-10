@@ -11,6 +11,20 @@ import (
 	"github.com/yatuk/tamga/internal/scanner"
 )
 
+// Tokenizable reports whether the vault may hold this finding's value and
+// put it back in the answer: PII and custom entities, the identifiers a
+// caller needs back to read the answer.
+//
+// A secret is never one of them, whatever the policy says about masking it.
+// The vault exists to give the caller's own data back; a key or a password
+// that was masked on the way out and restored on the way in would be in the
+// answer again, and in whatever the caller does with the answer. Nor is a
+// competitor's name: it is masked so that the model does not talk about it.
+// Both get the fixed, irreversible marker.
+func Tokenizable(f scanner.Finding) bool {
+	return f.Type == "pii" || f.Type == "custom"
+}
+
 // TokenizeEdits is Tokenize for a request scanned by segment. It returns the
 // edits that put a numbered placeholder in place of each positioned PII
 // finding, and the placeholder -> original mapping.
@@ -25,7 +39,7 @@ func TokenizeEdits(segs []extract.Segment, findings []scanner.Finding) ([]extrac
 	}
 	var spans []span
 	for _, f := range findings {
-		if f.Type != "pii" && f.Type != "custom" {
+		if !Tokenizable(f) {
 			continue
 		}
 		if !f.Placed() || f.Seg < 0 || f.Seg >= len(segs) || f.EndPos > len(segs[f.Seg].Text) {

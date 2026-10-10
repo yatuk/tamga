@@ -464,15 +464,22 @@ func (h *scanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// is one here. The vault is not used: with it on the proxy sends
 	// numbered placeholders and keeps the originals to put back, and a scan
 	// keeps nothing. The text shows the plain markers instead.
+	actionOf := func(f scanner.Finding) policy.Action { return pol.FindingAction(f, userRole, strictMode) }
 	var redactedText *string
 	if action == policy.ActionRedact {
-		reason := ""
-		if n := scanner.UnplacedRedactions(findings); n > 0 {
-			reason = "unplaced"
-		} else if redacted, rwErr := rewrittenText(body, segs, scanner.RedactEdits(findings)); rwErr != nil {
-			reason = "rewrite_failed"
-		} else {
-			redactedText = &redacted
+		// The same findings, on the same terms, as on the proxy path
+		// (redact.go).
+		targets := redactTargets(findings, actionOf)
+		reason := redactBlocker(targets)
+		if reason == "" {
+			edits := scanner.RedactEdits(targets)
+			if len(edits) == 0 {
+				reason = redactNothing
+			} else if redacted, rwErr := rewrittenText(body, segs, edits); rwErr != nil {
+				reason = redactRewrite
+			} else {
+				redactedText = &redacted
+			}
 		}
 		if reason != "" {
 			w.Header().Set("X-Tamga-Redact-Fallback", "block:"+reason)
@@ -482,12 +489,8 @@ func (h *scanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// The same for STRIP. The stripped body itself is not returned.
 	if action == policy.ActionStrip {
-		actionOf := func(f scanner.Finding) policy.Action { return pol.FindingAction(f, userRole, strictMode) }
 		if _, stripErr := stripSegments(scanProvider, body, segs, findings, actionOf, false); stripErr != nil {
-			reason := "rewrite_failed"
-			if errors.Is(stripErr, errStripRaw) || errors.Is(stripErr, errStripUnplaced) {
-				reason = stripErr.Error()
-			}
+			reason := stripFailure(stripErr)
 			w.Header().Set("X-Tamga-Strip-Fallback", "block:"+reason)
 			action = policy.ActionBlock
 		}

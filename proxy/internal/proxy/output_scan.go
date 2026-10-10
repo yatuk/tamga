@@ -131,18 +131,23 @@ func scanResponseBody(ctx context.Context, reg *scanner.Registry, outputReg *sca
 }
 
 // redactResponse masks the findings output_rules.redact_on names. It returns
-// nil when any of them has no position, or when the rewritten response
-// cannot be confirmed.
+// nil when any of them has no position or is of a type without spans, or
+// when the rewritten response cannot be confirmed.
 func redactResponse(provider string, raw []byte, segs []extract.Segment, findings []scanner.Finding, pol *policy.Policy) ([]byte, int) {
 	var edits []extract.Edit
 	for _, f := range findings {
 		if !pol.OutputRedacts(f) {
 			continue
 		}
-		if !f.Placed() || f.Seg < 0 || f.Seg >= len(segs) {
+		// A finding that is a verdict on the answer and not a span in it
+		// (an injection, moderated content, code) cannot be masked even when
+		// it carries a position: the position is not one to cut at. A policy
+		// that names such a type in redact_on does not load; this is for a
+		// category named there, which the load cannot tell apart.
+		if !scanner.Maskable(f) || f.Seg < 0 || f.Seg >= len(segs) {
 			return nil, 0
 		}
-		edits = append(edits, extract.Edit{Seg: f.Seg, From: f.StartPos, To: f.EndPos, Replacement: "[" + f.Category + "_REDACTED]"})
+		edits = append(edits, extract.Edit{Seg: f.Seg, From: f.StartPos, To: f.EndPos, Replacement: scanner.MaskMarker(f)})
 	}
 	if len(edits) == 0 {
 		return nil, 0
