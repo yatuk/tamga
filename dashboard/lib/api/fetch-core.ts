@@ -1,5 +1,6 @@
+import { BUILT_IN_ADMIN_KEY } from "@/lib/built-in-key";
+
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8443";
-const DEFAULT_ADMIN_KEY = process.env.NEXT_PUBLIC_ADMIN_KEY || "";
 const DEFAULT_TIMEOUT_MS = 5_000;
 
 type APIOptions = RequestInit & {
@@ -12,8 +13,10 @@ type APIOptions = RequestInit & {
   accept?: (status: number, body: Record<string, unknown>) => boolean;
 };
 
+/** The credential every call to the management API carries: in a header, never in a URL. */
 export function authHeaders(adminKey?: string): HeadersInit {
-  const key = adminKey || DEFAULT_ADMIN_KEY;
+  // The built-in key is empty in a production build: see lib/built-in-key.ts.
+  const key = adminKey || BUILT_IN_ADMIN_KEY;
   return key ? { "X-Tamga-Admin-Key": key } : {};
 }
 
@@ -42,6 +45,29 @@ export class ApiError extends Error {
 
 /** A response the server answered with: retrying a 4xx gives the same answer. */
 class ClientError extends ApiError {}
+
+/**
+ * Whether the proxy refused a call because the key's role is too low (403,
+ * code "permission_denied"), and what it asked for. The key itself is valid.
+ * `needs` is a sentence for the person; `refused` one to put beside a button.
+ */
+export function permissionDenied(error: unknown): { permission: string; needs: string; refused: string } | null {
+  if (!(error instanceof ApiError) || error.code !== "permission_denied") return null;
+  const required = error.body.required_permission;
+  const permission = typeof required === "string" ? required : "";
+  const needs = permission ? `The proxy asks for the ${permission} permission.` : "The proxy asks for a higher role.";
+  return { permission, needs, refused: `This key's role cannot do this. ${needs}` };
+}
+
+/**
+ * The error for an answer outside 2xx, read from the response. For the calls
+ * that do not go through fetchAPI because their answer is not JSON.
+ */
+export async function errorFromResponse(res: Response): Promise<ApiError> {
+  const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  const message = res.status === 401 ? "Admin key is wrong or missing" : formatFetchErrorMessage(res.status, body);
+  return new ApiError(message, res.status, body && typeof body === "object" ? body : {});
+}
 
 export async function fetchAPI<T>(path: string, options?: APIOptions): Promise<T> {
   const retries = options?.retry ?? 1;

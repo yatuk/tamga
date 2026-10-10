@@ -5,6 +5,7 @@ import NextLink from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Button,
+  InlineNotification,
   Link,
   NumberInput,
   PasswordInput,
@@ -28,10 +29,12 @@ import {
 } from "@carbon/react";
 import { failureWords, HealthDetailNotice, NEEDS_KEY } from "@/components/console/health";
 import { uptimeText } from "@/components/console/names";
-import { PageHead, Section } from "@/components/console/page";
+import { PageHead, Refused, Section } from "@/components/console/page";
 import { ADMIN_KEY_STORAGE } from "@/hooks/useAdminKey";
+import { BUILT_IN_ADMIN_KEY } from "@/lib/built-in-key";
 import { HEALTH_KEY } from "@/hooks/useHealth";
 import { api } from "@/lib/api";
+import { permissionDenied } from "@/lib/api/fetch-core";
 import type { SSOSettings } from "@/lib/api/client";
 import { toast } from "@/lib/toast";
 import { formatSince } from "@/lib/utils/format";
@@ -85,8 +88,19 @@ function Access({ m }: { m: Page }) {
       setInBrowser(false);
     }
   }, [m.saved]);
+  const builtIn = !inBrowser && !!m.saved && m.saved === BUILT_IN_ADMIN_KEY;
   return (
-    <Section id="admin-key" title="Admin key" note={inBrowser ? "One is stored in this browser" : m.saved ? "Using the one built into this console" : "None stored in this browser"} style={{ maxWidth: "44rem" }}>
+    <Section id="admin-key" title="Admin key" note={inBrowser ? "One is stored in this browser" : builtIn ? "Using the one built into this page" : "None stored in this browser"} style={{ maxWidth: "44rem" }}>
+      {builtIn ? (
+        <InlineNotification
+          kind="info"
+          lowContrast
+          hideCloseButton
+          title="This key is built into the page, for local development."
+          subtitle="It comes from NEXT_PUBLIC_ADMIN_KEY and anyone who can load this page can read it. A production build refuses it: there, each person enters a key here."
+          style={{ marginBottom: "1rem", maxWidth: "none" }}
+        />
+      ) : null}
       <form
         className="t-form"
         onSubmit={(e) => {
@@ -174,16 +188,20 @@ const CIRCUIT: Record<string, { word: string; action?: "FAILING" | "STRUGGLING" 
 function Providers({ m }: { m: Page }) {
   const pools = m.health?.providers ?? [];
   const [pending, setPending] = useState<string | null>(null);
+  // The reset the proxy last refused, so the row can say why beside its button.
+  const [refused, setRefused] = useState<{ row: string; error: unknown } | null>(null);
   const qc = useQueryClient();
 
   async function reset(pool: string, endpoint: string) {
     setPending(`${pool}:${endpoint}`);
+    setRefused(null);
     try {
       await api.resetUpstreamCircuit(m.saved, pool, endpoint);
       toast.success("Sending traffic again", `${pool}, ${endpoint}`);
       await qc.invalidateQueries({ queryKey: HEALTH_KEY });
     } catch (e) {
-      toast.error("Could not reset the endpoint", (e as Error).message);
+      if (permissionDenied(e)) setRefused({ row: `${pool}:${endpoint}`, error: e });
+      else toast.error("Could not reset the endpoint", (e as Error).message);
     } finally {
       setPending(null);
     }
@@ -260,6 +278,7 @@ function Providers({ m }: { m: Page }) {
                         <Button kind="ghost" size="sm" disabled={busy || !m.saved} onClick={() => void reset(pl.pool, p.name)}>
                           {busy ? "Resetting" : "Send traffic again"}
                         </Button>
+                        {refused?.row === `${pl.pool}:${p.name}` ? <Refused error={refused.error} /> : null}
                       </TableCell>
                     </TableRow>
                   );

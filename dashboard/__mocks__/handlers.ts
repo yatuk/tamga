@@ -3,6 +3,46 @@ import { policyHandlers, policyMock } from "./policy-handlers";
 
 const API = "/api/v1";
 
+/**
+ * The proxy's answer to a key whose role is too low, or nothing when the key
+ * may go on. A key starting with "viewer" stands for a viewer.
+ */
+function refusedForRole(request: Request, permission: string) {
+  if (!(request.headers.get("X-Tamga-Admin-Key") ?? "").startsWith("viewer")) return null;
+  return HttpResponse.json(
+    { error: `role viewer lacks ${permission}`, code: "permission_denied", required_permission: permission },
+    { status: 403 },
+  );
+}
+
+const MOCK_WEBHOOKS = {
+  items: [
+    {
+      id: "wh-1",
+      label: "Security channel",
+      kind: "slack",
+      url: "https://hooks.slack.com/[redacted]",
+      url_redacted: true,
+      has_auth_token: false,
+      enabled: true,
+      headers: { Authorization: "[redacted]" },
+      created_at: "2026-09-01T10:00:00Z",
+      last_fired: "0001-01-01T00:00:00Z",
+    },
+    {
+      id: "wh-2",
+      label: "Internal collector",
+      kind: "generic",
+      url: "http://collector.internal:8088/[redacted]",
+      url_redacted: true,
+      has_auth_token: true,
+      enabled: false,
+      created_at: "2026-09-02T10:00:00Z",
+    },
+  ],
+  total: 2,
+};
+
 // ── Helpers ────────────────────────────────────────────────────────────
 function paginate<T>(items: T[], page = 1, limit = 50) {
   const start = (page - 1) * limit;
@@ -376,6 +416,14 @@ export const handlers = [
   }),
 
   // Event detail
+  // The events export is for an analyst. It stands before /events/:id, which would answer for it.
+  http.get(
+    `${API}/events/export`,
+    ({ request }) =>
+      refusedForRole(request, "events:export") ??
+      new HttpResponse("request_id,action\nreq-1,BLOCK\n", { headers: { "Content-Type": "text/csv" } }),
+  ),
+
   http.get(`${API}/events/:id`, () => HttpResponse.json(MOCK_EVENT_DETAIL)),
 
   // Timeseries
@@ -420,8 +468,13 @@ export const handlers = [
   // Budget
   http.get(`${API}/budget/stats`, () => HttpResponse.json(MOCK_BUDGET)),
 
-  // API Keys
-  http.get(`${API}/apikeys`, () => HttpResponse.json(MOCK_API_KEYS)),
+  // API Keys. Listing them is for an admin: a key starting with "viewer" is refused.
+  http.get(`${API}/apikeys`, ({ request }) => refusedForRole(request, "apikeys:read") ?? HttpResponse.json(MOCK_API_KEYS)),
+
+  // Webhooks, as the proxy hands them back: the address cut to scheme and
+  // host, the token and header values withheld.
+  http.get(`${API}/webhooks`, ({ request }) => refusedForRole(request, "webhooks:read") ?? HttpResponse.json(MOCK_WEBHOOKS)),
+
   http.post(`${API}/apikeys`, async ({ request }) => {
     const body = (await request.json()) as Record<string, unknown>;
     return HttpResponse.json({
@@ -479,8 +532,9 @@ export const handlers = [
     });
   }),
 
-  // SSE live events (close immediately for tests)
-  http.get("/api/sse/live", () => {
+  // The live feed, as the proxy serves it: no key, no stream. It ends at once in tests.
+  http.get(`${API}/live/events`, ({ request }) => {
+    if (!request.headers.get("X-Tamga-Admin-Key")) return HttpResponse.json({ error: "unauthorized" }, { status: 401 });
     return new HttpResponse(
       new ReadableStream({
         start(controller) {

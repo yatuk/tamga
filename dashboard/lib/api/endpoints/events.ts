@@ -1,5 +1,6 @@
 import { authHeaders, fetchAPI } from "@/lib/api/fetch-core";
 import { buildEventsQueryString } from "@/lib/api/events-query";
+import { openLiveStream, type LiveStreamHandlers } from "@/lib/api/live-stream";
 import type {
   BreakdownResponse,
   DashboardStatsV2,
@@ -41,12 +42,17 @@ export const events = {
       headers: authHeaders(adminKey),
     }),
 
-  openLiveEvents: (_adminKey: string, onEvent: (ev: MessageEvent) => void): EventSource => {
-    const es = new EventSource("/api/sse/live");
-    es.addEventListener("request_scanned", onEvent as EventListener);
-    es.addEventListener("request_blocked", onEvent as EventListener);
-    return es;
-  },
+  /**
+   * The live feed of scanned and stopped requests, opened with the caller's
+   * own key in a header. Returns the function that closes it.
+   */
+  openLiveEvents: (adminKey: string, handlers: LiveStreamHandlers): (() => void) =>
+    openLiveStream(adminKey, {
+      onStatus: handlers.onStatus,
+      onEvent: (event) => {
+        if (event.type === "request_scanned" || event.type === "request_blocked") handlers.onEvent(event);
+      },
+    }),
 
   getTimeseries: (
     adminKey: string, range: TimeRange = "7d", bucket?: "hour" | "day",

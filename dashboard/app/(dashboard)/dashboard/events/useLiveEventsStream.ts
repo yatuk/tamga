@@ -1,68 +1,30 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
+import type { LiveStreamStatus } from "@/lib/api/live-stream";
 
-export type SSEStatus = "connecting" | "open" | "error" | "closed";
+export type SSEStatus = LiveStreamStatus;
 
+/**
+ * Counts the requests the proxy has scanned since the list was last read.
+ *
+ * The feed is opened with the key this browser uses for everything else.
+ * Without one it is not opened; when the proxy refuses the key it stays shut
+ * until the key changes. Leaving the page closes it.
+ */
 export function useLiveEventsStream(adminKey: string) {
   const [liveCount, setLiveCount] = useState(0);
   const [status, setStatus] = useState<SSEStatus>("connecting");
-  const reconnectAttempts = useRef(0);
-  const esRef = useRef<EventSource | null>(null);
-  const mountedRef = useRef(true);
 
-  useEffect(() => {
-    mountedRef.current = true;
-    if (!adminKey) {
-      setStatus("closed");
-      return;
-    }
-
-    const connect = () => {
-      if (!mountedRef.current) return;
-      setStatus("connecting");
-
-      const es = api.openLiveEvents(adminKey, () => {
-        if (mountedRef.current) {
-          setLiveCount((c) => c + 1);
-        }
-      });
-
-      es.onopen = () => {
-        if (mountedRef.current) {
-          setStatus("open");
-          reconnectAttempts.current = 0;
-        }
-      };
-
-      es.onerror = () => {
-        if (!mountedRef.current) return;
-        es.close();
-        setStatus("error");
-
-        const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000);
-        reconnectAttempts.current += 1;
-
-        if (reconnectAttempts.current > 10) {
-          setStatus("closed");
-          return;
-        }
-
-        setTimeout(connect, delay);
-      };
-
-      esRef.current = es;
-    };
-
-    connect();
-
-    return () => {
-      mountedRef.current = false;
-      esRef.current?.close();
-      esRef.current = null;
-    };
-  }, [adminKey]);
+  useEffect(
+    () =>
+      api.openLiveEvents(adminKey, {
+        onEvent: () => setLiveCount((c) => c + 1),
+        onStatus: setStatus,
+      }),
+    [adminKey],
+  );
 
   const resetCounter = useCallback(() => setLiveCount(0), []);
 

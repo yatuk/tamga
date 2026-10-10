@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 
+const { refuseBuiltInKey } = require("./lib/built-in-key-guard");
+
 const withBundleAnalyzer = process.env.ANALYZE === "true"
   ? require("@next/bundle-analyzer")({ enabled: true })
   : (config) => config;
@@ -55,4 +57,9 @@ const nextConfig = {
   },
 };
 
-module.exports = withBundleAnalyzer(nextConfig);
+// The function form receives the phase, so the build can be refused before
+// it starts. The .env files have been read by the time this runs.
+module.exports = (phase) => {
+  refuseBuiltInKey(phase);
+  return withBundleAnalyzer(nextConfig);
+};

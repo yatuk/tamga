@@ -1,0 +1,8 @@
+# Local settings never go into an image: a NEXT_PUBLIC_ value in one of these
+# would be compiled into the JavaScript every visitor downloads.
+.env
+.env.*
+node_modules
+.next
+test-results
+.playwright-artifacts
