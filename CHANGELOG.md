@@ -3,6 +3,33 @@
 ## v0.9.0 (unreleased)
 
 ### Security
+- **A session could not be ended.** A token was good for 24 hours whatever
+  happened to its owner. Changing or removing a role, `POST
+  /api/v1/team/{id}/sessions/revoke` and `POST /api/v1/auth/logout` now end
+  a user's sessions: at once on the replica that served the call, within 30
+  seconds on the others.
+- Session tokens carry an issuer and an audience and are checked for their
+  algorithm and issue time; a token whose header said `alg: none` over a
+  valid signature was accepted. **Every session token issued before this
+  release is refused: users sign in again.**
+- **An account nobody gave a role has no access**, at sign-in and on every
+  request. Through the Clerk callbacks it became a viewer. To keep that, set
+  `TAMGA_SSO_DEFAULT_ROLE=viewer`; it then applies to GitHub sign-in as well.
+- The Clerk SAML and OIDC callbacks could not complete a sign-in and let the
+  caller supply both halves of the state check. They answer 501, and the
+  code behind them is removed.
+- **A literal webhook URL in a rule's `notify` was shown to every role.** It
+  is masked for everyone below admin in the policy, its history, revisions
+  and proposals, and a policy that holds the mask cannot be saved.
+- Two demotions at the same moment could remove the last admin. An incident's
+  triage, resolve or reopen could go unrecorded in the audit log when the
+  read that followed failed.
+- `POST /api/v1/events/subject` takes the person's selector in the body; the
+  GET form, which puts it in the URL, still works. `DELETE
+  /api/v1/team/{id}/role` removes a role; nothing could before.
+- `POST /api/v1/policies/simulate` gave the scan two seconds, less than the
+  largest sample it accepts needs on a busy machine, and then answered 503.
+  It gives five, the proxy's own default for a scan.
 - A key in the query string is no longer read anywhere. The live stream was
   the last route that took `?key=`; the console sends the header there too.
   **A client that opened `/api/v1/live/events?key=…` must send

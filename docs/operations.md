@@ -35,6 +35,7 @@ Essential environment variables:
 | `TAMGA_MAX_BODY_BYTES` | `1048576` | Max request body size (1 MB) |
 | `TAMGA_MOCK_UPSTREAM` | `false` | Demo mode without real providers |
 | `TAMGA_STRICT_MODE` | `false` | Ignore all policy exceptions |
+| `TAMGA_SSO_DEFAULT_ROLE` | empty | The role of a signed-in account nobody gave one. Empty refuses it. `viewer` is the only other value |
 | `TAMGA_TRUST_ROLE_HEADER` | `false` | Honour `X-Tamga-Role` for policy exceptions. Enable only behind an authenticating gateway that sets the header itself |
 | `TAMGA_REQUIRE_KEY` | `false` | Answer 401 to any proxy request without a valid `X-Tamga-Key`. Leave off until every application has a key |
 | `TAMGA_UPSTREAM_ALLOW` | — | Hosts, addresses and CIDR ranges a policy's provider pool may point at beyond the vendors' own. See [Provider pools](#provider-pools) |
@@ -803,13 +804,14 @@ A caller is the admin key, an API key, or a signed-in user, and has one of
 three roles. The admin key is an admin; an API key of scope `admin`, `write`
 or `read` is an admin, an analyst or a viewer; a key of scope `proxy` is
 refused. A signed-in user has the role set under Team, read on every
-request, so a change takes effect at once.
+request. Changing or removing a role also ends that user's sessions: they
+sign in again and get the new role.
 
 | Role | May |
 |---|---|
 | viewer | read the summary, events, incidents, the policy and its history, patterns, metrics and costs |
 | analyst | also triage incidents, keep saved hunts, export events, read the audit log, edit the open sections of the policy and propose changes, edit patterns |
-| admin | also API keys, alert destinations, team roles, SSO and SCIM, a person's data (`/events/subject`), reload and rollback of the policy, retention and circuit reset |
+| admin | also API keys, alert destinations, team roles, SSO and SCIM, a person's data (`POST /events/subject`, the selector in the body), reload and rollback of the policy, retention and circuit reset |
 
 Every route states the permission it needs, and a route that states none is
 refused to everyone: a new route is closed until someone decides who may
@@ -841,14 +843,30 @@ Things that follow from this:
   token, its header values or the path of its URL.
 - The organisation is the install's own. `X-Tamga-Org-Id` on saved hunts,
   `?org_id=` on `/mttr` and `?org=` on `/budget/stats` are ignored.
-- GitHub sign-in is for accounts that have been given a role. The first one
-  is given with the admin key: `PUT /api/v1/team/{github user id}/role`; a
-  refused sign-in answers with that id. An account without a role is refused,
-  it does not become a viewer. Clerk sign-in still makes an unknown account a
-  viewer: there the Clerk tenant decides who can sign in.
+- Sign-in is for accounts that have been given a role. The first one is
+  given with the admin key: `PUT /api/v1/team/{user id}/role`; a refused
+  sign-in answers 403 `account_not_assigned` with that id. An account
+  without a role has no access, whatever its token says.
+  `TAMGA_SSO_DEFAULT_ROLE=viewer` makes such an account a viewer instead;
+  with GitHub sign-in that admits any GitHub account, so set it only where
+  the identity provider already decides who can sign in.
+- A session can be ended. `POST /api/v1/auth/logout` ends the caller's own
+  sessions, `POST /api/v1/team/{id}/sessions/revoke` ends someone else's,
+  and `DELETE /api/v1/team/{id}/role` takes the role and the sessions away.
+  The replica that serves the call refuses the old tokens at once, the
+  others within 30 seconds. A session token lasts 24 hours otherwise.
+  Replicas need clocks that agree: a token is ended by comparing when it was
+  issued with when the sessions were ended.
+- Sign-in through Clerk does not exist. The callbacks that were there could
+  not complete a sign-in and answer 501.
 - Nobody can change their own role, and the last admin cannot be demoted.
-- A viewer can read the policy, including a literal webhook URL written in a
-  rule's `notify`. Write those as `${NAME_WEBHOOK_URL}` references.
+- A literal webhook URL in a rule's `notify` is shown to an admin only.
+  Anyone else sees its scheme and host and `***masked***`, and the response
+  says so in `X-Tamga-Masked`. A policy that holds the mask cannot be saved
+  (422 `masked_value`), so an analyst cannot save the whole document while
+  it holds a literal URL. Write those as `${NAME_WEBHOOK_URL}` references:
+  they are not masked and nothing changes for an analyst.
+- `POST /api/v1/policies/simulate` gives the scan of its sample five seconds.
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
