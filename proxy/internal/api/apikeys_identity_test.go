@@ -68,7 +68,8 @@ func TestProxyScopedKey_DoesNotOpenTheManagementAPI(t *testing.T) {
 	defer ts.Close()
 
 	get := func(key string) int {
-		req, _ := http.NewRequest("GET", ts.URL+"/api/v1/apikeys", nil)
+		// A route every management role reads: listing keys is for an admin.
+		req, _ := http.NewRequest("GET", ts.URL+"/api/v1/stats", nil)
 		req.Header.Set("X-Tamga-Admin-Key", key)
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {

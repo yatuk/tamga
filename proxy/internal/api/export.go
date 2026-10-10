@@ -73,6 +73,9 @@ func (cfg Config) handleEventsExport(w http.ResponseWriter, r *http.Request) {
 			if e.Timestamp.IsZero() || e.Timestamp.Before(p.Since) || e.Timestamp.After(p.Until) {
 				continue
 			}
+			if !cfg.ownEvent(e) {
+				continue
+			}
 			if !events.MatchEventSearch(e, "", "", false, p.FindingType, p.Severity, p.Category, p.Technique, p.Q, time.Time{}, time.Time{}) {
 				continue
 			}

@@ -56,6 +56,7 @@ func (cfg Config) handleAPIKeyCreate(w http.ResponseWriter, r *http.Request) {
 		cfg.Audit.Append(incidents.AuditEntry{
 			Kind:   "apikey.create",
 			Target: ck.ID,
+			Actor:  actorFromRequest(r),
 			Detail: map[string]interface{}{"label": ck.Label, "scope": ck.Scope, "org_id": ck.OrgID, "role": ck.Role},
 		})
 	}
@@ -77,7 +78,7 @@ func (cfg Config) handleAPIKeyDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if cfg.Audit != nil {
-		cfg.Audit.Append(incidents.AuditEntry{Kind: "apikey.revoke", Target: id})
+		cfg.Audit.Append(incidents.AuditEntry{Kind: "apikey.revoke", Target: id, Actor: actorFromRequest(r)})
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }

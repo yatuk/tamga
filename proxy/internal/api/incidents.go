@@ -95,6 +95,7 @@ func (cfg Config) handleIncidentPatch(w http.ResponseWriter, r *http.Request) {
 		cfg.Audit.Append(incidents.AuditEntry{
 			Kind:   "incident.patch",
 			Target: id,
+			Actor:  actorFromRequest(r),
 			Detail: detail,
 		})
 	}
@@ -144,6 +145,7 @@ func (cfg Config) handleIncidentTriage(w http.ResponseWriter, r *http.Request) {
 		cfg.Audit.Append(incidents.AuditEntry{
 			Kind:   "incident.triage",
 			Target: id,
+			Actor:  actorFromRequest(r),
 			Detail: map[string]interface{}{"assignee": body.Assignee},
 		})
 	}
@@ -187,6 +189,7 @@ func (cfg Config) handleIncidentResolve(w http.ResponseWriter, r *http.Request) 
 		cfg.Audit.Append(incidents.AuditEntry{
 			Kind:   "incident.resolve",
 			Target: id,
+			Actor:  resolvedBy,
 			Detail: map[string]interface{}{"resolution": body.Resolution, "resolved_by": resolvedBy},
 		})
 	}
@@ -217,18 +220,21 @@ func (cfg Config) handleIncidentReopen(w http.ResponseWriter, r *http.Request) {
 		cfg.Audit.Append(incidents.AuditEntry{
 			Kind:   "incident.reopen",
 			Target: id,
+			Actor:  actorFromRequest(r),
 		})
 	}
 	writeJSON(w, http.StatusOK, st)
 }
 
-// handleMTTR processes GET /api/v1/mttr?range=7d&org_id=...
+// handleMTTR processes GET /api/v1/mttr?range=7d. The figures are for the
+// deployment's organisation; no credential names another, so ?org_id= is not
+// read.
 func (cfg Config) handleMTTR(w http.ResponseWriter, r *http.Request) {
 	if cfg.IncidentLifecycle == nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "lifecycle store unavailable"})
 		return
 	}
-	orgID := r.URL.Query().Get("org_id")
+	orgID := cfg.DefaultOrgID
 	rng := strings.ToLower(r.URL.Query().Get("range"))
 	if rng == "" {
 		rng = "7d"

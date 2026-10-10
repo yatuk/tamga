@@ -5,80 +5,110 @@ import (
 	"strings"
 )
 
-// Scopes — what the admin middleware enforces beyond simple auth.
+// Scopes are the permissions a management route asks for. Every route in the
+// table (see routes.go) names exactly one; a route that names none is refused
+// to everyone.
 const (
-	scopePoliciesWrite = "policies:write"
-	scopePoliciesAdmin = "policies:admin" // rollback
-	scopeAPIKeysWrite  = "apikeys:write"
-	scopeWebhooksWrite = "webhooks:write"
-	scopePatternsWrite = "patterns:write"
-	scopeTeamAdmin     = "team:admin"
-	scopePrivacyErase  = "privacy:erase"
-	scopeSSOAdmin      = "sso:admin" // who may sign in, and through whom
+	// scopeRead is every read that no scope below covers. It is the only
+	// scope a viewer holds, and it never opens a write: see scopeFitsMethod.
+	scopeRead = "read"
+
+	scopeEventsExport   = "events:export"   // request data in bulk
+	scopeIncidentsWrite = "incidents:write" // triage
+	scopeHuntsWrite     = "hunts:write"     // saved hunts
+	scopeAuditRead      = "audit:read"      // who did what, with their comments
+	scopePoliciesWrite  = "policies:write"
+	scopePoliciesAdmin  = "policies:admin" // rollback, reload from disk
+	scopePatternsWrite  = "patterns:write"
+	scopeAPIKeysRead    = "apikeys:read" // which keys exist, and whose they are
+	scopeAPIKeysWrite   = "apikeys:write"
+	scopeWebhooksRead   = "webhooks:read" // destinations are stored with their credentials
+	scopeWebhooksWrite  = "webhooks:write"
+	scopeTeamAdmin      = "team:admin"
+	scopePrivacyAccess  = "privacy:access" // everything stored about one person
+	scopePrivacyErase   = "privacy:erase"
+	scopeSSOAdmin       = "sso:admin"         // who may sign in, and through whom
+	scopeScimAdmin      = "scim:admin"        // provisioned users
+	scopeMaintenance    = "maintenance:admin" // retention run, circuit reset
 )
 
-// roleScopes maps a RBAC role to the set of scopes it carries. `admin`
-// holds every scope implicitly.
+// codePermissionDenied is the code of the 403 the guard answers.
+const codePermissionDenied = "permission_denied"
+
+// roleScopes maps a RBAC role to the set of scopes it carries. A role holds
+// what is listed and nothing else: there is no scope every caller has.
 var roleScopes = map[string][]string{
 	"admin": {
-		scopePoliciesWrite, scopePoliciesAdmin, scopeAPIKeysWrite, scopeWebhooksWrite,
-		scopePatternsWrite, scopeTeamAdmin, scopePrivacyErase, scopeSSOAdmin,
+		scopeRead, scopeEventsExport, scopeIncidentsWrite, scopeHuntsWrite, scopeAuditRead,
+		scopePoliciesWrite, scopePoliciesAdmin, scopePatternsWrite,
+		scopeAPIKeysRead, scopeAPIKeysWrite, scopeWebhooksRead, scopeWebhooksWrite,
+		scopeTeamAdmin, scopePrivacyAccess, scopePrivacyErase, scopeSSOAdmin,
+		scopeScimAdmin, scopeMaintenance,
 	},
+	// Triage, and the parts of detection an analyst owns: the policy
+	// sections refusePrivileged leaves open (rules, output_rules,
+	// custom_entities, competitors) and the custom patterns beside them.
 	"analyst": {
+		scopeRead, scopeEventsExport, scopeIncidentsWrite, scopeHuntsWrite, scopeAuditRead,
 		scopePoliciesWrite, scopePatternsWrite,
 	},
-	"viewer": {},
+	"viewer": {scopeRead},
 }
 
-// routeScope returns the scope required for a (method, path) tuple. An
-// empty string means the request is allowed without a role scope (admin
-// key or valid API-key scope still apply).
-func routeScope(method, path string) string {
-	path = strings.TrimPrefix(path, "/api/v1")
-	switch {
-	case method == http.MethodDelete && strings.HasPrefix(path, "/events/subject"):
-		return scopePrivacyErase
-	case strings.HasPrefix(path, "/policies/rollback"):
-		return scopePoliciesAdmin
-	// Proposals are open to every role that may write the policy: under
-	// dual control they are its only way in. What a proposal may change,
-	// and who may approve it, is decided per section by the handlers (see
-	// refusePrivileged), not by the route.
-	case method != http.MethodGet && strings.HasPrefix(path, "/policies"):
-		return scopePoliciesWrite
-	case method != http.MethodGet && strings.HasPrefix(path, "/apikeys"):
-		return scopeAPIKeysWrite
-	case method != http.MethodGet && strings.HasPrefix(path, "/webhooks"):
-		return scopeWebhooksWrite
-	case method != http.MethodGet && strings.HasPrefix(path, "/patterns"):
-		return scopePatternsWrite
-	case strings.HasPrefix(path, "/team"):
-		return scopeTeamAdmin
-	// Reading the SSO settings is open like the other settings; changing
-	// which identity provider is trusted is for an admin.
-	case method != http.MethodGet && strings.HasPrefix(path, "/settings/sso"):
-		return scopeSSOAdmin
-	}
-	return ""
-}
-
-// roleHasScope reports whether the given role carries scope.
+// roleHasScope reports whether the given role carries scope. No role carries
+// the empty scope, and a role that is not in roleScopes carries nothing.
 func roleHasScope(role, scope string) bool {
 	if scope == "" {
-		return true
-	}
-	role = strings.ToLower(strings.TrimSpace(role))
-	if role == "admin" {
-		return true
-	}
-	scopes, ok := roleScopes[role]
-	if !ok {
 		return false
 	}
-	for _, s := range scopes {
+	role = strings.ToLower(strings.TrimSpace(role))
+	for _, s := range roleScopes[role] {
 		if s == scope {
 			return true
 		}
 	}
 	return false
+}
+
+// minimumRole returns the least privileged role that carries scope, or ""
+// when no role does.
+func minimumRole(scope string) string {
+	for _, role := range []string{"viewer", "analyst", "admin"} {
+		if roleHasScope(role, scope) {
+			return role
+		}
+	}
+	return ""
+}
+
+// safeMethod reports whether a method only reads.
+func safeMethod(method string) bool {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		return true
+	}
+	return false
+}
+
+// scopeFitsMethod reports whether a route may ask for scope on method. A
+// write asks for more than the scope a viewer holds, however the table was
+// filled in.
+func scopeFitsMethod(method, scope string) bool {
+	if scope == "" {
+		return false
+	}
+	return safeMethod(method) || scope != scopeRead
+}
+
+// writeForbidden answers an authenticated caller whose role does not carry
+// the scope a route asks for.
+func writeForbidden(w http.ResponseWriter, role, scope string) {
+	if role == "" {
+		role = "none"
+	}
+	writeJSON(w, http.StatusForbidden, map[string]string{
+		"error":               "role " + role + " lacks " + scope,
+		"code":                codePermissionDenied,
+		"required_permission": scope,
+	})
 }

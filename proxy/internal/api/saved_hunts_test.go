@@ -259,7 +259,9 @@ func TestSavedHuntOrgIsolation(t *testing.T) {
 		t.Fatalf("create org-a: expected 201, got %d", rec.Code)
 	}
 
-	// List with org-b via header — should be empty.
+	// The organisation is the deployment's. X-Tamga-Org-Id is a header the
+	// client writes, and it reaches these handlers only through adminAuth
+	// here, with no role: it does not choose another organisation.
 	req = httptest.NewRequest(http.MethodGet, "/api/v1/saved-hunts", nil)
 	req.Header.Set("X-Tamga-Admin-Key", "test-key")
 	req.Header.Set("X-Tamga-Org-Id", "org-b")
@@ -275,11 +277,11 @@ func TestSavedHuntOrgIsolation(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&listResp); err != nil {
 		t.Fatalf("list org-b: decode: %v", err)
 	}
-	if listResp.Total != 0 {
-		t.Fatalf("list org-b: expected 0 items, got %d", listResp.Total)
+	if listResp.Total != 1 || listResp.Items[0].OrgID != "org-a" {
+		t.Fatalf("list with an org-b header: expected org-a's 1 hunt, got %d", listResp.Total)
 	}
 
-	// Delete with org-b should 404 (wrong org).
+	// Delete of an id that does not exist is 404.
 	req = httptest.NewRequest(http.MethodDelete, "/api/v1/saved-hunts/nonexistent", nil)
 	req.Header.Set("X-Tamga-Admin-Key", "test-key")
 	req.Header.Set("X-Tamga-Org-Id", "org-b")

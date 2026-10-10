@@ -26,15 +26,16 @@ func TestAdminAuth_QueryParamKey(t *testing.T) {
 	ts := httptest.NewServer(testMux(cfg))
 	defer ts.Close()
 
-	// GET /stats?key=my-api-key should authenticate via query param.
+	// A key in the query string is read for the live stream only (see
+	// TestKeyInQueryOnlyForLiveStream): anywhere else it is no credential.
 	req, _ := http.NewRequest("GET", ts.URL+"/api/v1/stats?key=my-api-key", nil)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("want 200 via query param key, got %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("want 401 for a key in the query string, got %d", resp.StatusCode)
 	}
 }
 
@@ -106,9 +107,9 @@ func TestAdminAuth_NoAdminConfigured(t *testing.T) {
 // -- RBAC: routeScope --
 
 func TestRouteScope_Policies(t *testing.T) {
-	// GET /policies → no scope required
-	if s := routeScope("GET", "/api/v1/policies"); s != "" {
-		t.Errorf("GET policies: want empty scope, got %q", s)
+	// GET /policies → the read every role has
+	if s := routeScope("GET", "/api/v1/policies"); s != scopeRead {
+		t.Errorf("GET policies: want %q, got %q", scopeRead, s)
 	}
 	// POST /policies/validate → policies:write
 	if s := routeScope("POST", "/api/v1/policies/validate"); s != scopePoliciesWrite {
@@ -125,8 +126,8 @@ func TestRouteScope_Policies(t *testing.T) {
 }
 
 func TestRouteScope_APIKeys(t *testing.T) {
-	if s := routeScope("GET", "/api/v1/apikeys"); s != "" {
-		t.Errorf("GET apikeys: want empty scope, got %q", s)
+	if s := routeScope("GET", "/api/v1/apikeys"); s != scopeAPIKeysRead {
+		t.Errorf("GET apikeys: want %q, got %q", scopeAPIKeysRead, s)
 	}
 	if s := routeScope("POST", "/api/v1/apikeys"); s != scopeAPIKeysWrite {
 		t.Errorf("POST apikeys: want %q, got %q", scopeAPIKeysWrite, s)
@@ -137,8 +138,8 @@ func TestRouteScope_APIKeys(t *testing.T) {
 }
 
 func TestRouteScope_Webhooks(t *testing.T) {
-	if s := routeScope("GET", "/api/v1/webhooks"); s != "" {
-		t.Errorf("GET webhooks: want empty scope, got %q", s)
+	if s := routeScope("GET", "/api/v1/webhooks"); s != scopeWebhooksRead {
+		t.Errorf("GET webhooks: want %q, got %q", scopeWebhooksRead, s)
 	}
 	if s := routeScope("POST", "/api/v1/webhooks"); s != scopeWebhooksWrite {
 		t.Errorf("POST webhooks: want %q, got %q", scopeWebhooksWrite, s)
@@ -146,8 +147,8 @@ func TestRouteScope_Webhooks(t *testing.T) {
 }
 
 func TestRouteScope_Patterns(t *testing.T) {
-	if s := routeScope("GET", "/api/v1/patterns"); s != "" {
-		t.Errorf("GET patterns: want empty scope, got %q", s)
+	if s := routeScope("GET", "/api/v1/patterns"); s != scopeRead {
+		t.Errorf("GET patterns: want %q, got %q", scopeRead, s)
 	}
 	if s := routeScope("PUT", "/api/v1/patterns/p1"); s != scopePatternsWrite {
 		t.Errorf("PUT patterns: want %q, got %q", scopePatternsWrite, s)
@@ -170,7 +171,7 @@ func TestRouteScope_SubjectErase(t *testing.T) {
 }
 
 func TestRouteScope_HealthNoScope(t *testing.T) {
-	// Health endpoints are mounted outside adminAuth, but routeScope should return empty.
+	// Health endpoints are public: they are mounted outside adminAuth and ask for no scope.
 	if s := routeScope("GET", "/api/v1/health/detailed"); s != "" {
 		t.Errorf("GET health: want empty scope, got %q", s)
 	}
@@ -194,9 +195,17 @@ func TestRoleHasScope(t *testing.T) {
 		}
 	})
 
-	t.Run("admin has empty scope", func(t *testing.T) {
-		if !roleHasScope("admin", "") {
-			t.Error("admin should be allowed for empty scope")
+	t.Run("nobody has the empty scope", func(t *testing.T) {
+		for _, role := range []string{"admin", "analyst", "viewer", ""} {
+			if roleHasScope(role, "") {
+				t.Errorf("%q should not be allowed for the empty scope", role)
+			}
+		}
+	})
+
+	t.Run("admin does not have a scope nobody declared", func(t *testing.T) {
+		if roleHasScope("admin", "nosuch:scope") {
+			t.Error("admin should not hold an unknown scope")
 		}
 	})
 
@@ -222,9 +231,14 @@ func TestRoleHasScope(t *testing.T) {
 		if roleHasScope("viewer", scopeAPIKeysWrite) {
 			t.Error("viewer should NOT have apikeys:write")
 		}
-		// Empty scope is allowed for everyone.
-		if !roleHasScope("viewer", "") {
-			t.Error("viewer should be allowed for empty scope")
+		// Reading is all a viewer holds.
+		if !roleHasScope("viewer", scopeRead) {
+			t.Error("viewer should have read")
+		}
+		for _, s := range roleScopes["admin"] {
+			if s != scopeRead && roleHasScope("viewer", s) {
+				t.Errorf("viewer should NOT have %q", s)
+			}
 		}
 	})
 
@@ -261,17 +275,23 @@ func TestAPIKeyScopeToRole(t *testing.T) {
 	}
 }
 
-// -- needsWriteScope --
+// -- safeMethod / scopeFitsMethod --
 
-func TestNeedsWriteScope(t *testing.T) {
+func TestWritesNeedMoreThanRead(t *testing.T) {
 	for _, m := range []string{http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete} {
-		if !needsWriteScope(m) {
-			t.Errorf("%s should need write scope", m)
+		if safeMethod(m) || scopeFitsMethod(m, scopeRead) {
+			t.Errorf("%s should need more than read", m)
+		}
+		if !scopeFitsMethod(m, scopeIncidentsWrite) {
+			t.Errorf("%s should be open to a write scope", m)
 		}
 	}
 	for _, m := range []string{http.MethodGet, http.MethodHead, http.MethodOptions} {
-		if needsWriteScope(m) {
-			t.Errorf("%s should NOT need write scope", m)
+		if !safeMethod(m) || !scopeFitsMethod(m, scopeRead) {
+			t.Errorf("%s should be open to read", m)
+		}
+		if scopeFitsMethod(m, "") {
+			t.Errorf("%s should not be open without a scope", m)
 		}
 	}
 }
@@ -425,14 +445,16 @@ func TestAdminAuth_ClerkUserScopeForbidden(t *testing.T) {
 	ts := httptest.NewServer(testMux(cfg))
 	defer ts.Close()
 
-	// Viewer tries to POST /apikeys (needs apikeys:write scope) → 403.
+	// A user id header with a key that is no credential is nobody: 401, the
+	// same as without the header. A 403 here would tell an unauthenticated
+	// caller that the user exists and which role it has.
 	req, _ := http.NewRequest("POST", ts.URL+"/api/v1/apikeys", nil)
 	req.Header.Set("X-Tamga-User-Id", "clerk-viewer-2")
 	req.Header.Set("X-Tamga-Admin-Key", "some-key")
 	resp, _ := http.DefaultClient.Do(req)
 	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusForbidden {
-		t.Errorf("viewer POST apikeys: want 403, got %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("viewer header with no credential: want 401, got %d", resp.StatusCode)
 	}
 }
 
@@ -527,10 +549,9 @@ func TestRBAC_PolicyExceptionRoleIntegration(t *testing.T) {
 	// Verify that policy.ValidRoles aligns with the RBAC system's roleHasScope.
 	// The policy exception framework should recognise all roles that the RBAC
 	// system defines and additionally support the security_lead role.
-	policyValidRoles := []string{"admin", "analyst", "viewer", "security_lead"}
-	for _, role := range policyValidRoles {
-		if !roleHasScope(role, "") {
-			t.Errorf("role %q should have empty scope (exists in policy.ValidRoles)", role)
+	for _, role := range []string{"admin", "analyst", "viewer"} {
+		if !roleHasScope(role, scopeRead) {
+			t.Errorf("role %q should be able to read", role)
 		}
 	}
 
@@ -539,8 +560,10 @@ func TestRBAC_PolicyExceptionRoleIntegration(t *testing.T) {
 	if roleHasScope("security_lead", scopePoliciesWrite) {
 		t.Error("security_lead should NOT have policies:write (not in RBAC scopes)")
 	}
-	if !roleHasScope("security_lead", "") {
-		t.Error("security_lead should have empty scope (authenticated)")
+	// It is a role of the exception framework only: on the management API
+	// it opens nothing, reads included.
+	if roleHasScope("security_lead", scopeRead) {
+		t.Error("security_lead is not a management role and should not read")
 	}
 
 	// Verify that admin has implicit exception capability in the policy framework
@@ -565,9 +588,9 @@ func TestRBAC_PolicyExceptionRoleIsolation(t *testing.T) {
 			t.Errorf("viewer should NOT have scope %q", s)
 		}
 	}
-	// Viewer should authenticate successfully (empty scope).
-	if !roleHasScope("viewer", "") {
-		t.Error("viewer should have empty scope (authenticated)")
+	// Viewer reads, and that is all.
+	if !roleHasScope("viewer", scopeRead) {
+		t.Error("viewer should have read")
 	}
 }
 

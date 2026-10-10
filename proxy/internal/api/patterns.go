@@ -65,6 +65,7 @@ func (cfg Config) handlePatternCreate(w http.ResponseWriter, r *http.Request) {
 		cfg.Audit.Append(incidents.AuditEntry{
 			Kind:   "pattern.create",
 			Target: out.ID,
+			Actor:  actorFromRequest(r),
 			Detail: map[string]interface{}{"name": out.Name, "kind": out.Kind, "severity": out.Severity},
 		})
 	}
@@ -98,6 +99,7 @@ func (cfg Config) handlePatternUpdate(w http.ResponseWriter, r *http.Request) {
 		cfg.Audit.Append(incidents.AuditEntry{
 			Kind:   "pattern.update",
 			Target: out.ID,
+			Actor:  actorFromRequest(r),
 			Detail: map[string]interface{}{"name": out.Name, "kind": out.Kind, "severity": out.Severity, "enabled": out.Enabled},
 		})
 	}
@@ -122,7 +124,7 @@ func (cfg Config) handlePatternDelete(w http.ResponseWriter, r *http.Request) {
 		cfg.CustomScanner.Refresh()
 	}
 	if cfg.Audit != nil {
-		cfg.Audit.Append(incidents.AuditEntry{Kind: "pattern.delete", Target: id})
+		cfg.Audit.Append(incidents.AuditEntry{Kind: "pattern.delete", Target: id, Actor: actorFromRequest(r)})
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }

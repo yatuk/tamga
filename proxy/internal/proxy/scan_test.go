@@ -373,20 +373,21 @@ func TestScan_Auth(t *testing.T) {
 }
 
 // managementRoutes reads the routes behind the admin middleware out of the
-// router's source, so a route added there is covered without touching this.
+// route table's source, so a route added there is covered without touching
+// this. An entry with a scope is a protected route; the public ones have none.
 func managementRoutes(t *testing.T) [][2]string {
 	t.Helper()
-	src, err := os.ReadFile("../api/router.go")
+	src, err := os.ReadFile("../api/routes.go")
 	if err != nil {
 		t.Fatal(err)
 	}
 	var out [][2]string
 	params := regexp.MustCompile(`\{[^}]+\}`)
-	for _, m := range regexp.MustCompile(`protected\.HandleFunc\("([A-Z]+) (/[^"]*)"`).FindAllSubmatch(src, -1) {
+	for _, m := range regexp.MustCompile(`\{method: "([A-Z]+)", path: "(/[^"]*)", scope: `).FindAllSubmatch(src, -1) {
 		out = append(out, [2]string{string(m[1]), params.ReplaceAllString(string(m[2]), "x")})
 	}
 	if len(out) < 50 {
-		t.Fatalf("found %d management routes in router.go, expected the full table", len(out))
+		t.Fatalf("found %d management routes in routes.go, expected the full table", len(out))
 	}
 	return out
 }

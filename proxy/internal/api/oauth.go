@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/yatuk/tamga/internal/auth"
-	"github.com/yatuk/tamga/internal/users"
 )
 
 // handleGitHubLogin redirects the user to GitHub's OAuth authorize page (step 1).
@@ -114,12 +113,9 @@ func (cfg Config) handleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Determine local RBAC role.
-	role := users.RoleViewer // default: read-only
-	if cfg.Users != nil {
-		if existingRole, ok := cfg.Users.Role(fmt.Sprintf("%d", ghUser.ID)); ok {
-			role = existingRole
-		}
+	role, ok := cfg.gitHubRole(w, ghUser.ID)
+	if !ok {
+		return
 	}
 
 	// Issue Tamga JWT (24-hour session).
@@ -148,6 +144,30 @@ func (cfg Config) handleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 			"role":   claims.Role,
 		},
 	})
+}
+
+// codeAccountNotAssigned is the code of the 403 a sign-in gets when nobody
+// has given the account a role.
+const codeAccountNotAssigned = "account_not_assigned"
+
+// gitHubRole returns the role a GitHub account signs in with. Anyone can
+// have a GitHub account, so one the user store does not know gets no
+// session: it answers 403 and returns false. An admin lets an account in by
+// assigning it a role (PUT /team/{github user id}/role), which the static
+// admin key can do before any user exists.
+func (cfg Config) gitHubRole(w http.ResponseWriter, id int64) (string, bool) {
+	sub := fmt.Sprintf("%d", id)
+	if cfg.Users != nil {
+		if role, ok := cfg.Users.Role(sub); ok {
+			return role, true
+		}
+	}
+	writeJSON(w, http.StatusForbidden, map[string]string{
+		"error":          "this GitHub account has not been given access; an admin assigns it a role first",
+		"code":           codeAccountNotAssigned,
+		"github_user_id": sub,
+	})
+	return "", false
 }
 
 // handleSession validates the Bearer JWT and returns the current user session.
@@ -231,11 +251,9 @@ func (cfg Config) handleGitHubExchange(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	role := users.RoleViewer
-	if cfg.Users != nil {
-		if existingRole, ok := cfg.Users.Role(fmt.Sprintf("%d", ghUser.ID)); ok {
-			role = existingRole
-		}
+	role, ok := cfg.gitHubRole(w, ghUser.ID)
+	if !ok {
+		return
 	}
 
 	claims := auth.Claims{

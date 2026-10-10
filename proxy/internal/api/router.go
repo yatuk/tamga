@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"net/http"
 	"os"
@@ -133,96 +134,24 @@ type TierEnforcer interface {
 
 // NewHandler serves /api/v1/* (mount with mux.Handle("/api/v1/", handler)).
 func NewHandler(cfg Config) http.Handler {
+	return newHandler(cfg, routes(&cfg))
+}
+
+// newHandler serves a route table. The table is the only source of routes:
+// see routes.go.
+func newHandler(cfg Config, table []route) http.Handler {
 	inner := http.NewServeMux()
-	// Public for uptime checks, which get a reduced body. The full body
-	// needs a management credential: see healthFull.
-	inner.HandleFunc("GET /health/detailed", cfg.handleHealthDetailed)
-	inner.HandleFunc("GET /health/detail", cfg.handleHealthDetail)
-
-	// OAuth / SSO (no auth required — public endpoints).
-	inner.HandleFunc("GET /auth/github/login", cfg.handleGitHubLogin)
-	inner.HandleFunc("GET /auth/github/callback", cfg.handleGitHubCallback)
-	inner.HandleFunc("POST /auth/github/exchange", cfg.handleGitHubExchange)
-	inner.HandleFunc("GET /auth/session", cfg.handleSession)
-	inner.HandleFunc("POST /auth/clerk/saml/callback", handleClerkSamlCallback(&cfg))
-	inner.HandleFunc("POST /auth/clerk/oidc/callback", handleClerkOidcCallback(&cfg))
-
-	// The one route a proxy-scope key opens. See Config.Scan.
-	if cfg.Scan != nil {
-		inner.Handle("POST /scan", cfg.Scan)
+	protected := newGuard()
+	for _, rt := range table {
+		switch {
+		case rt.handler == nil:
+			// Left out of this deployment (Config.Scan).
+		case rt.public != "":
+			inner.Handle(rt.pattern(), rt.handler)
+		default:
+			protected.handle(rt)
+		}
 	}
-
-	protected := http.NewServeMux()
-	protected.HandleFunc("GET /stats", cfg.handleStats)
-	protected.HandleFunc("GET /events", cfg.handleEvents)
-	protected.HandleFunc("GET /events/{request_id}", cfg.handleEventDetail)
-	protected.HandleFunc("GET /events/export", cfg.handleEventsExport)
-	protected.HandleFunc("POST /events/export", cfg.handleEventsExport)
-	protected.HandleFunc("GET /timeseries", cfg.handleTimeseries)
-	protected.HandleFunc("GET /findings/breakdown", cfg.handleBreakdown)
-	protected.HandleFunc("GET /stats/models", cfg.handleModelStats)
-	protected.HandleFunc("GET /incidents", cfg.handleIncidentList)
-	protected.HandleFunc("GET /incidents/{request_id}", cfg.handleIncidentGet)
-	protected.HandleFunc("PATCH /incidents/{request_id}", cfg.handleIncidentPatch)
-	protected.HandleFunc("POST /incidents/{request_id}/triage", cfg.handleIncidentTriage)
-	protected.HandleFunc("POST /incidents/{request_id}/resolve", cfg.handleIncidentResolve)
-	protected.HandleFunc("POST /incidents/{request_id}/reopen", cfg.handleIncidentReopen)
-	protected.HandleFunc("GET /mttr", cfg.handleMTTR)
-	protected.HandleFunc("GET /auditlog", cfg.handleAuditList)
-	protected.HandleFunc("GET /live/events", cfg.handleLiveEvents)
-	protected.HandleFunc("GET /policies", cfg.handlePolicies)
-	protected.HandleFunc("POST /policies/reload", cfg.handlePoliciesReload)
-	protected.HandleFunc("PUT /policies", cfg.handlePolicyPut)
-	protected.HandleFunc("POST /policies/validate", cfg.handlePolicyValidate)
-	protected.HandleFunc("POST /policies/simulate", cfg.handlePolicySimulate)
-	protected.HandleFunc("GET /policies/custom-entities", cfg.handleCustomEntityList)
-	protected.HandleFunc("POST /policies/custom-entities", cfg.handleCustomEntityCreate)
-	protected.HandleFunc("DELETE /policies/custom-entities/{name}", cfg.handleCustomEntityDelete)
-	protected.HandleFunc("GET /apikeys", cfg.handleAPIKeyList)
-	protected.HandleFunc("POST /apikeys", cfg.handleAPIKeyCreate)
-	protected.HandleFunc("DELETE /apikeys/{id}", cfg.handleAPIKeyDelete)
-	protected.HandleFunc("GET /webhooks", cfg.handleWebhookList)
-	protected.HandleFunc("POST /webhooks", cfg.handleWebhookCreate)
-	protected.HandleFunc("POST /webhooks/{id}/test", cfg.handleWebhookTest)
-	protected.HandleFunc("DELETE /webhooks/{id}", cfg.handleWebhookDelete)
-	protected.HandleFunc("GET /metrics", cfg.handleMetrics)
-	protected.HandleFunc("GET /metrics/histograms", cfg.handleMetricsHistograms)
-	protected.HandleFunc("GET /ratelimit/stats", cfg.handleRatelimitStats)
-	protected.HandleFunc("GET /patterns", cfg.handlePatternList)
-	protected.HandleFunc("POST /patterns", cfg.handlePatternCreate)
-	protected.HandleFunc("PUT /patterns/{id}", cfg.handlePatternUpdate)
-	protected.HandleFunc("DELETE /patterns/{id}", cfg.handlePatternDelete)
-	protected.HandleFunc("GET /saved-hunts", cfg.handleSavedHuntList)
-	protected.HandleFunc("POST /saved-hunts", cfg.handleSavedHuntCreate)
-	protected.HandleFunc("PUT /saved-hunts/{id}", cfg.handleSavedHuntUpdate)
-	protected.HandleFunc("DELETE /saved-hunts/{id}", cfg.handleSavedHuntDelete)
-	protected.HandleFunc("GET /team", cfg.handleTeamList)
-	protected.HandleFunc("PUT /team/{id}/role", cfg.handleTeamRolePut)
-	protected.HandleFunc("GET /policies/history", cfg.handlePolicyHistory)
-	protected.HandleFunc("GET /policies/revisions/{id}", cfg.handlePolicyRevisionGet)
-	protected.HandleFunc("POST /policies/rollback/{id}", cfg.handlePolicyRollback)
-	protected.HandleFunc("GET /policies/proposals", cfg.handleProposalList)
-	protected.HandleFunc("POST /policies/proposals", cfg.handleProposalCreate)
-	protected.HandleFunc("POST /policies/proposals/{id}/approve", cfg.handleProposalApprove)
-	protected.HandleFunc("POST /policies/proposals/{id}/reject", cfg.handleProposalReject)
-	protected.HandleFunc("GET /audit/verify", cfg.handleAuditVerify)
-	protected.HandleFunc("GET /events/subject", cfg.handleSubjectAccess)
-	protected.HandleFunc("DELETE /events/subject", cfg.handleSubjectErase)
-	protected.HandleFunc("GET /budget/stats", cfg.handleBudgetStats)
-	protected.HandleFunc("POST /maintenance/retention", cfg.handleRetentionRun)
-	protected.HandleFunc("POST /maintenance/circuit-reset", cfg.handleCircuitReset)
-	protected.HandleFunc("GET /providers", cfg.handleProvidersList)
-	protected.HandleFunc("GET /billing/pricing", cfg.handlePricingList)
-	protected.HandleFunc("GET /billing/costs/breakdown", cfg.handleCostsBreakdown)
-	protected.HandleFunc("GET /reports/owasp/pdf", cfg.handleOwaspPdfReport)
-	protected.HandleFunc("GET /reports/incident/pdf", cfg.handleIncidentPdfReport)
-	protected.HandleFunc("GET /settings/sso", cfg.handleSSOGet)
-	protected.HandleFunc("PUT /settings/sso", cfg.handleSSOPut)
-	protected.HandleFunc("GET /scim/v2/Users", cfg.handleScimListUsers)
-	protected.HandleFunc("POST /scim/v2/Users", cfg.handleScimCreateUser)
-	protected.HandleFunc("GET /scim/v2/Users/{id}", cfg.handleScimGetUser)
-	protected.HandleFunc("PATCH /scim/v2/Users/{id}", cfg.handleScimPatchUser)
-	protected.HandleFunc("DELETE /scim/v2/Users/{id}", cfg.handleScimDeleteUser)
 
 	inner.Handle("/", adminAuth(cfg)(protected))
 
@@ -232,14 +161,6 @@ func NewHandler(cfg Config) http.Handler {
 	pathSafe := middleware.PathNormalize(inner)
 	chained := corsMiddleware(cfg)(pathSafe)
 	return http.StripPrefix("/api/v1", chained)
-}
-
-func needsWriteScope(method string) bool {
-	switch method {
-	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
-		return true
-	}
-	return false
 }
 
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {
@@ -331,6 +252,10 @@ func parseOriginAllowlist(raw string) map[string]bool {
 	return set
 }
 
+// adminAuth establishes who a management request comes from and with what
+// role, and answers 401 when it comes from no one. It does not decide what
+// the role may do: every kind of credential ends in the same identity, and
+// the guard behind it (see routes.go) authorises all of them alike.
 func adminAuth(cfg Config) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -342,17 +267,15 @@ func adminAuth(cfg Config) func(http.Handler) http.Handler {
 				return
 			}
 			key := r.Header.Get("X-Tamga-Admin-Key")
-			if key == "" {
-				// EventSource cannot send custom headers. For SSE/export GETs we
-				// accept the admin key as a query parameter as a last resort.
+			if key == "" && keyInQueryAllowed(r) {
 				key = r.URL.Query().Get("key")
 			}
 			// 1. Primary admin key (full access, all scopes).
-			if key == cfg.AdminKey && cfg.AdminKey != "" {
+			if cfg.AdminKey != "" && subtle.ConstantTimeCompare([]byte(key), []byte(cfg.AdminKey)) == 1 {
 				next.ServeHTTP(w, withIdentity(r, ActorAdminKey, "admin"))
 				return
 			}
-			// 2. Scoped API key. Writes require write/admin scope; reads accept any.
+			// 2. Scoped API key. Its scope is its role: see apiKeyScopeToRole.
 			if cfg.APIKeys != nil {
 				if meta, ok := cfg.APIKeys.Verify(key); ok {
 					// A proxy key identifies an application on the proxy
@@ -361,47 +284,19 @@ func adminAuth(cfg Config) func(http.Handler) http.Handler {
 						writeJSON(w, http.StatusForbidden, map[string]string{"error": "this key is for the proxy path, not the management API"})
 						return
 					}
-					if needsWriteScope(r.Method) && meta.Scope == "read" {
-						writeJSON(w, http.StatusForbidden, map[string]string{"error": "write scope required"})
-						return
-					}
-					// Map scope -> implicit role and enforce route scopes.
-					role := apiKeyScopeToRole(meta.Scope)
-					if required := routeScope(r.Method, r.URL.Path); required != "" && !roleHasScope(role, required) {
-						writeJSON(w, http.StatusForbidden, map[string]string{"error": "missing scope: " + required})
-						return
-					}
 					// The actor is the key's record, by id. The label is
 					// free text and two keys may share it.
-					next.ServeHTTP(w, withIdentity(r, actorAPIKeyPrefix+meta.ID, role))
+					next.ServeHTTP(w, withIdentity(r, actorAPIKeyPrefix+meta.ID, apiKeyScopeToRole(meta.Scope)))
 					return
 				}
 			}
-			// 3. RBAC via Clerk user header (requires paired admin/API key; this
-			// branch is a no-crypto fallback used only by the dashboard when the
-			// operator has already authenticated via Clerk in the browser and
-			// the middleware wants to enforce role boundaries).
-			if userID := r.Header.Get("X-Tamga-User-Id"); userID != "" && cfg.Users != nil {
-				if role, ok := cfg.Users.Role(userID); ok {
-					if required := routeScope(r.Method, r.URL.Path); required != "" && !roleHasScope(role, required) {
-						writeJSON(w, http.StatusForbidden, map[string]string{"error": "role " + role + " lacks " + required})
-						return
-					}
-					// Still require the admin key alongside the user header so we
-					// never let an unauthenticated HTTP client self-assert a role.
-					if key == "" {
-						writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "API key required"})
-						return
-					}
-				}
-			}
-			// 4. JWT Bearer token (SSO / GitHub OAuth).
-			if cfg.JWTSecret != "" {
-				if claims := validateJWTFromRequest(r, cfg.JWTSecret); claims != nil {
-					if required := routeScope(r.Method, r.URL.Path); required != "" && !roleHasScope(claims.Role, required) {
-						writeJSON(w, http.StatusForbidden, map[string]string{"error": "role " + claims.Role + " lacks " + required})
-						return
-					}
+			// X-Tamga-User-Id is not a credential and is not read here: a
+			// header the client writes neither grants a role nor is told
+			// which role its user has.
+			// 3. JWT Bearer token (SSO / GitHub OAuth).
+			// The secret is trimmed as it is where the token is signed.
+			if secret := strings.TrimSpace(cfg.JWTSecret); secret != "" {
+				if claims := validateJWTFromRequest(r, secret); claims != nil {
 					// The headers are kept for handlers that read them; the
 					// identity handlers act on is the one in the context.
 					r.Header.Set("X-Tamga-User-Id", claims.Sub)
@@ -412,7 +307,7 @@ func adminAuth(cfg Config) func(http.Handler) http.Handler {
 					if subject == "" {
 						subject = claims.Email
 					}
-					next.ServeHTTP(w, withIdentity(r, actorUserPrefix+subject, strings.ToLower(strings.TrimSpace(claims.Role))))
+					next.ServeHTTP(w, withIdentity(r, actorUserPrefix+subject, cfg.sessionRole(claims)))
 					return
 				}
 			}
@@ -421,6 +316,38 @@ func adminAuth(cfg Config) func(http.Handler) http.Handler {
 	}
 }
 
+// keyInQueryAllowed reports whether a request may carry its key as ?key=.
+// A URL ends up in access logs and browser history, so a key belongs in a
+// header. The live stream is the one exception: EventSource cannot send
+// one.
+func keyInQueryAllowed(r *http.Request) bool {
+	return r.Method == http.MethodGet && r.URL.Path == "/live/events"
+}
+
+// sessionRole returns the role a session token acts with now. The token says
+// which role its user had at sign-in, up to a day ago; the user store says
+// which it has today, so a changed or withdrawn role takes effect on the
+// next request. A user the store does not know has no assigned role and is
+// a viewer, whatever the token says. Without a user store the token is all
+// there is. A role that is none of the three opens nothing: see roleHasScope.
+func (cfg Config) sessionRole(claims *auth.Claims) string {
+	role := strings.ToLower(strings.TrimSpace(claims.Role))
+	if cfg.Users == nil {
+		return role
+	}
+	if claims.Sub != "" {
+		if current, ok := cfg.Users.Role(claims.Sub); ok {
+			return strings.ToLower(strings.TrimSpace(current))
+		}
+	}
+	if role == users.RoleAdmin || role == users.RoleAnalyst {
+		return users.RoleViewer
+	}
+	return role
+}
+
+// apiKeyScopeToRole gives the role an API key acts with. A scope that is
+// not known is the least of them.
 func apiKeyScopeToRole(scope string) string {
 	switch scope {
 	case "admin":
@@ -541,7 +468,7 @@ func (cfg Config) handleEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	match := func(e events.Event) bool {
-		return events.MatchEventSearch(e, p.Action, p.Provider, p.ShadowOnly, p.FindingType, p.Severity, p.Category, p.Technique, p.Q, p.Since, p.Until)
+		return cfg.ownEvent(e) && events.MatchEventSearch(e, p.Action, p.Provider, p.ShadowOnly, p.FindingType, p.Severity, p.Category, p.Technique, p.Q, p.Since, p.Until)
 	}
 	evs, total := cfg.Recent.Search(p.Page, p.Limit, match)
 	out := make([]events.EventJSON, 0, len(evs))
@@ -1018,6 +945,9 @@ func (cfg Config) handleRetentionRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	t := cfg.Retention.LastRun()
+	if cfg.Audit != nil {
+		cfg.Audit.Append(incidents.AuditEntry{Kind: "maintenance.retention", Actor: actorFromRequest(r)})
+	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"ok":       true,
 		"last_run": t.UTC().Format(time.RFC3339),
@@ -1050,6 +980,14 @@ func (cfg Config) handleCircuitReset(w http.ResponseWriter, r *http.Request) {
 	if !cfg.Upstream.ResetCircuitBreaker(pool, ep) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "pool_or_endpoint_not_found"})
 		return
+	}
+	if cfg.Audit != nil {
+		cfg.Audit.Append(incidents.AuditEntry{
+			Kind:   "maintenance.circuit_reset",
+			Target: pool + "/" + ep,
+			Actor:  actorFromRequest(r),
+			Detail: map[string]interface{}{"pool": pool, "endpoint": ep},
+		})
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"ok":       true,

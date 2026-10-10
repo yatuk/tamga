@@ -8,6 +8,13 @@ import (
 	"github.com/yatuk/tamga/internal/events"
 )
 
+// ownEvent reports whether an event held in memory belongs to the
+// deployment's organisation, which is the one the database is read for. An
+// event that names no organisation is the deployment's own.
+func (cfg Config) ownEvent(e events.Event) bool {
+	return e.OrgID == "" || cfg.DefaultOrgID == "" || e.OrgID == cfg.DefaultOrgID
+}
+
 // handleLiveEvents streams scanned/blocked events to the client using
 // Server-Sent Events. The connection stays open until the client disconnects
 // or the broker unsubscribes on shutdown.
@@ -41,6 +48,9 @@ func (cfg Config) handleLiveEvents(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if e.EventType != "request_scanned" && e.EventType != "request_blocked" {
+				continue
+			}
+			if !cfg.ownEvent(e) {
 				continue
 			}
 			payload, err := json.Marshal(events.EventToJSON(e))

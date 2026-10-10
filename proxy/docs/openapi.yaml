@@ -10,6 +10,24 @@ info:
     Kimlik doğrulama iki şekilde yapılır:
     1. `X-Tamga-Admin-Key` başlığı (ana admin anahtarı)
     2. Scoped API key (`read`, `write`, `admin`)
+
+    Authorisation. Every management route asks for one permission
+    (`x-required-permission`), and `x-required-role` is the least role that
+    carries it. The role comes from the credential and from nothing the
+    client writes: the static admin key is `admin`; an API key is `viewer`
+    (scope `read`), `analyst` (`write`) or `admin` (`admin`); a session
+    token (`Authorization: Bearer`) has the role the user store holds for
+    its user now, and `viewer` when the store holds none. A `viewer` reads,
+    an `analyst` also does triage, saved hunts, exports and the policy
+    sections open to analysts, and everything that decides who may do what
+    or where data goes is for an `admin`. A route with no declared
+    permission is refused to everyone. Without a credential the answer is
+    401; with one whose role lacks the permission it is 403
+    (`PermissionDenied`), before the body is read.
+
+    The key is sent in the `X-Tamga-Admin-Key` header. `?key=` is read on
+    `GET /api/v1/live/events` only, because EventSource cannot send a
+    header; on every other route a key in the query string is ignored.
   contact:
     name: Tamga Security
     email: security@tamga.io
@@ -177,6 +195,8 @@ paths:
           description: OK
         "400":
           description: OAuth error
+        "403":
+          description: "`account_not_assigned`: see `POST /api/v1/auth/github/exchange`."
 
   /api/v1/auth/github/exchange:
     post:
@@ -186,6 +206,12 @@ paths:
       responses:
         "200":
           description: OK
+        "403":
+          description: |
+            `account_not_assigned`: nobody has given this GitHub account a
+            role, so it gets no session. An admin assigns one with
+            `PUT /api/v1/team/{id}/role`, where `id` is the `github_user_id`
+            in this body; the static admin key can do so before any user exists.
 
   /api/v1/auth/session:
     get:
@@ -203,6 +229,8 @@ paths:
     get:
       tags: [stats]
       summary: Dashboard overview statistics
+      x-required-role: viewer
+      x-required-permission: "read"
       description: |
         Counted over the asked range from the stored request logs when the
         proxy has a database, so the figures are the same after a restart and
@@ -233,11 +261,15 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DashboardStatsV2"
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
 
   /api/v1/stats/models:
     get:
       tags: [stats]
       summary: Per-model and per-family request counts
+      x-required-role: viewer
+      x-required-permission: "read"
       parameters:
         - in: query
           name: range
@@ -250,6 +282,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ModelStatsResponse"
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
 
   # ────────────────────────────────────────────────────────────────────
   # Events
@@ -258,6 +292,8 @@ paths:
     get:
       tags: [events]
       summary: List security events (paginated, filterable)
+      x-required-role: viewer
+      x-required-permission: "read"
       description: |
         Varsayılan zaman penceresi `range=7d`. PostgreSQL açıkken sunucu
         tarafında filtrelenir; aksi halde in-memory Recent buffer üzerinde
@@ -326,11 +362,15 @@ paths:
                     type: integer
         "400":
           description: Bad query parameters
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
 
   /api/v1/events/{request_id}:
     get:
       tags: [events]
       summary: Get a single security event by request ID
+      x-required-role: viewer
+      x-required-permission: "read"
       description: |
         Looked up in process memory first and then, in the caller's
         organisation, in the stored request logs (`X-Tamga-Data-Source` says
@@ -374,6 +414,8 @@ paths:
                 $ref: "#/components/schemas/SecurityEventDetail"
         "400":
           description: Missing request_id
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
         "404":
           description: Event not found
 
@@ -381,6 +423,8 @@ paths:
     get:
       tags: [events]
       summary: Export filtered events as CSV or JSON
+      x-required-role: analyst
+      x-required-permission: "events:export"
       description: |
         With a database the rows come from the stored request logs, newest
         first, with the filters and window of `GET /api/v1/events`
@@ -423,9 +467,13 @@ paths:
                     items:
                       $ref: "#/components/schemas/SecurityEvent"
                   total: { type: integer }
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
     post:
       tags: [events]
       summary: Export filtered events (POST variant for larger filters)
+      x-required-role: analyst
+      x-required-permission: "events:export"
       requestBody:
         content:
           application/json:
@@ -440,11 +488,15 @@ paths:
       responses:
         "200":
           description: CSV or JSON attachment
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
 
   /api/v1/events/subject:
     get:
       tags: [events]
       summary: GDPR Art. 15 / KVKK madde 11 subject access
+      x-required-role: admin
+      x-required-permission: "privacy:access"
       description: Return request_log rows for a data subject.
       parameters:
         - in: query
@@ -474,10 +526,14 @@ paths:
                   count: { type: integer }
         "400":
           description: Missing identifier query param
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
 
     delete:
       tags: [events]
       summary: KVKK/GDPR subject erase
+      x-required-role: admin
+      x-required-permission: "privacy:erase"
       requestBody:
         required: true
         content:
@@ -505,6 +561,8 @@ paths:
                   deleted: { type: integer }
         "400":
           description: Missing or invalid identifier
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
 
   # ────────────────────────────────────────────────────────────────────
   # Timeseries
@@ -513,6 +571,8 @@ paths:
     get:
       tags: [timeseries]
       summary: Bucketed time series for the overview chart
+      x-required-role: viewer
+      x-required-permission: "read"
       description: |
         Hour and day buckets start on UTC boundaries. With a database the
         counts and `scan_p95` come from the stored request logs for the
@@ -536,6 +596,8 @@ paths:
                 $ref: "#/components/schemas/TimeseriesResponse"
         "400":
           description: Invalid bucket
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
 
   # ────────────────────────────────────────────────────────────────────
   # Findings
@@ -544,6 +606,8 @@ paths:
     get:
       tags: [findings]
       summary: Finding type, category, and severity breakdown
+      x-required-role: viewer
+      x-required-permission: "read"
       parameters:
         - in: query
           name: range
@@ -556,6 +620,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/BreakdownResponse"
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
 
   # ────────────────────────────────────────────────────────────────────
   # Incidents
@@ -564,6 +630,8 @@ paths:
     get:
       tags: [incidents]
       summary: List incidents
+      x-required-role: viewer
+      x-required-permission: "read"
       parameters:
         - in: query
           name: limit
@@ -581,6 +649,8 @@ paths:
                     items:
                       $ref: "#/components/schemas/IncidentState"
                   total: { type: integer }
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
         "503":
           description: Incidents store unavailable
 
@@ -588,6 +658,8 @@ paths:
     get:
       tags: [incidents]
       summary: Get a single incident by request ID
+      x-required-role: viewer
+      x-required-permission: "read"
       parameters:
         - in: path
           name: request_id
@@ -602,6 +674,8 @@ paths:
                 $ref: "#/components/schemas/IncidentState"
         "400":
           description: Missing request_id
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
         "404":
           description: Incident not found
         "503":
@@ -610,6 +684,8 @@ paths:
     patch:
       tags: [incidents]
       summary: Patch an incident (status, assignee, tags, comment)
+      x-required-role: analyst
+      x-required-permission: "incidents:write"
       parameters:
         - in: path
           name: request_id
@@ -630,6 +706,8 @@ paths:
                 $ref: "#/components/schemas/IncidentState"
         "400":
           description: Invalid status or JSON
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
         "503":
           description: Incidents store unavailable
 
@@ -637,6 +715,8 @@ paths:
     post:
       tags: [incidents]
       summary: Triage an incident (assign + set In Progress)
+      x-required-role: analyst
+      x-required-permission: "incidents:write"
       parameters:
         - in: path
           name: request_id
@@ -658,6 +738,8 @@ paths:
                 $ref: "#/components/schemas/IncidentState"
         "400":
           description: Missing request_id
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
         "503":
           description: Lifecycle store unavailable
 
@@ -665,6 +747,8 @@ paths:
     post:
       tags: [incidents]
       summary: Resolve an incident
+      x-required-role: analyst
+      x-required-permission: "incidents:write"
       parameters:
         - in: path
           name: request_id
@@ -690,6 +774,8 @@ paths:
                 $ref: "#/components/schemas/IncidentState"
         "400":
           description: Missing request_id
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
         "503":
           description: Lifecycle store unavailable
 
@@ -697,6 +783,8 @@ paths:
     post:
       tags: [incidents]
       summary: Reopen a resolved incident
+      x-required-role: analyst
+      x-required-permission: "incidents:write"
       parameters:
         - in: path
           name: request_id
@@ -711,6 +799,8 @@ paths:
                 $ref: "#/components/schemas/IncidentState"
         "400":
           description: Missing request_id
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
         "503":
           description: Lifecycle store unavailable
 
@@ -721,21 +811,22 @@ paths:
     get:
       tags: [mttr]
       summary: Mean Time to Resolution statistics
+      x-required-role: viewer
+      x-required-permission: "read"
       parameters:
         - in: query
           name: range
           schema:
             $ref: "#/components/schemas/ReportRange"
-        - in: query
-          name: org_id
-          schema: { type: string }
       responses:
         "200":
-          description: OK
+          description: OK, for the deployment's organisation
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/MTTRStats"
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
         "503":
           description: Lifecycle store unavailable
 
@@ -746,6 +837,8 @@ paths:
     get:
       tags: [audit]
       summary: List audit log entries
+      x-required-role: analyst
+      x-required-permission: "audit:read"
       parameters:
         - in: query
           name: limit
@@ -763,11 +856,15 @@ paths:
                     items:
                       $ref: "#/components/schemas/AuditEntry"
                   total: { type: integer }
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
 
   /api/v1/audit/verify:
     get:
       tags: [audit]
       summary: Verify the audit hash-chain
+      x-required-role: viewer
+      x-required-permission: "read"
       description: |
         Returns `chain_ok=true` when every entry's `prev_hash`/`hash`
         link is intact. `chain_ok=false` + `broken_at` points to the
@@ -779,6 +876,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AuditChainResult"
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
 
   # ────────────────────────────────────────────────────────────────────
   # Live
@@ -787,15 +886,29 @@ paths:
     get:
       tags: [live]
       summary: Server-Sent Events stream of scanned/blocked requests
+      x-required-role: viewer
+      x-required-permission: "read"
       description: |
         text/event-stream yanıt; `request_scanned` ve `request_blocked`
         event tiplerini yayınlar. Bağlantı client kapatana kadar açık kalır.
+
+        Only events of the deployment's organisation are sent. This is the
+        one route that reads the key from `?key=` when the
+        `X-Tamga-Admin-Key` header is absent: a browser EventSource cannot
+        set a header. A server-side caller should send the header.
+      parameters:
+        - in: query
+          name: key
+          description: The admin key or a scoped API key, for EventSource only. Prefer the header.
+          schema: { type: string }
       responses:
         "200":
           description: SSE stream
           content:
             text/event-stream:
               schema: { type: string }
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
         "503":
           description: Live stream unavailable (no broker)
 
@@ -806,6 +919,8 @@ paths:
     get:
       tags: [policies]
       summary: Get active policy (returns array for dashboard compatibility)
+      x-required-role: viewer
+      x-required-permission: "read"
       responses:
         "200":
           description: OK
@@ -815,12 +930,16 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/TamgaPolicy"
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
         "500":
           description: Policy store unavailable
 
     put:
       tags: [policies]
       summary: Overwrite the on-disk policy YAML and reload
+      x-required-role: analyst
+      x-required-permission: "policies:write"
       description: |
         A direct write. It is refused with 409 `dual_control_required` while
         `governance.require_dual_control` is on in the active policy: open a
@@ -895,10 +1014,14 @@ paths:
     post:
       tags: [policies]
       summary: Reload the policy from disk without changing content
+      x-required-role: admin
+      x-required-permission: "policies:admin"
       description: |
         Brings in whatever the policy file on disk holds. It is not a direct
         write and is not held back by dual control or the privilege split:
-        the file was changed by someone with access to the host. The audit
+        the file was changed by someone with access to the host. Because it
+        installs the sections only an admin may change along with the rest,
+        it needs the admin role. The audit
         entry (`policy.reload`) carries the caller's verified actor and the
         paths that changed; a reload that changed the policy also appends a
         history revision.
@@ -914,6 +1037,8 @@ paths:
                   name: { type: string }
                   changed:
                     $ref: "#/components/schemas/PolicyChangedPaths"
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
         "500":
           description: Policy store unavailable or reload failed
 
@@ -921,6 +1046,8 @@ paths:
     post:
       tags: [policies]
       summary: Validate policy YAML/JSON without persisting (dry-run)
+      x-required-role: analyst
+      x-required-permission: "policies:write"
       description: |
         Gövde `PUT /api/v1/policies` ile aynıdır: ham YAML (`text/yaml`) veya
         JSON `{ "yaml": "..." }`. Sözdizimi + semantik kontrol; hata yoksa 200 ve
@@ -940,6 +1067,8 @@ paths:
                 $ref: "#/components/schemas/PolicyValidateOK"
         "400":
           description: Empty body, or text that does not decode as a policy (YAML syntax, an unknown key, a second document). The body is an object with one string, `error`.
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
         "422":
           description: |
             The policy decodes but is refused: a semantic error, a value outside
@@ -954,6 +1083,8 @@ paths:
     post:
       tags: [policies]
       summary: Dry-run scan against policy-supplied YAML and sample text
+      x-required-role: analyst
+      x-required-permission: "policies:write"
       requestBody:
         required: true
         content:
@@ -977,6 +1108,8 @@ paths:
                 $ref: "#/components/schemas/PolicySimulateResult"
         "400":
           description: Parse error or no policy to simulate
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
 
   /api/v1/scan:
     post:
@@ -1056,6 +1189,8 @@ paths:
     get:
       tags: [policies]
       summary: List custom entities from the active policy
+      x-required-role: viewer
+      x-required-permission: "read"
       responses:
         "200":
           description: OK
@@ -1069,12 +1204,16 @@ paths:
                     items:
                       $ref: "#/components/schemas/CustomEntity"
                   total: { type: integer }
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
         "500":
           description: Policy store unavailable or no policy loaded
 
     post:
       tags: [policies]
       summary: Add a custom entity to the policy
+      x-required-role: analyst
+      x-required-permission: "policies:write"
       requestBody:
         required: true
         content:
@@ -1110,6 +1249,8 @@ paths:
     delete:
       tags: [policies]
       summary: Remove a custom entity by name and reload
+      x-required-role: analyst
+      x-required-permission: "policies:write"
       parameters:
         - in: path
           name: name
@@ -1126,6 +1267,8 @@ paths:
                   ok: { type: boolean, enum: [true] }
         "400":
           description: Name is required
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
         "404":
           description: Entity not found
         "409":
@@ -1144,6 +1287,8 @@ paths:
     get:
       tags: [policies]
       summary: List policy revisions
+      x-required-role: viewer
+      x-required-permission: "read"
       responses:
         "200":
           description: OK
@@ -1153,11 +1298,15 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/PolicyRevision"
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
 
   /api/v1/policies/revisions/{id}:
     get:
       tags: [policies]
       summary: Get a single policy revision
+      x-required-role: viewer
+      x-required-permission: "read"
       parameters:
         - in: path
           name: id
@@ -1170,6 +1319,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PolicyRevision"
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
         "404":
           description: Revision not found
 
@@ -1177,6 +1328,8 @@ paths:
     post:
       tags: [policies]
       summary: Roll back to a previous policy revision
+      x-required-role: admin
+      x-required-permission: "policies:admin"
       description: |
         Admin role only. A rollback is a direct write: under dual control it
         is refused with 409 `dual_control_required`, and the revision's text
@@ -1198,6 +1351,8 @@ paths:
                   revision: { type: string }
         "400":
           description: History not configured
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
         "404":
           description: Revision not found
         "409":
@@ -1213,6 +1368,8 @@ paths:
     get:
       tags: [policies]
       summary: List policy proposals (open, approved and rejected)
+      x-required-role: viewer
+      x-required-permission: "read"
       responses:
         "200":
           description: OK
@@ -1222,10 +1379,14 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/PolicyProposal"
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
 
     post:
       tags: [policies]
       summary: Create a policy proposal
+      x-required-role: analyst
+      x-required-permission: "policies:write"
       description: |
         Open to the admin and analyst roles. The proposal is a whole policy
         document. Its author is the caller's verified actor (see
@@ -1270,6 +1431,8 @@ paths:
     post:
       tags: [policies]
       summary: Approve an open proposal and apply it
+      x-required-role: analyst
+      x-required-permission: "policies:write"
       description: |
         Applies the stored text of the proposal; the request body is not
         read. Everything is checked at the moment of approval, against the
@@ -1340,6 +1503,8 @@ paths:
     post:
       tags: [policies]
       summary: Reject an open proposal
+      x-required-role: analyst
+      x-required-permission: "policies:write"
       description: |
         The author may always withdraw their own proposal. Anyone else needs
         the role that could have approved it: an analyst cannot reject a
@@ -1380,6 +1545,8 @@ paths:
     get:
       tags: [apikeys]
       summary: List scoped API keys (prefix only, raw key not returned)
+      x-required-role: admin
+      x-required-permission: "apikeys:read"
       responses:
         "200":
           description: OK
@@ -1393,10 +1560,14 @@ paths:
                     items:
                       $ref: "#/components/schemas/ApiKey"
                   total: { type: integer }
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
 
     post:
       tags: [apikeys]
       summary: Create a new scoped API key
+      x-required-role: admin
+      x-required-permission: "apikeys:write"
       description: |
         `scope` defaults to `read`. The response carries `raw_key`, which is
         shown only this once; the server keeps a hash.
@@ -1434,6 +1605,8 @@ paths:
                 $ref: "#/components/schemas/ApiKeyCreated"
         "400":
           description: Invalid scope or label
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
         "503":
           description: API keys store unavailable
 
@@ -1441,6 +1614,8 @@ paths:
     delete:
       tags: [apikeys]
       summary: Revoke an API key
+      x-required-role: admin
+      x-required-permission: "apikeys:write"
       parameters:
         - in: path
           name: id
@@ -1455,6 +1630,8 @@ paths:
                 type: object
                 properties:
                   ok: { type: boolean, enum: [true] }
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
         "404":
           description: Key not found
         "503":
@@ -1467,6 +1644,13 @@ paths:
     get:
       tags: [webhooks]
       summary: List configured webhooks
+      x-required-role: admin
+      x-required-permission: "webhooks:read"
+      description: |
+        Credentials are not in the list: `auth_token` is left out
+        (`has_auth_token` says whether one is set), every header value is
+        `[redacted]`, and `url` is cut to its scheme and host when it has a
+        path, query or user (`url_redacted`).
       responses:
         "200":
           description: OK
@@ -1480,10 +1664,14 @@ paths:
                     items:
                       $ref: "#/components/schemas/Webhook"
                   total: { type: integer }
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
 
     post:
       tags: [webhooks]
       summary: Create a new webhook destination
+      x-required-role: admin
+      x-required-permission: "webhooks:write"
       requestBody:
         required: true
         content:
@@ -1499,6 +1687,8 @@ paths:
                 $ref: "#/components/schemas/Webhook"
         "400":
           description: Invalid body
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
         "503":
           description: Webhooks unavailable
 
@@ -1506,6 +1696,8 @@ paths:
     post:
       tags: [webhooks]
       summary: Send a test event to a webhook
+      x-required-role: admin
+      x-required-permission: "webhooks:write"
       parameters:
         - in: path
           name: id
@@ -1521,6 +1713,8 @@ paths:
                 properties:
                   ok: { type: boolean }
                   status_code: { type: integer }
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
         "404":
           description: Webhook not found
         "502":
@@ -1532,6 +1726,8 @@ paths:
     delete:
       tags: [webhooks]
       summary: Delete a webhook
+      x-required-role: admin
+      x-required-permission: "webhooks:write"
       parameters:
         - in: path
           name: id
@@ -1546,6 +1742,8 @@ paths:
                 type: object
                 properties:
                   ok: { type: boolean, enum: [true] }
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
         "404":
           description: Webhook not found
         "503":
@@ -1558,6 +1756,8 @@ paths:
     get:
       tags: [metrics]
       summary: Prometheus text-format metrics snapshot
+      x-required-role: viewer
+      x-required-permission: "read"
       description: |
         Includes `tamga_request_log_unrecorded_total{reason}`: scanned
         requests that could not be stored in the request log, so the console
@@ -1570,11 +1770,15 @@ paths:
           content:
             text/plain:
               schema: { type: string }
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
 
   /api/v1/metrics/histograms:
     get:
       tags: [metrics]
       summary: Prometheus histogram metrics as JSON
+      x-required-role: viewer
+      x-required-permission: "read"
       description: |
         Returns scan_latency, total_latency, and per-scanner latency
         histograms as structured JSON for the dashboard charts.
@@ -1590,6 +1794,8 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/HistogramMetric"
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
 
   # ────────────────────────────────────────────────────────────────────
   # Rate Limit
@@ -1598,6 +1804,8 @@ paths:
     get:
       tags: [ratelimit]
       summary: Rate limiter statistics snapshot
+      x-required-role: viewer
+      x-required-permission: "read"
       responses:
         "200":
           description: OK
@@ -1612,6 +1820,8 @@ paths:
                   max_requests_per_min: { type: integer }
                   top_keys: { type: object }
                   snapshot_t: { type: string, format: date-time }
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
 
   # ────────────────────────────────────────────────────────────────────
   # Patterns
@@ -1620,6 +1830,8 @@ paths:
     get:
       tags: [patterns]
       summary: List custom detection patterns
+      x-required-role: viewer
+      x-required-permission: "read"
       responses:
         "200":
           description: OK
@@ -1633,10 +1845,14 @@ paths:
                     items:
                       $ref: "#/components/schemas/CustomPattern"
                   total: { type: integer }
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
 
     post:
       tags: [patterns]
       summary: Create a new detection pattern
+      x-required-role: analyst
+      x-required-permission: "patterns:write"
       requestBody:
         required: true
         content:
@@ -1652,6 +1868,8 @@ paths:
                 $ref: "#/components/schemas/CustomPattern"
         "400":
           description: Invalid body
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
         "503":
           description: Patterns store unavailable
 
@@ -1659,6 +1877,8 @@ paths:
     put:
       tags: [patterns]
       summary: Update an existing detection pattern
+      x-required-role: analyst
+      x-required-permission: "patterns:write"
       parameters:
         - in: path
           name: id
@@ -1679,6 +1899,8 @@ paths:
                 $ref: "#/components/schemas/CustomPattern"
         "400":
           description: Invalid body
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
         "404":
           description: Pattern not found
         "503":
@@ -1687,6 +1909,8 @@ paths:
     delete:
       tags: [patterns]
       summary: Delete a detection pattern
+      x-required-role: analyst
+      x-required-permission: "patterns:write"
       parameters:
         - in: path
           name: id
@@ -1701,6 +1925,8 @@ paths:
                 type: object
                 properties:
                   ok: { type: boolean, enum: [true] }
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
         "404":
           description: Pattern not found
         "503":
@@ -1713,6 +1939,8 @@ paths:
     get:
       tags: [saved-hunts]
       summary: List saved threat-hunting queries
+      x-required-role: viewer
+      x-required-permission: "read"
       responses:
         "200":
           description: OK
@@ -1726,12 +1954,16 @@ paths:
                     items:
                       $ref: "#/components/schemas/SavedHunt"
                   total: { type: integer }
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
         "503":
           description: Saved hunts store unavailable
 
     post:
       tags: [saved-hunts]
       summary: Save a new threat-hunting query
+      x-required-role: analyst
+      x-required-permission: "hunts:write"
       requestBody:
         required: true
         content:
@@ -1751,6 +1983,8 @@ paths:
                 $ref: "#/components/schemas/SavedHunt"
         "400":
           description: Missing name or org_id
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
         "503":
           description: Saved hunts store unavailable
 
@@ -1758,6 +1992,8 @@ paths:
     put:
       tags: [saved-hunts]
       summary: Update a saved hunt
+      x-required-role: analyst
+      x-required-permission: "hunts:write"
       parameters:
         - in: path
           name: id
@@ -1781,6 +2017,8 @@ paths:
                 $ref: "#/components/schemas/SavedHunt"
         "400":
           description: Missing id or org_id
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
         "404":
           description: Saved hunt not found
         "503":
@@ -1789,6 +2027,8 @@ paths:
     delete:
       tags: [saved-hunts]
       summary: Delete a saved hunt
+      x-required-role: analyst
+      x-required-permission: "hunts:write"
       parameters:
         - in: path
           name: id
@@ -1805,6 +2045,8 @@ paths:
                   ok: { type: boolean, enum: [true] }
         "400":
           description: Missing id or org_id
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
         "404":
           description: Saved hunt not found
         "503":
@@ -1817,6 +2059,8 @@ paths:
     get:
       tags: [team]
       summary: List team members with roles
+      x-required-role: admin
+      x-required-permission: "team:admin"
       description: |
         If Clerk is configured, merges Clerk user profiles with local
         role assignments. Returns `clerk: false` when Clerk is unavailable.
@@ -1834,11 +2078,15 @@ paths:
                       $ref: "#/components/schemas/TeamMember"
                   total: { type: integer }
                   clerk: { type: boolean }
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
 
   /api/v1/team/{id}/role:
     put:
       tags: [team]
       summary: Set a team member's role
+      x-required-role: admin
+      x-required-permission: "team:admin"
       parameters:
         - in: path
           name: id
@@ -1862,7 +2110,17 @@ paths:
               schema:
                 $ref: "#/components/schemas/TeamMember"
         "400":
-          description: Invalid role or body
+          description: Invalid role, body or user id
+        "403":
+          description: |
+            `permission_denied`: the caller is not an admin.
+            `own_role`: the caller is the user named in the path; nobody sets their own role.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PermissionDenied"
+        "409":
+          description: "`last_admin`: the user is the only admin in the user store and the new role is not admin."
         "503":
           description: Users store unavailable
 
@@ -1873,6 +2131,8 @@ paths:
     get:
       tags: [billing]
       summary: List active model pricing entries
+      x-required-role: viewer
+      x-required-permission: "read"
       responses:
         "200":
           description: OK
@@ -1887,6 +2147,8 @@ paths:
                       $ref: "#/components/schemas/ModelPricing"
                   currency: { type: string }
                   updated_at: { type: string, format: date-time }
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
         "503":
           description: Pricing store not configured
 
@@ -1894,6 +2156,8 @@ paths:
     get:
       tags: [billing]
       summary: Per-model cost breakdown for a time range
+      x-required-role: viewer
+      x-required-permission: "read"
       description: |
         Sums the token counts stored with each request and prices them with
         the prices in force now. Only requests whose usage the proxy read
@@ -1931,6 +2195,8 @@ paths:
                   total_usd: { type: number }
                   mtd_total_usd: { type: number }
                   projected_monthly_usd: { type: number }
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
 
   # ────────────────────────────────────────────────────────────────────
   # Budget
@@ -1938,11 +2204,9 @@ paths:
   /api/v1/budget/stats:
     get:
       tags: [budget]
-      summary: Daily token + cost counters for an organisation
-      parameters:
-        - in: query
-          name: org
-          schema: { type: string }
+      summary: Daily token + cost counters for the deployment's organisation
+      x-required-role: viewer
+      x-required-permission: "read"
       responses:
         "200":
           description: OK
@@ -1950,6 +2214,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/BudgetStats"
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
 
   # ────────────────────────────────────────────────────────────────────
   # Maintenance
@@ -1958,6 +2224,8 @@ paths:
     post:
       tags: [maintenance]
       summary: Trigger a retention maintenance cycle
+      x-required-role: admin
+      x-required-permission: "maintenance:admin"
       responses:
         "200":
           description: OK
@@ -1968,6 +2236,8 @@ paths:
                 properties:
                   ok: { type: boolean, enum: [true] }
                   last_run: { type: string, format: date-time }
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
         "503":
           description: Retention not enabled
 
@@ -1975,6 +2245,8 @@ paths:
     post:
       tags: [maintenance]
       summary: Reset a circuit breaker for an upstream pool/endpoint
+      x-required-role: admin
+      x-required-permission: "maintenance:admin"
       requestBody:
         required: true
         content:
@@ -1998,6 +2270,8 @@ paths:
                   endpoint: { type: string }
         "400":
           description: Missing pool or endpoint
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
         "503":
           description: Upstream registry not configured
 
@@ -2008,6 +2282,8 @@ paths:
     get:
       tags: [providers]
       summary: List provider routes and the models seen on each (with pricing when known)
+      x-required-role: viewer
+      x-required-permission: "read"
       responses:
         "200":
           description: OK
@@ -2017,6 +2293,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/ProviderCatalogEntry"
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
 
   # ────────────────────────────────────────────────────────────────────
   # Proxy
@@ -2057,21 +2335,31 @@ paths:
     get:
       tags: [scim]
       summary: List SCIM users
+      x-required-role: admin
+      x-required-permission: "scim:admin"
       responses:
         "200":
           description: OK
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
 
     post:
       tags: [scim]
       summary: Create SCIM user
+      x-required-role: admin
+      x-required-permission: "scim:admin"
       responses:
         "201":
           description: Created
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
 
   /api/v1/scim/v2/Users/{id}:
     get:
       tags: [scim]
       summary: Get SCIM user
+      x-required-role: admin
+      x-required-permission: "scim:admin"
       parameters:
         - in: path
           name: id
@@ -2080,10 +2368,14 @@ paths:
       responses:
         "200":
           description: OK
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
 
     patch:
       tags: [scim]
       summary: Patch SCIM user
+      x-required-role: admin
+      x-required-permission: "scim:admin"
       parameters:
         - in: path
           name: id
@@ -2092,10 +2384,14 @@ paths:
       responses:
         "200":
           description: OK
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
 
     delete:
       tags: [scim]
       summary: Delete SCIM user
+      x-required-role: admin
+      x-required-permission: "scim:admin"
       parameters:
         - in: path
           name: id
@@ -2104,11 +2400,21 @@ paths:
       responses:
         "200":
           description: OK
+        "403":
+          $ref: "#/components/responses/PermissionDenied"
 
 # ══════════════════════════════════════════════════════════════════════
 # Components
 # ══════════════════════════════════════════════════════════════════════
 components:
+  responses:
+    PermissionDenied:
+      description: The caller is authenticated and its role does not carry the permission the route asks for. Nothing was read or changed.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/PermissionDenied"
+
   securitySchemes:
     AdminKey:
       type: apiKey
@@ -2118,7 +2424,7 @@ components:
       type: apiKey
       in: header
       name: X-Tamga-Admin-Key
-      description: Scoped API key (read/write/admin)
+      description: Scoped API key. `read` acts as viewer, `write` as analyst, `admin` as admin; a `proxy` key is refused (403) on every management route.
     TamgaKey:
       type: apiKey
       in: header
@@ -2727,6 +3033,17 @@ components:
           enum: [approved, rejected]
           description: With `proposal_closed`, what the proposal already is.
 
+    PermissionDenied:
+      type: object
+      required: [error, code]
+      properties:
+        error: { type: string, example: "role viewer lacks incidents:write" }
+        code: { type: string, enum: [permission_denied] }
+        required_permission:
+          type: string
+          description: The permission the route asks for. Absent when the route itself has none declared, which is refused to every caller.
+          example: "incidents:write"
+
     PolicyPrivilegeError:
       type: object
       required: [error, code, privileged_sections]
@@ -2808,7 +3125,9 @@ components:
         payload_template: { type: string }
         project_key: { type: string }
         issue_type: { type: string }
-        auth_token: { type: string }
+        auth_token: { type: string, description: Returned by create only; never in the list. }
+        has_auth_token: { type: boolean, description: In the list only. }
+        url_redacted: { type: boolean, description: In the list only. True when `url` was cut to its scheme and host. }
         created_at: { type: string, format: date-time }
         last_fired: { type: string, format: date-time }
 

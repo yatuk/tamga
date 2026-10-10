@@ -6,14 +6,29 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/yatuk/tamga/internal/incidents"
 	"github.com/yatuk/tamga/internal/store"
 )
 
-func (cfg Config) orgIDFromRequest(r *http.Request) string {
-	if org := strings.TrimSpace(r.Header.Get("X-Tamga-Org-Id")); org != "" {
-		return org
-	}
+// orgIDFromRequest returns the organisation whose saved hunts a request is
+// about: the deployment's own. No credential carries an organisation into
+// the management API, so X-Tamga-Org-Id, which the client writes, does not
+// choose whose hunts are read or changed.
+func (cfg Config) orgIDFromRequest(_ *http.Request) string {
 	return cfg.DefaultOrgID
+}
+
+// auditHunt records a change to a saved hunt: who, which one and its name,
+// not the query.
+func (cfg Config) auditHunt(r *http.Request, kind, orgID, id, name string) {
+	if cfg.Audit == nil {
+		return
+	}
+	detail := map[string]interface{}{"org_id": orgID}
+	if name != "" {
+		detail["name"] = name
+	}
+	cfg.Audit.Append(incidents.AuditEntry{Kind: kind, Target: id, Actor: actorFromRequest(r), Detail: detail})
 }
 
 func (cfg Config) savedHuntStore() store.SavedHuntStore {
@@ -79,6 +94,7 @@ func (cfg Config) handleSavedHuntCreate(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
+	cfg.auditHunt(r, "hunt.create", orgID, hunt.ID, hunt.Name)
 	writeJSON(w, http.StatusCreated, hunt)
 }
 
@@ -121,6 +137,7 @@ func (cfg Config) handleSavedHuntUpdate(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
+	cfg.auditHunt(r, "hunt.update", orgID, hunt.ID, hunt.Name)
 	writeJSON(w, http.StatusOK, hunt)
 }
 
@@ -148,5 +165,6 @@ func (cfg Config) handleSavedHuntDelete(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
+	cfg.auditHunt(r, "hunt.delete", orgID, id, "")
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }

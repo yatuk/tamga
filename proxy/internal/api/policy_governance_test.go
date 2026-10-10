@@ -313,12 +313,17 @@ func TestEveryPolicyChangeIsAudited(t *testing.T) {
 			name: "reload after an edit on disk",
 			run: func(t *testing.T, f *govFixture) {
 				_ = os.WriteFile(f.path, []byte(govEdit("allowed: [openai, anthropic]", "allowed: [openai]")), 0o600)
-				if res := f.do(http.MethodPost, "/policies/reload", f.analystA.RawKey, "", nil); res.status != http.StatusOK {
+				// A reload installs the file as it is, privileged sections
+				// included, so it is not for an analyst.
+				if res := f.do(http.MethodPost, "/policies/reload", f.analystA.RawKey, "", nil); res.status != http.StatusForbidden {
+					t.Fatalf("analyst reload: %d %s", res.status, res.raw)
+				}
+				if res := f.do(http.MethodPost, "/policies/reload", f.adminA.RawKey, "", nil); res.status != http.StatusOK {
 					t.Fatalf("%d %s", res.status, res.raw)
 				}
 			},
 			kind: "policy.reload", source: sourceReload,
-			actor:   func(f *govFixture) string { return "apikey:" + f.analystA.ID },
+			actor:   func(f *govFixture) string { return "apikey:" + f.adminA.ID },
 			changed: "providers.allowed", wantHistory: true,
 		},
 		{

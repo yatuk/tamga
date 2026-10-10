@@ -13,7 +13,6 @@ import (
 // cfg.Budget is nil (legacy wiring) we still return a well-formed JSON body
 // so the dashboard renders without errors.
 func handleBudgetStatsImpl(cfg Config, w http.ResponseWriter, r *http.Request) {
-	_ = r
 	if cfg.Budget == nil {
 		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"tokens_today":   0,
@@ -24,11 +23,9 @@ func handleBudgetStatsImpl(cfg Config, w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	org := cfg.DefaultOrgID
-	if q := r.URL.Query().Get("org"); q != "" {
-		org = q
-	}
-	writeJSON(w, http.StatusOK, cfg.Budget.Stats(org))
+	// The deployment's organisation: a name from the query string would
+	// read any organisation's spend, and start a counter for each name.
+	writeJSON(w, http.StatusOK, cfg.Budget.Stats(cfg.DefaultOrgID))
 }
 
 // providerRoutes lists the routes the proxy serves. It names no models: a
