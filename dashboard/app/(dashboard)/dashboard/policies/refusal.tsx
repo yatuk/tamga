@@ -26,7 +26,6 @@ const SECTION_WORDS: Record<string, string> = {
   exceptions: "Exceptions",
   governance: "Governance",
   data: "Data handling",
-  pricing: "Pricing",
   vault: "The vault",
   cache: "The cache",
   body_limits: "Body limits",

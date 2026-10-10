@@ -7,9 +7,9 @@ import { useAdminKey } from "@/hooks/useAdminKey";
 import { useRangeParam } from "@/hooks/useRangeParam";
 import { topEntries } from "@/lib/utils/top";
 
-// Detection trends over time. Defaults to a 30-day / daily view, which is
-// DB-backed (daily_stats) rather than the in-memory recent buffer, so
-// "this month" numbers are accurate.
+// Detection trends over time. Defaults to a 30-day / daily view. With a
+// database the proxy reads it from the stored request logs, so the numbers
+// cover the whole window and survive a restart.
 export function useTrendsPage() {
   const [adminKey] = useAdminKey();
   const [range, setRange] = useRangeParam("30d");

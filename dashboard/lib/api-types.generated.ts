@@ -110,8 +110,8 @@ export interface paths {
         };
         /**
          * Runtime operational profile
-         * @description Exposes TLS, mTLS, Redis, Postgres status plus policy identity and
-         *     tier information for the Settings / Runtime dashboard tab.
+         * @description Exposes TLS, mTLS, Redis, Postgres status and policy identity for
+         *     the Settings / Runtime dashboard tab.
          *
          *     All of it needs the admin key or a scoped key of read, write or
          *     admin scope in `X-Tamga-Admin-Key` (or a session token in
@@ -1947,7 +1947,7 @@ export interface paths {
          *     `rate_limit.max_requests_per_minute`, counted apart from the key's
          *     proxy requests and always refused when exceeded; a body of at most
          *     262144 bytes; a small number of scans at a time, answered 503 when
-         *     all are in use. Calls do not count against the monthly request cap.
+         *     all are in use.
          *
          *     A 200 is a complete verdict. If any scanner or the inline classifier
          *     did not finish, the answer is 503, whatever `scan.on_error` says.
@@ -2118,13 +2118,6 @@ export interface paths {
                 };
                 /** @description Missing name/pattern or invalid regex */
                 400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                /** @description Tier does not allow custom entities */
-                403: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -4428,8 +4421,6 @@ export interface components {
             retention_enabled?: boolean;
             /** Format: date-time */
             retention_last_run?: string;
-            tier?: string;
-            tier_custom_entities?: boolean;
         };
         DashboardStatsV2: {
             total_requests?: number;

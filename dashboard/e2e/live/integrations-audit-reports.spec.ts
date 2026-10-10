@@ -592,10 +592,6 @@ test.describe("Reports", () => {
     });
   }
 
-  test.fixme("OWASP report and Incident report download a PDF", () => {
-    // The proxy answers 503 "analyzer unavailable": it looks for the analyzer's HTTP API at localhost:8000 inside its own container.
-  });
-
   test("a request under Stopped most recently opens Incidents with that request's panel", async ({ page }) => {
     await openReports(page, "?range=30d");
     const link = page.locator("section[aria-labelledby=stopped] ul.t-queue a").first();
