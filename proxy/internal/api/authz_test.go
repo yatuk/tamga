@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/yatuk/tamga/internal/apikeys"
 	"github.com/yatuk/tamga/internal/auth"
@@ -34,6 +35,7 @@ var wantAccess = map[string]string{
 	"GET /auth/github/callback":      "public",
 	"POST /auth/github/exchange":     "public",
 	"GET /auth/session":              "public",
+	"POST /auth/logout":              "public",
 	"POST /auth/clerk/saml/callback": "public",
 	"POST /auth/clerk/oidc/callback": "public",
 	"POST /scan":                     "public",
@@ -101,6 +103,8 @@ var wantAccess = map[string]string{
 	"DELETE /webhooks/{id}":           "admin",
 	"GET /team":                       "admin",
 	"PUT /team/{id}/role":             "admin",
+	"DELETE /team/{id}/role":          "admin",
+	"POST /team/{id}/sessions/revoke": "admin",
 	"GET /settings/sso":               "viewer",
 	"PUT /settings/sso":               "admin",
 	"GET /scim/v2/Users":              "admin",
@@ -109,6 +113,7 @@ var wantAccess = map[string]string{
 	"PATCH /scim/v2/Users/{id}":       "admin",
 	"DELETE /scim/v2/Users/{id}":      "admin",
 	"GET /events/subject":             "admin",
+	"POST /events/subject":            "admin",
 	"DELETE /events/subject":          "admin",
 	"POST /maintenance/retention":     "admin",
 	"POST /maintenance/circuit-reset": "admin",
@@ -330,9 +335,14 @@ func newAuthzFixture(t *testing.T, cfg Config) *authzFixture {
 	return f
 }
 
+// authzToken signs a session token as a sign-in would. A test assigns the
+// role and signs the token within one second, and assigning a role ends the
+// sessions from before it, so the token is dated the second after, which is
+// what issueSession does for a sign-in that follows a revocation that
+// closely.
 func authzToken(t *testing.T, sub, role string) string {
 	t.Helper()
-	tok, err := auth.CreateToken(auth.Claims{Sub: sub, Email: sub + "@example.invalid", Role: role}, []byte(authzSecret))
+	tok, err := auth.CreateToken(auth.Claims{Sub: sub, Email: sub + "@example.invalid", Role: role, Iat: time.Now().Unix() + 1}, []byte(authzSecret))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -577,8 +587,10 @@ func TestSessionRoleFollowsTheUserStore(t *testing.T) {
 	if status, reached, _ := f.do("POST", "/api/v1/maintenance/retention", bearer("u-stranger", "admin")); status != http.StatusForbidden || reached != "" {
 		t.Errorf("unassigned admin token: %d reached %q, want 403", status, reached)
 	}
-	if _, reached, _ := f.do("GET", "/api/v1/stats", bearer("u-stranger", "admin")); reached == "" {
-		t.Error("unassigned user is not the viewer its sign-in made it")
+	// Nor is it a viewer: an account without a role reads nothing.
+	if status, reached, body := f.do("GET", "/api/v1/stats", bearer("u-stranger", "admin")); status != http.StatusForbidden || reached != "" ||
+		!strings.Contains(body, codeAccountNotAssigned) || !strings.Contains(body, "u-stranger") {
+		t.Errorf("unassigned user: %d reached %q %s, want 403 %s with its id", status, reached, body, codeAccountNotAssigned)
 	}
 	if status, reached, _ := f.do("GET", "/api/v1/stats", bearer("u-stranger", "superadmin")); status != http.StatusForbidden || reached != "" {
 		t.Errorf("unassigned user with an unknown role: %d reached %q, want 403", status, reached)
@@ -916,12 +928,21 @@ func TestTeamRoleGuards(t *testing.T) {
 	if e, ok := f.lastAudit("team.role"); !ok || e.Actor != "user:u-admin" || e.Target != "u-analyst" {
 		t.Errorf("team.role audit = %+v", e)
 	}
+	// A change of role ends the sessions from before it, a promotion
+	// included: the new admin signs in again.
+	if rec := f.as("analyst", "GET", "/stats", ""); rec.Code != http.StatusUnauthorized || !strings.Contains(rec.Body.String(), codeSessionRevoked) {
+		t.Errorf("the token from before the promotion: %d %s", rec.Code, rec.Body.String())
+	}
+	f.tokens["analyst"] = signInToken(t, Config{JWTSecret: authzSecret, Users: f.users}, "u-analyst")
 	if rec := f.as("analyst", "PUT", "/team/u-admin/role", `{"role":"viewer"}`); rec.Code != http.StatusOK {
 		t.Errorf("demote by the new admin: %d %s", rec.Code, rec.Body.String())
 	}
-	// The demotion holds on the next request, on the token that still says admin.
-	if rec := f.as("admin", "GET", "/team", ""); rec.Code != http.StatusForbidden {
-		t.Errorf("demoted admin reads the team: %d", rec.Code)
+	// The demotion holds on the next request: the token that still says
+	// admin opens nothing, not even what a viewer reads.
+	for _, path := range []string{"/team", "/stats"} {
+		if rec := f.as("admin", "GET", path, ""); rec.Code != http.StatusUnauthorized || !strings.Contains(rec.Body.String(), codeSessionRevoked) {
+			t.Errorf("demoted admin GET %s: %d %s", path, rec.Code, rec.Body.String())
+		}
 	}
 }
 

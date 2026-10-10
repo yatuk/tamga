@@ -131,6 +131,9 @@ func loadPolicyForWrite(w http.ResponseWriter, yamlText string) *policy.Policy {
 		writePolicyValidationFailed(w, sem)
 		return nil
 	}
+	if refuseMaskedNotify(w, pol) {
+		return nil
+	}
 	return pol
 }
 

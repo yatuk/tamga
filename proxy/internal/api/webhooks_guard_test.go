@@ -67,23 +67,17 @@ func TestWebhookCreate_RejectsBlockedAndInsecureURLs(t *testing.T) {
 	}
 }
 
-// The update handler has no route today; it is called directly so the check
-// is in place when it gets one.
+// No route updates a destination today. The store's Update holds the check,
+// so it is in place when one does.
 func TestWebhookUpdate_RejectsBlockedAndInsecureURLs(t *testing.T) {
 	store := webhooks.NewMemoryStore()
 	wh, err := store.Create(webhooks.Webhook{Label: "ok", Kind: webhooks.KindSlack, URL: "https://hooks.example.com/x", Enabled: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg := Config{AdminKey: "test-key", Webhooks: store, DefaultOrgID: "org-1"}
 	for _, u := range []string{"http://127.0.0.1/", "http://169.254.169.254/", "https://192.168.1.1/", "http://hooks.example.com/x", "gopher://example.com/"} {
-		body, _ := json.Marshal(map[string]interface{}{"url": u, "enabled": true})
-		req := httptest.NewRequest(http.MethodPut, "/api/v1/webhooks/"+wh.ID, strings.NewReader(string(body)))
-		req.SetPathValue("id", wh.ID)
-		rec := httptest.NewRecorder()
-		cfg.handleWebhookUpdate(rec, req)
-		if rec.Code != http.StatusBadRequest {
-			t.Errorf("%s: %d %s, want 400", u, rec.Code, rec.Body.String())
+		if _, err := store.Update(wh.ID, webhooks.Webhook{URL: u, Enabled: true}); err == nil {
+			t.Errorf("%s: the update was accepted", u)
 		}
 	}
 	if got, _ := store.Get(wh.ID); got.URL != wh.URL {

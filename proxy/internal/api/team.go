@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -38,7 +39,10 @@ func (cfg Config) handleTeamList(w http.ResponseWriter, r *http.Request) {
 					Email:    cu.Email(),
 					Name:     cu.Name(),
 					ImageURL: cu.ImageURL,
-					Role:     users.RoleViewer,
+					// Being in the Clerk tenant assigns nothing: the role is
+					// empty, or the operator's default for accounts without
+					// one.
+					Role: cfg.defaultRole(),
 				}
 				if existing, ok := roleByID[cu.ID]; ok {
 					m.Role = existing.Role
@@ -62,6 +66,9 @@ func (cfg Config) handleTeamList(w http.ResponseWriter, r *http.Request) {
 		"items": items,
 		"total": len(items),
 		"clerk": clerkOK,
+		// The role of an account nobody assigned one: "" (it has no access)
+		// or "viewer".
+		"default_role": cfg.defaultRole(),
 	})
 }
 
@@ -86,16 +93,6 @@ func validUserID(id string) bool {
 		}
 	}
 	return true
-}
-
-func adminCount(members []users.Member) int {
-	n := 0
-	for _, m := range members {
-		if m.Role == users.RoleAdmin {
-			n++
-		}
-	}
-	return n
 }
 
 func (cfg Config) handleTeamRolePut(w http.ResponseWriter, r *http.Request) {
@@ -126,17 +123,15 @@ func (cfg Config) handleTeamRolePut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// The last admin stays one: without it only the static admin key could
-	// assign roles again.
-	if cur, ok := cfg.Users.Role(id); ok && cur == users.RoleAdmin &&
-		strings.ToLower(strings.TrimSpace(body.Role)) != users.RoleAdmin && adminCount(cfg.Users.List()) <= 1 {
-		writeJSON(w, http.StatusConflict, map[string]string{
-			"error": "this is the last admin; make someone else an admin first",
-			"code":  codeLastAdmin,
-		})
-		return
-	}
-	m, err := cfg.Users.Set(id, body.Role)
+	// assign roles again. The store checks that and writes in one step, so
+	// two demotions at once cannot both find another admin still there.
+	// A role that changes ends the user's sessions (see users.MemoryStore).
+	m, err := cfg.Users.Assign(id, body.Role)
 	if err != nil {
+		if errors.Is(err, users.ErrLastAdmin) {
+			writeLastAdmin(w)
+			return
+		}
 		writeStoreError(w, err)
 		return
 	}
@@ -149,4 +144,96 @@ func (cfg Config) handleTeamRolePut(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	writeJSON(w, http.StatusOK, m)
+}
+
+func writeLastAdmin(w http.ResponseWriter) {
+	writeJSON(w, http.StatusConflict, map[string]string{
+		"error": "this is the last admin; make someone else an admin first",
+		"code":  codeLastAdmin,
+	})
+}
+
+// teamTarget returns the user id a team route names, having answered the
+// request when there is no user store or the id cannot be one.
+func (cfg Config) teamTarget(w http.ResponseWriter, r *http.Request) (string, bool) {
+	if cfg.Users == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "users store unavailable"})
+		return "", false
+	}
+	id := strings.TrimSpace(r.PathValue("id"))
+	if !validUserID(id) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid user id"})
+		return "", false
+	}
+	return id, true
+}
+
+// handleTeamRoleDelete serves DELETE /team/{id}/role: the account keeps no
+// role. Its sessions end, and it cannot sign in again unless the operator
+// set a default role for accounts without one.
+func (cfg Config) handleTeamRoleDelete(w http.ResponseWriter, r *http.Request) {
+	id, ok := cfg.teamTarget(w, r)
+	if !ok {
+		return
+	}
+	// As with a change of role: nobody removes their own.
+	if actorFromRequest(r) == actorUserPrefix+id {
+		writeJSON(w, http.StatusForbidden, map[string]string{
+			"error": "you cannot remove your own role",
+			"code":  codeOwnRole,
+		})
+		return
+	}
+	if err := cfg.Users.Remove(id); err != nil {
+		switch {
+		case errors.Is(err, users.ErrLastAdmin):
+			writeLastAdmin(w)
+		case errors.Is(err, users.ErrNotFound):
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "this account has no role"})
+		default:
+			writeStoreError(w, err)
+		}
+		return
+	}
+	if cfg.Audit != nil {
+		cfg.Audit.Append(incidents.AuditEntry{
+			Kind:   "team.role.remove",
+			Target: id,
+			Actor:  actorFromRequest(r),
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "user_id": id})
+}
+
+// handleTeamSessionsRevoke serves POST /team/{id}/sessions/revoke: every
+// session token the user holds now stops working, and the user signs in
+// again. The role is not touched. An admin may do this to their own
+// sessions; the request that asks for it is the last one its token makes.
+//
+// The replica that serves this refuses the tokens from the next request on;
+// another replica does once it has reloaded the team roles, up to 30 s
+// later (main.settingsReloadInterval).
+func (cfg Config) handleTeamSessionsRevoke(w http.ResponseWriter, r *http.Request) {
+	id, ok := cfg.teamTarget(w, r)
+	if !ok {
+		return
+	}
+	from, err := cfg.Users.RevokeSessions(id)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	if cfg.Audit != nil {
+		cfg.Audit.Append(incidents.AuditEntry{
+			Kind:   "team.sessions.revoke",
+			Target: id,
+			Actor:  actorFromRequest(r),
+			Detail: map[string]interface{}{"sessions_valid_from": from},
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"ok":                  true,
+		"user_id":             id,
+		"sessions_valid_from": from,
+	})
 }

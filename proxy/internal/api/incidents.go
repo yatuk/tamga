@@ -135,12 +135,8 @@ func (cfg Config) handleIncidentTriage(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	// Fetch updated state to return.
-	st, err := cfg.Incidents.Get(id)
-	if err != nil {
-		writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "request_id": id})
-		return
-	}
+	// The change is made: it is recorded now, whether or not the state can
+	// be read back for the answer.
 	if cfg.Audit != nil {
 		cfg.Audit.Append(incidents.AuditEntry{
 			Kind:   "incident.triage",
@@ -149,7 +145,19 @@ func (cfg Config) handleIncidentTriage(w http.ResponseWriter, r *http.Request) {
 			Detail: map[string]interface{}{"assignee": body.Assignee},
 		})
 	}
-	writeJSON(w, http.StatusOK, st)
+	cfg.writeIncidentState(w, id)
+}
+
+// writeIncidentState answers a lifecycle change with the incident as it is
+// now, or with a bare acknowledgement when it cannot be read back.
+func (cfg Config) writeIncidentState(w http.ResponseWriter, id string) {
+	if cfg.Incidents != nil {
+		if st, err := cfg.Incidents.Get(id); err == nil {
+			writeJSON(w, http.StatusOK, st)
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "request_id": id})
 }
 
 // handleIncidentResolve processes POST /api/v1/incidents/{request_id}/resolve
@@ -180,11 +188,6 @@ func (cfg Config) handleIncidentResolve(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	st, err := cfg.Incidents.Get(id)
-	if err != nil {
-		writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "request_id": id})
-		return
-	}
 	if cfg.Audit != nil {
 		cfg.Audit.Append(incidents.AuditEntry{
 			Kind:   "incident.resolve",
@@ -193,7 +196,7 @@ func (cfg Config) handleIncidentResolve(w http.ResponseWriter, r *http.Request) 
 			Detail: map[string]interface{}{"resolution": body.Resolution, "resolved_by": resolvedBy},
 		})
 	}
-	writeJSON(w, http.StatusOK, st)
+	cfg.writeIncidentState(w, id)
 }
 
 // handleIncidentReopen processes POST /api/v1/incidents/{request_id}/reopen
@@ -211,11 +214,6 @@ func (cfg Config) handleIncidentReopen(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	st, err := cfg.Incidents.Get(id)
-	if err != nil {
-		writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "request_id": id})
-		return
-	}
 	if cfg.Audit != nil {
 		cfg.Audit.Append(incidents.AuditEntry{
 			Kind:   "incident.reopen",
@@ -223,7 +221,7 @@ func (cfg Config) handleIncidentReopen(w http.ResponseWriter, r *http.Request) {
 			Actor:  actorFromRequest(r),
 		})
 	}
-	writeJSON(w, http.StatusOK, st)
+	cfg.writeIncidentState(w, id)
 }
 
 // handleMTTR processes GET /api/v1/mttr?range=7d. The figures are for the

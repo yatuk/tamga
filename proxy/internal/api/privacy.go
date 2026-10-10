@@ -70,12 +70,39 @@ func handleSubjectEraseImpl(cfg Config, w http.ResponseWriter, r *http.Request) 
 }
 
 // handleSubjectAccess returns request_log rows for a data subject (GDPR Art. 15).
+//
+// The selector names a person. POST takes it from a JSON body, the fields
+// DELETE takes, and reads nothing from the query string; GET takes it from
+// the query string, which access logs and proxies keep, and is there for
+// the callers that already use it.
 func handleSubjectAccessImpl(cfg Config, w http.ResponseWriter, r *http.Request) {
-	userID := r.URL.Query().Get("user_id")
-	email := r.URL.Query().Get("email")
-	tcknHash := r.URL.Query().Get("tckn_hash")
+	var userID, email, tcknHash string
+	if r.Method == http.MethodPost {
+		defer func() { _ = r.Body.Close() }()
+		var body struct {
+			UserID   string `json:"user_id"`
+			Email    string `json:"email"`
+			TCKNHash string `json:"tckn_hash"`
+		}
+		raw, err := io.ReadAll(io.LimitReader(r.Body, 1<<16))
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		if len(raw) > 0 {
+			if err := json.Unmarshal(raw, &body); err != nil {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+				return
+			}
+		}
+		userID, email, tcknHash = body.UserID, body.Email, body.TCKNHash
+	} else {
+		userID = r.URL.Query().Get("user_id")
+		email = r.URL.Query().Get("email")
+		tcknHash = r.URL.Query().Get("tckn_hash")
+	}
 	if userID == "" && email == "" && tcknHash == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "user_id, email, or tckn_hash query param required"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "user_id, email, or tckn_hash required"})
 		return
 	}
 	if cfg.Store != nil && cfg.DefaultOrgID != "" {

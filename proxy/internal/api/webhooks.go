@@ -89,38 +89,6 @@ func (cfg Config) handleWebhookCreate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, created)
 }
 
-func (cfg Config) handleWebhookUpdate(w http.ResponseWriter, r *http.Request) {
-	if cfg.Webhooks == nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "webhooks unavailable"})
-		return
-	}
-	id := r.PathValue("id")
-	defer func() { _ = r.Body.Close() }()
-	var body webhooks.Webhook
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeStoreError(w, err)
-		return
-	}
-	updated, err := cfg.Webhooks.Update(id, body)
-	if err != nil {
-		if errors.Is(err, webhooks.ErrNotFound) {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
-			return
-		}
-		writeStoreError(w, err)
-		return
-	}
-	if cfg.Audit != nil {
-		cfg.Audit.Append(incidents.AuditEntry{
-			Kind:   "webhook.update",
-			Target: updated.ID,
-			Actor:  actorFromRequest(r),
-			Detail: map[string]interface{}{"kind": string(updated.Kind), "label": updated.Label},
-		})
-	}
-	writeJSON(w, http.StatusOK, updated)
-}
-
 func (cfg Config) handleWebhookTest(w http.ResponseWriter, r *http.Request) {
 	if cfg.Webhooks == nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "webhooks unavailable"})

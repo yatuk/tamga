@@ -13,13 +13,19 @@ import (
 	"github.com/yatuk/tamga/internal/auth"
 )
 
-// handleGitHubLogin redirects the user to GitHub's OAuth authorize page (step 1).
-func (cfg Config) handleGitHubLogin(w http.ResponseWriter, r *http.Request) {
-	oauthCfg := auth.GitHubOAuthConfig{
+// gitHubOAuth is the GitHub OAuth client of this deployment.
+func (cfg Config) gitHubOAuth() auth.GitHubOAuthConfig {
+	return auth.GitHubOAuthConfig{
 		ClientID:     cfg.GitHubClientID,
 		ClientSecret: cfg.GitHubClientSecret,
 		CallbackURL:  cfg.GitHubOAuthCallbackURL,
+		HTTPClient:   cfg.gitHubHTTP,
 	}
+}
+
+// handleGitHubLogin redirects the user to GitHub's OAuth authorize page (step 1).
+func (cfg Config) handleGitHubLogin(w http.ResponseWriter, r *http.Request) {
+	oauthCfg := cfg.gitHubOAuth()
 	if !oauthCfg.IsConfigured() {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "github oauth not configured"})
 		return
@@ -52,11 +58,7 @@ func (cfg Config) handleGitHubLogin(w http.ResponseWriter, r *http.Request) {
 // fetches the user's identity, and returns a Tamga JWT (step 2+3).
 // The JWT is returned as JSON so the dashboard can store it.
 func (cfg Config) handleGitHubCallback(w http.ResponseWriter, r *http.Request) {
-	oauthCfg := auth.GitHubOAuthConfig{
-		ClientID:     cfg.GitHubClientID,
-		ClientSecret: cfg.GitHubClientSecret,
-		CallbackURL:  cfg.GitHubOAuthCallbackURL,
-	}
+	oauthCfg := cfg.gitHubOAuth()
 	if !oauthCfg.IsConfigured() {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "github oauth not configured"})
 		return
@@ -118,55 +120,30 @@ func (cfg Config) handleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Issue Tamga JWT (24-hour session).
-	claims := auth.Claims{
+	// Issue Tamga JWT (24-hour session) and return it with the user info.
+	cfg.issueSession(w, jwtSecret, auth.Claims{
 		Sub:    fmt.Sprintf("%d", ghUser.ID),
 		Email:  ghUser.Email,
 		Name:   ghUser.Name,
 		Avatar: ghUser.AvatarURL,
 		Role:   role,
-		Exp:    time.Now().Add(24 * time.Hour).Unix(),
-	}
-	token, err := auth.CreateToken(claims, []byte(jwtSecret))
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create token"})
-		return
-	}
-
-	// Return the JWT + user info to the dashboard.
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"token": token,
-		"user": map[string]interface{}{
-			"id":     claims.Sub,
-			"email":  claims.Email,
-			"name":   claims.Name,
-			"avatar": claims.Avatar,
-			"role":   claims.Role,
-		},
 	})
 }
 
-// codeAccountNotAssigned is the code of the 403 a sign-in gets when nobody
-// has given the account a role.
-const codeAccountNotAssigned = "account_not_assigned"
-
 // gitHubRole returns the role a GitHub account signs in with. Anyone can
-// have a GitHub account, so one the user store does not know gets no
-// session: it answers 403 and returns false. An admin lets an account in by
+// have a GitHub account, so one without an assigned role gets no session:
+// it answers 403 and returns false. An admin lets an account in by
 // assigning it a role (PUT /team/{github user id}/role), which the static
-// admin key can do before any user exists.
+// admin key can do before any user exists. The operator can instead admit
+// every account as a viewer (TAMGA_SSO_DEFAULT_ROLE=viewer), which for
+// GitHub means anyone who has an account there: see accountRole, the one
+// rule for every sign-in.
 func (cfg Config) gitHubRole(w http.ResponseWriter, id int64) (string, bool) {
 	sub := fmt.Sprintf("%d", id)
-	if cfg.Users != nil {
-		if role, ok := cfg.Users.Role(sub); ok {
-			return role, true
-		}
+	if role, ok := cfg.accountRole(sub); ok {
+		return role, true
 	}
-	writeJSON(w, http.StatusForbidden, map[string]string{
-		"error":          "this GitHub account has not been given access; an admin assigns it a role first",
-		"code":           codeAccountNotAssigned,
-		"github_user_id": sub,
-	})
+	writeAccountNotAssigned(w, "github", sub)
 	return "", false
 }
 
@@ -195,6 +172,14 @@ func (cfg Config) handleSession(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, status, map[string]string{"error": msg})
 		return
 	}
+	// The answer is what the management API would say to this token now:
+	// a revoked session is not restored, and the role is today's, not the
+	// one the token was signed with.
+	role, refused := cfg.sessionRole(claims)
+	if refused != "" {
+		refuseSession(w, refused, claims)
+		return
+	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"user": map[string]interface{}{
@@ -202,7 +187,7 @@ func (cfg Config) handleSession(w http.ResponseWriter, r *http.Request) {
 			"email":  claims.Email,
 			"name":   claims.Name,
 			"avatar": claims.Avatar,
-			"role":   claims.Role,
+			"role":   role,
 		},
 	})
 }
@@ -211,11 +196,7 @@ func (cfg Config) handleSession(w http.ResponseWriter, r *http.Request) {
 // This is the POST variant used by SPAs where the redirect lands on the dashboard,
 // not the proxy. The dashboard sends the code here and receives a session token.
 func (cfg Config) handleGitHubExchange(w http.ResponseWriter, r *http.Request) {
-	oauthCfg := auth.GitHubOAuthConfig{
-		ClientID:     cfg.GitHubClientID,
-		ClientSecret: cfg.GitHubClientSecret,
-		CallbackURL:  cfg.GitHubOAuthCallbackURL,
-	}
+	oauthCfg := cfg.gitHubOAuth()
 	if !oauthCfg.IsConfigured() {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "github oauth not configured"})
 		return
@@ -256,29 +237,12 @@ func (cfg Config) handleGitHubExchange(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	claims := auth.Claims{
+	cfg.issueSession(w, jwtSecret, auth.Claims{
 		Sub:    fmt.Sprintf("%d", ghUser.ID),
 		Email:  ghUser.Email,
 		Name:   ghUser.Name,
 		Avatar: ghUser.AvatarURL,
 		Role:   role,
-		Exp:    time.Now().Add(24 * time.Hour).Unix(),
-	}
-	token, err := auth.CreateToken(claims, []byte(jwtSecret))
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create token"})
-		return
-	}
-
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"token": token,
-		"user": map[string]interface{}{
-			"id":     claims.Sub,
-			"email":  claims.Email,
-			"name":   claims.Name,
-			"avatar": claims.Avatar,
-			"role":   claims.Role,
-		},
 	})
 }
 

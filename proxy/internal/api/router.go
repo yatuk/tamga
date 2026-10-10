@@ -118,19 +118,18 @@ type Config struct {
 	GitHubClientID         string
 	GitHubClientSecret     string
 	GitHubOAuthCallbackURL string
-	// ClerkSecretKey is the Clerk Backend API secret key for SAML/OIDC verification.
-	ClerkSecretKey string
-	// ClerkCallbackURL is the base URL for Clerk callback endpoints
-	// (e.g. https://proxy.example.com/auth/clerk).
-	ClerkCallbackURL string
+	// SSODefaultRole is the role of a signed-in account nobody assigned
+	// one: "" refuses it, "viewer" admits it as a viewer. See
+	// config.Config.SSODefaultRole.
+	SSODefaultRole string
 	// Scan serves POST /scan (the proxy package builds it, around the proxy
 	// path's own scanners and policy evaluation). It authenticates its own
 	// callers and is mounted outside the admin middleware, because a proxy
 	// key must open it and nothing else here. Nil leaves the route out.
 	Scan http.Handler
-	// clerkAPIBaseURL is the Clerk Backend API base URL. Defaults to
-	// https://api.clerk.com/v1. Tests can override via this unexported field.
-	clerkAPIBaseURL string
+	// gitHubHTTP is the client GitHub is asked with; nil is the default
+	// one. Tests point it at a stand-in for GitHub.
+	gitHubHTTP *http.Client
 }
 
 // TierEnforcer is the subset of tier.Enforcer needed by the API layer.
@@ -224,7 +223,7 @@ func corsMiddleware(cfg Config) func(http.Handler) http.Handler {
 				"X-Tamga-Input-Risk, X-Tamga-Risk-Level, X-Tamga-Confidence-Score, "+
 					"X-Tamga-Request-Id, X-Tamga-Org-Id, X-Tamga-Action-Reason, "+
 					"X-Tamga-Upstream-Provider, X-Tamga-Upstream-Fallback, X-Tamga-Scan-Ms, X-Tamga-Scan-Latency-Ms, "+
-					dataSourceHeader+", "+exportTruncatedHeader)
+					dataSourceHeader+", "+exportTruncatedHeader+", "+maskedHeader)
 
 			if cfg.CORSMaxAge > 0 {
 				w.Header().Set("Access-Control-Max-Age", strconv.Itoa(cfg.CORSMaxAge))
@@ -303,6 +302,14 @@ func adminAuth(cfg Config) func(http.Handler) http.Handler {
 			// The secret is trimmed as it is where the token is signed.
 			if secret := strings.TrimSpace(cfg.JWTSecret); secret != "" {
 				if claims := validateJWTFromRequest(r, secret); claims != nil {
+					// A token that is signed and in date still opens
+					// nothing when its user's sessions were revoked or the
+					// account has no role now.
+					role, refused := cfg.sessionRole(claims)
+					if refused != "" {
+						refuseSession(w, refused, claims)
+						return
+					}
 					// The headers are kept for handlers that read them; the
 					// identity handlers act on is the one in the context.
 					r.Header.Set("X-Tamga-User-Id", claims.Sub)
@@ -313,36 +320,13 @@ func adminAuth(cfg Config) func(http.Handler) http.Handler {
 					if subject == "" {
 						subject = claims.Email
 					}
-					next.ServeHTTP(w, withIdentity(r, actorUserPrefix+subject, cfg.sessionRole(claims)))
+					next.ServeHTTP(w, withIdentity(r, actorUserPrefix+subject, role))
 					return
 				}
 			}
 			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		})
 	}
-}
-
-
-// sessionRole returns the role a session token acts with now. The token says
-// which role its user had at sign-in, up to a day ago; the user store says
-// which it has today, so a changed or withdrawn role takes effect on the
-// next request. A user the store does not know has no assigned role and is
-// a viewer, whatever the token says. Without a user store the token is all
-// there is. A role that is none of the three opens nothing: see roleHasScope.
-func (cfg Config) sessionRole(claims *auth.Claims) string {
-	role := strings.ToLower(strings.TrimSpace(claims.Role))
-	if cfg.Users == nil {
-		return role
-	}
-	if claims.Sub != "" {
-		if current, ok := cfg.Users.Role(claims.Sub); ok {
-			return strings.ToLower(strings.TrimSpace(current))
-		}
-	}
-	if role == users.RoleAdmin || role == users.RoleAnalyst {
-		return users.RoleViewer
-	}
-	return role
 }
 
 // apiKeyScopeToRole gives the role an API key acts with. A scope that is
@@ -678,7 +662,8 @@ func (cfg Config) handlePolicies(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Dashboard contract expects an array payload, even for a single active policy.
-	writeJSON(w, http.StatusOK, []*policy.Policy{p})
+	// A webhook URL in a rule's notify is shown to an admin only.
+	writeJSON(w, http.StatusOK, []*policy.Policy{maskedPolicy(w, r, p)})
 }
 
 func (cfg Config) handlePoliciesReload(w http.ResponseWriter, r *http.Request) {

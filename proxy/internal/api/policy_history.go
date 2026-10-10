@@ -22,7 +22,13 @@ func (cfg Config) handlePolicyHistory(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	writeJSON(w, http.StatusOK, revs)
+	// The text of every revision, as the caller may read it. Into a slice
+	// of its own: the store's is not this handler's to change.
+	out := make([]history.Revision, len(revs))
+	for i := range revs {
+		out[i] = maskedRevision(w, r, revs[i])
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (cfg Config) handlePolicyRevisionGet(w http.ResponseWriter, r *http.Request) {
@@ -36,7 +42,7 @@ func (cfg Config) handlePolicyRevisionGet(w http.ResponseWriter, r *http.Request
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "revision not found"})
 		return
 	}
-	writeJSON(w, http.StatusOK, rev)
+	writeJSON(w, http.StatusOK, maskedRevision(w, r, rev))
 }
 
 func (cfg Config) handlePolicyRollback(w http.ResponseWriter, r *http.Request) {
@@ -98,7 +104,11 @@ func (cfg Config) handleProposalList(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	writeJSON(w, http.StatusOK, props)
+	out := make([]history.Proposal, len(props))
+	for i := range props {
+		out[i] = maskedProposal(w, r, props[i])
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (cfg Config) handleProposalCreate(w http.ResponseWriter, r *http.Request) {
@@ -159,7 +169,7 @@ func (cfg Config) handleProposalCreate(w http.ResponseWriter, r *http.Request) {
 			},
 		})
 	}
-	writeJSON(w, http.StatusCreated, p)
+	writeJSON(w, http.StatusCreated, maskedProposal(w, r, p))
 }
 
 func (cfg Config) handleProposalApprove(w http.ResponseWriter, r *http.Request) {
@@ -296,5 +306,5 @@ func (cfg Config) handleProposalReject(w http.ResponseWriter, r *http.Request) {
 	if cfg.Audit != nil {
 		cfg.Audit.Append(incidents.AuditEntry{Kind: "policy.proposal.reject", Target: id, Actor: prop.RejectedBy})
 	}
-	writeJSON(w, http.StatusOK, prop)
+	writeJSON(w, http.StatusOK, maskedProposal(w, r, prop))
 }

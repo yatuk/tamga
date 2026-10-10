@@ -81,13 +81,21 @@ type Config struct {
 	// GitHubOAuthCallbackURL is the redirect URI registered with the GitHub OAuth app
 	// (e.g. http://localhost:8443/api/v1/auth/github/callback).
 	GitHubOAuthCallbackURL string
-	// ClerkSecretKey is the Clerk Backend API secret key for SAML/OIDC verification.
-	// Required for Clerk SSO. Set via TAMGA_CLERK_SECRET_KEY env var.
+	// ClerkSecretKey is the Clerk Backend API secret key. It is used to list
+	// names and email addresses on the Team page, not to sign anyone in.
+	// Set via TAMGA_CLERK_SECRET_KEY env var.
 	ClerkSecretKey string
-	// ClerkCallbackURL is the base URL for Clerk SAML/OIDC callback endpoints
-	// (e.g. https://proxy.example.com/auth/clerk).
-	// Set via TAMGA_CLERK_CALLBACK_URL env var.
+	// ClerkCallbackURL is read from TAMGA_CLERK_CALLBACK_URL and used by
+	// nothing: the proxy has no Clerk sign-in (see api.handleClerkCallback).
 	ClerkCallbackURL string
+	// SSODefaultRole is the role of a signed-in account that no admin has
+	// assigned one (GitHub or any other sign-in). Empty, the default, refuses
+	// such an account: it gets no session, and a session it already holds
+	// stops working. "viewer" admits it as a viewer, which is for a
+	// deployment whose identity provider is itself the list of who may read
+	// events, findings, the policy, incidents and costs. No other value is
+	// accepted. Set via TAMGA_SSO_DEFAULT_ROLE env var.
+	SSODefaultRole string
 
 	// ScannerPipelineMode selects the scanner execution strategy.
 	// "adaptive" (default): fast scanners sequential, slow scanners parallel goroutines.
@@ -233,6 +241,11 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
+	ssoDefaultRole, err := ParseSSODefaultRole(os.Getenv("TAMGA_SSO_DEFAULT_ROLE"))
+	if err != nil {
+		return nil, err
+	}
+
 	alertNets, alertHosts, err := ParseAlertAllowPrivate(os.Getenv("TAMGA_ALERT_ALLOW_PRIVATE"))
 	if err != nil {
 		return nil, err
@@ -288,6 +301,7 @@ func Load() (*Config, error) {
 		GitHubOAuthCallbackURL:   envOrDefault("TAMGA_GITHUB_OAUTH_CALLBACK_URL", ""),
 		ClerkSecretKey:           envOrDefault("TAMGA_CLERK_SECRET_KEY", ""),
 		ClerkCallbackURL:         envOrDefault("TAMGA_CLERK_CALLBACK_URL", ""),
+		SSODefaultRole:           ssoDefaultRole,
 		ScannerPipelineMode:      envOrDefault("TAMGA_SCANNER_PIPELINE_MODE", "adaptive"),
 		ScannerPipelineTimeoutMs: envOrDefaultInt("TAMGA_SCANNER_PIPELINE_TIMEOUT_MS", 5000),
 		ScannerWorkerPoolSize:    envOrDefaultInt("TAMGA_SCANNER_WORKER_POOL_SIZE", 0),

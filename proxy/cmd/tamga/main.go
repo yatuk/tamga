@@ -394,6 +394,12 @@ func main() {
 		}
 	})
 	clerkClient := users.NewClerkClient(cfg.ClerkSecretKey)
+	if cfg.SSODefaultRole != "" {
+		// Said at every start: with GitHub sign-in this lets in anyone who
+		// has a GitHub account.
+		log.Warn().Str("role", cfg.SSODefaultRole).
+			Msg("TAMGA_SSO_DEFAULT_ROLE is set: an account that signs in without an assigned role gets this role instead of being refused")
+	}
 	var policyHistory policyhistory.Store
 	if pgStore != nil {
 		pgHist, err := policyhistory.NewPostgresStore(pgStore.Pool())
@@ -848,8 +854,7 @@ func main() {
 		GitHubClientID:         cfg.GitHubClientID,
 		GitHubClientSecret:     cfg.GitHubClientSecret,
 		GitHubOAuthCallbackURL: cfg.GitHubOAuthCallbackURL,
-		ClerkSecretKey:         cfg.ClerkSecretKey,
-		ClerkCallbackURL:       cfg.ClerkCallbackURL,
+		SSODefaultRole:         cfg.SSODefaultRole,
 		AnalyzerHTTPURL:        cfg.AnalyzerHTTPURL,
 		SSOSettings:            ssoStore,
 		Scan: proxy.NewScanHandler(proxyCfg, proxy.ScanOptions{
@@ -985,6 +990,8 @@ func retentionSchedulerEnabled() bool {
 
 // settingsReloadInterval is how long a change to patterns, team roles,
 // SSO settings or webhooks made on one replica takes to reach the others.
+// A revoked session is such a change (it is stored with the team roles): a
+// token revoked on one replica is honoured by another for up to this long.
 const settingsReloadInterval = 30 * time.Second
 
 // persistSettings puts the database behind the pattern, team-role, SSO and

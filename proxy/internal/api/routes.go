@@ -49,8 +49,10 @@ func routes(cfg *Config) []route {
 		{method: "GET", path: "/auth/github/callback", public: publicSignIn, handler: h(cfg.handleGitHubCallback)},
 		{method: "POST", path: "/auth/github/exchange", public: publicSignIn, handler: h(cfg.handleGitHubExchange)},
 		{method: "GET", path: "/auth/session", public: publicToken, handler: h(cfg.handleSession)},
-		{method: "POST", path: "/auth/clerk/saml/callback", public: publicSignIn, handler: h(handleClerkSamlCallback(cfg))},
-		{method: "POST", path: "/auth/clerk/oidc/callback", public: publicSignIn, handler: h(handleClerkOidcCallback(cfg))},
+		{method: "POST", path: "/auth/logout", public: publicToken, handler: h(cfg.handleLogout)},
+		// There is no Clerk sign-in: both answer 501 and issue nothing.
+		{method: "POST", path: "/auth/clerk/saml/callback", public: publicSignIn, handler: h(handleClerkCallback)},
+		{method: "POST", path: "/auth/clerk/oidc/callback", public: publicSignIn, handler: h(handleClerkCallback)},
 		// The one route a proxy-scope key opens.
 		{method: "POST", path: "/scan", public: publicScan, handler: cfg.Scan},
 
@@ -132,6 +134,8 @@ func routes(cfg *Config) []route {
 		{method: "DELETE", path: "/webhooks/{id}", scope: scopeWebhooksWrite, handler: h(cfg.handleWebhookDelete)},
 		{method: "GET", path: "/team", scope: scopeTeamAdmin, handler: h(cfg.handleTeamList)},
 		{method: "PUT", path: "/team/{id}/role", scope: scopeTeamAdmin, handler: h(cfg.handleTeamRolePut)},
+		{method: "DELETE", path: "/team/{id}/role", scope: scopeTeamAdmin, handler: h(cfg.handleTeamRoleDelete)},
+		{method: "POST", path: "/team/{id}/sessions/revoke", scope: scopeTeamAdmin, handler: h(cfg.handleTeamSessionsRevoke)},
 		// The SSO settings hold no secret and are read like the other
 		// settings; which identity provider is trusted is for an admin.
 		{method: "GET", path: "/settings/sso", scope: scopeRead, handler: h(cfg.handleSSOGet)},
@@ -143,7 +147,11 @@ func routes(cfg *Config) []route {
 		{method: "GET", path: "/scim/v2/Users/{id}", scope: scopeScimAdmin, handler: h(cfg.handleScimGetUser)},
 		{method: "PATCH", path: "/scim/v2/Users/{id}", scope: scopeScimAdmin, handler: h(cfg.handleScimPatchUser)},
 		{method: "DELETE", path: "/scim/v2/Users/{id}", scope: scopeScimAdmin, handler: h(cfg.handleScimDeleteUser)},
+		// The selector names a person. POST takes it in the body; GET takes
+		// it in the query string, where access logs keep it, and stays for
+		// the callers that have it.
 		{method: "GET", path: "/events/subject", scope: scopePrivacyAccess, handler: h(cfg.handleSubjectAccess)},
+		{method: "POST", path: "/events/subject", scope: scopePrivacyAccess, handler: h(cfg.handleSubjectAccess)},
 		{method: "DELETE", path: "/events/subject", scope: scopePrivacyErase, handler: h(cfg.handleSubjectErase)},
 		{method: "POST", path: "/maintenance/retention", scope: scopeMaintenance, handler: h(cfg.handleRetentionRun)},
 		{method: "POST", path: "/maintenance/circuit-reset", scope: scopeMaintenance, handler: h(cfg.handleCircuitReset)},
