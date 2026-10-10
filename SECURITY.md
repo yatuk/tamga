@@ -9,7 +9,7 @@ open a public issue. Report it privately:
    repository's **Security** tab and choose **Report a vulnerability**, or go
    to <https://github.com/yatuk/tamga/security/advisories/new>.
 2. **E-mail**, if you cannot use GitHub or the form is not offered to you:
-   security@tamga.dev. No PGP key is published for this address.
+   security@tamgaproxy.com. No PGP key is published for this address.
 
 Include:
 

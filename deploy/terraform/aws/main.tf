@@ -90,7 +90,7 @@ module "vpc" {
   enable_dns_hostnames = true
 
   tags = {
-    "tamga.io/managed-by" = "terraform"
+    "tamgaproxy.com/managed-by" = "terraform"
   }
 }
 
@@ -122,7 +122,7 @@ module "eks" {
   }
 
   tags = {
-    "tamga.io/managed-by" = "terraform"
+    "tamgaproxy.com/managed-by" = "terraform"
   }
 }
 

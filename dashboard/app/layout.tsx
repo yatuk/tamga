@@ -33,7 +33,7 @@ const atkinsonMono = Atkinson_Hyperlegible_Mono({
   fallback: ["Consolas", "Menlo", "monospace"],
 });
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://tamga.dev";
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://tamgaproxy.com";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),

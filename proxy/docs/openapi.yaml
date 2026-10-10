@@ -30,14 +30,12 @@ info:
     browser history.
   contact:
     name: Tamga Security
-    email: security@tamga.io
-    url: https://tamga.io/trust
+    email: security@tamgaproxy.com
+    url: https://tamgaproxy.com/trust
 
 servers:
-  - url: https://api.tamga.io
-    description: Production
-  - url: http://localhost:8080
-    description: Local
+  - url: http://localhost:8443
+    description: A proxy you run. There is no hosted API; put your own address here.
 
 security:
   - AdminKey: []
