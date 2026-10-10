@@ -36,6 +36,11 @@ type Finding struct {
 	// Seg is the index of the segment the finding is in; StartPos and EndPos
 	// are then offsets into that segment's text.
 	Seg int `json:"-"`
+	// fp tells apart two values whose Match is the same because the Match
+	// holds none of the value (see secretFingerprint). Zero when the scanner
+	// set none, as for a finding that came over the wire. It is unexported
+	// so that no encoder writes it.
+	fp uint64
 }
 
 // ScanResult wraps a scanner's output with execution metadata. Used by the

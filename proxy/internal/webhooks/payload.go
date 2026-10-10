@@ -14,8 +14,8 @@ import (
 
 // Alert is what a destination is told about one decision. It has no field
 // for the request or response text and none for what a scanner matched, so
-// no renderer can send either: a finding's match keeps the start of a secret
-// even when masked, and some scanners do not mask at all.
+// no renderer can send either: a masked match still keeps the ends of a
+// value, and some scanners do not mask at all.
 type Alert struct {
 	RequestID string
 	Timestamp time.Time

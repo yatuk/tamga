@@ -3,6 +3,7 @@ package scanner
 import (
 	"context"
 	"encoding/base64"
+	"hash/maphash"
 	"regexp"
 	"strings"
 	"sync"
@@ -265,23 +266,64 @@ func (s *SecretScanner) Scan(ctx context.Context, content []byte) ([]Finding, er
 }
 
 func makeSecretFinding(name, severity, raw string, start, end int, conf float64) Finding {
-	masked := maskSecret(raw)
 	return Finding{
 		Type:       "secret",
 		Category:   name,
 		Severity:   severity,
-		Match:      masked,
+		Match:      maskSecret(name, raw),
 		StartPos:   start,
 		EndPos:     end,
 		Confidence: conf,
+		fp:         secretFingerprint(raw),
 	}
 }
 
-func maskSecret(s string) string {
-	if len(s) <= 8 {
-		return "****"
+// secretPrefixes are the markers a vendor puts in front of its keys, by
+// category. Each is a literal of the category's pattern: it is public, the
+// same for every key of its kind, and says nothing about the key that
+// follows. Longer markers come first where one starts with another.
+var secretPrefixes = map[string][]string{
+	"aws_access_key": {"AKIA", "AGPA", "AIDA", "AROA", "AIPA", "ANPA", "ANVA", "ASIA", "A3T"},
+	"github_token":   {"github_pat_", "ghp_", "gho_", "ghu_", "ghs_", "ghr_"},
+	"anthropic_key":  {"sk-ant-"},
+	"openai_key":     {"sk-"},
+	"stripe_key":     {"sk_live_", "sk_test_", "pk_live_", "pk_test_"},
+	"slack_token":    {"xoxa-", "xoxb-", "xoxe-", "xoxo-", "xoxp-", "xoxr-", "xoxs-"},
+	"google_api_key": {"AIza"},
+	"twilio_sid":     {"AC", "SK"},
+}
+
+// secretMasked stands for the whole of a secret's value.
+const secretMasked = "****"
+
+// maskSecret is what a secret finding keeps of its match: the vendor's
+// marker when the category has one, and no character of the value. The
+// match is stored with the event and shown in the console, and neither
+// needs any part of a key to say what kind of key it was.
+func maskSecret(category, raw string) string {
+	for _, p := range secretPrefixes[category] {
+		if strings.HasPrefix(raw, p) {
+			return p + secretMasked
+		}
 	}
-	return s[:8] + "..."
+	return secretMasked
+}
+
+// fingerprintSeed is drawn once per process, so a fingerprint means nothing
+// outside it.
+var fingerprintSeed = maphash.MakeSeed()
+
+// secretFingerprint tells two secrets of one category apart now that their
+// matches no longer do. It stays in the finding's unexported field: it is
+// compared while a scan's findings are settled and is never written out.
+// Case is ignored, because the normalised views differ in case and one
+// value found in two of them is one value.
+func secretFingerprint(raw string) uint64 {
+	fp := maphash.String(fingerprintSeed, strings.ToLower(raw))
+	if fp == 0 {
+		fp = 1 // zero means "no fingerprint"
+	}
+	return fp
 }
 
 // scanConnectionStrings emits a finding for the full URI and a separate finding for the password segment only.

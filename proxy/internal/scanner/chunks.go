@@ -182,6 +182,9 @@ func dropOverlapDuplicates(in []Finding) []Finding {
 		k := key{typ: f.Type, cat: f.Category, start: f.StartPos, end: f.EndPos}
 		if !f.Placed() {
 			k.match = f.Match
+			if f.fp != 0 {
+				k.match = valueSignature(f)
+			}
 		}
 		if seen[k] {
 			continue

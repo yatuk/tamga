@@ -51,7 +51,11 @@ func (s *scannerServer) Scan(ctx context.Context, req *pb.ScanRequest) (*pb.Scan
 		Pool:    s.pool,
 	}
 
-	findings, err := s.registry.ScanAllWithConfig(ctx, req.Content, cfg)
+	// ScanRaw settles the findings before they leave: a value found in the
+	// text and again in a normalised view of it is reported once. That has
+	// to happen here, where the text is. A secret's match holds none of its
+	// value, so the proxy cannot tell an echo from a second secret.
+	findings, err := s.registry.ScanRaw(ctx, req.Content, cfg)
 	if err != nil {
 		log.Warn().Err(err).Str("request_id", req.RequestId).Msg("scan failed")
 		// An empty response would read as a clean scan. The caller has to

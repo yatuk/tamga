@@ -121,8 +121,10 @@ func (f Finding) Placed() bool { return f.EndPos > f.StartPos }
 // A finding without a position is an echo when a positioned finding of the
 // same category masks to the same value — the scanner found one number in
 // both the raw and a normalised view. Reversed-digit findings are echoes when
-// there are no more of them than positioned ones. What is left without a
-// position is a value that only a normalised view revealed.
+// there are no more of them than positioned ones. A secret's match holds
+// none of its value, so secrets are compared by fingerprint, and one without
+// a fingerprint is kept (see blindSecret). What is left without a position
+// is a value that only a normalised view revealed.
 func dedupeFindings(in []Finding) []Finding {
 	if len(in) < 2 {
 		return in
@@ -152,7 +154,7 @@ func dedupeFindings(in []Finding) []Finding {
 
 		sigs := map[string]bool{}
 		for _, p := range placed {
-			sigs[maskSignature(p.Match)] = true
+			sigs[valueSignature(p)] = true
 		}
 		reversed := 0
 		for _, f := range floating {
@@ -164,8 +166,10 @@ func dedupeFindings(in []Finding) []Finding {
 		seen := map[string]bool{}
 		var kept []Finding
 		for _, f := range floating {
-			sig := maskSignature(f.Match)
+			sig := valueSignature(f)
 			switch {
+			case blindSecret(f):
+				kept = append(kept, f)
 			case sigs[sig]:
 				dropped++
 			case f.Metadata["detected_via"] == "reversed_digits" && len(placed) > 0 && reversed <= len(placed):
@@ -227,6 +231,26 @@ func dedupePlaced(in []Finding) []Finding {
 		}
 	}
 	return out
+}
+
+// valueSignature identifies the value behind a finding among the findings
+// of its category: the fingerprint its scanner gave it, or else what its
+// masked match shows.
+func valueSignature(f Finding) string {
+	if f.fp != 0 {
+		return "fp:" + strconv.FormatUint(f.fp, 16)
+	}
+	return maskSignature(f.Match)
+}
+
+// blindSecret reports whether f is a secret with nothing to compare: its
+// match holds no part of the value and it has no fingerprint, which is how
+// a secret arrives from the remote scanner service. It is kept. The service
+// has the text and drops the echoes itself (it scans with ScanRaw); to drop
+// here on the match alone would drop every further secret of a category
+// that has one in plain sight, and a value that is dropped is not masked.
+func blindSecret(f Finding) bool {
+	return f.Type == "secret" && f.fp == 0
 }
 
 // maskSignature reduces a masked match to what identifies the value behind
