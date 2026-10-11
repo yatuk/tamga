@@ -13,7 +13,7 @@ agents call. It scans each request routed through it and blocks or redacts
 PII, secrets and prompt injection before the request is forwarded to the provider.
 
 [![Tests](https://img.shields.io/github/actions/workflow/status/yatuk/tamga/proxy-ci.yml?branch=main&label=tests&style=flat-square)](https://github.com/yatuk/tamga/actions/workflows/proxy-ci.yml)
-[![Version](https://img.shields.io/badge/version-v0.8.0--rc1-blue?style=flat-square)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v0.9.0%20unreleased-blue?style=flat-square)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-green?style=flat-square)](LICENSE)
 [![Go](https://img.shields.io/badge/go-1.25-00ADD8?logo=go&logoColor=white&style=flat-square)](proxy/go.mod)
 [![Stars](https://img.shields.io/github/stars/yatuk/tamga?style=flat-square)](https://github.com/yatuk/tamga/stargazers)
@@ -61,8 +61,11 @@ Tamga sees only the requests that are sent to it. It does not see:
 
 - **Chat websites.** Text someone types or pastes into chatgpt.com, claude.ai
   or gemini.google.com in a browser goes from the browser to that site and
-  never reaches the proxy. A browser extension for this is planned. It is not
-  available.
+  never reaches the proxy. A [browser extension](docs/browser-extension.md)
+  for those three sites exists as an MVP: it asks your Tamga for a verdict at
+  paste and at send. It has not been verified on the live sites, it is not
+  in any store (you load or pack it yourself), and it covers neither file
+  uploads nor the sites' apps.
 - **Traffic between an agent and its MCP servers.** The agent talks to them
   directly. What a tool returned reaches Tamga only when the agent puts it in
   its next model request, as a tool result.
@@ -170,8 +173,43 @@ daily budget per organisation, provider allowlists, a response cache, and a SOC 
 an incident queue. See [docs/operations.md](docs/operations.md), and
 [docs/agents.md](docs/agents.md) for running Claude Code and other agents through it.
 
+Six pages of the dashboard, on made-up data
+([how the pictures are taken](dashboard/e2e/screenshots.spec.ts)):
+
 <p align="center">
-  <img src="docs/demo/dashboard.gif" alt="A tour of the Tamga dashboard: the overview, the incident queue with one incident opened, the event explorer, traffic by provider, the policy editor, custom patterns and API keys" width="820" />
+  <img src="docs/images/console-overview.png" alt="The Overview page: 214 of 18,412 requests stopped in the last 7 days, a table of what was found by kind, the seven requests stopped most recently, and a column chart of requests by day" width="820" />
+  <br />
+  <sub>Overview: what the proxy scanned in the last 7 days, what it found and what it stopped most recently.</sub>
+</p>
+
+<p align="center">
+  <img src="docs/images/console-incidents.png" alt="The Incidents page: the proxy's counts of stopped, redacted and warned requests in the last 7 days above a table of the latest 200, each row with its time, action, finding, where it was found, provider and model" width="820" />
+  <br />
+  <sub>Incidents: the requests the proxy acted on, newest first, with the proxy's own counts for the week.</sub>
+</p>
+
+<p align="center">
+  <img src="docs/images/console-event-detail.png" alt="The Event explorer with one stopped request open beside the list: an instruction override and an email address found in a tool result, each with its location and masked match, the triage buttons, and the request's ID, endpoint and policy version" width="820" />
+  <br />
+  <sub>Event explorer: every scanned request, with one stopped request open to show what was found and where.</sub>
+</p>
+
+<p align="center">
+  <img src="docs/images/console-playground.png" alt="The Playground: a prompt beside the running policy, the verdict Stopped, the prompt with an email address and an injected instruction marked in it, and a table of the two findings" width="820" />
+  <br />
+  <sub>Playground: a prompt tried against the running policy, with the text behind the verdict marked.</sub>
+</p>
+
+<p align="center">
+  <img src="docs/images/console-policy-editor.png" alt="The Policies page: the policy document open in a code editor, with tabs for changes, history and custom entities, and buttons to reload it from disk or save and apply it" width="820" />
+  <br />
+  <sub>Policies: the policy document in the editor, saved and applied without a restart.</sub>
+</p>
+
+<p align="center">
+  <img src="docs/images/console-traffic.png" alt="The Traffic page: 18,412 requests in the last 7 days, a column chart of requests by day, and tables of requests by provider and by model family" width="820" />
+  <br />
+  <sub>Traffic: how many requests went through, by day, by provider and by model family.</sub>
 </p>
 
 ## Benchmarks
@@ -250,9 +288,10 @@ arguments, tool descriptions and attachments, and bodies that parsers read
 differently. The bypasses are published in
 [tests/stress/baseline.json](tests/stress/baseline.json) and include leetspeak
 and character-by-character smuggling. That is the run of 2026-10-03: since
-2026-10-11 the scanners read the two character-by-character vectors
-(measured in-process,
-[docs/benchmarks](docs/benchmarks/README.md#letter-by-letter-spelling)), and
+2026-10-11 the scanners read the two character-by-character vectors and the
+leetspeak one (measured in-process,
+[docs/benchmarks](docs/benchmarks/README.md#letter-by-letter-spelling),
+[leetspeak](docs/benchmarks/README.md#leetspeak)), and
 the suite has not been run again, so the baseline still lists them. The vectors are known to the authors, so this is a regression
 suite, not an independent evaluation. With the classifier on, the result was
 the same 78 and 6, and the load figures were within the run-to-run spread of
@@ -432,7 +471,7 @@ exercises the whole path, so treat these as experimental:
 - The Helm chart and the Terraform module (never linted, rendered or applied).
 - The Python and TypeScript SDKs (unit tests with a mocked transport, not
   run in CI).
-- The analyzer (its tests mock Presidio, LLM Guard and the LLM judge).
+- The analyzer (its tests mock Presidio and the LLM judge).
 - Redis, NATS and OpenTelemetry export: tested with in-memory or mocked
   substitutes, not against the real servers.
 - mTLS as the proxy sets it up, the remote scanner service, and SCIM (no
@@ -460,15 +499,18 @@ custom entity UI · the security fixes listed in the [changelog](CHANGELOG.md).
 - The first scan of a very large request is slow, about 250 KB of new text a
   second per core ([agents](docs/agents.md#speed)).
 - Traffic from a browser to a chat site, and between an agent and its MCP
-  servers, does not pass through a proxy at all.
+  servers, does not pass through a proxy at all. For three chat sites there
+  is a [browser extension](docs/browser-extension.md), an MVP whose site
+  selectors are unverified.
 - There is no multi-region replication, no SSO sign-in beyond GitHub OAuth
   (SSO settings are stored and used by no sign-in; the SCIM routes have no
   store behind them) and no custom roles.
 
 **Planned next,** in this order, with no dates and no promise: a locked
 evaluation set for the scanners and the classifier · response scanners for
-malicious links and for JSON that does not match a schema · a browser
-extension for chat sites. MCP inspection is not in the plan.
+malicious links and for JSON that does not match a schema · the browser
+extension checked against the live chat sites. MCP inspection is not in the
+plan.
 
 ## Related projects
 

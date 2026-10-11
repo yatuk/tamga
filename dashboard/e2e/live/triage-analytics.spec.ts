@@ -45,15 +45,37 @@ async function apiGet<T>(page: Page, path: string): Promise<T> {
   return (await res.json()) as T;
 }
 
-const getEvents = (page: Page, query: string) => apiGet<{ events: Ev[] | null; total: number }>(page, `/api/v1/events?${query}`);
+const getEvents = (page: Page, query: string) =>
+  apiGet<{ events: Ev[] | null; total: number; action_counts?: Record<string, number> }>(page, `/api/v1/events?${query}`);
 
-const isIncident = (e: Ev) => !!e.action && e.action !== "PASS" && e.action !== "LOG";
+/** What puts a request in the queue, in the order the page says the counts. */
+const ACTED = ["BLOCK", "REDACT", "STRIP", "WARN"];
+const ACTED_WORDS: Record<string, string> = { BLOCK: "stopped", REDACT: "redacted", STRIP: "stripped", WARN: "warned" };
+/** The queue covers the last 7 days and lists at most this many requests of them. */
+const LISTED = 200;
 
-/** The incidents the queue lists: the acted-on ones among the 200 most recent requests. */
-async function queue(page: Page) {
-  const { events } = await getEvents(page, "page=1&limit=200");
-  return (events ?? []).filter(isIncident);
+/**
+ * The queue as the page asks the proxy for it: the requests of the last 7
+ * days that were acted on (or of one action alone, for the Stopped and
+ * Redacted tabs), the newest 200 of them, with the proxy's own counts.
+ */
+async function queueOf(page: Page, action = ACTED.join(",")) {
+  const { events, total, action_counts } = await getEvents(page, `page=1&limit=${LISTED}&action=${action}&range=7d`);
+  return { listed: events ?? [], total, counts: action_counts ?? {} };
 }
+
+/** The rows the queue lists under "All", newest first. */
+const queue = async (page: Page) => (await queueOf(page)).listed;
+
+const n = (count: number) => count.toLocaleString("en");
+
+/** The note beside the filters while nothing narrows the list. */
+const listedNote = (q: { listed: Ev[]; total: number }) =>
+  q.listed.length < q.total ? `Latest ${n(q.listed.length)} of ${n(q.total)}` : `${n(q.total)} listed`;
+
+/** The same note while the provider list or the search narrows it to `matching` rows. */
+const matchNote = (matching: number, q: { listed: Ev[]; total: number }) =>
+  `${n(matching)} of the ${q.listed.length < q.total ? "latest " : ""}${n(q.listed.length)} listed match`;
 
 const panel = (page: Page) => page.getByRole("complementary", { name: "Request detail" });
 const rows = (page: Page) => page.locator(".t-work tbody tr");
@@ -71,8 +93,6 @@ test.beforeEach(async ({ page }) => {
   page.on("pageerror", (err) => pageErrors.push(err.message));
   page.on("response", (res) => {
     if (res.status() < 400) return;
-    // An incident nobody has triaged has no record: the console reads the 404 as "Open".
-    if (res.status() === 404 && res.request().method() === "GET" && /\/api\/v1\/incidents\/[^/?]+$/.test(res.url())) return;
     failedResponses.push(`${res.status()} ${res.request().method()} ${res.url()}`);
   });
 });
@@ -84,54 +104,86 @@ test.afterEach(() => {
 
 test.describe("Incidents", () => {
   test("the switch, the provider list and the search filter the rows", async ({ page }) => {
-    const incidents = await queue(page);
-    const all = incidents.length;
-    const stopped = incidents.filter((e) => e.action === "BLOCK").length;
-    const redacted = incidents.filter((e) => e.action === "REDACT").length;
-    expect(all, "the proxy has incidents to list").toBeGreaterThan(1);
+    // What the proxy answers to the three questions the page asks it.
+    const all = await queueOf(page);
+    const stopped = await queueOf(page, "BLOCK");
+    const redacted = await queueOf(page, "REDACT");
+    const incidents = all.listed;
+    expect(incidents.length, "the proxy has incidents to list").toBeGreaterThan(1);
+    expect(stopped.total, "the proxy stopped something in the last 7 days").toBeGreaterThan(0);
 
     await page.goto("/dashboard/security");
-    const shown = page.getByText(/\d+ of \d+ shown/);
-    await expect(shown).toHaveText(`${all} of ${all} shown`);
-    await expect(rows(page)).toHaveCount(all);
-    await expect(page.locator(".t-lede")).toContainText(`${stopped} of them were stopped`);
+    const note = page.locator(".t-filters .t-count");
+    const lede = page.locator(".t-lede");
+    await expect(note).toHaveText(listedNote(all));
+    await expect(rows(page)).toHaveCount(incidents.length);
 
+    // The counts are the proxy's, over the whole window, not a count of the rows.
+    await expect(lede).toContainText(`The proxy acted on ${n(all.total)} ${all.total === 1 ? "request" : "requests"} in the last 7 days`);
+    const counts = ACTED.filter((a) => (all.counts[a] ?? 0) > 0).map((a) => `${n(all.counts[a])} ${ACTED_WORDS[a]}`);
+    expect(counts.length, "the proxy counts the queue by action").toBeGreaterThan(0);
+    await expect(lede).toContainText(`: ${counts.join(", ")}.`);
+    expect(all.counts.BLOCK ?? 0, "the count of stopped requests is the total of the Stopped tab").toBe(stopped.total);
+    expect(all.counts.REDACT ?? 0, "the count of redacted requests is the total of the Redacted tab").toBe(redacted.total);
+    // A queue longer than the list says how much of it is listed.
+    await expect(lede).toContainText(
+      incidents.length < all.total
+        ? `The latest ${n(incidents.length)} of ${n(all.total)} are listed, newest first.`
+        : "They are listed newest first.",
+    );
+
+    // Each tab asks the proxy again: its rows are the latest of that kind.
     await page.getByRole("tab", { name: "Stopped" }).click();
-    await expect(shown).toHaveText(`${stopped} of ${all} shown`);
-    await expect(rows(page)).toHaveCount(stopped);
+    await expect(page).toHaveURL(/action=BLOCK/);
+    await expect(note).toHaveText(listedNote(stopped));
+    await expect(rows(page)).toHaveCount(stopped.listed.length);
     await expect(rows(page).filter({ hasNot: page.locator('.t-action[data-action="BLOCK"]') })).toHaveCount(0);
+    await expect(rows(page).first()).toContainText(stopped.listed[0].request_id.slice(0, 13));
 
     await page.getByRole("tab", { name: "Redacted" }).click();
-    await expect(shown).toHaveText(`${redacted} of ${all} shown`);
-    await expect(rows(page)).toHaveCount(redacted);
+    await expect(page).toHaveURL(/action=REDACT/);
+    await expect(note).toHaveText(listedNote(redacted));
+    await expect(rows(page)).toHaveCount(redacted.listed.length);
     await expect(rows(page).filter({ hasNot: page.locator('.t-action[data-action="REDACT"]') })).toHaveCount(0);
+    if (redacted.total === 0) await expect(page.getByText("No request was redacted in the last 7 days.")).toBeVisible();
 
     await page.getByRole("tab", { name: "All", exact: true }).click();
-    await expect(shown).toHaveText(`${all} of ${all} shown`);
+    await expect(page).not.toHaveURL(/action=/);
+    await expect(note).toHaveText(listedNote(all));
+    await expect(rows(page)).toHaveCount(incidents.length);
 
-    // The provider list offers the providers the incidents went to.
+    // The provider list offers the providers the listed incidents went to, and hides the other rows.
     const provider = providerWord(incidents[0].provider);
     const toProvider = incidents.filter((e) => providerWord(e.provider) === provider).length;
     await page.locator("#provider").click();
+    await expect(page.getByRole("option")).toHaveCount(new Set(incidents.map((e) => providerWord(e.provider))).size + 1);
     await page.getByRole("option", { name: provider, exact: true }).click();
-    await expect(shown).toHaveText(`${toProvider} of ${all} shown`);
+    await expect(note).toHaveText(matchNote(toProvider, all));
     await expect(rows(page)).toHaveCount(toProvider);
     await page.locator("#provider").click();
     await page.getByRole("option", { name: "All providers", exact: true }).click();
-    await expect(shown).toHaveText(`${all} of ${all} shown`);
+    await expect(note).toHaveText(listedNote(all));
 
+    // The search reads the listed rows, and says so in its count.
     const search = page.getByRole("searchbox", { name: "Search incidents" });
     await search.fill(incidents[1].request_id);
-    await expect(shown).toHaveText(`1 of ${all} shown`);
+    await expect(note).toHaveText(matchNote(1, all));
     await expect(rows(page)).toHaveCount(1);
     await expect(rows(page).first()).toContainText(incidents[1].request_id.slice(0, 13));
 
     await search.fill("no incident reads like this");
-    await expect(shown).toHaveText(`0 of ${all} shown`);
-    await expect(page.getByText("No incident matches these filters.")).toBeVisible();
+    await expect(note).toHaveText(matchNote(0, all));
+    await expect(
+      page.getByText(
+        incidents.length < all.total
+          ? `No incident among the latest ${n(incidents.length)} matches these filters. Older ones are not searched here; the event explorer searches the whole window.`
+          : "No incident matches these filters.",
+      ),
+    ).toBeVisible();
 
     await search.fill("");
-    await expect(shown).toHaveText(`${all} of ${all} shown`);
+    await expect(note).toHaveText(listedNote(all));
+    await expect(rows(page)).toHaveCount(incidents.length);
   });
 
   test("a row opens the panel, and the same row, Escape or the close button closes it", async ({ page }) => {
@@ -180,25 +232,38 @@ test.describe("Incidents", () => {
 
   test("Enter and Space on a focused row do what a click does", async ({ page }) => {
     const incidents = await queue(page);
+    expect(incidents.length, "the queue lists at least three incidents").toBeGreaterThan(2);
+    const id = incidents[2].request_id;
     await page.goto("/dashboard/security");
+    await expect(rows(page)).toHaveCount(incidents.length);
     const third = rows(page).nth(2);
-    await expect(third).toBeVisible();
+    // The third row is the third request the proxy lists.
+    await expect(third).toContainText(id.slice(0, 13));
 
-    await third.focus();
-    await page.keyboard.press("Enter");
-    await expect(panel(page)).toContainText(incidents[2].request_id);
-    expect(requestId(page)).toBe(incidents[2].request_id);
-    await third.focus();
-    await page.keyboard.press("Enter");
-    await expect(panel(page)).toHaveCount(0);
-
-    await third.focus();
-    await page.keyboard.press("Space");
-    await expect(panel(page)).toContainText(incidents[2].request_id);
-    await third.focus();
-    await page.keyboard.press("Space");
+    // A click, to compare the keys with.
+    await third.click();
+    await expect(panel(page)).toContainText(id);
+    expect(requestId(page)).toBe(id);
+    await expect(third).toHaveAttribute("aria-current", "true");
+    await expect(headers(page)).toHaveCount(3);
+    await third.click();
     await expect(panel(page)).toHaveCount(0);
     await expect(page).not.toHaveURL(/request_id=/);
+
+    for (const key of ["Enter", "Space"]) {
+      await third.focus();
+      await page.keyboard.press(key);
+      await expect(panel(page), `${key} opens the request`).toContainText(id);
+      expect(requestId(page)).toBe(id);
+      await expect(third).toHaveAttribute("aria-current", "true");
+      await expect(headers(page)).toHaveCount(3);
+
+      await third.focus();
+      await page.keyboard.press(key);
+      await expect(panel(page), `${key} closes it again`).toHaveCount(0);
+      await expect(page).not.toHaveURL(/request_id=/);
+      await expect(headers(page)).toHaveCount(6);
+    }
   });
 
   test("a link with ?request_id= opens that request, listed or not", async ({ page }) => {
@@ -245,9 +310,9 @@ test.describe("Incidents", () => {
       // One nobody has decided on, so nothing of anyone's is overwritten.
       let target: Ev | undefined;
       for (const e of [...incidents].reverse()) {
-        const res = await page.request.get(`${API}/api/v1/incidents/${e.request_id}`, { headers: HEADERS });
-        const status = res.ok() ? ((await res.json()) as { status?: string }).status : "Open";
-        if (res.status() === 404 || status === "Open") {
+        // The proxy answers for an incident nobody has touched as well: it is open.
+        const { status } = await apiGet<{ status?: string }>(page, `/api/v1/incidents/${e.request_id}`);
+        if (status === "Open") {
           target = e;
           break;
         }
