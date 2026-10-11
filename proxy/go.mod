@@ -1,6 +1,6 @@
 module github.com/yatuk/tamga
 
-go 1.26.0
+go 1.26.9
 
 require (
 	github.com/coregx/ahocorasick v0.2.1
