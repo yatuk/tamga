@@ -644,12 +644,13 @@
   25 packages are in review today (LGPL-3.0 libvips builds under `sharp`,
   the OFL-1.1 IBM Plex fonts, CC-BY-4.0 `caniuse-lite`, CNRI-Python in
   `regex`). `mode: report` prints what would be refused and exits 0;
-  `mode: enforce` fails. `vulnerability-report.yml` runs `govulncheck`,
+  `mode: enforce` fails. `vulnerability-report.yml` runs
   `npm audit --omit=dev --audit-level=high` (console, TypeScript SDK) and
-  `pip-audit` (analyzer, classifier, Python SDK) on pull requests that touch
-  a dependency file and weekly, as warnings; `GATE_MODE: enforce` makes them
-  fail. Neither workflow has run. The existing `govulncheck` job in
-  `proxy-ci.yml` is unchanged and still fails on a finding.
+  `pip-audit` (analyzer, classifier, Python SDK), as warnings;
+  `GATE_MODE: enforce` makes them fail. Both workflows run weekly and by
+  hand, not on pull requests: a job that cannot fail tells a reviewer
+  nothing. The `govulncheck` job in `proxy-ci.yml` runs on every pull
+  request and fails on a finding.
 - `docs/threat-model.md`: boundaries, assets, seven adversaries, the control
   for each with the file and test behind it, and what remains.
   `docs/tr/kurulum-ve-isletim.md`: an installation and operations guide in

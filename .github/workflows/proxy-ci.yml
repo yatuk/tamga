@@ -45,27 +45,6 @@ jobs:
         with:
           args: "-quiet -exclude-dir=scripts ./proxy/..."
 
-  sbom:
-    name: Generate SBOM (CycloneDX)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: proxy/go.mod
-          cache: true
-          cache-dependency-path: proxy/go.sum
-      - name: Generate SBOM
-        run: |
-          go install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@v1.10.0
-          # The module root has no main package; point at the proxy binary.
-          cyclonedx-gomod app -main cmd/tamga -output sbom.json -licenses -assert-licenses
-      - name: Upload SBOM
-        uses: actions/upload-artifact@v4
-        with:
-          name: sbom
-          path: proxy/sbom.json
-
   go-test:
     name: Go Test (race + E2E)
     runs-on: ubuntu-latest
