@@ -79,7 +79,7 @@ Full docs: [tests/stress/README.md](../tests/stress/README.md).
 | Layer | Technology |
 |---|---|
 | Core Proxy | Go 1.25+ — Aho-Corasick DFA, regex hybrid scanning |
-| Deep Analysis | Python 3.11+ — FastAPI, Presidio, LLM Guard |
+| Deep Analysis | Python 3.11+ — FastAPI, Presidio, spaCy |
 | Dashboard | Next.js 15, TypeScript 5, Carbon (`@carbon/react`) |
 | Storage | PostgreSQL 16, Redis 7 |
 | Observability | OpenTelemetry, Jaeger 1.54 |
@@ -88,7 +88,7 @@ Full docs: [tests/stress/README.md](../tests/stress/README.md).
 The table lists what the repository uses. It does not say the tests run
 against each of them:
 
-- **Analyzer.** Its tests (`analyzer/tests/`) mock Presidio, LLM Guard and
+- **Analyzer.** Its tests (`analyzer/tests/`) mock Presidio and
   the LLM judge, and no CI workflow runs them.
 - **Redis and NATS.** The Go tests use in-memory or mocked substitutes. The
   adversarial gate and the integration smoke workflow start the proxy next

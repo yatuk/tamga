@@ -48,7 +48,6 @@ _ORIGINAL_SCANNER_MODULES: dict[str, types.ModuleType | None] = {}
 _SCANNER_NAMES = [
     ("app.scanners.pii_deep", "DeepPIIScanner", "pii"),
     ("app.scanners.injection_llm", "LLMInjectionScanner", "injection"),
-    ("app.scanners.toxicity", "ToxicityScanner", "toxicity"),
 ]
 for _name, _cls_name, _type_val in _SCANNER_NAMES:
     _ORIGINAL_SCANNER_MODULES[_name] = sys.modules.pop(_name, None)
@@ -276,6 +275,17 @@ class TestAnalyzeEndpoint:
             body = response.json()
             assert len(body["findings"]) >= 1
             assert any(f["type"] == "injection" for f in body["findings"])
+
+    def test_analyze_removed_toxicity_scan_type_adds_nothing(self):
+        """'toxicity' was removed with llm-guard: 200, no scanner result for it."""
+        response = client.post(
+            "/api/v1/analyze",
+            json={"request_id": "req-tox", "content": "some text", "scan_types": ["toxicity"]},
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["findings"] == []
+        assert body["scanner_results"] == []
 
     def test_analyze_missing_required_fields_returns_422(self):
         """Missing request_id or content must return 422 Unprocessable Entity."""

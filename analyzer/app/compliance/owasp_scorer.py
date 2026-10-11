@@ -70,7 +70,7 @@ OWASP_LLM_TOP_10_2025: list[OWASPRisk] = [
         title="Improper Output Handling",
         description="LLM output treated as trusted: RCE via code, XSS, SQLi, path traversal",
         tamga_coverage="partial",
-        mitigating_scanners=["output_scan", "toxicity"],
+        mitigating_scanners=["output_scan", "content_moderation"],
         recommendations=[
             "Add HTML/JS/SQL injection patterns to output scanner",
             "Enforce CSP headers on all responses",

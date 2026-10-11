@@ -21,7 +21,6 @@ def is_module_available(module_name: str) -> bool:
 
 _HAS_ANTHROPIC = is_module_available("anthropic")
 _HAS_PRESIDIO = is_module_available("presidio_analyzer")
-_HAS_LLM_GUARD = is_module_available("llm_guard")
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -34,10 +33,6 @@ def pytest_configure(config: pytest.Config) -> None:
         "markers",
         "requires_presidio: tests that need Presidio Analyzer installed",
     )
-    config.addinivalue_line(
-        "markers",
-        "requires_llm_guard: tests that need LLM Guard installed",
-    )
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
@@ -47,8 +42,6 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
             item.add_marker(pytest.mark.skip(reason="anthropic not installed"))
         if item.get_closest_marker("requires_presidio") and not _HAS_PRESIDIO:
             item.add_marker(pytest.mark.skip(reason="presidio_analyzer not installed"))
-        if item.get_closest_marker("requires_llm_guard") and not _HAS_LLM_GUARD:
-            item.add_marker(pytest.mark.skip(reason="llm_guard not installed"))
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────

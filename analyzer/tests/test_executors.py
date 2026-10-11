@@ -1,11 +1,9 @@
-"""Tests for process-pool executors — Presidio and LLM Guard pool lifecycle.
+"""Tests for the process-pool executor — Presidio pool lifecycle.
 
-Module-level globals (_presidio_pool, _llm_guard_pool, _worker_count) are
-reset between tests via an autouse fixture to prevent state leakage.
+Module-level globals (_presidio_pool, _worker_count) are reset between
+tests via an autouse fixture to prevent state leakage.
 """
 
-import sys
-import types
 from concurrent.futures import ProcessPoolExecutor
 from unittest.mock import MagicMock, patch
 
@@ -23,18 +21,15 @@ from app import executors as ex  # noqa: E402
 def _reset_module_state():
     """Reset the module-level pool globals before and after each test."""
     saved_presidio = ex._presidio_pool
-    saved_llm = ex._llm_guard_pool
     saved_worker_count = ex._worker_count
 
     ex._presidio_pool = None
-    ex._llm_guard_pool = None
     # Recompute _worker_count so environment changes are visible.
     ex._worker_count = ex._default_workers()
 
     yield
 
     ex._presidio_pool = saved_presidio
-    ex._llm_guard_pool = saved_llm
     ex._worker_count = saved_worker_count
 
 
@@ -71,123 +66,34 @@ def test_get_presidio_pool_passes_correct_initializer():
         assert args[1] == "presidio"
 
 
-# ── Tests: get_llm_guard_pool ───────────────────────────────────────────────────
-
-
-def test_get_llm_guard_pool_returns_none_when_not_available(monkeypatch):
-    """When _is_llm_guard_available returns False, get_llm_guard_pool returns None."""
-    # Mock the entire app.scanners.toxicity module so the lazy import
-    # inside get_llm_guard_pool() finds our stubs.
-    mock_tox = types.ModuleType("app.scanners.toxicity")
-    mock_tox._is_llm_guard_available = lambda: False
-    mock_tox._init_llm_guard_worker = lambda: None
-
-    # If real module is loaded, pop it first so our mock is used.
-    real_tox = sys.modules.pop("app.scanners.toxicity", None)
-    sys.modules["app.scanners.toxicity"] = mock_tox
-
-    try:
-        result = ex.get_llm_guard_pool()
-        assert result is None
-        # The module-level singleton should still be None (not a pool).
-        assert ex._llm_guard_pool is None
-    finally:
-        sys.modules.pop("app.scanners.toxicity", None)
-        if real_tox is not None:
-            sys.modules["app.scanners.toxicity"] = real_tox
-
-
-def test_get_llm_guard_pool_returns_pool_when_available(monkeypatch):
-    """When LLM Guard is importable, get_llm_guard_pool creates and returns a pool."""
-    mock_pool = MagicMock(spec=ProcessPoolExecutor)
-
-    mock_tox = types.ModuleType("app.scanners.toxicity")
-    mock_tox._is_llm_guard_available = lambda: True
-    mock_tox._init_llm_guard_worker = lambda: None
-
-    real_tox = sys.modules.pop("app.scanners.toxicity", None)
-    sys.modules["app.scanners.toxicity"] = mock_tox
-
-    try:
-        with patch.object(ex, "_create_pool", return_value=mock_pool) as mock_create:
-            pool = ex.get_llm_guard_pool()
-            assert pool is mock_pool
-            mock_create.assert_called_once()
-            # Verify the pool name is "llm_guard".
-            args, kwargs = mock_create.call_args
-            assert args[1] == "llm_guard"
-    finally:
-        sys.modules.pop("app.scanners.toxicity", None)
-        if real_tox is not None:
-            sys.modules["app.scanners.toxicity"] = real_tox
-
-
-def test_get_llm_guard_pool_cache_when_available(monkeypatch):
-    """Once LLM Guard pool is created, subsequent calls return the cached pool."""
-    mock_pool = MagicMock(spec=ProcessPoolExecutor)
-
-    mock_tox = types.ModuleType("app.scanners.toxicity")
-    mock_tox._is_llm_guard_available = lambda: True
-    mock_tox._init_llm_guard_worker = lambda: None
-
-    real_tox = sys.modules.pop("app.scanners.toxicity", None)
-    sys.modules["app.scanners.toxicity"] = mock_tox
-
-    try:
-        with patch.object(ex, "_create_pool", return_value=mock_pool) as mock_create:
-            pool1 = ex.get_llm_guard_pool()
-            pool2 = ex.get_llm_guard_pool()
-            assert pool1 is pool2
-            mock_create.assert_called_once()
-    finally:
-        sys.modules.pop("app.scanners.toxicity", None)
-        if real_tox is not None:
-            sys.modules["app.scanners.toxicity"] = real_tox
-
-
 # ── Tests: shutdown_pools ───────────────────────────────────────────────────────
 
 
-def test_shutdown_pools_with_initialized_pools():
-    """shutdown_pools shuts down both pools and clears the globals."""
+def test_shutdown_pools_with_initialized_pool():
+    """shutdown_pools shuts the pool down and clears the global."""
     mock_presidio = MagicMock()
-    mock_llm = MagicMock()
-
     ex._presidio_pool = mock_presidio
-    ex._llm_guard_pool = mock_llm
-
-    ex.shutdown_pools()
-
-    mock_presidio.shutdown.assert_called_once_with(wait=True, cancel_futures=True)
-    mock_llm.shutdown.assert_called_once_with(wait=True, cancel_futures=True)
-    assert ex._presidio_pool is None
-    assert ex._llm_guard_pool is None
-
-
-def test_shutdown_pools_when_one_is_none():
-    """shutdown_pools handles the case where one pool is None."""
-    mock_presidio = MagicMock()
-
-    ex._presidio_pool = mock_presidio
-    ex._llm_guard_pool = None
 
     ex.shutdown_pools()
 
     mock_presidio.shutdown.assert_called_once_with(wait=True, cancel_futures=True)
     assert ex._presidio_pool is None
-    assert ex._llm_guard_pool is None
 
 
-def test_shutdown_pools_when_both_are_none():
-    """shutdown_pools is a no-op when both pools are None."""
+def test_shutdown_pools_when_none():
+    """shutdown_pools is a no-op when the pool was never created."""
     ex._presidio_pool = None
-    ex._llm_guard_pool = None
 
     # Should not raise.
     ex.shutdown_pools()
 
     assert ex._presidio_pool is None
-    assert ex._llm_guard_pool is None
+
+
+def test_presidio_pool_is_the_only_pool():
+    """No pool is left for the removed LLM Guard classifiers."""
+    assert not hasattr(ex, "get_llm_guard_pool")
+    assert not hasattr(ex, "_llm_guard_pool")
 
 
 # ── Tests: _default_workers ─────────────────────────────────────────────────────

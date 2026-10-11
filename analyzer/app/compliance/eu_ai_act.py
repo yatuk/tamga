@@ -22,7 +22,7 @@ class EUAIActCheck:
 
 EU_AI_ACT_CHECKS: list[EUAIActCheck] = [
     EUAIActCheck("Art. 5", "Prohibited AI practices (subliminal manipulation, social scoring)", True,
-                  "partial", "Toxicity scanner blocks manipulation; social scoring not in scope"),
+                  "partial", "The proxy's content-moderation phrase lists flag some harmful text; no model judges manipulation; social scoring not in scope"),
     EUAIActCheck("Art. 9", "Risk management system for high-risk AI", True,
                   "partial", "OWASP mapping exists; continuous risk monitoring needed"),
     EUAIActCheck("Art. 10", "Data governance and provenance", True,

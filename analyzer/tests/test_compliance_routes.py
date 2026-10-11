@@ -1,7 +1,7 @@
 """Tests for FastAPI compliance and report routes.
 
-Uses sys.modules mocking so scanner dependencies (presidio, anthropic,
-llm_guard) are not required at test time.  The compliance/report routes
+Uses sys.modules mocking so scanner dependencies (presidio, anthropic)
+are not required at test time.  The compliance/report routes
 themselves do not use scanners — only the module-level imports in
 app.main need to be satisfied.
 """
@@ -16,14 +16,13 @@ import pytest
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Mock scanner modules so app.main can be imported without the full
-# dependency tree of presidio, anthropic, llm_guard, etc.
+# dependency tree of presidio, anthropic, etc.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 _ORIGINAL_SCANNER_MODULES: dict[str, types.ModuleType | None] = {}
 _SCANNER_NAMES = [
     ("app.scanners.pii_deep", "DeepPIIScanner"),
     ("app.scanners.injection_llm", "LLMInjectionScanner"),
-    ("app.scanners.toxicity", "ToxicityScanner"),
 ]
 
 for _name, _cls_name in _SCANNER_NAMES:
@@ -46,8 +45,6 @@ for _name, _cls_name in _SCANNER_NAMES:
     _mod.ScanResult = MagicMock()
     _mod._init_presidio_worker = MagicMock()
     _mod._sync_scan = MagicMock()
-    _mod._init_llm_guard_worker = MagicMock()
-    _mod._is_llm_guard_available = MagicMock(return_value=False)
     _mod.logger = MagicMock()
     sys.modules[_name] = _mod
 
@@ -467,3 +464,9 @@ class TestHealthEndpoint:
         assert "pii_deep" in body["scanners"]
         assert "injection_llm" in body["scanners"]
         assert "custom_count" in body["scanners"]
+
+    def test_health_reports_no_removed_scanner(self):
+        """The toxicity scanner and llm-guard are gone, and /health says nothing of them."""
+        body = client.get("/health").json()
+        assert "llm_guard_available" not in body
+        assert "toxicity" not in body["scanners"]

@@ -9,12 +9,9 @@ RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 COPY requirements.txt .
-# The analyzer runs on CPU. llm-guard pulls in torch, and the default PyPI
-# wheel bundles the CUDA runtime (several GB of nvidia-* packages). The PyTorch
-# CPU index serves "+cpu" builds, which pip prefers for the same version.
-RUN pip install --no-cache-dir \
-        --extra-index-url https://download.pytorch.org/whl/cpu \
-        -r requirements.txt && \
+# Nothing in requirements.txt asks for torch or transformers, so PyPI is the
+# only index. The spaCy model is fetched here, at build time.
+RUN pip install --no-cache-dir -r requirements.txt && \
     python -m spacy download en_core_web_sm
 
 # ── Runtime stage ───────────────────────────────────────────────────────────
@@ -25,8 +22,8 @@ LABEL org.opencontainers.image.title="Tamga analyzer" \
       org.opencontainers.image.source="https://github.com/yatuk/tamga" \
       org.opencontainers.image.licenses="AGPL-3.0-only"
 
-# /app is the service user's home and must be writable: transformers caches
-# downloaded models under ~/.cache.
+# /app is the service user's home and is writable, for whatever a library
+# caches under ~/.cache.
 RUN groupadd -r tamga && useradd -r -g tamga -d /app -s /sbin/nologin tamga && \
     mkdir -p /app && chown tamga:tamga /app
 

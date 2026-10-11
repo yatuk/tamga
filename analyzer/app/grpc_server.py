@@ -35,7 +35,7 @@ from app.scanners.base import ScanResult
 from app.scanners.egress import content_is_blocked
 from app.scanners.pii_deep import DeepPIIScanner
 from app.scanners.injection_llm import LLMInjectionScanner
-from app.scanners.toxicity import ToxicityScanner
+from app.removed import report_removed_scan_types
 
 logger = structlog.get_logger()
 
@@ -72,12 +72,10 @@ class AnalyzerServicer(AnalyzerServiceServicer):
         self,
         pii_scanner: DeepPIIScanner,
         injection_scanner: LLMInjectionScanner,
-        toxicity_scanner: ToxicityScanner,
         custom_scanners: list[BaseScanner] | None = None,
     ) -> None:
         self._pii = pii_scanner
         self._injection = injection_scanner
-        self._toxicity = toxicity_scanner
         self._custom = custom_scanners or []
 
     async def Analyze(  # type: ignore[override]
@@ -89,6 +87,8 @@ class AnalyzerServicer(AnalyzerServiceServicer):
         start = time.monotonic()
 
         scan_types = set(request.scan_types)
+        # "toxicity" was removed with llm-guard: logged once, answers nothing.
+        report_removed_scan_types(scan_types)
         tasks: list[asyncio.Task] = []
         task_labels: list[str] = []
 
@@ -115,15 +115,6 @@ class AnalyzerServicer(AnalyzerServiceServicer):
                 scanner_results.append(_scan_result_to_pb(result))
                 for f in result.findings:
                     raw_findings.append(_app_finding_to_pb(f))
-
-        if "toxicity" in scan_types:
-            try:
-                tox_result = await self._toxicity.scan(request.content)
-                scanner_results.append(_scan_result_to_pb(tox_result))
-                for f in tox_result.findings:
-                    raw_findings.append(_app_finding_to_pb(f))
-            except Exception as exc:
-                logger.warning("toxicity scanner failed (fail-open): %s", exc)
 
         # Custom scanner SDK.
         if "custom" in scan_types or any(
@@ -169,7 +160,6 @@ class AnalyzerServicer(AnalyzerServiceServicer):
 async def serve_grpc(
     pii_scanner: DeepPIIScanner,
     injection_scanner: LLMInjectionScanner,
-    toxicity_scanner: ToxicityScanner,
     custom_scanners: list[BaseScanner] | None = None,
     port: int = 50051,
 ) -> grpc.aio.Server:
@@ -187,7 +177,7 @@ async def serve_grpc(
         ],
     )
 
-    servicer = AnalyzerServicer(pii_scanner, injection_scanner, toxicity_scanner, custom_scanners)
+    servicer = AnalyzerServicer(pii_scanner, injection_scanner, custom_scanners)
     add_AnalyzerServiceServicer_to_server(servicer, server)
 
     listen_addr = f"[::]:{port}"

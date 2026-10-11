@@ -1,12 +1,12 @@
-"""Process-pool executors for CPU-bound ML inference.
+"""Process-pool executor for CPU-bound NLP.
 
-Each ML scanner (Presidio/spaCy, LLM Guard) gets its own ProcessPoolExecutor.
-Worker processes load their own copy of the ML models via an initializer
-callback — this avoids GIL contention under concurrent gRPC requests.
+Presidio with spaCy is the one CPU-bound scanner the analyzer runs. It gets a
+ProcessPoolExecutor: each worker process loads its own copy of the spaCy model
+through an initializer callback, which avoids GIL contention under concurrent
+gRPC requests.
 
-Worker count is configurable via TAMGA_ANALYZER_WORKERS (default: 2 per pool).
-Memory scales linearly with worker count: each process loads spaCy (~15 MB)
-or LLM Guard models (~200 MB).  Keep the default low unless you have the RAM.
+Worker count is configurable via TAMGA_ANALYZER_WORKERS. Memory scales
+linearly with worker count: each process loads its own spaCy model.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from typing import Callable
 # ── Worker count ──────────────────────────────────────────────────────────────
 
 def _default_workers() -> int:
-    """Return the number of worker processes per executor pool.
+    """Return the number of worker processes in the pool.
 
     Reads TAMGA_ANALYZER_WORKERS from the environment.  Defaults to
     min(cpu_count, 4), clamped to [1, 8].
@@ -31,10 +31,9 @@ def _default_workers() -> int:
 
 _worker_count = _default_workers()
 
-# ── Pools (created lazily on first use) ──────────────────────────────────────
+# ── Pool (created lazily on first use) ───────────────────────────────────────
 
 _presidio_pool: ProcessPoolExecutor | None = None
-_llm_guard_pool: ProcessPoolExecutor | None = None
 
 
 def _create_pool(
@@ -62,31 +61,16 @@ def get_presidio_pool() -> ProcessPoolExecutor:
     return _presidio_pool
 
 
-def get_llm_guard_pool() -> ProcessPoolExecutor | None:
-    """Return the LLM Guard process pool, or None if LLM Guard is unavailable."""
-    global _llm_guard_pool
-    if _llm_guard_pool is None:
-        from app.scanners.toxicity import _init_llm_guard_worker, _is_llm_guard_available
-        # Only create the pool if LLM Guard is actually importable.
-        # The check runs in the main process to avoid forking useless workers.
-        if not _is_llm_guard_available():
-            return None
-        _llm_guard_pool = _create_pool(_init_llm_guard_worker, "llm_guard")
-    return _llm_guard_pool
-
-
 def shutdown_pools() -> None:
-    """Shut down both process pools gracefully (called from lifespan)."""
+    """Shut down the process pool gracefully (called from lifespan)."""
     import structlog
     logger = structlog.get_logger()
 
-    global _presidio_pool, _llm_guard_pool
+    global _presidio_pool
 
-    for name, pool in [("presidio", _presidio_pool), ("llm_guard", _llm_guard_pool)]:
-        if pool is not None:
-            logger.info("shutting down %s process pool", name)
-            pool.shutdown(wait=True, cancel_futures=True)
-            logger.info("%s process pool shut down", name)
+    if _presidio_pool is not None:
+        logger.info("shutting down presidio process pool")
+        _presidio_pool.shutdown(wait=True, cancel_futures=True)
+        logger.info("presidio process pool shut down")
 
     _presidio_pool = None
-    _llm_guard_pool = None

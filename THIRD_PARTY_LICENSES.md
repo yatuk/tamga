@@ -262,7 +262,6 @@ packages that are not installed are marked NOT-INSPECTED.
 | presidio-analyzer | ==2.2.355 | 2.2.359 (differs from the pin) | MIT | License field |
 | presidio-anonymizer | ==2.2.355 | - | NOT-INSPECTED | not installed in the inspected environment |
 | spacy | >=3.7,<4.0 | 3.8.13 | MIT | License field |
-| llm-guard | ==0.3.14 | - | NOT-INSPECTED | not installed in the inspected environment |
 | asyncpg | ==0.30.0 | - | NOT-INSPECTED | not installed in the inspected environment |
 | sqlalchemy | ==2.0.35 | 2.0.52 (differs from the pin) | MIT | License field |
 | reportlab | >=4.5.0 | 4.5.1 | BSD-3-Clause | licence file in dist-info (detected; metadata says only "BSD (unspecified)") |
@@ -367,7 +366,7 @@ project's own conclusion about compatibility.
 | `@ibm/plex*` fonts (through `@carbon/styles`) | console, npm | `OFL-1.1` | Entry "SIL Open Font License 1.1", under licences for fonts: a free copyleft licence for fonts. The entry makes no statement about GPL compatibility |
 | `caniuse-lite` (through `next`) | console, npm | `CC-BY-4.0` | Entry "Creative Commons Attribution 4.0 license" (`#ccby`): compatible with all versions of the GNU GPL; not recommended for software |
 | `pgregory.net/rapid` | proxy, Go, tests only (not in the binaries) | MPL-2.0 (detected) | Entry "Mozilla Public License (MPL) version 2.0": listed among the GPL-compatible licences |
-| `llm-guard`, `presidio-anonymizer`, `asyncpg`, `tenacity` (analyzer); `onnxruntime`, `tokenizers` (classifier); everything they pull in, including `torch` and `transformers` | Python | not inspected | These were not installed where the generator ran, so neither they nor their dependencies appear in the tables above. Run the generator against the built images (see the script header) |
+| `presidio-anonymizer`, `asyncpg`, `tenacity` (analyzer); `onnxruntime`, `tokenizers` (classifier); everything they pull in | Python | not inspected | These were not installed where the generator ran, so neither they nor their dependencies appear in the tables above. Run the generator against the built images (see the script header) |
 
 The FSF list's statements above are about the GNU GPL. This file does not
 extend them to the AGPL.
@@ -385,16 +384,11 @@ tag.
 | Model | When it arrives | Used by | Licence on the model card |
 |---|---|---|---|
 | spaCy `en_core_web_sm` | image build (`python -m spacy download en_core_web_sm` in `analyzer/Dockerfile`) | Presidio's `SpacyRecognizer` (`app/scanners/pii_deep.py`) | MIT (<https://huggingface.co/spacy/en_core_web_sm>). The card lists OntoNotes 5, ClearNLP and WordNet 3.0 as sources and gives no licence for them |
-| `unitary/unbiased-toxic-roberta` | first use, from the Hugging Face Hub into `~/.cache` | LLM Guard `Toxicity()` (`app/scanners/toxicity.py`) | apache-2.0 (<https://huggingface.co/unitary/unbiased-toxic-roberta>). Trained on the Jigsaw toxicity competition data; the card gives no licence for the data |
-| `ProtectAI/distilroberta-base-rejection-v1` | first use | LLM Guard `NoRefusal()` | apache-2.0 (<https://huggingface.co/ProtectAI/distilroberta-base-rejection-v1>) |
-| `vishnun/codenlbert-sm` | first use | LLM Guard `BanCode()` | **not declared** (<https://huggingface.co/vishnun/codenlbert-sm>). ProtectAI's ONNX conversion, `protectai/vishnun-codenlbert-sm-onnx`, is tagged apache-2.0, but the analyzer does not ask for the ONNX variant |
-| `MoritzLaurer/roberta-base-zeroshot-v2.0-c` | first use | LLM Guard `BanTopics()` | mit (<https://huggingface.co/MoritzLaurer/roberta-base-zeroshot-v2.0-c>) |
 
-The four LLM Guard model names are the defaults in the llm-guard 0.3.14
-source (`llm_guard/input_scanners/{toxicity,ban_code,ban_topics}.py`,
-`llm_guard/output_scanners/no_refusal.py` at tag `v0.3.14`), which the
-analyzer uses by constructing the scanners with no arguments. They were read
-from the upstream repository, not from an installed copy.
+The analyzer used `llm-guard` 0.3.14 (MIT) until 2026-10-11, and through it
+four classifier models from the Hugging Face Hub. The package, the toxicity
+scanner that called it and those four models are gone: the scanner was
+deleted, and no llm-guard source was copied or adapted into this repository.
 
 `app/scanners/injection_llm.py` sends text to a hosted model
 (`claude-haiku-4-5-20251001`, through the `anthropic` client) when it is

@@ -6,8 +6,12 @@ This service is strictly reserved for semantic/deep analysis that requires
 ML models or NLP context:
 
   • Presidio spaCy NER — contextual entity recognition (PERSON, ORG, GPE, LOC)
-  • Claude Haiku judge — semantic prompt injection classification
-  • LLM Guard ML — toxicity, refusal, banned code/topics classifiers
+  • Claude Haiku judge — semantic prompt injection classification (off
+    unless TAMGA_LLM_JUDGE is set)
+
+It also renders the PDF reports and runs custom scanners written against
+tamga_sdk. It loads no classifier model: the toxicity scanner and the
+llm-guard package it came from were removed (see app/removed.py).
 """
 
 import asyncio
@@ -27,12 +31,12 @@ from app.scanners.base import BaseScanner, Finding, ScanResult
 from app.scanners.egress import content_is_blocked, judge_stats
 from app.scanners.pii_deep import DeepPIIScanner
 from app.scanners.injection_llm import LLMInjectionScanner
-from app.scanners.toxicity import ToxicityScanner
 from app.compliance import compute_compliance_report
 from app.reports import generate_owasp_pdf_report
 from tamga_sdk.discovery import discover_scanners, get_custom_scanners
 from app.grpc_server import serve_grpc
 from app.executors import shutdown_pools
+from app.removed import report_removed_env, report_removed_scan_types
 
 logger = structlog.get_logger()
 
@@ -55,7 +59,6 @@ settings = Settings()
 
 deep_pii = DeepPIIScanner()
 injection = LLMInjectionScanner(api_key=settings.anthropic_api_key, judge=settings.tamga_llm_judge)
-toxicity = ToxicityScanner()
 
 # Custom scanner SDK — auto-discovered from TAMGA_CUSTOM_SCANNERS_DIR.
 # Each scanner class is instantiated once at startup. An empty directory
@@ -107,12 +110,13 @@ async def _close_db() -> None:
 async def lifespan(app: FastAPI):
     global _grpc_server
     logger.info("analyzer_starting")
+    report_removed_env()
     await _init_db()
 
     # Start gRPC server alongside FastAPI on port 50051.
     # Both share the same asyncio event loop.
     grpc_port = int(os.environ.get("TAMGA_GRPC_PORT", "50051"))
-    _grpc_server = await serve_grpc(deep_pii, injection, toxicity, _custom_scanner_instances, grpc_port)
+    _grpc_server = await serve_grpc(deep_pii, injection, _custom_scanner_instances, grpc_port)
 
     yield
 
@@ -120,8 +124,7 @@ async def lifespan(app: FastAPI):
         await _grpc_server.stop(5.0)
         logger.info("gRPC server stopped")
 
-    # Shut down ML process pools.  Each worker process is given 5 seconds
-    # to finish any in-flight inference before being terminated.
+    # Shut down the Presidio process pool, waiting for in-flight scans.
     shutdown_pools()
 
     await _close_db()
@@ -155,19 +158,15 @@ class AnalyzeResponse(BaseModel):
 
 @app.get("/health")
 async def health():
-    from app.scanners.toxicity import _is_llm_guard_available
-    llm_guard_ok = _is_llm_guard_available()
     return {
         "status": "ok",
         "service": "tamga-analyzer",
-        "llm_guard_available": llm_guard_ok,
         "scanners": {
             "pii_deep": True,
             # True only when the judge was turned on (TAMGA_LLM_JUDGE) with
             # a key: it is the one scanner that sends text to a provider.
             "injection_llm": getattr(injection, "enabled", False) is True,
             "injection_llm_egress": judge_stats(),
-            "toxicity": llm_guard_ok,
             "custom_count": len(_custom_scanner_instances),
             "custom_names": [s.name for s in _custom_scanner_instances],
         },
@@ -185,14 +184,15 @@ async def analyze(req: AnalyzeRequest, background_tasks: BackgroundTasks):
 
       • PII deep — spaCy NER for contextual entities (names, orgs, locations)
       • Injection LLM — Claude Haiku judge for semantic injection detection
-      • Toxicity — LLM Guard ML classifiers for nuanced toxicity
 
-    PII and injection run concurrently via asyncio.gather.  Toxicity runs
-    sequentially after (it operates on output, not input).
+    PII and injection run concurrently via asyncio.gather.  The scan type
+    "toxicity" no longer exists: asking for it is logged once and adds
+    nothing to the response.
     """
     start = time.monotonic()
 
     scan_types = set(req.scan_types)
+    report_removed_scan_types(scan_types)
     tasks: list[asyncio.Task] = []
     task_labels: list[str] = []
 
@@ -220,18 +220,6 @@ async def analyze(req: AnalyzeRequest, background_tasks: BackgroundTasks):
                     type=f.type, category=f.category,
                     severity=f.severity, match=f.match, confidence=f.confidence,
                 ))
-
-    if "toxicity" in scan_types:
-        try:
-            tox_result = await toxicity.scan(req.content)
-            scanner_results.append(tox_result)
-            for f in tox_result.findings:
-                raw_findings.append(Finding(
-                    type=f.type, category=f.category,
-                    severity=f.severity, match=f.match, confidence=f.confidence,
-                ))
-        except Exception as exc:
-            logger.warning("toxicity scanner failed (fail-open): %s", exc)
 
     # Custom scanner SDK — run all discovered custom scanners.
     # Custom scanners accept a "custom" scan_type or their specific name.
