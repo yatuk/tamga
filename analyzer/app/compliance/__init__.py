@@ -91,6 +91,8 @@ _FINDING_TYPE_TO_OWASP: dict[str, list[str]] = {
     "jailbreak": ["LLM01"],
     "canary": ["LLM04"],
     "competitor": [],
+    # No scanner reports this type since the analyzer's classifiers were
+    # removed. It stays for findings recorded before that.
     "toxicity": ["LLM05"],
     "code_leakage": ["LLM05"],
     "custom": ["LLM02"],

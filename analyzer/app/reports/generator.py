@@ -1,4 +1,4 @@
-"""PDF report generator � OWASP + incident reports via ReportLab."""
+"""PDF report generator: OWASP and incident reports via ReportLab."""
 
 from __future__ import annotations
 

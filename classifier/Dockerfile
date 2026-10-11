@@ -1,7 +1,7 @@
 # The classifier is its own small image on purpose. It sits on the proxy's
 # decision path, so it must not share a process with the analyzer's heavy,
-# asynchronous work, and the analyzer's pinned dependencies (llm-guard holds
-# tokenizers below 0.20) cannot read current model files.
+# asynchronous work, and it needs a tokenizer and a model runtime that the
+# analyzer does not install.
 #
 # No model is baked in: mount one at TAMGA_CLASSIFIER_MODEL_DIR.
 FROM python:3.11-slim AS builder

@@ -1,5 +1,6 @@
 # Keep the build context and the image to what the service runs.
 tests/
+finetune/
 Dockerfile
 .dockerignore
 __pycache__/

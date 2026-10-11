@@ -1,0 +1,8 @@
+# For classifier/finetune/finetune.py only. The classifier service does not
+# use these and its image does not hold them (classifier/requirements.txt).
+# Not installed or tested on the day this file was written (2026-10-11):
+# the lower bounds are the first releases known to support ModernBERT, and
+# have to be confirmed on the first run.
+torch>=2.4
+transformers>=4.48
+safetensors>=0.4

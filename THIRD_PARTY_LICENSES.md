@@ -258,21 +258,17 @@ packages that are not installed are marked NOT-INSPECTED.
 | pydantic | ==2.9.0 | 2.13.4 (differs from the pin) | MIT | License-Expression |
 | pydantic-settings | ==2.5.0 | 2.14.2 (differs from the pin) | MIT | License-Expression |
 | anthropic | ==0.39.0 | 0.109.1 (differs from the pin) | MIT | License field |
-| openai | ==1.51.0 | 2.41.1 (differs from the pin) | Apache-2.0 | License field |
 | presidio-analyzer | ==2.2.355 | 2.2.359 (differs from the pin) | MIT | License field |
-| presidio-anonymizer | ==2.2.355 | - | NOT-INSPECTED | not installed in the inspected environment |
 | spacy | >=3.7,<4.0 | 3.8.13 | MIT | License field |
 | asyncpg | ==0.30.0 | - | NOT-INSPECTED | not installed in the inspected environment |
-| sqlalchemy | ==2.0.35 | 2.0.52 (differs from the pin) | MIT | License field |
 | reportlab | >=4.5.0 | 4.5.1 | BSD-3-Clause | licence file in dist-info (detected; metadata says only "BSD (unspecified)") |
 | httpx | ==0.27.2 | 0.28.1 (differs from the pin) | BSD-3-Clause | License field |
-| tenacity | >=8.1.0,<9.0.0 | - | NOT-INSPECTED | not installed in the inspected environment |
 | structlog | ==24.4.0 | 26.1.0 (differs from the pin) | MIT OR Apache-2.0 | License-Expression |
 | jinja2 | ==3.1.4 | 3.1.6 (differs from the pin) | BSD-3-Clause | licence file in dist-info (detected; metadata says only "BSD (unspecified)") |
 
 ### Transitive
 
-Distributions reached through Requires-Dist: 55.
+Distributions reached through Requires-Dist: 54.
 
 | Licence | Count |
 |---|---|
@@ -284,7 +280,6 @@ Distributions reached through Requires-Dist: 55.
 | Apache-2.0 OR BSD-2-Clause | 1 |
 | BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0 | 1 |
 | ISC | 1 |
-| MIT AND PSF-2.0 | 1 |
 | MIT OR Apache-2.0 | 1 |
 | MIT-CMU | 1 |
 | MPL-2.0 | 1 |
@@ -366,7 +361,7 @@ project's own conclusion about compatibility.
 | `@ibm/plex*` fonts (through `@carbon/styles`) | console, npm | `OFL-1.1` | Entry "SIL Open Font License 1.1", under licences for fonts: a free copyleft licence for fonts. The entry makes no statement about GPL compatibility |
 | `caniuse-lite` (through `next`) | console, npm | `CC-BY-4.0` | Entry "Creative Commons Attribution 4.0 license" (`#ccby`): compatible with all versions of the GNU GPL; not recommended for software |
 | `pgregory.net/rapid` | proxy, Go, tests only (not in the binaries) | MPL-2.0 (detected) | Entry "Mozilla Public License (MPL) version 2.0": listed among the GPL-compatible licences |
-| `presidio-anonymizer`, `asyncpg`, `tenacity` (analyzer); `onnxruntime`, `tokenizers` (classifier); everything they pull in | Python | not inspected | These were not installed where the generator ran, so neither they nor their dependencies appear in the tables above. Run the generator against the built images (see the script header) |
+| `asyncpg` (analyzer); `onnxruntime`, `tokenizers` (classifier); everything they pull in | Python | not inspected | These were not installed where the generator ran, so neither they nor their dependencies appear in the tables above. Run the generator against the built images (see the script header) |
 
 The FSF list's statements above are about the GNU GPL. This file does not
 extend them to the AGPL.
