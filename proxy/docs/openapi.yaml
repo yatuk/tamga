@@ -629,7 +629,9 @@ paths:
         a person, is in the query string, and URLs are kept in access logs,
         proxies and browser history. GET stays for existing callers.
 
-        Audited like the POST, with the same rule for `tckn_hash`.
+        Audited like the POST, with the same rule for `tckn_hash`. A
+        national id (`tckn`) is not read here: a request with `tckn` in the
+        query string is 400, whatever else it carries.
       parameters:
         - in: query
           name: user_id
@@ -671,14 +673,28 @@ paths:
         selector is in the body and nothing is read from the query string.
         The answer is that of the GET.
 
-        One selector is used: the first that is given of `user_id`, `email`
-        and `tckn_hash`. `tckn_hash` must be a SHA-256 in lower-case hex (64
-        characters); anything else is 400.
+        One selector is used: the first that is given of `user_id`, `email`,
+        `tckn_hash` and `tckn`.
+
+        `tckn` is a national id as the person gave it: 11 digits with a
+        valid checksum, anything else is 400. The server looks for it in
+        the findings of the request and of the response, in the forms the
+        log may hold it in: the masked match (`10*******46`), its keyed
+        hash (`hmac-sha256:…`, with `data.hash_findings`) and the unkeyed
+        `sha256:…` of rows written before v0.9.0. The log never held more
+        than the masked form, so rows that mention another id with the same
+        first and last two digits are returned too. The id is not logged,
+        not written to the audit log and not repeated in the answer.
+
+        `tckn_hash` is a stored hash as it is: the 64 lower-case hex
+        characters after the prefix, copied from a row. Anything else is
+        400. Stored hashes are keyed since v0.9.0, so a caller cannot
+        compute one; send `tckn`.
 
         Every call that names a subject is written to the audit log as
         `privacy.subject_access`, with the verified actor and, in `detail`,
-        `selector` (which of the three was used: `user_id`, `email` or
-        `tckn_hash`), `rows` (how many were returned) and `result` (`ok`,
+        `selector` (which was used: `user_id`, `email`, `tckn_hash` or
+        `tckn`), `rows` (how many were returned) and `result` (`ok`,
         `error` or `store_unavailable`). The selector's value is not
         written, in any form.
       requestBody:
@@ -687,11 +703,12 @@ paths:
           application/json:
             schema:
               type: object
-              description: At least one of the three.
+              description: At least one of the four.
               properties:
                 user_id: { type: string }
                 email: { type: string, format: email }
-                tckn_hash: { type: string }
+                tckn_hash: { type: string, pattern: "^[0-9a-f]{64}$", description: "A stored hash, without its prefix" }
+                tckn: { type: string, pattern: "^[1-9][0-9]{10}$", description: "A national id; body only" }
       responses:
         "200":
           description: OK
@@ -702,10 +719,12 @@ paths:
                 properties:
                   subject:
                     type: object
+                    description: The selector as it was sent. A national id is not repeated; `selector` then says `tckn`.
                     properties:
                       user_id: { type: string }
                       email: { type: string }
                       tckn_hash: { type: string }
+                      selector: { type: string, enum: [tckn] }
                   rows: { type: array }
                   count: { type: integer }
         "400":
@@ -720,12 +739,16 @@ paths:
       x-required-permission: "privacy:erase"
       description: |
         Deletes the stored request logs of a data subject. The rows are
-        deleted, not marked. One selector is used, as on the POST, and
-        `tckn_hash` must be a SHA-256 in lower-case hex (64 characters).
+        deleted, not marked. One selector is used, as on the POST, with the
+        same rules for `tckn` and `tckn_hash`.
+
+        A national id finds rows by its masked form, which another id can
+        share: read with the POST first, and erase when the rows are the
+        ones meant.
 
         Written to the audit log as `privacy.subject_erase`, with the
-        verified actor and, in `detail`, `selector` (`user_id`, `email` or
-        `tckn_hash`), `deleted` and `result` (`ok`, `error` or
+        verified actor and, in `detail`, `selector` (`user_id`, `email`,
+        `tckn_hash` or `tckn`), `deleted` and `result` (`ok`, `error` or
         `store_unavailable`). The selector's value is not written: the
         entry used to carry `user_id`, `email` and `tckn_hash`, and entries
         written by earlier versions still do.
@@ -743,7 +766,10 @@ paths:
                     email: { type: string, format: email }
                 - required: [tckn_hash]
                   properties:
-                    tckn_hash: { type: string, description: "SHA-256 of the TCKN" }
+                    tckn_hash: { type: string, pattern: "^[0-9a-f]{64}$", description: "A stored hash, without its prefix" }
+                - required: [tckn]
+                  properties:
+                    tckn: { type: string, pattern: "^[1-9][0-9]{10}$", description: "A national id" }
       responses:
         "200":
           description: OK

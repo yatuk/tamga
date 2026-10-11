@@ -229,6 +229,57 @@ STRIP replaces the whole message part a finding is in, so it works for every
 kind of finding in a request read by message, and blocks
 (`X-Tamga-Strip-Fallback`) where there is no part to replace.
 
+### Signals: text that hides something
+
+Two findings of type `injection` say that a text is unusual, not that it is
+an attack:
+
+- `unreadable_block`: a run of 100 or more characters that looks encoded
+  (base64, base58 or base32 alphabet, random by its character statistics)
+  and that Tamga cannot decode into text. Hashes and other hex, lockfile
+  integrity values, anything inside a URL, images and fonts as data URLs,
+  the signature of a JWT, SSH keys, certificates and base64 of common file
+  formats (PNG, JPEG, GIF, PDF, ZIP, gzip and others) are not reported. What
+  Tamga can decode (base64 in both alphabets, base32, hex, percent escapes)
+  is decoded and scanned as text, and is not reported either.
+- `hidden_text` at severity low: a run of eight or more zero-width or other
+  invisible format characters, or a bidirectional override character.
+
+A signal changes no verdict by itself. It is counted and stored with the
+request, it makes the risk level `low` where it would be `none`, and the
+[inline classifier](#inline-classifier) judges the text it is in by
+`signal_threshold`. **No rule acts on a signal unless it names the category
+in `types`**: an `injection` rule without a `types` list leaves signals
+alone at any sensitivity, and so does `scan.default_action`. In
+`output_rules`, `block_on: [injection]` does not mean them either;
+`block_on: [unreadable_block]` does. A rule that names one acts on it
+whatever its sensitivity:
+
+```yaml
+rules:
+  injection_detection:          # the signals: tell me
+    action: WARN
+    types: [unreadable_block, hidden_text]
+  injection:                    # attacks: block
+    action: BLOCK
+    sensitivity: medium
+```
+
+`hidden_text` at severity high is not a signal. It means the invisible
+characters spell text: eight or more characters in Unicode tag characters,
+or as bytes in runs of variation selectors. Nobody writes a sentence a
+reader cannot see by accident, and the model reads it. It is an ordinary
+`injection` finding, blocked by the shipped policy, and what the characters
+spell is scanned like the rest of the request. The flag emoji that are made
+of tag characters are not counted.
+
+Invisible characters with an honest use are never a finding on their own:
+the joiners inside emoji and inside Persian or Indic words, a soft hyphen, a
+byte order mark, direction marks around a path or a Hebrew sentence,
+private-use glyphs from a terminal prompt. They are left out of the copy of
+the text the scanners match on, so that they cannot split a pattern; the
+request is forwarded as it was written.
+
 ### Vault — reversible PII tokenization
 
 By default REDACT masks PII irreversibly, so the user loses the original data.
@@ -598,6 +649,7 @@ scan:
     enabled: true
     timeout_ms: 150     # a missed deadline is a failed scan: see on_error
     threshold: 0.98
+    signal_threshold: 0.90   # for text that carries a signal; see below
     roles: [user, tool]
     max_chars: 6000
 ```
@@ -628,6 +680,23 @@ thresholds.
   text ("ignore the previous error and retry the build") is where it errs.
   Start with the `injection_detection` rule on `WARN` if you cannot afford a
   false block, and watch `tamga_classifier_*` on `/metrics`.
+
+**Signals.** Some text is held to `signal_threshold` instead of
+`threshold`: text with an [unreadable block or hidden characters](#signals-text-that-hides-something)
+in it, and text that changes writing system. The change is judged by Unicode
+script, with no model: a `user` or `tool` text mostly in Cyrillic, Arabic,
+CJK or another script when the user's earlier messages were in a different
+one, or a text whose two halves are in different scripts. Only a change
+towards a script other than Latin counts, because people who write in
+Russian or Chinese paste English logs all day. Turkish and English are both
+Latin and never count. A change between two languages of one script
+(English to German) is not seen; that needs a language model. The change of
+script is not a finding. When the lower threshold is what made the
+classifier's finding, that finding's metadata names the signal
+(`signal: script_switch`). The default, 0.90, was
+chosen from the published sweep (it flagged 1 of 117 and 2 of 85 benign
+samples when applied to every text) and has not been measured on text that
+carries a signal. A value equal to `threshold` turns the signals off.
 
 The classifier service has no authentication of its own and receives prompt
 text in the clear. Keep it on the internal network, next to the proxy.
@@ -724,6 +793,79 @@ policy has it commented out.
 
 Rows written by earlier versions have no policy name, tokens or cost, and
 may hold 0 for the times; averages and percentiles leave those out.
+
+#### Hashed findings
+
+A finding is stored with its match as the scanner let it out: for PII the
+masked value, its first and last two characters (`10*******46`), never the
+whole value. With `data.hash_findings: true` the match is replaced by a
+keyed hash, `hmac-sha256:` and 64 hex characters: HMAC-SHA-256 of that
+masked match. The same value gives the same hash, so repeated findings can
+still be told to be of one value and a person's rows can still be found;
+without the key the hash cannot be computed, and so cannot be undone by
+hashing every possible value.
+
+The key is `TAMGA_FINDING_HASH_KEY`: standard base64 of 32 random bytes or
+more (`openssl rand -base64 32`). When it is not set a key is derived from
+`TAMGA_VAULT_KEY` (HKDF-SHA-256), so a deployment that has the vault key
+needs nothing new. Either way the key has to stay the same across restarts
+and on every replica. Changing it, or changing `TAMGA_VAULT_KEY` while the
+hash key is derived from it, does not break anything that is stored, but
+rows hashed under the old key are no longer found by a national id. Set
+`TAMGA_FINDING_HASH_KEY` before rotating the vault key if that matters.
+
+With `data.hash_findings` on and neither variable set, or with one that is
+not usable, no hash is stored: the match is written as
+`[not stored: no finding hash key]`, the finding keeps its type, category
+and severity, and such rows cannot be found by a national id. The proxy says
+so at startup and, at error level, the first time it happens.
+
+Rows written before v0.9.0 hold an unkeyed `sha256:` hash of the masked
+match. Whoever can read the table can recover the masked match from it by
+hashing candidates, which is what a row holds anyway when
+`data.hash_findings` is off. Those rows are not rewritten: they stay as they
+are until retention deletes them (`TAMGA_RETENTION_REQUEST_LOGS_DAYS`), and
+they are still found by a national id. To be rid of them sooner, delete the
+rows older than the upgrade, or only their matches:
+
+```sql
+UPDATE request_logs
+   SET findings = (SELECT COALESCE(jsonb_agg(
+         CASE WHEN f->>'match' LIKE 'sha256:%'
+              THEN jsonb_set(f, '{match}', '"[removed]"') ELSE f END), '[]'::jsonb)
+       FROM jsonb_array_elements(findings) f)
+ WHERE findings::text LIKE '%"sha256:%';
+```
+
+and the same for `output_findings`. Rows changed that way are no longer
+found by a national id.
+
+#### Looking a person up
+
+`POST /api/v1/events/subject` returns, and `DELETE` erases, the stored
+requests of one selector, the first that is given of:
+
+- `user_id` or `email`: compared with the user identifier stored on the
+  request, that is, with the sender.
+- `tckn_hash`: the 64 hex characters of a stored hash, as copied from a row
+  or an export. It finds the rows whose findings hold exactly that hash.
+- `tckn`: a Turkish national id, as the person gave it (11 digits; one that
+  fails its checksum is refused). The proxy computes the forms the log may
+  hold it in (the masked match, its keyed hash, and the unkeyed hash of
+  earlier versions) and looks for those in the findings of the request and
+  of the response. It is read from the body only (`GET` refuses it, because
+  a URL is kept in access logs) and is not logged, not written to the audit
+  log and not repeated in the answer.
+
+A client cannot compute a keyed hash, so a caller that used to send a
+SHA-256 it computed itself sends `tckn` now.
+
+Rows are found by the masked form, because that is all the log ever held.
+Two national ids with the same first two and last two digits have the same
+masked form, so a lookup by `tckn` can return, and an erase can delete,
+requests that mentioned another person's id. Read with `POST` before you
+`DELETE`. This finds a national id that was detected in a request or an
+answer; a person who was only the sender is found by `user_id` or `email`.
 
 A request that could not be stored is counted in
 `tamga_request_log_unrecorded_total{reason}`. The reason `org_not_uuid`

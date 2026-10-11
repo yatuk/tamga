@@ -848,7 +848,9 @@ export interface paths {
          *     a person, is in the query string, and URLs are kept in access logs,
          *     proxies and browser history. GET stays for existing callers.
          *
-         *     Audited like the POST, with the same rule for `tckn_hash`.
+         *     Audited like the POST, with the same rule for `tckn_hash`. A
+         *     national id (`tckn`) is not read here: a request with `tckn` in the
+         *     query string is 400, whatever else it carries.
          */
         get: {
             parameters: {
@@ -897,14 +899,28 @@ export interface paths {
          *     selector is in the body and nothing is read from the query string.
          *     The answer is that of the GET.
          *
-         *     One selector is used: the first that is given of `user_id`, `email`
-         *     and `tckn_hash`. `tckn_hash` must be a SHA-256 in lower-case hex (64
-         *     characters); anything else is 400.
+         *     One selector is used: the first that is given of `user_id`, `email`,
+         *     `tckn_hash` and `tckn`.
+         *
+         *     `tckn` is a national id as the person gave it: 11 digits with a
+         *     valid checksum, anything else is 400. The server looks for it in
+         *     the findings of the request and of the response, in the forms the
+         *     log may hold it in: the masked match (`10*******46`), its keyed
+         *     hash (`hmac-sha256:…`, with `data.hash_findings`) and the unkeyed
+         *     `sha256:…` of rows written before v0.9.0. The log never held more
+         *     than the masked form, so rows that mention another id with the same
+         *     first and last two digits are returned too. The id is not logged,
+         *     not written to the audit log and not repeated in the answer.
+         *
+         *     `tckn_hash` is a stored hash as it is: the 64 lower-case hex
+         *     characters after the prefix, copied from a row. Anything else is
+         *     400. Stored hashes are keyed since v0.9.0, so a caller cannot
+         *     compute one; send `tckn`.
          *
          *     Every call that names a subject is written to the audit log as
          *     `privacy.subject_access`, with the verified actor and, in `detail`,
-         *     `selector` (which of the three was used: `user_id`, `email` or
-         *     `tckn_hash`), `rows` (how many were returned) and `result` (`ok`,
+         *     `selector` (which was used: `user_id`, `email`, `tckn_hash` or
+         *     `tckn`), `rows` (how many were returned) and `result` (`ok`,
          *     `error` or `store_unavailable`). The selector's value is not
          *     written, in any form.
          */
@@ -921,7 +937,10 @@ export interface paths {
                         user_id?: string;
                         /** Format: email */
                         email?: string;
+                        /** @description A stored hash, without its prefix */
                         tckn_hash?: string;
+                        /** @description A national id; body only */
+                        tckn?: string;
                     };
                 };
             };
@@ -933,10 +952,13 @@ export interface paths {
                     };
                     content: {
                         "application/json": {
+                            /** @description The selector as it was sent. A national id is not repeated; `selector` then says `tckn`. */
                             subject?: {
                                 user_id?: string;
                                 email?: string;
                                 tckn_hash?: string;
+                                /** @enum {string} */
+                                selector?: "tckn";
                             };
                             rows?: unknown[];
                             count?: number;
@@ -956,12 +978,16 @@ export interface paths {
         /**
          * KVKK/GDPR subject erase
          * @description Deletes the stored request logs of a data subject. The rows are
-         *     deleted, not marked. One selector is used, as on the POST, and
-         *     `tckn_hash` must be a SHA-256 in lower-case hex (64 characters).
+         *     deleted, not marked. One selector is used, as on the POST, with the
+         *     same rules for `tckn` and `tckn_hash`.
+         *
+         *     A national id finds rows by its masked form, which another id can
+         *     share: read with the POST first, and erase when the rows are the
+         *     ones meant.
          *
          *     Written to the audit log as `privacy.subject_erase`, with the
-         *     verified actor and, in `detail`, `selector` (`user_id`, `email` or
-         *     `tckn_hash`), `deleted` and `result` (`ok`, `error` or
+         *     verified actor and, in `detail`, `selector` (`user_id`, `email`,
+         *     `tckn_hash` or `tckn`), `deleted` and `result` (`ok`, `error` or
          *     `store_unavailable`). The selector's value is not written: the
          *     entry used to carry `user_id`, `email` and `tckn_hash`, and entries
          *     written by earlier versions still do.
@@ -981,8 +1007,11 @@ export interface paths {
                         /** Format: email */
                         email: string;
                     } | {
-                        /** @description SHA-256 of the TCKN */
+                        /** @description A stored hash, without its prefix */
                         tckn_hash: string;
+                    } | {
+                        /** @description A national id */
+                        tckn: string;
                     };
                 };
             };

@@ -159,8 +159,8 @@ schema are in [docs/architecture](docs/architecture/README.md).
 | | Detects | Default action |
 |---|---|---|
 | **PII** | TC Kimlik, credit cards (Luhn + BIN), IBAN, email, phone, IP | Block IDs and cards, redact the rest |
-| **Secrets** | AWS, GitHub, OpenAI, Anthropic and Stripe keys, JWTs, private keys, connection strings | Block |
-| **Prompt injection** | Instruction override, role manipulation, jailbreak patterns, encoded payloads; EN/TR/DE | Block |
+| **Secrets** | AWS, Azure storage, GitHub, GitLab, OpenAI, Anthropic, Stripe, Slack, npm and PyPI keys and tokens, JWTs, private keys, connection strings, credentials in URLs ([all formats](proxy/internal/scanner/patterns/README.md#secret-formats)) | Block |
+| **Prompt injection** | Instruction override, role manipulation, jailbreak patterns, encoded payloads, text hidden in invisible characters; EN/TR/DE | Block |
 | **Custom entities** | Your own regex patterns (customer numbers, file IDs), editable from the dashboard | Per entity |
 | **System-prompt leaks** | Canary token injected into the system prompt and looked for in the response | Block (opt-in) |
 | **Decision governance** | Prompts that contradict a locked decision in a [jugeni](https://github.com/jugeni/jugeni-contracts) audit log | Per assertion (opt-in) |
@@ -188,6 +188,11 @@ at threshold 0.98.
 |---|---|---|---|
 | Tuning corpus `prompts.csv` (gates CI) | 309, of which 117 benign | 1.000 / 0.896 | 1.000 / 0.927 |
 | Held-out set `holdout.csv` | 163, of which 85 benign | 1.000 / 1.000 | 1.000 / 1.000 |
+
+On 2026-10-11 the tuning corpus grew by 22 prompts written together with new
+detectors (331, of which 121 benign). The deterministic scanners score
+1.000 / 0.905 on it: the 18 added attacks are caught and the 20 misses are
+the same 20. The classifier has not been run on the larger corpus.
 
 Source: [docs/benchmarks/README.md](docs/benchmarks/README.md#with-the-inline-classifier),
 from the reports
@@ -336,6 +341,7 @@ unknown or misplaced key is a load error, not a silent no-op.
 | `REDIS_URL` | — | Rate limiting, cache, vault store |
 | `TAMGA_MOCK_UPSTREAM` | `false` | Answer with a canned response instead of calling a provider |
 | `TAMGA_VAULT_KEY` | — | Base64 32-byte AES key for vault entries at rest |
+| `TAMGA_FINDING_HASH_KEY` | — | Base64 key (32 bytes or more) for the hashes of finding matches in the request log (`data.hash_findings`); empty derives one from `TAMGA_VAULT_KEY` |
 | `TAMGA_TRUST_ROLE_HEADER` | `false` | Honour `X-Tamga-Role` for policy exceptions; only behind an authenticating gateway |
 | `TAMGA_REQUIRE_KEY` | `false` | Refuse proxy requests that carry no valid `X-Tamga-Key` |
 | `TAMGA_CLASSIFIER_ADDR` | — | gRPC address of the optional classifier service; the policy's `scan.classifier` turns it on |
@@ -451,8 +457,7 @@ custom entity UI · the security fixes listed in the [changelog](CHANGELOG.md).
   store behind them) and no custom roles.
 
 **Planned next,** in this order, with no dates and no promise: a locked
-evaluation set for the scanners and the classifier · detectors for invisible
-text, more secret formats and encoded blocks · response scanners for
+evaluation set for the scanners and the classifier · response scanners for
 malicious links and for JSON that does not match a schema · a browser
 extension for chat sites. MCP inspection is not in the plan.
 

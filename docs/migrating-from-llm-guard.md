@@ -159,12 +159,12 @@ box nothing is scanned in responses.
 | `BanTopics` | Rejects prompts about topics you name, using a zero-shot classifier | none. The content-moderation scanner has a fixed list of phrases about weapons, self-harm and drugs; you cannot name a topic | **none** | — |
 | `Code` | Detects code in the prompt and allows or bans it by programming language | none | **none** | — |
 | `EmotionDetection` | Classifies the emotions in a prompt and blocks the ones you list (on `main` only, not in a release) | none | **none** | — |
-| `Gibberish` | Flags nonsensical English text with a classifier | none | **none** | — |
-| `InvisibleText` | Detects and removes characters of Unicode categories Cf, Cc, Co and Cn | Normalization before scanning (`normalize/unicode.go`, `stripZeroWidth`) | **partial.** Five characters (U+200B, U+200C, U+200D, U+2060, U+FEFF) are dropped from the copy of the text the scanners match on, so a pattern split by them is still found. No finding is raised for their presence, the forwarded request keeps them, and private-use and tag characters are not handled | Requests and responses |
-| `Language` | Detects the language with a model and rejects prompts outside your list | none | **none** | — |
+| `Gibberish` | Flags nonsensical English text with a classifier | none for prose. The `unreadable_block` signal (`obfuscation.go`) marks a block of 100 or more characters that looks encoded and cannot be decoded | **none.** The signal judges character statistics of encoded-looking blocks, not whether sentences make sense, and changes no verdict unless a rule names it | — |
+| `InvisibleText` | Detects and removes characters of Unicode categories Cf, Cc, Co and Cn | Normalization before scanning (`normalize/invisible.go`) and the `hidden_text` finding of the injection type (`obfuscation.go`) | **partial.** Detection is equivalent or wider: characters of Cf, Cc, Co and Cn, variation selectors and the other default-ignorable characters are dropped from the copy of the text the scanners match on, so a pattern split by them is found, and text written in tag characters or variation selectors is read out and scanned. Eight or more characters of such text is a finding the shipped policy blocks; a long run of zero-width characters or a bidi override is a signal that only a rule naming `hidden_text` acts on. Removal is not equivalent: the forwarded request keeps the characters. Tamga blocks or strips the text, it does not clean it | Requests and responses |
+| `Language` | Detects the language with a model and rejects prompts outside your list | none. A change of writing system inside a conversation (Latin to Cyrillic, Arabic, CJK) lowers the inline classifier's threshold for that text | **none.** No language is detected and nothing is rejected for its language; the change of script is not a finding | — |
 | `PromptInjection` | Classifies the prompt with a DeBERTa model against a threshold | Injection and jailbreak scanners (`injection*.go`, `jailbreak.go`), rules `injection_detection` and `injection`; and the optional inline classifier, `scan.classifier`, off by default | **equivalent**, by different means. By default Tamga matches wording: a phrase list in English, Turkish, German and Russian, plus rules for role spoofing, encoded payloads and paraphrases. A model reads the text only when you run the classifier service and download a model for it; none ships. The classifier is asked about `user` and `tool` text only | Patterns: requests and responses. Classifier: requests |
 | `Regex` | Matches your regular expressions; treats a match as bad or as required; can redact | `custom_entities` | **partial.** A match is always a finding: there is no "valid only if it matches" mode and no full-match switch. Go RE2 syntax (no lookaround or backreferences); a pattern that can match the empty string is refused | Requests and responses |
-| `Secrets` | Finds secrets with the `detect-secrets` library, including high-entropy strings, and redacts them | Secret scanner (`secrets.go`), rule `secret_detection` | **partial.** A fixed set of formats: AWS access and secret keys, GitHub, OpenAI, Anthropic, Stripe, Slack tokens and webhooks, Google API keys, Twilio SIDs, JWTs, private keys, connection strings, basic auth, stated passwords, `.env` assignments, and a generic `key = value` form. No high-entropy detector. A secret under `REDACT` is masked with a fixed marker and is never put in the vault, so it is not restored in the answer | Requests and responses |
+| `Secrets` | Finds secrets with the `detect-secrets` library, including high-entropy strings, and redacts them | Secret scanner (`secrets.go`), rule `secret_detection` | **partial.** A fixed set of formats: AWS access and secret keys, Azure storage keys, GitHub, GitLab, npm, PyPI, OpenAI, Anthropic, Stripe, SendGrid, Mailchimp, Square, Discord, Telegram and Artifactory keys and tokens, Slack tokens and webhooks, Google API keys, Twilio SIDs, JWTs, private keys, connection strings, credentials in URLs, basic auth, stated passwords, `.env` assignments, and a generic `key = value` form. Of the `detect-secrets` plugins, Cloudant, IBM and SoftLayer keys have no pattern of their own (they are found only next to a name, as `key = value`). No high-entropy detector for secrets. A secret under `REDACT` is masked with a fixed marker and is never put in the vault, so it is not restored in the answer | Requests and responses |
 | `Sentiment` | Scores sentiment with NLTK and rejects prompts below a threshold | none | **none** | — |
 | `TokenLimit` | Counts tokens with `tiktoken` and rejects prompts over a limit | `body_limits` (bytes of the whole request body, 413 when over) and `rate_limit.max_tokens_per_day` (per key, per day) | **partial.** A size cap in bytes on the whole body, not a token count on the prompt. Nothing is counted in tokens per request | Requests |
 | `Toxicity` | Scores the toxicity of the prompt against a threshold | Content-moderation scanner (`content_moderation.go`), rule `content_moderation` | **partial.** A short fixed list of English and Turkish phrases (threats, slurs, profanity), no model and no score. The shipped policy has no rule for it, so its findings get `scan.default_action`, which is `WARN` there | Requests and responses |
@@ -500,7 +500,8 @@ the last 1000 are kept in memory):
   keep the first eight characters, as they were stored); an injection or
   content-moderation finding stores the matched
   phrase itself, cut at 64 to 200 characters depending on the scanner.
-  `data.hash_findings: true` stores a SHA-256 of the match instead.
+  `data.hash_findings: true` stores a keyed hash (HMAC-SHA-256) of the
+  match instead; it needs `TAMGA_FINDING_HASH_KEY` or `TAMGA_VAULT_KEY`.
 - **Audit log**: administrative actions (policy changes, keys) and refused
   management credentials (never the credential itself), hash-chained.
   Request decisions are in the request log, which is not chained.
@@ -699,14 +700,11 @@ Planned, not promised, with no dates. Each line is an item in the project's
 plan; none of it exists today, and the table above will change only when it
 does.
 
-- **Invisible text and secret patterns.** Compare what normalization strips
-  with the Unicode Cf, Co and Cn categories and add what is missing; compare
-  the secret patterns with the `detect-secrets` plugin list and add the
-  missing formats, each with its validator.
-- **Encoded blocks and language switching.** A marker for high-entropy
-  blocks that cannot be decoded, by character statistics, not a model. A
-  change of language inside a conversation as a signal that lowers the
-  classifier's threshold, not as a finding of its own.
+Two items that stood here were done on 2026-10-11 and are in the table:
+invisible text and more secret formats (`InvisibleText`, `Secrets`), and the
+signals for encoded blocks and for a change of script (`Gibberish`,
+`Language`, both still "none" as replacements).
+
 - **Output scanners.** In responses: the same PII scanners in the stream
   path, malicious links by a local list and a format check with no outbound
   request, and structured output that does not match an expected JSON schema.

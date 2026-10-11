@@ -190,6 +190,62 @@
   `error` field of `scanner did not report`, `scanner error`, `gRPC scanner
   failed`, `classifier unavailable` or the analyzer's `deep scan failed`
   lines finds nothing now: the field is `error_kind`.**
+- **The hash that `data.hash_findings` stores could be undone.** It was a
+  plain SHA-256 of the finding's match. The match is what the scanner lets
+  out, for PII the masked value (`10*******46`), so the hash was of that and
+  not of the whole identifier; but a masked value has few possibilities, and
+  whoever could read the table could recover it by hashing them. The option
+  therefore kept nothing out of the table that is not there with it off.
+  The hash is now HMAC-SHA-256 under a key of the deployment, stored as
+  `hmac-sha256:…`: equal values still give equal hashes, and without the
+  key a hash can be neither computed nor enumerated. The key is
+  `TAMGA_FINDING_HASH_KEY` (base64, 32 bytes or more); when it is not set
+  one is derived from `TAMGA_VAULT_KEY` with HKDF, so the vault's key is not
+  used for a second purpose. **With `data.hash_findings` on and neither
+  variable set, matches are no longer stored at all: the row holds
+  `[not stored: no finding hash key]` in their place, and the proxy says so
+  at startup and at error level when it first happens. The Compose file
+  does not pass `TAMGA_VAULT_KEY` to the proxy, so a Compose deployment
+  with `data.hash_findings` on has to set `TAMGA_FINDING_HASH_KEY`.** The
+  key has to be the same on every replica and after a restart; rows hashed
+  under another key are no longer found by a national id.
+  **Rows written before this version keep the old, reversible `sha256:`
+  hash until retention deletes them (`TAMGA_RETENTION_REQUEST_LOGS_DAYS`).
+  They are not rewritten. An operator who wants them gone sooner deletes
+  the rows older than the upgrade, or removes only their matches with the
+  statement in [docs/operations.md](docs/operations.md#hashed-findings).**
+  No migration: the hash is inside the findings, and its prefix tells old
+  from new.
+- **The subject routes take a national id, in the body.** `POST` and
+  `DELETE /api/v1/events/subject` accept `tckn`, the id as the person gave
+  it; the server computes the forms the log may hold it in (the masked
+  match, its keyed hash, the unkeyed hash of older rows) and looks for
+  exactly those in the findings of the request and of the response. The id
+  is checked (11 digits, valid checksum), read from the body only (`GET`
+  with `tckn` in the URL is 400), and is not logged, not written to the
+  audit log, whose entry says `selector: tckn`, and not repeated in the
+  answer. **`tckn_hash` was documented as "SHA-256 of the TCKN" and never
+  found a row that way: what was stored was the hash of the masked match.
+  It stays, as the 64 hex characters of a stored hash copied from a row;
+  a caller that computed a hash itself sends `tckn` now.** The SDKs take
+  `tckn` and send it by `POST`. **The log never held more than the masked
+  form, so a lookup by national id also returns, and an erase also deletes,
+  requests that mention another id with the same first and last two
+  digits. Read before erasing.** The lookup by match is tested against
+  PostgreSQL; that test was not run here.
+- **A scanner that panicked in `workerpool` mode ended the process.** A job
+  runs on a pool worker, which is not a request's goroutine, and nothing
+  recovered there; in the other modes the pipeline does. The job is now
+  answered with a failure of kind `panic`, counted and logged as one
+  (`reason: panic`, never the panic's value), the scan is reported as
+  degraded with what the other scanners found, and the worker stays.
+  **A scan whose context was already over (a client that went away, a
+  timeout) could hang its request for good in the same mode**: the pool
+  refused such a job at random and the pipeline went on waiting for its
+  result. Every job the pool accepts now gets exactly one result, and a job
+  whose context is over is answered with that error without running the
+  scanner. A panic in `workerpool` mode shows in
+  `tamga_scan_degraded_total` under both `panic` and `error`.
 
 ### LiteLLM
 - **Tamga can be added to a LiteLLM proxy as a guardrail**, without Tamga's
@@ -239,6 +295,21 @@
   No text is stored, and no tokens or cost, which Tamga does not see here.
   `litellm_call_id` stays in the log line: the request log has no column
   for it. `POST /api/v1/scan` is unchanged and stores nothing. No migration.
+- **A long answer over the bridge was a 503.** Each text of an answer was
+  given `output_rules.scan_window_ms` to be scanned in, 200 ms by default,
+  and one the scanners needed longer for (an answer near the route's size
+  limit can) was answered with
+  `tamga_scan_unavailable`, which LiteLLM turns into a refused request. That
+  window is the proxy path's: it is how long a buffered answer is held back
+  from a waiting client, and `output_rules.fail_open` says what happens when
+  it runs out. Over the bridge LiteLLM already has the answer and waits for
+  the verdict, and there is no `fail_open`. An answer call now has one
+  budget of 10 seconds for all its texts and tool calls together, several
+  times what the 256 KiB the route accepts takes to scan; a scan that
+  reaches it is still a 503, never a verdict. **`scan_window_ms` no longer
+  shortens the scan of an answer over the bridge; set above 10 seconds it
+  is the bound. A `post_call` guardrail can therefore take longer to answer
+  than 200 ms a text.** The proxy path is unchanged.
 
 ### Licences and packaging
 - `NOTICE` gives the attributions the bundled material asks for, and
@@ -266,6 +337,14 @@
 - Text that wraps is no longer set solid; a selection in the policy editor is
   visible; toasts carry no icon; a report that could not be made says why
   next to its button; figures are not drawn as 0 while they load.
+- Marked text was wrong in three cases: a literal pattern tried on a sample
+  with a letter such as "İ" before the match marked the wrong characters; a
+  playground prompt that was one match from end to end was not shown; a diff
+  against an empty policy counted one removed line. A request list read anew
+  no longer marks rows as new. The charts, the diff, new-row marking and
+  match marking have unit tests; the mocked end-to-end tests written for the
+  old interface are replaced by `e2e/states.spec.ts`; `npm run lint` covers
+  `hooks/`.
 - The Redis and NATS URLs were written to the log at startup with their
   passwords. Only the host is logged.
 - **Helm chart 0.2.0.** The chart set variables the proxy does not read, so
@@ -563,6 +642,21 @@
   not by the moment its batch was flushed.
 - `daily_stats` is no longer read; nothing ever filled it. The earlier entry
   about the day-bucket timeseries reading it is superseded.
+- **"Shadow only" gave different answers from the database and from
+  memory.** The filter was written three times: a list of provider names in
+  the SQL of the event search, another in the export, and a function for the
+  events held in memory. They disagreed about a request that names no
+  provider (shadow in the database, not in memory), about a provider
+  recorded as `OpenAI` (shadow in memory, not in the database), and the
+  export, answered from memory, counted a LiteLLM bridge call as shadow.
+  There is one list now, in the `providers` package; the search is given it
+  as an argument and the two filters over memory call the same function.
+  **A request without a provider is not shadow AI**: shadow says traffic
+  went to a provider outside the approved ones, and such a row says nothing
+  about where anything went. **`?shadow=true` and `?provider=shadow` on a
+  deployment with a database return fewer rows than before if it holds rows
+  with an empty provider.** The agreement of the database's filter with the
+  one over memory is tested against PostgreSQL; that test was not run here.
 
 ### Agents
 - **A long tool result or file no longer stalls the proxy.** Scanning a large
@@ -838,6 +932,70 @@
   the findings but apply no rule to them.
 - `go test ./cmd/redteam` now fails when either set catches fewer attacks or
   flags a benign prompt, so the published numbers are enforced by CI.
+- **Characters that do not show no longer split a pattern, and text hidden
+  in them is read.** The copy of the text the scanners match on used to
+  drop five zero-width characters. It now drops every character of the
+  Unicode categories Cf, Co and Cc (line breaks and tabs stay), unassigned
+  code points, variation selectors and the other default-ignorable
+  characters, all taken from Go's Unicode tables: soft hyphens, direction
+  marks, tag characters, private-use characters and control bytes among
+  them. The forwarded request is unchanged, as before. Text written in tag
+  characters (U+E0020 to U+E007E) or as bytes in runs of variation
+  selectors is read out and scanned like the rest of the request.
+- **Hidden text is a finding: `injection` / `hidden_text`.** Eight or more
+  characters of text in tag characters or variation selectors is severity
+  high. **The shipped policy blocks it, and so does any `injection` rule
+  that acts on high findings.** The tags of a flag emoji are not counted.
+  A run of eight or more zero-width or other format characters, and a
+  bidirectional override (U+202D, U+202E), are the same category at
+  severity low, which is a signal (below).
+- **Signals.** Two findings say a text is unusual and not that it is an
+  attack: low-severity `hidden_text`, and `unreadable_block`, a run of 100
+  or more base64-alphabet characters that looks random (character entropy
+  and how often the character class changes) and that no decoder turns into
+  text. Hex, hashes, integrity values, text inside a URL, image and font
+  data URLs, the signature of a JWT, SSH keys, certificates and base64 of
+  common file formats are left out. **No rule acts on a signal unless it
+  names the category in `types:`**, at any sensitivity, and
+  `scan.default_action` does not either, so no verdict changes because of
+  one. In `output_rules` likewise: `block_on: [injection]` does not mean
+  them, `block_on: [unreadable_block]` does. What changes: the finding is counted and stored, the request's risk
+  level is `low` where it was `none`, and the inline classifier is stricter
+  with that text. To act on them:
+  `injection_detection: { action: WARN, types: [unreadable_block, hidden_text] }`.
+- **More encodings are decoded before scanning**: base64 in the URL-safe
+  alphabet, base64 of text that is not ASCII (Turkish, Russian, Chinese), of
+  UTF-16, base64 twice, base64 written backwards, base32, bytes spelled out
+  in hex with separators or with `0x` and `\x` in front, and runs of percent
+  escapes. An instruction or an ID number in any of them is found by the
+  rules that would find it in plain sight.
+- **New secret categories**: `azure_storage_key`, `gitlab_token`,
+  `npm_token`, `sendgrid_key`, `mailchimp_key`, `square_token`,
+  `discord_bot_token`, `telegram_bot_token`, `pypi_token`,
+  `artifactory_key` and `url_credentials` (a user name and password inside
+  an `https`, `ftp`, `amqp`, `smtp` or `ldap` URL). `stripe_key` covers
+  restricted keys (`rk_`), `private_key` a PuTTY key file. Each has a
+  validator; where the formats come from is in
+  `proxy/internal/scanner/patterns/README.md`. **A policy whose
+  `secret_detection` rule has a `types:` list must add them to act on
+  them; a rule without a list acts on them from this version on.** The
+  shipped policy lists them. The console's table of category names does
+  not have them yet. There is still no generic high-entropy detector.
+- `scan.classifier.signal_threshold` (default 0.90): the threshold for a
+  text that carries a signal, or that changes writing system against the
+  user's earlier messages or half-way through (Latin to Cyrillic, Arabic,
+  CJK and so on, by Unicode script). Turkish and English are one script and
+  never count; a change between two languages of one script is not seen.
+  The change of script is not a finding. The default was not measured with
+  a model; set it equal to `threshold` to turn the signals off.
+- Measured (`docs/benchmarks/README.md`): no benign prompt is flagged in
+  either red-team set, before or after (0 of 117 and 0 of 85). Of the 23
+  encoding vectors published before this change 20 were found before and 20
+  after: the three that pass are leetspeak and letter-by-letter spelling,
+  which this change does not address. Of 25 new vectors 4 were found before
+  and 25 after. `prompts.csv` has 22 more prompts (331); the 18 added
+  attacks are caught and the 20 misses are the same 20. The scanner
+  benchmarks did not get slower.
 
 ### Tests
 - Stress suite: a sixth category, **request structure** — 19 attacks that keep
