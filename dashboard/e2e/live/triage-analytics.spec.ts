@@ -544,7 +544,8 @@ test.describe("Threat hunting", () => {
   }
 
   test.afterEach(async ({ page }) => {
-    await deleteHunts(page);
+    // A skipped test still runs this hook, and without a proxy the request is refused and fails the test.
+    if (process.env.E2E_LIVE) await deleteHunts(page);
   });
 
   test("each filter narrows the matches and stays in the URL", async ({ page }) => {
