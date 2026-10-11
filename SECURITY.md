@@ -32,6 +32,11 @@ container image or package. `CHANGELOG.md` names v0.7.0 (2026-06-20) and
 v0.8.0-rc1 (2026-07-21) and lists v0.9.0 as unreleased. Security fixes are
 made on `main` only; nothing is backported.
 
+A release workflow that signs what it builds is in the repository and has
+not run yet. What a release will contain and how to check its signatures,
+provenance and SBOMs is in
+[Verifying a release](docs/verifying-a-release.md).
+
 | Version | Security fixes |
 |---------|-----------|
 | `main` | ✅ |
@@ -50,6 +55,10 @@ with a management credential. See
 [Who may call what](docs/operations.md#who-may-call-what).
 
 ## Trust Assumptions
+
+The [threat model](docs/threat-model.md) lists the trust boundaries, the
+controls with the code and tests behind each, and the risks that remain.
+The points below are the ones an operator has to act on.
 
 Callers on the proxy path are authenticated only when they send a Tamga key
 in `X-Tamga-Key`, and only required to when `TAMGA_REQUIRE_KEY=true`. The

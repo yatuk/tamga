@@ -1,0 +1,106 @@
+name: Dependency licences (report)
+
+# Judges the licence of every shipped dependency against
+# .github/licence-policy.yml with scripts/licence-gate.py.
+#
+# The policy file says `mode: report`: the job prints what it would refuse
+# and does not fail. The allow, review and deny sets in that file are a
+# proposal the maintainer has not yet decided. Changing `mode` to `enforce`
+# there makes this job fail on a finding; nothing in this workflow changes.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "proxy/go.mod"
+      - "proxy/go.sum"
+      - "dashboard/package.json"
+      - "dashboard/package-lock.json"
+      - "sdk/typescript/tamga-client/package.json"
+      - "sdk/typescript/tamga-client/package-lock.json"
+      - "analyzer/requirements.txt"
+      - "classifier/requirements.txt"
+      - "sdk/python/pyproject.toml"
+      - "scripts/licence-gate.py"
+      - "scripts/third-party-licenses.py"
+      - ".github/licence-policy.yml"
+      - ".github/workflows/licence-gate.yml"
+  schedule:
+    - cron: "0 7 * * 1" # Mondays at 07:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  licences:
+    name: Licence policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Go: the inventory reads each module's licence file from the module
+      # cache with GOPROXY=off, so the modules have to be there first.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: proxy/go.mod
+          cache: true
+          cache-dependency-path: proxy/go.sum
+      - name: Download Go modules
+        working-directory: proxy
+        run: go mod download
+
+      # npm: the inventory reads the `license` field of each production
+      # package under node_modules. No install script is run.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: Install the console's production packages
+        working-directory: dashboard
+        run: npm ci --omit=dev --ignore-scripts --legacy-peer-deps
+      - name: Install the TypeScript SDK's production packages
+        working-directory: sdk/typescript/tamga-client
+        run: npm ci --omit=dev --ignore-scripts
+
+      # Python: one environment per component, built from its own
+      # requirements, so that the licences read are those of the versions
+      # that component installs.
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      - name: Read the Python components' licence metadata
+        run: |
+          set -euo pipefail
+          meta="$RUNNER_TEMP/pip-meta"
+          mkdir -p "$meta"
+          dump() {  # dump <name> <pip install arguments...>
+            local name="$1"; shift
+            python -m venv "$RUNNER_TEMP/venv-$name"
+            "$RUNNER_TEMP/venv-$name/bin/python" -m pip install --quiet "$@"
+            "$RUNNER_TEMP/venv-$name/bin/python" scripts/third-party-licenses.py dump-pip > "$meta/$name.json"
+          }
+          dump analyzer -r analyzer/requirements.txt
+          dump classifier -r classifier/requirements.txt
+          dump sdk-python ./sdk/python
+
+      - name: Install PyYAML (reads the policy file)
+        run: python -m pip install pyyaml==6.0.2
+
+      - name: Licence gate
+        run: |
+          python scripts/licence-gate.py \
+            --pip "analyzer=$RUNNER_TEMP/pip-meta/analyzer.json" \
+            --pip "classifier=$RUNNER_TEMP/pip-meta/classifier.json" \
+            --pip "sdk-python=$RUNNER_TEMP/pip-meta/sdk-python.json" \
+            --json "$RUNNER_TEMP/licence-findings.json"
+
+      - name: Upload the findings
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: licence-findings
+          path: ${{ runner.temp }}/licence-findings.json
+          if-no-files-found: ignore

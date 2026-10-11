@@ -1,0 +1,158 @@
+# Licence policy for Tamga's dependencies.
+#
+# Read by scripts/licence-gate.py, which takes the dependency inventory from
+# scripts/third-party-licenses.py (the generator of THIRD_PARTY_LICENSES.md)
+# and sorts every shipped dependency into allow, review, deny or unreadable.
+#
+# THE SETS BELOW ARE A PROPOSAL. The maintainer has not decided them. Until
+# that decision is made the gate runs in report mode: it prints what it would
+# refuse and exits 0. Nothing here is legal advice, and the reasons quote
+# what a licence's steward or the FSF licence list says, not a conclusion of
+# this project about compatibility with AGPL-3.0.
+#
+# To turn the gate on:
+#   1. Read `decisions` at the end of this file and give every entry that
+#      says `pending` a decision: `allow` or `deny`.
+#   2. Correct the sets if you disagree with a proposal.
+#   3. Change `mode: report` to `mode: enforce`.
+# In enforce mode the gate fails on: a licence in `deny`; a licence in
+# `review` whose package has no `allow` decision; a licence in no set at
+# all; and, with `unreadable: fail`, a dependency whose licence could not be
+# read.
+
+version: 1
+
+# report  : print the findings, exit 0.
+# enforce : print the findings, exit 1 when there is one.
+mode: report
+
+# What to do with a dependency whose licence is MISSING, UNRECOGNISED or
+# NOT-INSPECTED (not installed where the gate ran). `fail` or `warn`.
+# In enforce mode `fail` needs the gate to run where every component is
+# installed, as the workflow does.
+unreadable: fail
+
+# Go modules that are in the module graph only (tests, tools) and are not
+# compiled into cmd/tamga, cmd/scanner-service or cmd/redteam are counted and
+# not judged: they are not distributed. Set to true to judge them too.
+judge_go_modules_outside_binaries: false
+
+allow:
+  # Permissive licences: attribution and a copy of the licence text, no
+  # condition on the licence of the combined work.
+  - licences: [MIT, MIT-0, MIT-CMU, ISC, 0BSD, BSD-2-Clause, BSD-3-Clause,
+               Apache-2.0, Zlib, BSL-1.0, HPND, BlueOak-1.0.0]
+    reason: Permissive; attribution only. The FSF list names each as GPL-compatible (Apache-2.0 with GPLv3 only).
+  - licences: [Unlicense, CC0-1.0]
+    reason: Public-domain dedications with a fallback licence.
+  - licences: [PSF-2.0, Python-2.0]
+    reason: The Python Software Foundation licence; the FSF list names it as GPL-compatible.
+  - licences: [Unicode-3.0, Unicode-DFS-2016]
+    reason: Unicode data licences; permissive.
+  - licences: [MPL-2.0]
+    reason: >-
+      File-level copyleft. The FSF list names MPL-2.0 as GPL-compatible unless
+      a file is marked "Incompatible With Secondary Licenses". The inventory
+      already counts it as permissive. Under it today: certifi (analyzer and
+      Python SDK, through httpx), tqdm (analyzer, with MIT) and the Go module
+      pgregory.net/rapid, which tests use and the binaries do not contain.
+
+review:
+  # Not refused and not waved through: a person decides per package, and the
+  # decision is written under `decisions`.
+  - licences: [LGPL-2.0-only, LGPL-2.0-or-later, LGPL-2.1-only, LGPL-2.1-or-later,
+               LGPL-3.0-only, LGPL-3.0-or-later, LGPL, "LGPL (unspecified)"]
+    reason: >-
+      Weak copyleft with conditions on how the library is linked and replaced.
+      Whether they are met depends on how the package is shipped (a separate
+      shared library, a prebuilt binary inside an image).
+  - licences: [GPL-2.0-or-later, GPL-3.0-only, GPL-3.0-or-later, GPL,
+               AGPL-3.0-only, AGPL-3.0-or-later, AGPL-3.0]
+    reason: >-
+      Same family as Tamga's own licence. Listed for review so that a new
+      strong-copyleft dependency is noticed and its exact version terms read.
+  - licences: [OFL-1.1, OFL-1.1-RFN, OFL-1.1-no-RFN]
+    reason: >-
+      A copyleft licence for fonts. The FSF list calls it a free licence for
+      fonts and makes no statement about GPL compatibility. Applies to font
+      files served by the console, not to code.
+  - licences: [CC-BY-4.0, CC-BY-3.0]
+    reason: >-
+      Attribution licence for data and text. The FSF list names CC BY 4.0 as
+      GPL-compatible and does not recommend it for software. Needs the
+      attribution to be given (see NOTICE).
+  - licences: [CC-BY-SA-4.0]
+    reason: Share-alike licence for data and text; one-way compatible with GPLv3 per Creative Commons. Check what it covers.
+  - licences: [CNRI-Python]
+    reason: >-
+      The FSF list calls the Python 1.6b1 licence free and GPL-incompatible
+      (a choice-of-law clause). Whether that matters for a package installed
+      from PyPI into a separate service is a legal question.
+  - licences: [EPL-1.0, EPL-2.0, EPL, EUPL-1.2, Artistic-2.0, CDDL-1.1]
+    reason: Copyleft licences whose compatibility depends on the version and on optional clauses.
+  - licences: ["BSD (unspecified)", "Public-Domain (unspecified)", "GPL (unspecified)"]
+    reason: The package's metadata names a family, not a licence. Read the licence file.
+
+deny:
+  - licences: [SSPL-1.0, BUSL-1.1, Elastic-2.0, Commons-Clause]
+    reason: Source-available licences that restrict use or hosting; not open-source licences.
+  - licences: ["CC-BY-NC-*", "CC-BY-ND-*", "CC-BY-NC-SA-*", "CC-BY-NC-ND-*"]
+    reason: Non-commercial or no-derivatives terms; not free licences.
+  - licences: [GPL-2.0-only, LGPL-2.0, GPL-1.0-only]
+    reason: The FSF list says GPLv2-only is not compatible with GPLv3, and AGPL-3.0 combines with the GPL through version 3.
+  - licences: [BSD-4-Clause, CDDL-1.0, JSON]
+    reason: The FSF list names each as incompatible with the GPL (advertising clause; CDDL's terms) or non-free (the JSON licence's use restriction).
+  - licences: [UNLICENSED, Proprietary, "SEE LICENSE IN *"]
+    reason: No licence granted, or one this file cannot read.
+
+# One entry per package (or family of packages) whose licence is in `review`.
+# `package` is a glob. `decision` is pending, allow or deny.
+# The entries below are every dependency that is in review today
+# (2026-10-11, from THIRD_PARTY_LICENSES.md). All are pending: the maintainer
+# has not decided.
+decisions:
+  - ecosystem: npm
+    component: dashboard
+    package: "@img/sharp-libvips-*"
+    licence: LGPL-3.0-or-later
+    decision: pending
+    note: >-
+      Prebuilt libvips, one package per platform. Optional dependencies of
+      sharp, which is an optional dependency of next (image optimisation).
+      The question: does the published console image contain one, and if so
+      are LGPL-3.0's conditions (licence text, source offer, replaceable
+      library) met by pointing at the upstream package.
+  - ecosystem: npm
+    component: dashboard
+    package: "@img/sharp-w*"
+    licence: Apache-2.0 AND LGPL-3.0-or-later
+    decision: pending
+    note: >-
+      sharp for Windows and WebAssembly (`@img/sharp-win32-*`,
+      `@img/sharp-wasm32`, the latter also MIT), with libvips inside. Not
+      installed in the Linux image. Same question as above for anyone who runs
+      the console on those platforms.
+  - ecosystem: npm
+    component: dashboard
+    package: "@ibm/plex*"
+    licence: OFL-1.1
+    decision: pending
+    note: >-
+      IBM Plex font files, through @carbon/styles. The console serves them to
+      browsers. OFL-1.1 asks that the fonts keep their licence and are not
+      sold on their own.
+  - ecosystem: npm
+    component: dashboard
+    package: caniuse-lite
+    licence: CC-BY-4.0
+    decision: pending
+    note: Browser-support data, through next. Build-time data; attribution is the condition.
+  - ecosystem: python
+    component: analyzer
+    package: regex
+    licence: Apache-2.0 AND CNRI-Python
+    decision: pending
+    note: >-
+      Required by presidio-analyzer. Runs inside the analyzer service, a
+      separate process from the proxy. See THIRD_PARTY_LICENSES.md, "Entries
+      a person should look at".
