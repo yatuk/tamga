@@ -26,7 +26,7 @@ rules:
   secret_detection:
     action: BLOCK
     sensitivity: low
-    types: [aws_access_key, aws_secret_key, aws_secret_key_broad, github_token, openai_key, anthropic_key, private_key, stripe_key, connection_string, connection_string_password, jwt_token, dotenv_secret, slack_webhook, slack_token, google_api_key, twilio_sid, basic_auth, password, generic_api_key]
+    types: [aws_access_key, aws_secret_key, aws_secret_key_broad, github_token, openai_key, anthropic_key, private_key, stripe_key, connection_string, connection_string_password, jwt_token, dotenv_secret, slack_webhook, slack_token, google_api_key, twilio_sid, basic_auth, password, generic_api_key, azure_storage_key, gitlab_token, npm_token, sendgrid_key, mailchimp_key, square_token, discord_bot_token, telegram_bot_token, pypi_token, artifactory_key, url_credentials]
 
   # applies_to limits a rule to text of some roles: system, user, assistant,
   # tool (tool results, documents, search results), tool_definition, request.
@@ -43,6 +43,21 @@ rules:
   # The role is whatever the request says. Only narrow a rule this way when
   # your own server builds the request; a caller who reaches the proxy
   # directly can label any text "system".
+  #
+  # Two injection categories are signals and not verdicts: unreadable_block
+  # (a long block that looks encoded and decodes to nothing readable) and
+  # hidden_text at severity low (a run of zero-width characters, a
+  # bidirectional override). No rule acts on a signal unless it names the
+  # category, whatever its sensitivity; scan.default_action does not either.
+  # To be told about them, add:
+  #
+  #   injection_detection:
+  #     action: WARN
+  #     types: [unreadable_block, hidden_text]
+  #
+  # hidden_text is severity high, and an ordinary injection finding that the
+  # rule below blocks, when the invisible characters spell text (tag
+  # characters, variation selectors).
   injection:
     action: BLOCK
     sensitivity: medium
@@ -231,6 +246,8 @@ providers:
 #     enabled: true
 #     timeout_ms: 150     # how long a request may wait; a miss follows on_error
 #     threshold: 0.98     # lower catches more and flags more ordinary text
+#     signal_threshold: 0.90  # for text with an unreadable block, hidden
+#                             # characters or a change of script in it
 #     roles: [user, tool] # whose text is sent
 #     max_chars: 6000     # per request, newest first; the rest is not classified
 scan:

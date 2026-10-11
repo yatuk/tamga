@@ -15,6 +15,9 @@ import (
 
 // Options controls which passes run. All default to true via Default().
 type Options struct {
+	// StripZeroWidth drops every character that does not show, not only the
+	// zero-width ones the name is from, and reads out text hidden in tag
+	// characters and variation selectors.
 	StripZeroWidth       bool
 	NFKC                 bool
 	FoldDiacritics       bool
@@ -83,23 +86,28 @@ func Apply(s string, opts Options) Result {
 	// Encoding detection must happen against the original casing — Base64,
 	// hex and ROT13 are case-sensitive, and folding to lowercase destroys
 	// the alphabet. We therefore run these passes on a light-normalized
-	// view (zero-width stripped + NFKC) before descending to turkishLower.
+	// view (invisible characters stripped + NFKC) before descending to turkishLower.
 	pre := s
 	// Decode HTML entities early so downstream regex sees the real characters.
 	pre = html.UnescapeString(pre)
+	decoded := make([]string, 0, 2)
 	if opts.StripZeroWidth {
-		pre = stripZeroWidth(pre)
+		// What is written in characters that do not show is read out
+		// before they are dropped (invisible.go).
+		decoded = append(decoded, hiddenViews(pre)...)
+		pre = stripInvisible(pre)
 	}
 	if opts.NFKC {
 		pre = norm.NFKC.String(pre)
 	}
 
-	decoded := make([]string, 0, 2)
 	if opts.TryBase64 {
 		decoded = append(decoded, findBase64Text(pre)...)
+		decoded = append(decoded, findBase32Text(pre)...)
 	}
 	if opts.TryHex {
 		decoded = append(decoded, findHexText(pre)...)
+		decoded = append(decoded, findSpelledBytes(pre)...)
 	}
 	if opts.TryROT13 {
 		if t := rot13(pre); isMostlyPrintableASCII(t) {
@@ -145,27 +153,6 @@ func Apply(s string, opts Options) Result {
 		}
 	}
 	return Result{Canonical: cur, Plain: plain, Decoded: decoded}
-}
-
-// stripZeroWidth removes common invisible characters that adversaries use to
-// split sensitive patterns (e.g. 4\u200B111 ...).
-func stripZeroWidth(s string) string {
-	if !strings.ContainsAny(s, "\u200B\u200C\u200D\u2060\uFEFF\u00A0") {
-		return s
-	}
-	var b strings.Builder
-	b.Grow(len(s))
-	for _, r := range s {
-		switch r {
-		case '\u200B', '\u200C', '\u200D', '\u2060', '\uFEFF':
-			continue
-		case '\u00A0':
-			b.WriteByte(' ')
-		default:
-			b.WriteRune(r)
-		}
-	}
-	return b.String()
 }
 
 // foldDiacritics strips combining marks after NFD.

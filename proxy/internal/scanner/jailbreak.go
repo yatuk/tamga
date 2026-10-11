@@ -46,7 +46,9 @@ func (s *JailbreakScanner) Scan(ctx context.Context, content []byte) ([]Finding,
 		combined = combined + "\n" + d
 	}
 
-	var out []Finding
+	// Text that hides something: characters that do not show, and blocks
+	// that decode to nothing readable (obfuscation.go).
+	out := obfuscationFindings(text)
 	if st.stopped() {
 		return out, st.err
 	}

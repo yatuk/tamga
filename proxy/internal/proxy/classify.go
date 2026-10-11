@@ -34,12 +34,35 @@ var errClassifierNotConfigured = errkind.New("not_configured", "scan.classifier 
 // conversation the newest text is the part no earlier request has vouched
 // for. A segment the rules already flagged as an injection is skipped: the
 // answer is known.
+//
+// A segment that carries a signal is judged by signal_threshold, which is
+// lower. The signals are the rules' low-severity findings for text that
+// hides something (scanner.Signal) and a change of writing system against
+// the user's earlier messages or inside the text (classifier.ScriptSwitch).
+// None of them is a verdict, and the second is not a finding at all.
 func classifySegments(ctx context.Context, guard *classifier.Guard, set policy.ClassifierSettings, requestID string, segs []extract.Segment, known []scanner.Finding) classifyOutcome {
 	var out classifyOutcome
 	flagged := make(map[int]bool)
+	signals := make(map[int]string)
 	for _, f := range known {
-		if f.Type == "injection" && f.Seg >= 0 {
+		if f.Type != "injection" || f.Seg < 0 {
+			continue
+		}
+		if scanner.Signal(f) {
+			signals[f.Seg] = f.Category
+		} else {
 			flagged[f.Seg] = true
+		}
+	}
+
+	// The script of the conversation before each segment: that of the
+	// user's messages up to it.
+	before := make([]classifier.Script, len(segs))
+	var userText classifier.ScriptCounts
+	for i, seg := range segs {
+		before[i] = userText.Dominant()
+		if seg.Role == extract.RoleUser {
+			userText.Add(seg.Text)
 		}
 	}
 
@@ -62,6 +85,11 @@ func classifySegments(ctx context.Context, guard *classifier.Guard, set policy.C
 		budget -= len(text)
 		texts = append(texts, text)
 		segIdx = append(segIdx, i)
+		if _, ok := signals[i]; !ok {
+			if _, switched := classifier.ScriptSwitch(before[i], seg.Text); switched {
+				signals[i] = "script_switch"
+			}
+		}
 	}
 	if len(texts) == 0 {
 		return out
@@ -77,11 +105,16 @@ func classifySegments(ctx context.Context, guard *classifier.Guard, set policy.C
 		if res.Truncated {
 			out.partial = true
 		}
-		if res.Score < set.Threshold {
+		threshold := set.Threshold
+		signal, signalled := signals[segIdx[j]]
+		if signalled {
+			threshold = set.SignalThreshold
+		}
+		if res.Score < threshold {
 			continue
 		}
 		seg := segs[segIdx[j]]
-		out.findings = append(out.findings, scanner.Finding{
+		f := scanner.Finding{
 			Type:       "injection",
 			Category:   "classifier",
 			Severity:   classifierSeverity(res.Score),
@@ -93,7 +126,12 @@ func classifySegments(ctx context.Context, guard *classifier.Guard, set policy.C
 			// No StartPos/EndPos: the model judges the text as a whole.
 			// There is no span to point at, so the finding cannot be
 			// redacted, only acted on.
-		})
+		}
+		if signalled && res.Score < set.Threshold {
+			// Reported only because of the signal: say which.
+			f.Metadata = map[string]string{"signal": signal, "threshold": fmt.Sprintf("%.2f", threshold)}
+		}
+		out.findings = append(out.findings, f)
 	}
 	return out
 }

@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/yatuk/tamga/internal/scanner"
 )
 
 func parseScan(t *testing.T, scan string) (*Policy, error) {
@@ -70,5 +72,114 @@ func TestClassifierConfig_RejectsBadValues(t *testing.T) {
 		if _, err := parseScan(t, scan); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%q: err = %v, want one naming %q", scan, err, want)
 		}
+	}
+}
+
+// signal_threshold is the stricter threshold for text that carries a
+// signal. It defaults to 0.90 and is never above threshold.
+func TestClassifierSettings_SignalThreshold(t *testing.T) {
+	tests := []struct {
+		scan string
+		want float64
+	}{
+		{"  classifier:\n    enabled: true", DefaultClassifierSignalThreshold},
+		{"  classifier:\n    enabled: true\n    signal_threshold: 0.8", 0.8},
+		{"  classifier:\n    enabled: true\n    threshold: 0.7", 0.7},
+		{"  classifier:\n    enabled: true\n    threshold: 0.95\n    signal_threshold: 0.99", 0.95},
+	}
+	for _, tt := range tests {
+		p, err := parseScan(t, tt.scan)
+		if err != nil {
+			t.Fatalf("%q: %v", tt.scan, err)
+		}
+		s, on := p.ClassifierSettings()
+		if !on || s.SignalThreshold != tt.want {
+			t.Errorf("%q: signal threshold %v, want %v", tt.scan, s.SignalThreshold, tt.want)
+		}
+	}
+	if _, err := parseScan(t, "  classifier:\n    enabled: true\n    signal_threshold: 1.2"); err == nil || !strings.Contains(err.Error(), "signal_threshold") {
+		t.Errorf("err = %v, want one naming signal_threshold", err)
+	}
+}
+
+// A signal is acted on only by a rule that names its category. A rule for
+// injection without a types list does not act on it at any sensitivity, and
+// neither does scan.default_action; hidden text that spells something is an
+// ordinary finding.
+func TestSignalsNeedARuleThatNamesThem(t *testing.T) {
+	signal := scanner.Finding{Type: "injection", Category: "unreadable_block", Severity: "low", Role: "user"}
+	zeroWidth := scanner.Finding{Type: "injection", Category: "hidden_text", Severity: "low", Role: "tool"}
+	hidden := scanner.Finding{Type: "injection", Category: "hidden_text", Severity: "high", Role: "user"}
+	weak := scanner.Finding{Type: "injection", Category: "ascii_art", Severity: "low", Role: "user"}
+
+	shipped, err := LoadFromFile(defaultPolicyPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name   string
+		policy string
+		f      scanner.Finding
+		want   Action
+	}{
+		{"low sensitivity, no types", "rules:\n  injection:\n    action: BLOCK\n    sensitivity: low\n", signal, ActionPass},
+		{"low sensitivity, no types, strip", "rules:\n  injection_detection:\n    action: STRIP\n    sensitivity: low\n    applies_to: [tool]\n", zeroWidth, ActionPass},
+		{"low sensitivity still acts on weak findings", "rules:\n  injection:\n    action: BLOCK\n    sensitivity: low\n", weak, ActionBlock},
+		{"default action only", "scan:\n  default_action: BLOCK\n", signal, ActionPass},
+		{"default action acts on other unruled findings", "scan:\n  default_action: BLOCK\n", weak, ActionBlock},
+		{"named, no sensitivity given", "rules:\n  injection_detection:\n    action: WARN\n    types: [unreadable_block, hidden_text]\n", signal, ActionWarn},
+		{"named, high sensitivity", "rules:\n  injection_detection:\n    action: BLOCK\n    sensitivity: high\n    types: [hidden_text]\n", zeroWidth, ActionBlock},
+		{"another category named", "rules:\n  injection_detection:\n    action: BLOCK\n    sensitivity: low\n    types: [hidden_text]\n", signal, ActionPass},
+		{"named, another role", "rules:\n  injection_detection:\n    action: BLOCK\n    types: [hidden_text]\n    applies_to: [user]\n", zeroWidth, ActionPass},
+	}
+	for _, tt := range tests {
+		p, err := LoadFromBytes([]byte("name: t\n" + tt.policy))
+		if err != nil {
+			t.Fatalf("%s: %v", tt.name, err)
+		}
+		if a := p.Evaluate([]scanner.Finding{tt.f}); a != tt.want {
+			t.Errorf("%s: Evaluate = %s, want %s", tt.name, a, tt.want)
+		}
+		if a := p.FindingAction(tt.f, "", false); a != tt.want {
+			t.Errorf("%s: FindingAction = %s, want %s", tt.name, a, tt.want)
+		}
+		rule, matched := p.MatchedRule(tt.f)
+		if matched != (tt.want != ActionPass) || (matched && rule.Action != tt.want) {
+			t.Errorf("%s: MatchedRule = %v %s, want action %s", tt.name, matched, rule.Action, tt.want)
+		}
+	}
+
+	if a := shipped.Evaluate([]scanner.Finding{signal}); a != ActionPass {
+		t.Errorf("unreadable_block under the shipped policy: %s, want PASS", a)
+	}
+	if a := shipped.Evaluate([]scanner.Finding{hidden}); a != ActionBlock {
+		t.Errorf("hidden text that spells something under the shipped policy: %s, want BLOCK", a)
+	}
+}
+
+// In a response too: block_on naming "injection" does not mean the
+// signals, block_on naming the category does.
+func TestSignalsInOutputRules(t *testing.T) {
+	signal := scanner.Finding{Type: "injection", Category: "unreadable_block", Severity: "low", Confidence: 0.4}
+	attack := scanner.Finding{Type: "injection", Category: "instruction_override", Severity: "high", Confidence: 0.9}
+	byType, err := LoadFromBytes([]byte("name: t\noutput_rules:\n  enabled: true\n  block_on: [injection]\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a := byType.EvaluateOutput([]scanner.Finding{signal}); a != ActionPass {
+		t.Errorf("block_on [injection], a signal: %s, want PASS", a)
+	}
+	if a := byType.EvaluateOutput([]scanner.Finding{attack}); a != ActionBlock {
+		t.Errorf("block_on [injection], an attack: %s, want BLOCK", a)
+	}
+	named, err := LoadFromBytes([]byte("name: t\noutput_rules:\n  enabled: true\n  block_on: [unreadable_block]\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a := named.EvaluateOutput([]scanner.Finding{signal}); a != ActionBlock {
+		t.Errorf("block_on [unreadable_block]: %s, want BLOCK", a)
+	}
+	if _, err := LoadFromBytes([]byte("name: t\noutput_rules:\n  enabled: true\n  redact_on: [unreadable_block]\n")); err == nil {
+		t.Error("redact_on [unreadable_block] loaded; there is nothing to mask")
 	}
 }

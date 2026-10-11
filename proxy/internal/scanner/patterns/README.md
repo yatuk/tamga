@@ -261,6 +261,62 @@ go test ./internal/scanner/ -run '^$' -bench 'BenchmarkDFA_' -benchmem
    go test ./internal/scanner/ -run 'Injection|DFA'
    ```
 
+## Secret formats
+
+The secret scanner's patterns are in [`../secrets.go`](../secrets.go), not in the automaton
+described above. This section records where the formats added on 2026-10-11 come from.
+
+On that date the scanner's formats were compared with the plugin list of Yelp's
+[detect-secrets](https://github.com/Yelp/detect-secrets/tree/master/detect_secrets/plugins)
+(Apache-2.0). What was taken from it is the list itself: which vendors it has a plugin for. No
+code and no regular expression was copied; each pattern below was written for Tamga from the
+format of the credential. Nothing from detect-secrets is in the source tree, so
+[`NOTICE`](../../../../NOTICE) has no entry for it.
+
+"Read" means the vendor's own page was read on 2026-10-11 and says what the row says. Where it
+was not, or says less, the format is the shape of credentials the vendor issues, which is public
+knowledge and is not documented by the vendor in the pages read; the row says so.
+
+| Category | Format | Validator | Where the format is from | Status |
+|---|---|---|---|---|
+| `azure_storage_key` | `AccountKey=` and 88 characters of base64 | Decodes to 64 bytes; not one character repeated | Microsoft Learn, "Configure a connection string - Azure Storage": the layout of the connection string and an example key | Vendor documentation, format only. Read |
+| `gitlab_token` | A prefix (`glpat-`, `gloas-`, `gldt-`, `glrt-`, `glrtr-`, `glcbt-`, `glptt-`, `glft-`, `glimt-`, `glagent-`, `glsoat-`, `glwt-`, `glffct-`) and 20 or more characters | At least 8 different characters | GitLab docs, "GitLab token overview", table of token prefixes | Vendor documentation, format only. Read. The page gives no length; 20 is that of issued tokens |
+| `npm_token` | `npm_` and 36 letters and digits | Length; at least 8 different characters | GitHub changelog, 2021-09-23, "npm has a new access token format": the prefix, and that the last six characters are a checksum | Vendor announcement, format only. Read. The length is that of issued tokens. The checksum is not verified: a sample with a valid one would be taken for a live key by the repository host's own scanner |
+| `npm_token` (older) | `:_authToken=` and a UUID, as in `.npmrc` | The UUID's layout | The same changelog: the old token was a 36-character UUID | Vendor announcement, format only. Read |
+| `sendgrid_key` | `SG.`, 22 characters, a dot, 43 characters | The length of each part; at least 8 different characters | Shape of issued keys. Twilio SendGrid docs, "API Keys", give only the total length (69) | Not documented by the page read |
+| `mailchimp_key` | 32 hex digits, `-us` and one or two digits | At least 8 different characters in the hex part | Shape of issued keys | Not documented by the pages read ("API structure", "Send your first API request") |
+| `square_token` | `sq0atp-` and 22 characters; `sq0csp-` and 43 | The length that goes with the prefix | Shape of issued credentials. Square docs, "Access Tokens and Other Square Credentials", name the kinds and not their shape | Not documented by the page read |
+| `discord_bot_token` | Three base64url parts joined by dots | The first part decodes to a number of 17 to 20 digits, the bot's user id | Shape of issued tokens | No vendor page was read |
+| `telegram_bot_token` | 8 to 10 digits, a colon, 35 characters | Length; upper and lower case; at least 8 different characters | Telegram Bot API docs, "Authorizing your bot", which show an example token and give no formal layout. The example's id is shorter than those issued today | Vendor documentation, format only. Read |
+| `pypi_token` | `pypi-` and a base64url macaroon | The start of the body decodes to text that names `pypi.org` | PyPI help, "How can I use API tokens to authenticate with PyPI?", for the prefix. That the body starts with the index name is read off the encoding | Vendor documentation for the prefix. Read |
+| `artifactory_key` | `AKCp` and 60 to 76 letters and digits | At least 12 different characters | Shape of issued keys | No vendor page was read |
+| `url_credentials` | `scheme://user:password@host` for http, https, ftp, sftp, amqp, smtp and ldap | The password is not a placeholder (`password`, `${VAR}`, `****`) | RFC 3986, section 3.2.1 ("userinfo") | Standard |
+| `stripe_key` (restricted) | `rk_live_` or `rk_test_` and 24 or more letters and digits | As for the other Stripe keys | Shape of issued keys | No vendor page was read for this change |
+| `private_key` (PuTTY) | The first line of a `.ppk` file, `PuTTY-User-Key-File-2:` or `-3:` | None | The file format PuTTY writes | No vendor page was read for this change |
+
+The formats that were in the scanner before that date (AWS, GitHub, OpenAI, Anthropic, Stripe
+secret and publishable keys, Slack, Google, Twilio, JWT, PEM private keys, connection strings,
+basic auth) have no source recorded in the code.
+
+detect-secrets plugins without a pattern here, and why:
+
+- **Cloudant**, **IBM Cloud IAM**, **IBM COS HMAC**, **SoftLayer**: the key is a hex or
+  alphanumeric string of a fixed length with nothing of its own to tell it by; the plugin relies
+  on a keyword next to it. Written as `name = value` these are found as `generic_api_key`,
+  `dotenv_secret` or `password`; a Cloudant URL with credentials in it is found as
+  `url_credentials`.
+- **Artifactory encrypted passwords** (`AP` and a character): the marker is too short to be
+  told from an ordinary word.
+- **High-entropy strings**: there is no generic entropy detector for secrets. A long block
+  that looks encoded and cannot be decoded is reported as the `unreadable_block` signal of the
+  injection type, which is not a secret finding.
+- **Public IP addresses** and **keywords**: covered by the PII scanner (`ip_public`) and by
+  `password` and `generic_api_key`.
+
+Every category has a value that must be found and a look-alike that must not in
+[`../secrets_formats_test.go`](../secrets_formats_test.go), and a prompt in
+`proxy/testdata/redteam/prompts.csv` (`sec-25` to `sec-38`).
+
 ## Related
 
 - [Pattern update runbook](../../../docs/PATTERN_UPDATE_RUNBOOK.md)

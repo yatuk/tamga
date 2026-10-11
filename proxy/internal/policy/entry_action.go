@@ -116,6 +116,8 @@ var unmaskableKinds = map[string]string{
 var unmaskableOutputKeys = map[string]string{
 	"injection":               "an injection finding is a verdict on the answer, not a value with a place in it",
 	"classifier":              "an injection finding is a verdict on the answer, not a value with a place in it",
+	"unreadable_block":        "an unreadable block is a mark on the answer, not a value to mask",
+	"hidden_text":             "hidden text is a mark on the answer, not a value to mask",
 	"content_moderation":      "a content moderation finding is a verdict on the answer, not a value with a place in it",
 	"operator_state":          "an operator-state finding is a verdict, not a value with a place in the answer",
 	"operator_state_semantic": "an operator-state finding is a verdict, not a value with a place in the answer",

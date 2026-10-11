@@ -424,6 +424,10 @@ func (p *Policy) unruledAction(f scanner.Finding) (Action, bool) {
 	if p == nil || p.Scan == nil || strings.TrimSpace(p.Scan.DefaultAction) == "" || f.Type == "custom" {
 		return ActionPass, false
 	}
+	// A signal is acted on only by a rule that names it (evalRuleAction).
+	if scanner.Signal(f) {
+		return ActionPass, false
+	}
 	for _, key := range []string{f.Type + "_detection", f.Type} {
 		if _, ok := p.Rules[key]; ok {
 			return ActionPass, false
@@ -554,13 +558,13 @@ func (p *Policy) EvaluateOutput(findings []scanner.Finding) Action {
 		if f.Category != "" {
 			key = f.Category
 		}
-		if containsOutputKey(p.OutputRules.BlockOn, f.Type, f.Category) {
+		if containsOutputKey(p.OutputRules.BlockOn, outputType(f), f.Category) {
 			if actionSeverity(ActionBlock) > actionSeverity(maxAction) {
 				maxAction = ActionBlock
 			}
 			continue
 		}
-		if containsOutputKey(p.OutputRules.RedactOn, f.Type, f.Category) {
+		if containsOutputKey(p.OutputRules.RedactOn, outputType(f), f.Category) {
 			if actionSeverity(ActionRedact) > actionSeverity(maxAction) {
 				maxAction = ActionRedact
 			}
@@ -587,12 +591,26 @@ func (p *Policy) OutputRedacts(f scanner.Finding) bool {
 	if p.OutputRules.MinimumConfidence > 0 && confScore < p.OutputRules.MinimumConfidence {
 		return false
 	}
-	return !containsOutputKey(p.OutputRules.BlockOn, f.Type, f.Category) &&
-		containsOutputKey(p.OutputRules.RedactOn, f.Type, f.Category)
+	return !containsOutputKey(p.OutputRules.BlockOn, outputType(f), f.Category) &&
+		containsOutputKey(p.OutputRules.RedactOn, outputType(f), f.Category)
+}
+
+// outputType is the type a finding is matched by in block_on and redact_on.
+// A signal has none: as with the rules for requests, it is acted on only
+// when its category is named ("unreadable_block"), not because the list
+// names "injection".
+func outputType(f scanner.Finding) string {
+	if scanner.Signal(f) {
+		return ""
+	}
+	return f.Type
 }
 
 func containsOutputKey(list []string, typ, cat string) bool {
 	for _, k := range list {
+		if k == "" {
+			continue
+		}
 		if strings.EqualFold(k, typ) || strings.EqualFold(k, cat) {
 			return true
 		}
@@ -809,6 +827,15 @@ func evalRuleAction(rule Rule, f scanner.Finding) (Action, bool) {
 	if !rule.appliesToRole(f.Role) {
 		return ActionPass, false
 	}
+	// A signal (an unreadable block, a run of invisible characters) says a
+	// text is unusual, not that it is an attack. A rule written for
+	// attacks does not mean it, whatever its sensitivity: only a rule that
+	// names the category in its types acts on it, and then at any
+	// sensitivity, since naming it is the decision.
+	signal := scanner.Signal(f)
+	if signal && len(rule.Types) == 0 {
+		return ActionPass, false
+	}
 
 	if strings.EqualFold(strings.TrimSpace(rule.Mode), "confidence_based") {
 		confScore := 0
@@ -826,7 +853,7 @@ func evalRuleAction(rule Rule, f scanner.Finding) (Action, bool) {
 		return actionFromConfidenceFinding(f), true
 	}
 
-	if !meetsThreshold(f.Severity, rule.Sensitivity) {
+	if !signal && !meetsThreshold(f.Severity, rule.Sensitivity) {
 		return ActionPass, false
 	}
 	return rule.Action, true
@@ -918,7 +945,12 @@ func (p *Policy) MatchedRule(f scanner.Finding) (Rule, bool) {
 		if !rule.appliesToRole(f.Role) {
 			continue
 		}
-		if !meetsThreshold(f.Severity, rule.Sensitivity) {
+		if scanner.Signal(f) {
+			// As in evalRuleAction: only a rule that names it.
+			if len(rule.Types) == 0 {
+				continue
+			}
+		} else if !meetsThreshold(f.Severity, rule.Sensitivity) {
 			continue
 		}
 		return rule, true

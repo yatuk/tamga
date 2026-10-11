@@ -109,6 +109,11 @@ rules:
 
 Things to know:
 
+- Neither rule acts on the two [signals](operations.md#signals-text-that-hides-something)
+  (`unreadable_block`, low-severity `hidden_text`), although both say
+  `sensitivity: low`: a tool result is not stripped for carrying a
+  compressed or encrypted block. A rule has to name them in `types` to act
+  on them.
 - The whole piece of text goes, not the suspicious sentence. A model cannot
   be trusted to ignore half of a document it was shown.
 - The rest of the request is still held to its own rules: a finding under a

@@ -7,7 +7,7 @@ import (
 
 func TestStripZeroWidth(t *testing.T) {
 	in := "41\u200B11 11\u200C11 11\uFEFF11 11\u00A011"
-	got := stripZeroWidth(in)
+	got := stripInvisible(in)
 	if strings.ContainsAny(got, "\u200B\u200C\u200D\u2060\uFEFF") {
 		t.Fatalf("zero-width chars leaked: %q", got)
 	}

@@ -21,6 +21,16 @@ type ClassifierConfig struct {
 	// benign sample on the tuning corpus. Lower catches more and flags more
 	// ordinary text; measure on your own traffic before lowering it.
 	Threshold float64 `yaml:"threshold" json:"threshold,omitempty"`
+	// SignalThreshold is the threshold for a text that carries a signal:
+	// an unreadable block or hidden characters in it (the low-severity
+	// injection findings unreadable_block and hidden_text), or a change of
+	// writing system against the conversation so far. Such a text is not
+	// an attack for that, and is judged more strictly. Default 0.90; a
+	// value above threshold is the same as threshold, which turns the
+	// signals off. Not measured with a model: on the published sweep 0.90
+	// flagged 1 of 117 and 2 of 85 benign samples when applied to every
+	// text, and here it applies only to the few that carry a signal.
+	SignalThreshold float64 `yaml:"signal_threshold" json:"signal_threshold,omitempty"`
 	// Roles are the message roles whose text is sent to the classifier.
 	// Default: user and tool, the text that reaches the model from outside
 	// the application.
@@ -33,9 +43,10 @@ type ClassifierConfig struct {
 
 // Classifier defaults.
 const (
-	DefaultClassifierTimeoutMs = 150
-	DefaultClassifierThreshold = 0.98
-	DefaultClassifierMaxChars  = 6000
+	DefaultClassifierTimeoutMs       = 150
+	DefaultClassifierThreshold       = 0.98
+	DefaultClassifierSignalThreshold = 0.90
+	DefaultClassifierMaxChars        = 6000
 )
 
 var defaultClassifierRoles = []string{"user", "tool"}
@@ -49,6 +60,9 @@ func (c *ClassifierConfig) validate() error {
 	}
 	if c.Threshold < 0 || c.Threshold > 1 {
 		return fmt.Errorf("scan.classifier.threshold: %v is out of range (0 to 1)", c.Threshold)
+	}
+	if c.SignalThreshold < 0 || c.SignalThreshold > 1 {
+		return fmt.Errorf("scan.classifier.signal_threshold: %v is out of range (0 to 1)", c.SignalThreshold)
 	}
 	if c.MaxChars < 0 {
 		return fmt.Errorf("scan.classifier.max_chars: %d must not be negative", c.MaxChars)
@@ -65,8 +79,11 @@ func (c *ClassifierConfig) validate() error {
 type ClassifierSettings struct {
 	Timeout   time.Duration
 	Threshold float64
-	MaxChars  int
-	roles     map[string]bool
+	// SignalThreshold is the threshold for text that carries a signal. It
+	// is never above Threshold.
+	SignalThreshold float64
+	MaxChars        int
+	roles           map[string]bool
 }
 
 // CoversRole reports whether text of this role is sent to the classifier.
@@ -90,6 +107,13 @@ func (p *Policy) ClassifierSettings() (ClassifierSettings, bool) {
 	}
 	if c.Threshold == 0 {
 		s.Threshold = DefaultClassifierThreshold
+	}
+	s.SignalThreshold = c.SignalThreshold
+	if s.SignalThreshold == 0 {
+		s.SignalThreshold = DefaultClassifierSignalThreshold
+	}
+	if s.SignalThreshold > s.Threshold {
+		s.SignalThreshold = s.Threshold
 	}
 	if c.MaxChars == 0 {
 		s.MaxChars = DefaultClassifierMaxChars

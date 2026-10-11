@@ -25,6 +25,8 @@ A second set, `holdout.csv`, is run the same way and published as
 
 - **File:** [`redteam_latest.json`](./redteam_latest.json)
 - **Corpus size:** 309 prompts (≈ 40% benign, 60% adversarial/PII/secret)
+  on the day of the run. It has 331 since 2026-10-11; see
+  [Changes to the corpus after that run](#changes-to-the-corpus-after-that-run-2026-10-11).
 - **Run:** 2026-10-03, Go 1.25.14, linux/amd64 (container on a 16-core
   laptop CPU), single process, deterministic scanners only
 
@@ -80,6 +82,138 @@ corpus and will overstate real-world recall.
 > A median of exactly zero is the Windows clock's resolution, not the
 > scanner: individual scans were being rounded to 0 or to one timer tick.
 > The numbers above come from Linux, where the clock resolves nanoseconds.
+
+### Changes to the corpus after that run (2026-10-11)
+
+Twenty-two prompts were added to `prompts.csv` together with the detectors
+they exercise: 14 secrets in formats the scanner did not know (Azure storage
+keys, GitLab, npm, SendGrid, Mailchimp, Square, Discord, Telegram, PyPI and
+Artifactory tokens, credentials in a URL, a Stripe restricted key, a PuTTY
+key file), 4 instructions in encodings the normalizer did not read (base32,
+spelled-out hex bytes, percent escapes, base64 twice), and 4 benign prompts
+that look like one of those secrets and are not. They are tuning vectors by
+construction.
+
+| `prompts.csv` | Prompts | Attacks caught | Benign flagged | Precision | Recall |
+| --- | --- | --- | --- | --- | --- |
+| 2026-10-03, as published above | 309 | 172 of 192 | 0 of 117 | 1.000 | 0.896 |
+| 2026-10-11, the same 309 prompts, new code | 309 | 172 of 192 | 0 of 117 | 1.000 | 0.896 |
+| 2026-10-11, with the 22 new prompts | 331 | 190 of 210 | 0 of 121 | 1.000 | 0.905 |
+
+`holdout.csv` was not changed and scores as before: 78 of 78 attacks, 0 of
+85 benign prompts.
+
+The step from 0.896 to 0.905 is the 18 added attacks, each caught by the
+rule written with it; the 20 misses are the same 20. It is not a gain on
+text the rules had not seen. `go test ./cmd/redteam` holds the floor at 190.
+
+These three rows were measured in-process with `go test ./cmd/redteam` on
+Windows (Go 1.27.0). The JSON reports in this folder, the latency figures
+and everything under [With the inline classifier](#with-the-inline-classifier)
+are still the run of 2026-10-03 on 309 prompts: they have not been produced
+again, and the classifier has not been run on the 22 new prompts.
+
+### Encoded and invisible text
+
+Two lists of vectors are kept in
+[`proxy/cmd/redteam/encoding_vectors_test.go`](../../proxy/cmd/redteam/encoding_vectors_test.go)
+and scored there: each text is scanned in-process as one piece, with the
+PII, secret, injection and jailbreak scanners, and judged by the shipped
+policy. This is not the adversarial suite, which needs the whole stack; a
+vector counts as found when it has a finding, the way that suite scores,
+and as acted on when the policy's answer is not PASS.
+
+| Vectors | Count | Found, before | Found, after | Acted on, before | Acted on, after |
+| --- | --- | --- | --- | --- | --- |
+| Published before 2026-10-11 | 23 | 20 | 20 | 20 | 20 |
+| Written on 2026-10-11 with the detectors | 25 | 4 | 25 | 4 | 22 |
+
+"Before" is the scanner code of commit `8d5b17b`, "after" the change of 2026-10-11,
+both run on the same machine on that day.
+
+**The published list** is every vector in the repository that hides a value
+or an instruction behind an encoding or behind characters: 8 from
+`tests/stress/adversarial/pii_bypass.py` (digits in mathematical bold, a
+Greek iota, a fullwidth @, two values in base64, two split by a zero-width
+space, HTML entities), 3 from `injection_bypass.py` (leetspeak and two instructions
+spelled one letter at a time) and 12 from the two red-team sets (base64,
+hex, ROT13, homoglyphs). The change of 2026-10-11 closed none of them: the
+20 were already found, and the 3 that pass are the three published
+injection bypasses. They are not encodings a decoder reads. Leetspeak needs
+the phrase rules to match what de-leeting produces, and letter-by-letter
+spelling needs them to match text with the spaces between words gone;
+neither was part of this change.
+
+**The new list** is what the change was written for, so it shows that the
+detectors do what they were built to do and nothing about encodings nobody
+thought of. It holds an instruction in tag characters and in variation
+selectors; a word or a number split by a soft hyphen, a direction mark, an
+invisible operator, a Mongolian vowel separator, a NUL byte, a private-use
+character, a grapheme joiner, a bidi isolate and a variation selector; an
+instruction in URL-safe base64, in base64 of Turkish, of Russian, of UTF-16
+and of base64, in base32, in spelled-out hex, in `\x` escapes and in percent
+escapes; an ID number in base32; a run of zero-width characters; and two
+blocks that decode to nothing readable. The three that are found and not
+acted on are the last three. That is the design: they are
+[signals](../operations.md#signals-text-that-hides-something), and the
+shipped policy has no rule that names them.
+
+**False positives of the two signals.** The red-team sets have almost no
+text that looks encoded, so a third list,
+[`benign_dev_test.go`](../../proxy/cmd/redteam/benign_dev_test.go), holds 50
+texts of the kind that does: hashes, UUIDs, a git log, lockfile integrity
+values, an SSH public key, a hex dump, long and signed URLs, an image as a
+data URL, code in four languages, minified JSON and JavaScript, a stack
+trace, Turkish, Japanese, Arabic and Russian prose, and text with the
+invisible characters that Persian, Hindi, Hebrew, emoji, flags, PDFs,
+Windows paths and terminal prompts put there.
+
+| On the 50 benign developer texts | Before | After |
+| --- | --- | --- |
+| Raised `unreadable_block` or `hidden_text` | not applicable | 0 |
+| Any other injection finding | 0 | 0 |
+| Acted on by the shipped policy | 0 | 0 |
+
+The list was written by the author of the detectors while tuning them. It
+says they are quiet on these cases, not that no other text trips them. Two
+false positives that are older than this change turned up while writing it
+and are not in the list: "Please translate this into English:" followed by
+a sentence is blocked as `translation_bypass`, and
+`https://user:password@example.com` is read as the e-mail address
+`password@example.com`.
+
+The bounds of `unreadable_block` come from measurement, not from a guess: of
+20,000 random base64 strings of 100 characters the lowest character entropy
+was 5.09 bits and the lowest share of class changes 0.41 (base58: 5.06 and
+0.40); long identifiers, paths and slugs made of words measured 4.2 to 4.6
+bits and 0.28 to 0.36. The bounds are 4.85 and 0.40, at a length of 100 or
+more. A block broken into lines shorter than that, or written in an
+alphabet with punctuation in it (Ascii85, uuencode), is not seen.
+
+**Speed.** Scanner benchmarks before and after, best of 3 and of 5 runs of
+one second each, Windows, Go 1.27.0, Core Ultra 7 255H. Run-to-run spread on
+this machine is about 7%, so none of these is a difference.
+
+| Benchmark | Before | After |
+| --- | --- | --- |
+| `ScanAll_SmallPrompt` | 723 µs | 677 µs |
+| `ScanAll_MediumPrompt` | 3407 µs | 3617 µs |
+| `ScanAll_WithPII` | 5565 µs | 5678 µs |
+| `ScanAll_WithSecrets` | 1880 µs | 1871 µs |
+| `ScanAll_WithInjection` | 1905 µs | 1966 µs |
+| `ScanAll_MixedThreats` | 2086 µs | 1965 µs |
+| `ScannerPipeline/clean_text_small` | 440 µs | 411 µs |
+| `ScannerPipeline/clean_text_medium` | 6122 µs | 4936 µs |
+| `ScannerPipeline/with_secrets` | 884 µs | 803 µs |
+| `AdversarialInjection` | 637 µs | 627 µs |
+| `ScanSegments_200/segments` | 11778 µs | 11315 µs |
+
+The new passes cost time and two changes paid for it: the tokens of the
+encodings are found with loops over the bytes where regular expressions
+were used, and a secret pattern is not run on a text that lacks the literal
+every match of it contains. These benchmarks do not register the jailbreak
+scanner, where the two signals are computed; that pass alone runs at 97 to
+172 MB a second, against about 0.25 MB a second for the scan as a whole.
 
 ### Large requests
 
@@ -373,5 +507,6 @@ go test -bench=. -benchtime=1s -run=^$ ./internal/scanner/...
 
 ## Changelog
 
+- 2026-10-11 — 22 prompts added to `prompts.csv`; encoded and invisible text measured before and after.
 - 2026-06-17 — Added Go performance benchmarks (proxy + scanner) for v0.1.1 baseline.
 - 2026-04-18 — initial public benchmark published.

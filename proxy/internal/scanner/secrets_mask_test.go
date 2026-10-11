@@ -44,6 +44,21 @@ func prefixSamples() map[string]map[string]string {
 			return fill(mixed, 35)
 		case "twilio_sid":
 			return fill(hexDigits, 32)
+		case "gitlab_token":
+			return fill(mixed, 24)
+		case "npm_token":
+			return fill(mixed, 36)
+		case "sendgrid_key":
+			return fill(mixed, 22) + "." + fill(mixed, 43)
+		case "square_token":
+			if prefix == "sq0csp-" {
+				return fill(mixed, 43)
+			}
+			return fill(mixed, 22)
+		case "pypi_token":
+			return strings.TrimPrefix(fakePyPIToken(), prefix)
+		case "artifactory_key":
+			return fill(mixed, 69)
 		}
 		return ""
 	}

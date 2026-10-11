@@ -49,7 +49,7 @@ func TestCorpusDoesNotRegress(t *testing.T) {
 		minCaught  int
 		maxFlagged int
 	}{
-		{"../../testdata/redteam/prompts.csv", 172, 0},
+		{"../../testdata/redteam/prompts.csv", 190, 0},
 		{"../../testdata/redteam/holdout.csv", 78, 0},
 	}
 	for _, tt := range tests {
