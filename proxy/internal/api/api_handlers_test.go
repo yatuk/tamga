@@ -309,7 +309,9 @@ func TestIncidentList_Empty(t *testing.T) {
 	}
 }
 
-func TestIncidentGet_NotFound(t *testing.T) {
+// A request nobody has triaged has no record, and that is answered as the
+// default state, not as a missing resource (see TestIncidentGet_UntouchedIsOpen).
+func TestIncidentGet_NoRecordIsNotAnError(t *testing.T) {
 	cfg := Config{
 		AdminKey:     "test-key",
 		Incidents:    incidents.NewMemoryStore(),
@@ -322,8 +324,8 @@ func TestIncidentGet_NotFound(t *testing.T) {
 	adminHeaders(cfg.AdminKey)(req)
 	resp, _ := http.DefaultClient.Do(req)
 	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusNotFound {
-		t.Fatalf("expected 404, got %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
 	}
 }
 

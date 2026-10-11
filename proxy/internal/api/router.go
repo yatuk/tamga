@@ -445,25 +445,46 @@ func (cfg Config) handleEvents(w http.ResponseWriter, r *http.Request) {
 				for _, row := range rows {
 					out = append(out, storeSecurityEventToJSON(row))
 				}
-				writeJSON(w, http.StatusOK, map[string]interface{}{"events": out, "total": total})
+				body := map[string]interface{}{"events": out, "total": total}
+				// Left out, not guessed, when the store cannot count or
+				// does not answer: the list and its total stand without it.
+				if counter, ok := cfg.Store.(eventActionCounter); ok {
+					if counts, err := counter.EventActionCounts(ctx, cfg.DefaultOrgID, p); err == nil {
+						body["action_counts"] = counts
+					}
+				}
+				writeJSON(w, http.StatusOK, body)
 				return
 			}
 		}
 	}
 
 	if cfg.Recent == nil {
-		writeJSON(w, http.StatusOK, map[string]interface{}{"events": []interface{}{}, "total": 0})
+		writeJSON(w, http.StatusOK, map[string]interface{}{"events": []interface{}{}, "total": 0, "action_counts": map[string]int{}})
 		return
 	}
+	// Search asks match about every event it holds, once: the counts are of
+	// all that match, not of the page returned.
+	counts := map[string]int{}
 	match := func(e events.Event) bool {
-		return cfg.ownEvent(e) && events.MatchEventSearch(e, p.Action, p.Provider, p.ShadowOnly, p.FindingType, p.Severity, p.Category, p.Technique, p.Q, p.Since, p.Until)
+		if !cfg.ownEvent(e) || !events.MatchEventSearch(e, p.Action, p.Provider, p.ShadowOnly, p.FindingType, p.Severity, p.Category, p.Technique, p.Q, p.Since, p.Until) {
+			return false
+		}
+		counts[storedAction(e.Action)]++
+		return true
 	}
 	evs, total := cfg.Recent.Search(p.Page, p.Limit, match)
 	out := make([]events.EventJSON, 0, len(evs))
 	for _, e := range evs {
 		out = append(out, events.EventToJSON(e))
 	}
-	writeJSON(w, http.StatusOK, map[string]interface{}{"events": out, "total": total})
+	writeJSON(w, http.StatusOK, map[string]interface{}{"events": out, "total": total, "action_counts": counts})
+}
+
+// eventActionCounter is a store that can count the rows a search matches by
+// action. *store.PostgresStore implements it.
+type eventActionCounter interface {
+	EventActionCounts(ctx context.Context, orgID string, p store.EventSearchParams) (map[string]int, error)
 }
 
 func (cfg Config) handleEventDetail(w http.ResponseWriter, r *http.Request) {

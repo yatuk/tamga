@@ -24,13 +24,26 @@ func (cfg Config) handleIncidentGet(w http.ResponseWriter, r *http.Request) {
 	st, err := cfg.Incidents.Get(id)
 	if err != nil {
 		if errors.Is(err, incidents.ErrNotFound) {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "incident not found"})
+			// No record is the state of an incident nobody has touched, not
+			// an error: it is open. The answer says so and carries no dates,
+			// because nothing has happened to it. Whether a request of this
+			// id exists is not this endpoint's question (GET /events/{id}).
+			writeJSON(w, http.StatusOK, untouchedIncident(id))
 			return
 		}
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
 	writeJSON(w, http.StatusOK, st)
+}
+
+// untouchedIncident is the triage state of a request nobody has triaged.
+func untouchedIncident(id string) map[string]interface{} {
+	return map[string]interface{}{
+		"request_id": id,
+		"status":     incidents.StatusOpen,
+		"untouched":  true,
+	}
 }
 
 func (cfg Config) handleIncidentList(w http.ResponseWriter, r *http.Request) {
@@ -109,7 +122,13 @@ func (cfg Config) handleAuditList(w http.ResponseWriter, r *http.Request) {
 	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	items := cfg.Audit.List(limit)
-	writeJSON(w, http.StatusOK, map[string]interface{}{"items": items, "total": len(items)})
+	// total is every entry the log holds, not the length of the page asked
+	// for: a caller that shows the latest 200 can say of how many.
+	total := len(items)
+	if limit > 0 {
+		total = len(cfg.Audit.List(0))
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"items": items, "total": total})
 }
 
 // handleIncidentTriage processes POST /api/v1/incidents/{request_id}/triage

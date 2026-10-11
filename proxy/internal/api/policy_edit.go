@@ -193,7 +193,8 @@ const maxEntityBodyBytes = 16 << 10
 // The policy is the caller's, and so are its regular expressions: it is
 // loaded like any other, so a pattern past the limits is refused, and the
 // pattern scanners stop at the request's deadline. A match is returned
-// masked, as it would be stored.
+// masked, as it would be stored, with its place in sample_text (see
+// FindingSpan).
 //
 // Body: { "yaml": "...", "sample_text": "..." }
 func (cfg Config) handlePolicySimulate(w http.ResponseWriter, r *http.Request) {
@@ -275,7 +276,10 @@ func (cfg Config) handlePolicySimulate(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), cfg.simulateTimeout())
 	defer cancel()
-	findings, err := registry.ScanAll(ctx, []byte(body.SampleText))
+	// As one piece of text, settled the way the proxy path settles a
+	// segment: a value found in several views of the text is reported once,
+	// and a match made only in a normalised view carries no position.
+	findings, err := registry.ScanRaw(ctx, []byte(body.SampleText), scanner.PipelineConfig{Mode: scanner.ModeAdaptive})
 	if err != nil {
 		// A scan that was cut short (too slow, too many matches) has no
 		// verdict to show; answering with what it found so far would read
@@ -299,14 +303,18 @@ func (cfg Config) handlePolicySimulate(w http.ResponseWriter, r *http.Request) {
 		if policyActionSeverity(act) > policyActionSeverity(topAction) {
 			topAction = act
 		}
-		out = append(out, map[string]interface{}{
+		item := map[string]interface{}{
 			"type":       f.Type,
 			"category":   f.Category,
 			"severity":   f.Severity,
 			"match":      simulateMatch(f),
 			"confidence": f.Confidence,
 			"action":     string(act),
-		})
+		}
+		// Where it is in sample_text, which the caller has: the match is
+		// masked, so it cannot be found again by looking for it.
+		FindingSpan(body.SampleText, f).Put(item)
+		out = append(out, item)
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"policy_name":    pol.Name,

@@ -146,8 +146,9 @@ func TestAuditList_RespectsLimit(t *testing.T) {
 	if len(items) > 2 {
 		t.Fatalf("expected at most 2 items, got %d", len(items))
 	}
-	// Total reflects count of returned items (capped by limit)
-	if total, ok := body["total"].(float64); !ok || total != 2 {
-		t.Errorf("expected total 2, got %v", body["total"])
+	// The total is of every entry the log holds, not of the page: a caller
+	// that shows the latest two can say of how many.
+	if total, ok := body["total"].(float64); !ok || total != 5 {
+		t.Errorf("expected total 5, got %v", body["total"])
 	}
 }

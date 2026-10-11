@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -229,6 +230,45 @@ func TestPG_RequestHistory(t *testing.T) {
 		_, listed, err := s.SearchSecurityEvents(ctx, testOrgID, pii)
 		if err != nil || len(exported) != 1 || listed != 1 {
 			t.Errorf("finding_type=pii: exported %d, listed %d, err %v; want 1 and 1", len(exported), listed, err)
+		}
+	})
+
+	t.Run("action counts", func(t *testing.T) {
+		all := EventSearchParams{Since: from, Until: to}
+		counts, err := s.EventActionCounts(ctx, testOrgID, all)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// The counts are of every matching row, whatever page is asked for,
+		// and add up to the total the list reports.
+		paged := all
+		paged.Page, paged.Limit = 2, 1
+		again, _ := s.EventActionCounts(ctx, testOrgID, paged)
+		_, listed, _ := s.SearchSecurityEvents(ctx, testOrgID, all)
+		sum := 0
+		for action, n := range counts {
+			if action != strings.ToUpper(action) || action == "" {
+				t.Errorf("action %q is not an upper-case name", action)
+			}
+			if again[action] != n {
+				t.Errorf("%s: %d with a page asked for, %d without", action, again[action], n)
+			}
+			sum += n
+		}
+		if sum != listed || listed != 7 {
+			t.Errorf("counts add up to %d, the list reports %d, want 7 and 7", sum, listed)
+		}
+		// Both spellings of a stored action are one action.
+		if counts["BLOCK"] != 2 {
+			t.Errorf("BLOCK = %d, want 2: %v", counts["BLOCK"], counts)
+		}
+		blocked := all
+		blocked.Action = "block"
+		if only, _ := s.EventActionCounts(ctx, testOrgID, blocked); len(only) != 1 || only["BLOCK"] != 2 {
+			t.Errorf("filtered to block: %v, want BLOCK alone, 2", only)
+		}
+		if _, err := s.EventActionCounts(ctx, "not-a-uuid", all); err == nil {
+			t.Error("a malformed organisation id was accepted")
 		}
 	})
 }

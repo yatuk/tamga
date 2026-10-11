@@ -450,6 +450,39 @@ LIMIT $%d`, where, len(args)+1), append(args, max+1)...)
 	return out, false, nil
 }
 
+// EventActionCounts counts the organisation's rows that match p, by action
+// (upper case; a row with none counts as PASS). Page and Limit in p are
+// ignored: the counts are of every matching row, so a list that shows one
+// page of them can say how many there are of each kind.
+func (s *PostgresStore) EventActionCounts(ctx context.Context, orgID string, p EventSearchParams) (map[string]int, error) {
+	org, err := uuid.Parse(orgID)
+	if err != nil {
+		return nil, fmt.Errorf("org id: %w", err)
+	}
+	where, args := eventSearchWhere(org, p)
+	ctx2, cancel := context.WithTimeout(ctx, getStatsTimeout)
+	defer cancel()
+	rows, err := s.pool.Query(ctx2, `
+SELECT COALESCE(NULLIF(upper(btrim(action_taken)), ''), 'PASS'), COUNT(*)
+FROM request_logs
+`+where+`
+GROUP BY 1`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]int{}
+	for rows.Next() {
+		var action string
+		var n int
+		if err := rows.Scan(&action, &n); err != nil {
+			return nil, err
+		}
+		out[action] = n
+	}
+	return out, rows.Err()
+}
+
 // shadowCondition is the filter for shadow AI on request_logs, with the
 // argument it takes at place arg. It is providers.IsShadow in SQL: a
 // provider is named (a row with none, NULL or empty, is not shadow) and,
