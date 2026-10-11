@@ -384,6 +384,19 @@ func worstAcceptedSpecs(t *testing.T) []CustomEntitySpec {
 	return specs
 }
 
+// searchSlack is how long the one search may take that was running when the
+// budget or the context ran out: a search is not interrupted, the scan stops
+// after it. A second is generous for the binary as shipped (the search takes
+// about 15 ms here). Built with -race the same search took 1.5 s on a CI
+// runner, so the instrumented build is given ten times as long: it checks
+// that the scan stops, not how fast an instrumented regexp runs.
+func searchSlack() time.Duration {
+	if raceDetector {
+		return 10 * time.Second
+	}
+	return time.Second
+}
+
 func TestWorstAcceptedPatternSetIsBounded(t *testing.T) {
 	if testing.Short() {
 		t.Skip("spends the scanner's whole time budget")
@@ -400,7 +413,7 @@ func TestWorstAcceptedPatternSetIsBounded(t *testing.T) {
 		t.Errorf("err = %v, want ErrScanDegraded: this set cannot finish 1 MiB inside the budget", err)
 	}
 	// The budget, plus the one search that was running when it ran out.
-	if limit := patternScanBudgetMax + time.Second; elapsed > limit {
+	if limit := patternScanBudgetMax + searchSlack(); elapsed > limit {
 		t.Errorf("1 MiB took %v, the bound is %v", elapsed, limit)
 	}
 	t.Logf("worst accepted set, 1 MiB, no deadline: %v", elapsed)
@@ -413,7 +426,7 @@ func TestWorstAcceptedPatternSetIsBounded(t *testing.T) {
 	if !errors.Is(err, ErrScanDegraded) {
 		t.Errorf("cancelled: err = %v, want ErrScanDegraded", err)
 	}
-	if elapsed > time.Second {
+	if elapsed > searchSlack() {
 		t.Errorf("a context that ended after 100 ms stopped the scan after %v", elapsed)
 	}
 	t.Logf("worst accepted set, 1 MiB, 100 ms deadline: %v", elapsed)

@@ -1,6 +1,7 @@
 package events
 
 import (
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -58,5 +59,31 @@ func TestBus_StopDrainsPending(t *testing.T) {
 	b.Stop()
 	if n.Load() != 1 {
 		t.Fatalf("want 1 after drain, got %d", n.Load())
+	}
+}
+
+// An event can be published by a goroutine that outlives its request (the
+// output-scan hint is), so a publish can arrive while the bus is being
+// stopped. The send used to race the close of the queue: the race detector
+// reported it, and a send on a closed channel panics the process. Publishing
+// during and after Stop must do neither.
+func TestBus_PublishWhileStoppingDoesNotPanic(t *testing.T) {
+	for round := 0; round < 200; round++ {
+		b := NewBus()
+		b.Subscribe(func(Event) {})
+		b.Start()
+		var wg sync.WaitGroup
+		for g := 0; g < 8; g++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for i := 0; i < 50; i++ {
+					b.Publish(Event{RequestID: "r"})
+				}
+			}()
+		}
+		b.Stop()
+		wg.Wait()
+		b.Publish(Event{RequestID: "after"})
 	}
 }
