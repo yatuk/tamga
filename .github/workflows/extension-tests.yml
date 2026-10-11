@@ -1,0 +1,39 @@
+name: Browser Extension
+
+# The extension has no dependencies and no build step: its tests need Node
+# and nothing else, so nothing is installed here.
+
+on:
+  pull_request:
+    paths:
+      - "extension/**"
+      # extension/LICENSE is checked against this file.
+      - "LICENSE"
+      - ".github/workflows/extension-tests.yml"
+  push:
+    branches: [main]
+    paths:
+      - "extension/**"
+      - "LICENSE"
+      - ".github/workflows/extension-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: extension
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Node version
+        run: node --version
+
+      - name: Tests
+        run: node --test

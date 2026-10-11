@@ -1,0 +1,20 @@
+<!doctype html>
+<!--
+  A page the extension cannot attach to: there is a control that sends, and
+  no textarea or contenteditable element in the document for it to read (as
+  when the message box sits in a closed shadow root or a frame).
+  Written 2026-10-11.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Fixture: a page with nothing to attach to</title>
+  </head>
+  <body>
+    <main>
+      <p data-fixture="log"></p>
+      <div data-fixture="opaque-editor"></div>
+      <button type="button" aria-label="Send message" data-fixture="send">Send</button>
+    </main>
+  </body>
+</html>

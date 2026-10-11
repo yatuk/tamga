@@ -1,0 +1,40 @@
+{
+  "type": "object",
+  "properties": {
+    "tamgaUrl": {
+      "title": "Tamga URL",
+      "description": "Base URL of your Tamga proxy, for example https://tamga.internal. https only, except for localhost. The extension calls POST <URL>/api/v1/scan and nothing else.",
+      "type": "string"
+    },
+    "tamgaKey": {
+      "title": "Tamga key",
+      "description": "A Tamga key of the proxy scope, sent as X-Tamga-Key. Use one key per group of browsers: the scan limit is counted per key.",
+      "type": "string"
+    },
+    "failMode": {
+      "title": "When Tamga cannot be asked",
+      "description": "closed (the default): a message is held until it has been checked. open: it is sent unchecked and the person is told.",
+      "type": "string",
+      "enum": ["closed", "open"]
+    },
+    "autoRedact": {
+      "title": "Replace text without asking",
+      "description": "false (the default): the redacted text is shown and the person chooses to use it. true: it replaces the original straight away and the person is told.",
+      "type": "boolean"
+    },
+    "sites": {
+      "title": "Sites",
+      "description": "The sites the extension acts on. All three when left out.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["claude", "chatgpt", "gemini"]
+      }
+    },
+    "timeoutMs": {
+      "title": "Timeout in milliseconds",
+      "description": "How long to wait for Tamga before the check counts as failed. 2500 when left out; kept between 500 and 10000.",
+      "type": "integer"
+    }
+  }
+}

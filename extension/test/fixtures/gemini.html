@@ -1,0 +1,28 @@
+<!doctype html>
+<!--
+  The structure the gemini adapter assumes. It is NOT a copy of
+  gemini.google.com and was not checked against it: a Quill editor
+  (div.ql-editor, contenteditable) inside a rich-textarea element, and a send
+  button with the class send-button. Written 2026-10-11.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Fixture: the structure assumed for gemini.google.com</title>
+  </head>
+  <body>
+    <main>
+      <p data-fixture="log"></p>
+      <div class="input-area">
+        <rich-textarea>
+          <div class="ql-editor textarea" contenteditable="true" role="textbox" aria-label="Gemini için bir istem girin" data-fixture="composer"><p>Hello</p><p>second line</p></div>
+        </rich-textarea>
+        <div class="send-button-container"><gem-icon-button class="send-button submit"><button type="submit" aria-label="Mesaj gönder" data-fixture="send"><span data-fixture="send-icon">Send</span></button></gem-icon-button></div>
+      </div>
+    </main>
+    <script type="module">
+      import { attachFakeSite } from './fake-site.js';
+      attachFakeSite(document, { composer: '[data-fixture="composer"]', send: '[data-fixture="send"]' });
+    </script>
+  </body>
+</html>

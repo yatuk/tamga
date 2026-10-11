@@ -1,0 +1,30 @@
+<!doctype html>
+<!--
+  A page none of the three adapters matches: a plain textarea in a form with
+  an unnamed submit button, which is what the generic fallback is for. Beside
+  it is a search form the extension must leave alone. Written 2026-10-11.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Fixture: a page only the generic fallback matches</title>
+  </head>
+  <body>
+    <form data-fixture="search-form">
+      <input type="text" name="q" data-fixture="search-input">
+      <button type="submit" data-fixture="search-submit">Search</button>
+    </form>
+    <main>
+      <p data-fixture="log"></p>
+      <form data-fixture="chat-form">
+        <textarea name="message" data-fixture="composer">Hello
+second line</textarea>
+        <button type="submit" data-fixture="send"><span data-fixture="send-icon">Go</span></button>
+      </form>
+    </main>
+    <script type="module">
+      import { attachFakeSite } from './fake-site.js';
+      attachFakeSite(document, { composer: '[data-fixture="composer"]', send: '[data-fixture="send"]' });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,26 @@
+<!doctype html>
+<!--
+  The structure the chatgpt adapter assumes. It is NOT a copy of chatgpt.com
+  and was not checked against it: a form holding a contenteditable div with
+  the id prompt-textarea, and a submit button carrying
+  data-testid="send-button". Written 2026-10-11.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Fixture: the structure assumed for chatgpt.com</title>
+  </head>
+  <body>
+    <main>
+      <p data-fixture="log"></p>
+      <form>
+        <div class="ProseMirror" contenteditable="true" role="textbox" aria-label="ChatGPT'ye sor" data-fixture="composer"><p>Hello</p><p>second line</p></div>
+        <button type="submit" aria-label="Gönder" data-fixture="send"><span data-fixture="send-icon">Send</span></button>
+      </form>
+    </main>
+    <script type="module">
+      import { attachFakeSite } from './fake-site.js';
+      attachFakeSite(document, { composer: '[data-fixture="composer"]', send: '[data-fixture="send"]' });
+    </script>
+  </body>
+</html>

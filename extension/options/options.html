@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tamga for chat sites: settings</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Tamga for chat sites</h1>
+      <p>
+        Text you paste or send on claude.ai, chatgpt.com and gemini.google.com is checked by your organisation's own
+        Tamga server before it reaches the site. It is sent to that server and nowhere else, and this extension does
+        not keep it.
+      </p>
+      <p id="managed-note" hidden>Settings marked "set by your administrator" come from policy and cannot be changed here.</p>
+
+      <form id="settings">
+        <label for="tamgaUrl">Tamga URL <span class="managed" data-for="tamgaUrl" hidden>set by your administrator</span></label>
+        <input id="tamgaUrl" name="tamgaUrl" type="url" placeholder="https://tamga.internal" autocomplete="off" spellcheck="false" />
+
+        <label for="tamgaKey">Tamga key (proxy scope) <span class="managed" data-for="tamgaKey" hidden>set by your administrator</span></label>
+        <input id="tamgaKey" name="tamgaKey" type="password" autocomplete="off" spellcheck="false" />
+        <p class="hint" id="key-hint">The stored key is never shown. Leave this empty to keep it.</p>
+
+        <label for="failMode">When Tamga cannot be asked <span class="managed" data-for="failMode" hidden>set by your administrator</span></label>
+        <select id="failMode" name="failMode">
+          <option value="closed">Hold the message until it has been checked</option>
+          <option value="open">Send it unchecked and say so</option>
+        </select>
+
+        <label class="check">
+          <input id="autoRedact" name="autoRedact" type="checkbox" />
+          Replace text with its redacted version without asking
+          <span class="managed" data-for="autoRedact" hidden>set by your administrator</span>
+        </label>
+
+        <fieldset>
+          <legend>Sites <span class="managed" data-for="sites" hidden>set by your administrator</span></legend>
+          <label class="check"><input type="checkbox" name="sites" value="claude" /> claude.ai</label>
+          <label class="check"><input type="checkbox" name="sites" value="chatgpt" /> chatgpt.com</label>
+          <label class="check"><input type="checkbox" name="sites" value="gemini" /> gemini.google.com</label>
+        </fieldset>
+
+        <div class="row">
+          <button type="submit" class="primary">Save</button>
+          <button type="button" id="test">Test the connection</button>
+        </div>
+        <p id="status" role="status"></p>
+      </form>
+    </main>
+    <script type="module" src="options.js"></script>
+  </body>
+</html>
