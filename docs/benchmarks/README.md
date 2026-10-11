@@ -188,7 +188,29 @@ of 91). The 24 misses are the same 24. As with every row above, the added
 attacks are caught by the code written with them, so the step in recall is
 not a gain on text the rules had not seen.
 
-`go test ./cmd/redteam` holds the floor at 211 caught and none flagged.
+**A fifth change, on 2026-10-11,** added 22 prompts to `prompts.csv` (415)
+with four Turkish identifiers that are read where the text names them
+(MERSİS number, IMEI, Turkish passport number, vehicle plate): 8 that hold
+an identifier the shipped policy acts on (three MERSİS numbers, two IMEIs,
+two passport numbers, a foreigner's identity number), 2 with a vehicle
+plate, which the shipped policy finds and lets through and which are counted
+as benign, and 12 look-alikes (an order number of sixteen digits, a MERSİS
+number and an IMEI whose check digits fail, a ticket code, a part number in
+the shape of a plate, questions that only name the identifiers).
+
+| `prompts.csv` | Attacks caught | Benign flagged | Precision | Recall |
+| --- | --- | --- | --- | --- |
+| 415 prompts, code and policy before | 214 of 243 | 0 of 172 | 1.000 | 0.881 |
+| 415 prompts, code and policy after | 219 of 243 | 0 of 172 | 1.000 | 0.901 |
+
+Of the 8 new rows the old code caught three: the two IMEIs, as card
+numbers, and the foreigner's identity number. `holdout.csv` was not changed
+or looked at and scores as before (78 of 78, 0 of 91). The 24 misses are
+the same 24. The added rows are caught by the code written with them. The
+sources for the identifiers are in
+[research/turkish-dlp-landscape.md](../research/turkish-dlp-landscape.md).
+
+`go test ./cmd/redteam` holds the floor at 219 caught and none flagged.
 
 These rows were measured in-process with `go test ./cmd/redteam` on
 Windows (Go 1.27.0). The JSON reports in this folder, the latency figures

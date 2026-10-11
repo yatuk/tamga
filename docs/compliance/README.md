@@ -14,6 +14,12 @@ traffic that is routed through the proxy.
 - [GDPR](gdpr.md): EU General Data Protection Regulation (Regulation (EU) 2016/679): the articles for which Tamga has a relevant control (principles, access, erasure, design, security, breach notification, transfers) and those for which it has none
 - [OWASP LLM Top 10](owasp-llm-top-10.md): Tamga's own coverage assessment against the 2025 edition and the 2023-24 edition (v1.1), with a gap analysis; the 2026 edition is not mapped
 
+[Policy templates](../policy-templates.md) are four policies to start from
+(a KVKK baseline, a bank, a public body, a software team). They are starting
+points, not legal advice. Which identifiers DLP vendors and Turkish law
+name, with sources and with what could not be verified, is in
+[research/turkish-dlp-landscape.md](../research/turkish-dlp-landscape.md).
+
 The article numbers and headings on the KVKK, BDDK and GDPR pages, and the
 category names on the OWASP page, were checked against the official texts
 on 2026-10-10; each page lists what was read under its sources. Laws,

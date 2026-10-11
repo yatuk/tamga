@@ -85,8 +85,67 @@
   checked, without loading `next.config.js`, and `next lint` is deprecated
   in any case. CI runs `npm run lint`. The guard is unchanged: `next build`
   with the variable set still stops.
+- **The analyzer's requirements lose four packages nothing imported:**
+  `openai`, `presidio-anonymizer`, `sqlalchemy` and `tenacity`. **An
+  analyzer image built from now on does not install them** unless another
+  package asks for one; no analyzer code path changes. `grpcio-tools`,
+  `spacy` and `httpx` are imported nowhere either and stay, each with its
+  reason in `analyzer/tests/test_requirements_used.py`, which fails when a
+  requirement is imported by no file and is not on that list.
+  `grpcio-tools` is what brings `protobuf`, which the generated gRPC stubs
+  import. `THIRD_PARTY_LICENSES.md` is regenerated. The image was not
+  rebuilt. Comments that still named LLM Guard or the removed toxicity
+  scanner are corrected in the `.proto` sources and elsewhere; the generated
+  gRPC stubs keep the old comments until they are next generated.
 
 ### Security
+- **A streamed tool call's arguments and streamed reasoning are scanned.**
+  With `output_rules.streaming` on, the stream guard read the model's prose
+  and nothing else: a customer's identity number, a secret or an
+  exfiltration link that the model put into a tool call's arguments went to
+  the agent unread, although a buffered answer's arguments were scanned.
+  Tool-call arguments (OpenAI chat `tool_calls` and `function_call`, custom
+  tool input, Anthropic `input_json_delta`, the Responses API's argument
+  deltas, Gemini function calls) are now kept back until the tool call is
+  complete, scanned whole with the scanners a buffered answer gets, the link
+  scanner included, and then sent in one event, masked inside their strings
+  where `redact_on` says so, or the stream ends on a `block_on` finding.
+  Reasoning (`thinking_delta`, `reasoning_content`, reasoning summaries,
+  Gemini thoughts) is scanned like the answer's text. Signatures and
+  encrypted reasoning pass untouched. **An existing deployment with
+  `output_rules.streaming` on will notice: (1) a tool call's arguments reach
+  the client in one piece when the tool call ends, not fragment by fragment
+  (the events still come, with empty fragments, and the id and name arrive
+  at once); (2) streams that used to pass now end or are masked when a tool
+  call or the reasoning holds a value the policy acts on; (3) arguments
+  longer than `output_rules.buffer_bytes` (1 MiB when unset) end the stream
+  with `tool_call_unscanned_too_large`, or pass unread with `fail_open`;
+  (4) a `redact_on` finding in Anthropic's signed thinking ends the stream
+  with `redact_signed_thinking`, because a mask there would break the
+  signature the client sends back; (5) findings carry the role `assistant`
+  and a path that names the tool call
+  (`choices[0].message.tool_calls[0].function.arguments#to`,
+  `content[1].input.to`).** New stop reasons in the stream's error event:
+  `tool_call_unscanned_too_large`, `redact_tool_call`,
+  `redact_signed_thinking`, `redact_stream_event`; new degraded reasons:
+  `stream_tool_call_too_large`, `redact_stream_tool_call_failed`,
+  `redact_stream_signed_thinking`, `redact_stream_event_failed`. Not read
+  yet: a value written as a JSON number or a key in the arguments (buffered
+  answers neither), Gemini's partial function-call arguments, Anthropic
+  citation deltas. See
+  [operations](docs/operations.md#tool-calls-and-reasoning-in-a-stream).
+- **The closing events of a Responses API stream repeated the text
+  unmasked.** `response.output_text.done`, `response.content_part.done`,
+  `response.output_item.done` and `response.completed` carry the whole text
+  again, and a client library takes its final result from the last of them.
+  The guard masked the deltas and forwarded those events as they came, so a
+  value under `redact_on` reached the client after all. They are now scanned
+  and masked where they stand, text and tool calls alike. **A Responses API
+  stream under `redact_on` now has the mask in its closing events too.**
+- A held piece of a chat completions or Gemini stream is sent in an event
+  that carries that piece alone. It used to be sent in a copy of the last
+  event that carried text on the channel, which could repeat a role or
+  another part of that event.
 - **A value written twice, once plainly and once obfuscated, was sent on
   under REDACT with the obfuscated copy in it.** A card number or a Turkish
   identity number written plainly and again in fullwidth digits (or with
@@ -505,6 +564,34 @@
   nothing about browser checks.
 - No dependencies and no build step. `node --test` in `extension/` runs the
   tests, and the `Browser Extension` workflow runs them in CI.
+- **A person now learns that Tamga cannot be asked before they try to send.**
+  A paste whose check failed said nothing, so an extension with no key, no
+  permission to reach Tamga, or a Tamga that was down was noticed only at
+  the send. **What people with the extension installed will see:** when the
+  page loads and no address or key is set, one notice, "Tamga is not set up
+  in this browser yet", with "Open settings"; at the first paste that cannot
+  be checked, one notice with the reason ("Tamga cannot be reached" and the
+  like). The notice holds nothing, is shown once for a reason on a page load
+  and again only when the reason changes. Under `failMode: open` it says
+  that what is sent from the page goes to the site unchecked.
+- **`STRIP` is worded as what it is.** The scan route answers `STRIP` with
+  the findings and no text, and for one typed message stripping the whole
+  text leaves nothing to send, so the message is still not sent. The notice
+  now says that the policy removes the whole text and names the kinds of
+  finding a rule strips for, where it said the policy "removes text like
+  this". A `REDACT` that arrives without text has its own sentence. The
+  scan route is unchanged.
+- **The generic fallback can find a send button that is in no form and has
+  no English name**, which it could not on gemini.google.com: a button after
+  the message box that appeared (or became enabled) only once the box held
+  text, or one whose label, title, test id or class, or its wrapper's class,
+  holds "send" in one of nine languages (the list is in
+  `adapters/generic.js`). Neither the button's type nor its icon is used. It
+  applies only when the site's own selectors find no send button. **With a
+  site's selectors broken, a click on such a button is now held and checked
+  where it used to go through.** The upload, dictation, model, attach and
+  voice buttons of the fixtures are tested not to be taken for it. None of
+  this was run on the live sites: the README of the extension says so.
 
 ### Licences and packaging
 - `NOTICE` gives the attributions the bundled material asks for, and
@@ -523,6 +610,40 @@
   drain; `analyzer.grpcAddr` and `analyzer.httpUrl` set where the analyzer
   is. Terraform: the cluster version is a required variable, zones come from
   the region, and provider versions are locked.
+- **A release workflow, which has not run yet** (`.github/workflows/release.yml`).
+  A tag `vX.Y.Z` on `main` builds the `tamga` and `scanner-service` binaries
+  for five platforms (`-trimpath`, version and commit linked in), the five
+  images (pushed to GHCR by digest, `linux/amd64`), the chart, the extension
+  archive and the SDK packages; signs the images and the checksum file with
+  Sigstore cosign keyless (GitHub OIDC, no key in the repository); attaches
+  SLSA build provenance (`actions/attest-build-provenance`) and an SPDX SBOM
+  (syft) to each image and each binary archive; and creates a draft release.
+  Started by hand it is a dry run that publishes and signs nothing. The jobs
+  that run the builds hold no signing identity, and an image gets its
+  version tag only after its signature has been verified. It also runs the
+  Go tests again and refuses a tag that is not on `main` or whose changelog
+  section still says unreleased. **No release exists: nothing has been
+  built, pushed or signed by it, and it has not been run even as a dry
+  run.** `docs/verifying-a-release.md` has the `cosign` and
+  `gh attestation` commands and the certificate identity to require.
+- **A licence gate and a vulnerability report in CI, both in report mode.**
+  `scripts/licence-gate.py` judges every shipped dependency (the inventory of
+  `scripts/third-party-licenses.py`) against `.github/licence-policy.yml`:
+  allow, review and deny sets with a reason for each, and one entry per
+  package in review. The sets are a proposal and every entry is `pending`:
+  25 packages are in review today (LGPL-3.0 libvips builds under `sharp`,
+  the OFL-1.1 IBM Plex fonts, CC-BY-4.0 `caniuse-lite`, CNRI-Python in
+  `regex`). `mode: report` prints what would be refused and exits 0;
+  `mode: enforce` fails. `vulnerability-report.yml` runs `govulncheck`,
+  `npm audit --omit=dev --audit-level=high` (console, TypeScript SDK) and
+  `pip-audit` (analyzer, classifier, Python SDK) on pull requests that touch
+  a dependency file and weekly, as warnings; `GATE_MODE: enforce` makes them
+  fail. Neither workflow has run. The existing `govulncheck` job in
+  `proxy-ci.yml` is unchanged and still fails on a finding.
+- `docs/threat-model.md`: boundaries, assets, seven adversaries, the control
+  for each with the file and test behind it, and what remains.
+  `docs/tr/kurulum-ve-isletim.md`: an installation and operations guide in
+  Turkish for the Compose stack.
 
 ### Console
 - **Incidents counted the rows of one page and called it the queue.** The
@@ -834,6 +955,19 @@
   response above `output_rules.buffer_bytes` was cut at the limit. It is now
   forwarded whole with `X-Tamga-Output-Scan: skipped-too-large`; the default
   limit is raised from 256 KB to 1 MB.
+- **A refused admin key that is stored in the browser is named as that.** A
+  key saved under Settings is kept in that browser and wins over the key a
+  development build carries. With an old key stored, every page said "The
+  proxy did not accept the admin key. It is up. Check the key under
+  Settings." and nothing said which key, or that removing it would bring
+  the built-in one back. The notice now says "The key it refused is the one
+  stored in this browser" and carries the button "Forget the key stored in
+  this browser". In a development build with a built-in key it says the
+  console will use that one; in a production build, where there is none, it
+  says to enter a valid key under Settings. A refused built-in key is named
+  too, with nothing to forget. Settings says which key is in use (the one
+  stored in this browser, the one built into the page for development, or
+  none) and has the same button. No part of a key is shown by any of this.
 
 ### Console data
 - `GET /api/v1/events` returns `action_counts` beside `total`: the matching
@@ -915,6 +1049,72 @@
   about where anything went. **`?shadow=true` and `?provider=shadow` on a
   deployment with a database return fewer rows than before if it holds rows
   with an empty provider.**
+
+### Routing
+- **New action `ROUTE`: a request that holds something sensitive is answered
+  by a model you run yourself, and never reaches the provider.** A rule (or a
+  custom entity or competitor entry) says `action: ROUTE` and
+  `route_to: <pool>`; the pool is defined under `providers.pools` with
+  `internal: true`, a `dialect` (`openai` or `anthropic`), an optional
+  `model` that replaces the caller's, and its own `api_key_env`. The request
+  goes there as written, nothing masked, and the answer carries
+  `X-Tamga-Routed-To`. The order is BLOCK > ROUTE > STRIP > REDACT > WARN >
+  LOG > PASS. A finding under a STRIP rule is still stripped on the way; one
+  under a REDACT rule is left as it is. The caller's provider credential is
+  not sent to the pool. The answer is scanned by `output_rules`, streams
+  work, and the response cache keys on the pool. Worked example and the full
+  rules: `docs/operations.md`, "Routing to an internal model".
+- **It fails closed.** When the pool is down, speaks another API than the
+  caller's route, or is not there, the request is blocked with a 503
+  `tamga_route_unavailable` and a `reason` (`upstream`, `dialect`,
+  `no_pool`). It is not sent to the provider instead, and not retried there.
+  Only the OpenAI-shaped routes (`/v1/`, `/openai/`, `/mistral/`, `/local/`)
+  and `/anthropic/` can be routed, each to a pool of its own dialect; nothing
+  is translated. A ROUTE verdict on `/azure/`, `/gemini/` or `/bedrock/`
+  blocks.
+- **Where an internal pool may point is the operator's decision.** Every
+  endpoint must be listed in `TAMGA_UPSTREAM_ALLOW`, and a private or
+  loopback address also needs `allow_private_addresses: true` on the pool
+  itself; a listed name that resolves to a private address is refused at
+  connect time for a pool without it. No setting opens private addresses for
+  all pools. Refused at load: ROUTE without `route_to`, to an undefined pool
+  or to one not marked internal; two ROUTE rules naming different pools;
+  `route_to` on a rule that does not route; an internal pool named after a
+  route or without a dialect.
+- Recording: the event and the stored request carry the action `ROUTE` and
+  `route_pool`; a route that failed is a `BLOCK` with the pool it was meant
+  for. The console shows "Routed" in ochre, with the pool in the request's
+  detail and in the playground verdict; the event explorer and the hunt
+  filter take it, and the incident queue lists it. New metrics
+  `tamga_routed_total` and `tamga_route_unavailable_total{pool,reason}`.
+  `POST /api/v1/scan` and `/policies/simulate` report `ROUTE` and the pool
+  in `route_to`, and send nothing.
+- **What an existing deployment will notice, with no ROUTE rule in its
+  policy:**
+  - **`/stats` has `routed_requests` and `/timeseries` points have `routed`
+    (both 0), and `passed_requests` no longer includes routed requests.**
+  - **Events, the stored request and its detail may carry `route_pool`.
+    Migration `020_route_pool` adds the column; the proxy also adds it at
+    startup.**
+  - **Every response-cache entry is asked for under a new key once** (the
+    key now has a field for the pool), so the cache starts empty after the
+    upgrade.
+  - **`/api/v1/health/detailed` marks each pool with `internal`.**
+  - **Policy validation messages list ROUTE among the actions, and a pool
+    under an unknown key is told about `internal: true`.**
+- **What a deployment that adds a ROUTE rule must know:**
+  - **Over the LiteLLM bridge a ROUTE verdict is `BLOCKED`**: the contract
+    cannot send a request elsewhere. The reason says so and
+    `X-Tamga-Route-Fallback` is `block:bridge`.
+  - **The browser extension treats ROUTE as a block, and must be this
+    version or newer.** An older extension does not know the action, reads
+    the answer as no verdict and follows its fail mode: with fail-open it
+    lets the text through to the chat site. Update the extension before
+    adding a ROUTE rule, or keep the fail mode closed.
+  - **Any other caller of `/api/v1/scan` gets a verdict it has not seen
+    before** and must treat it as a block if it forwards the text itself.
+  - **Saved alert destinations hear of ROUTE as they do of REDACT**: only
+    with a threshold above 1 or a cooldown.
 
 ### Agents
 - **A long tool result or file no longer stalls the proxy.** Scanning a large
@@ -1165,6 +1365,55 @@
 - A misspelled value under `scan:` is a load error.
 
 ### Detection
+- **Turkish prompt injection: a set of the repository's own, and where the
+  rules stand on it.** `proxy/testdata/redteam/tr_tuning.csv` and
+  `tr_locked.csv` hold Turkish attacks and deliberately hard benign Turkish
+  text, written for this repository and split by a seeded hash of the row
+  id; no rule may be changed by looking at the locked part. Under the shipped
+  policy the deterministic scanners catch 142 of 185 attacks in the tuning
+  part (0.768) and flag 6 of 186 benign texts (0.032), and 104 of 142 in the
+  locked part (0.732) with 4 of 125 benign texts flagged (0.032). **The
+  benign figure is not zero: ordinary Turkish text that uses the words of an
+  attack is sometimes stopped.** These are the scanners' figures on a set
+  written by the same hand as the rules, which is weak evidence. This work
+  was stopped before it was finished: the rules were being tuned on the
+  tuning part and that pass is incomplete. What is known in public about
+  Turkish injection is collected in
+  `docs/research/turkish-prompt-injection.md`, and `classifier/finetune/`
+  holds a script, not yet run, for fine-tuning the classifier once a model
+  download is approved. The scanner version is 1.10.0.
+- **Look-alike host names written in Latin letters only are reported.**
+  `gıthub.com` with a dotless ı, `paypał.com`, `akbánk.com` and their
+  punycode passed the link scanner, which looked for mixed scripts. A host
+  that reads as a protected name once its accents are taken off and its
+  look-alike letters folded, and is not that name or a host under it, is now
+  a `link_homoglyph` finding with the name in `imitates`. Twelve names are
+  built in (source hosts and package registries, the most imitated consumer
+  brands, three Turkish banks whose names are plain ASCII); add your own
+  domains in the new `output_rules.links.protected_hosts`. A host with
+  Turkish or other accented letters that imitates nothing on the list is not
+  reported: 0 of 58 benign answers, 7 of 7 Latin-only look-alikes in the
+  test sets. **A deployment with `malicious_link` or `link_homoglyph` in
+  `output_rules` will see such links masked or blocked; the scanner version
+  is 1.9.0, so answers cached as clean by an older build are scanned
+  again.**
+- **The policy's own patterns are remembered per text, and the scanners
+  share their readings of a text.** The custom-entity and competitor
+  scanners were left out of the scan cache because their patterns can change
+  at runtime. Their findings are now stored under a fingerprint of the
+  pattern set they were made with, taken together with the compiled patterns
+  under one lock: a changed pattern is a new key, an unchanged set is
+  answered from memory, and nothing has to be evicted. One scan of a text
+  also normalises it once for the scanners that read the same readings and
+  hashes it once for the cache. On 2 KB of text through the pipeline a
+  repeated scan of the custom patterns went from 330 µs to 1.1 µs and of the
+  competitor list from 240 µs to 1.0 µs; an agent's next turn (200 pieces of
+  3 KB already seen and one new) from 51 ms to 14 ms; a first scan of the
+  same history from 555 ms to 411 ms. No verdict changes.
+- Fixed: switching a competitor off (`enabled: false`) did not take effect
+  until something else about the list changed, because the scanner's
+  fingerprint of the list left the switch out. **A competitor that is
+  switched off is no longer reported after the next policy reload.**
 - **Recall on the red-team corpus went from 0.495 to 0.896 with no false
   positives** (was 3). Read `docs/benchmarks/README.md` before quoting it:
   eleven corpus entries were mislabelled, and the rules were then written
@@ -1494,6 +1743,106 @@
   `ScannerVersion` is 1.6.0 for the changes of this and the Security entry
   above: a request cached as forwarded can be one this build masks or
   blocks.
+- Four Turkish identifiers are detected, each only where the text names it:
+  `mersis_no` (16 digits next to "MERSİS"; the tax number or national id it
+  is built from must pass its check digits; severity high, or critical when
+  it holds a person's TC Kimlik), `imei` (15 digits with a Luhn check digit
+  next to "IMEI"), `passport_tr` (a capital letter and eight digits after
+  "pasaport" or "passport" on the same line; there is no check digit, and
+  the format was not confirmed from an official source) and
+  `license_plate_tr` (province code 01-81, letters and digits in the six
+  shapes in use, next to "plaka" or "plate"). A text without the word is not
+  searched, so the cost on other traffic is a few byte comparisons
+  (`ScanAll_WithPII` +2.3%, within noise). A foreigner's identity number
+  (99…) was already found as `tc_kimlik`; a test now holds that. Which
+  products and laws name which identifier, what was read and what could not
+  be verified is in `docs/research/turkish-dlp-landscape.md`. No detector
+  was added for the special categories of KVKK Md. 6; the research page
+  says why. `ScannerVersion` is 1.7.0.
+  - **The shipped policy masks three of them** (`mersis_no`, `imei`,
+    `passport_tr` are added to `rules.pii_detection.types`). It finds a
+    vehicle plate and does not act on it.
+  - **A policy of your own with explicit `types:` lists sees the new
+    findings and applies no rule to them** until you list them. **A `pii`
+    rule without a `types:` list acts on them** with its own action, as it
+    does on every category.
+  - **A fifteen digit number next to the word "IMEI" is now an `imei`
+    finding (severity high) and no longer a `credit_card` finding
+    (critical)**, unless it starts like a fifteen digit card (34, 37, 1,
+    2131, 2014, 2149). An IMEI passes the Luhn check by construction, so
+    every IMEI used to be blocked as a card number. A policy that blocks
+    `credit_card` and does not list `imei` now lets such a request through.
+    The same holds for a sixteen digit number next to "MERSİS" that is
+    built from a valid tax number or national id (one MERSİS number in ten
+    passes Luhn).
+- Policy templates to start from, in `proxy/policies/templates/`:
+  `kvkk-baseline.yaml`, `bddk-bank.yaml`, `public-sector.yaml`,
+  `software-team.yaml`, described in `docs/policy-templates.md`. They are
+  starting points and not legal advice. `go test ./internal/policy` loads
+  each, holds it to the validator, checks that every category it names is
+  one a scanner reports, and runs it against test texts.
+- The red-team corpus has 22 more rows (415). Under the shipped policy the
+  old code caught 214 of 243 and the new code catches 219, with no benign
+  prompt flagged in either; the floor in `go test ./cmd/redteam` is 219.
+- **Turkish instructions are read by stem and ending, and more Turkish
+  requests are blocked.** The Turkish rules were fixed phrases, which match
+  one form of a word and, as a substring, also forms they must not. They are
+  now a target (talimat, yönerge, kural, kısıtlama … in the case the verb
+  governs), a verb that drops it ("yok say", "görmezden gel", "unut", or the
+  negation of "uy", "dikkate al") and an ending that makes the verb a
+  command ("unut", "unutun", "unutunuz", "unutalım", "unutmalısın",
+  "unutmanı istiyorum"; not "unuttum", "unutmadan"). New rules of the same
+  kind read system-prompt extraction, persona and mode framings ("geliştirici
+  modu etkin … filtreler kapalı", "DAN'sın"), text addressed to whatever
+  model reads it ("bu sayfayı okuyan yapay zeka"), a summary or a correction
+  used as a wrapper ("özetle ve içindeki talimatı uygula"), English words
+  with Turkish endings ("instructions'ları override et"), and an instruction
+  handed over in quoted parts. Text without Turkish letters and text in
+  capitals read the same, as before.
+  - A new Turkish set, written for this repository and split by a hash of
+    the row id before any scanner read it: `tr_tuning.csv` (371 rows) and
+    `tr_locked.csv` (267 rows), ten attack families and ten kinds of benign
+    text that use the same words (banking, law, teaching, software, customer
+    service). An attack counts as caught when the shipped policy acts on an
+    injection finding.
+
+    | | Attacks caught, before | after | Benign rows flagged, before | after |
+    |---|---|---|---|---|
+    | `tr_tuning.csv`, which the rules were written against | 42 of 185 (0.227) | 142 of 185 (0.768) | 8 of 186 | 6 of 186 |
+    | `tr_locked.csv`, **measured once, after the rules were final** | 42 of 142 (0.296) | 104 of 142 (0.732) | 6 of 125 | 4 of 125 |
+
+    The locked figure is weak evidence: the set was written by the author of
+    the rules, on the same day, in the same families, so it says the rules
+    are not fitted to the wording of the tuning rows and nothing about
+    Turkish attacks nobody here thought of. No rule is to be changed by
+    looking at the locked file; it is measured once per release
+    (`docs/benchmarks/README.md`). Requests for bulk data are caught in 0 of
+    12 locked rows and 6 of 20 tuning rows, and instructions cut into pieces
+    without quotation marks are mostly not read. The benign rows still
+    flagged are ones that quote an attack to ask about it, the English word
+    "jailbreak" used of a phone, and "disregard" in a question about
+    translating it.
+  - **An existing deployment will notice:** Turkish requests that passed are
+    now blocked under the shipped policy (the rows above). A request to send
+    all of some personal or secret data to a URL or an e-mail address is a
+    new injection category, `data_exfiltration` (severity medium), which the
+    shipped `injection` rule blocks; a rule that lists `types` has to name it
+    to act on it. Five kinds of text that were blocked now pass: "sen artık
+    …" followed within thirty characters by a word that merely contains "ol"
+    ("kontrol", "olur"), a Turkish
+    phrase followed by a non-command ending ("güvenlik kurallarını atlamaya
+    çalışmamalıdır", "kuralları görmezden gelerek …"), "tüm/önceki … talimat
+    …" where the target follows a word such as "ödeme" or the verb is not a
+    command ("önceki bütçe talimatının iptal edildiğini bildirdi"), "hiçbir
+    kuralı olmayan" said of something that is not a model, and "gizli
+    talimat" as a bare term. `ScannerVersion` is 1.8.0, so answers cached by
+    an older build are not served.
+  - `prompts.csv` gains one caught attack (220 of 243, the floor) and
+    `holdout.csv` is unchanged (78 of 78, no benign prompt flagged in
+    either). The fine-tune of the classifier that S6-2 also asks for has not
+    been run: `classifier/finetune/` holds the script and what it needs
+    downloaded. What is public about Turkish prompt injection is in
+    `docs/research/turkish-prompt-injection.md`.
 
 ### Tests
 - Stress suite: a sixth category, **request structure** — 19 attacks that keep

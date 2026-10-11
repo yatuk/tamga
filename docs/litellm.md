@@ -63,6 +63,16 @@ place.
 - `texts` has one text for each one LiteLLM sent, in the same order. Values
   are masked with the markers the proxy uses, `[email_REDACTED]`,
   `[tc_kimlik_REDACTED]`.
+- `ROUTE` is a `BLOCKED`. On the proxy path a request under a ROUTE rule is
+  answered by an internal model of your own and never reaches the provider
+  ([Routing to an internal model](operations.md#routing-to-an-internal-model)).
+  The guardrail contract has no action that sends a request somewhere else,
+  and LiteLLM would send a request Tamga lets through to its own provider,
+  so over the bridge such a request is stopped. The `blocked_reason` says
+  that routing is not possible over the LiteLLM bridge, `X-Tamga-Action` is
+  `BLOCK`, `X-Tamga-Route-Fallback` is `block:bridge`, and the recorded
+  request carries the pool it was meant for. To have such requests answered,
+  send them through the proxy path instead, or route in LiteLLM itself.
 - A `REDACT` or `STRIP` that cannot be carried out is a `BLOCKED`, as on the
   proxy path. The reason then says so.
 - The reply has no field for findings that do not change the outcome, so a
