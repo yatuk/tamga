@@ -167,6 +167,16 @@ guardrail call.
   very large tool definitions can reach the limit with little text.
 - Scans share the scan API's slots; when all are in use the answer is 503
   with `tamga_scan_busy`.
+- The scan of an answer, all its texts and tool calls together, may take up
+  to 10 seconds; one that is not done by then is a 503 with
+  `tamga_scan_unavailable`. The size limit above is what keeps a scan well
+  inside that: the scanners read about 250 KB a second on one core.
+  `output_rules.scan_window_ms` does not apply here, unless it is set longer
+  than 10 seconds, and then it is the bound. That window is how long Tamga's
+  own proxy path holds a buffered answer back from a waiting client; over
+  the bridge LiteLLM is already waiting for the verdict. The scanner
+  pipeline's own timeout (`TAMGA_SCANNER_PIPELINE_TIMEOUT_MS`) applies to an
+  answer as it does to a request.
 
 ## What is recorded
 

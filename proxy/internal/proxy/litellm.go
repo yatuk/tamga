@@ -61,6 +61,21 @@ const litellmMaxTexts = 256
 // most tool calls.
 const litellmMaxTools = 256
 
+// litellmAnswerBudget is how long the scan of one call's answer may take, all
+// its texts and tool calls together. It is a bound, not a target.
+//
+// output_rules.scan_window_ms is not it. On the proxy path that window is
+// how long a buffered answer may be held back from a client that is waiting
+// for it, and output_rules.fail_open says what becomes of the answer when
+// the window runs out. Here LiteLLM already has the answer and is waiting
+// for a verdict, a call without one is refused, and there is no fail_open:
+// 200 ms refused every answer the scanners needed longer for, which a long
+// one is. What bounds the work here is the size limit (scanMaxBodyBytes of
+// text in a call); the budget is several times what the scanners need for
+// that much, so that it ends a scan that is stuck and not one that is long.
+// A scan that reaches it is still answered with a 503.
+const litellmAnswerBudget = 10 * time.Second
+
 // litellmMaxModel is how much of the model's name is kept.
 const litellmMaxModel = 128
 
@@ -135,6 +150,8 @@ type litellmHandler struct {
 	scan *scanHandler
 	// fallback limits callers when the policy has no rate limit.
 	fallback *ratelimit.Limiter
+	// answerBudget bounds the scan of one answer: litellmAnswerBudget.
+	answerBudget time.Duration
 }
 
 // NewScanHandlers returns the handler for POST /api/v1/scan and the one for
@@ -145,8 +162,9 @@ func NewScanHandlers(cfg HandlerConfig, opts ScanOptions) (scan, litellm http.Ha
 	s := NewScanHandler(cfg, opts).(*scanHandler)
 	limit := &policy.Policy{RateLimit: &policy.RateLimit{MaxRequestsPerMinute: litellmDefaultRPM}}
 	return s, &litellmHandler{
-		scan:     s,
-		fallback: ratelimit.NewLimiter(func() *policy.Policy { return limit }),
+		scan:         s,
+		fallback:     ratelimit.NewLimiter(func() *policy.Policy { return limit }),
+		answerBudget: litellmAnswerBudget,
 	}
 }
 
@@ -498,6 +516,10 @@ func (b *litellmHandler) record(ctx context.Context, call *scanCall, requestID s
 // every answer is a PASS here too. Where the proxy lets output_rules.fail_open
 // decide about an answer whose scan was cut short, this gives no verdict:
 // whether to fail open is LiteLLM's setting on this side of the bridge.
+//
+// The whole answer is scanned within one budget (see litellmAnswerBudget),
+// not each part within output_rules.scan_window_ms. A window set longer than
+// the budget is kept: whoever set it meant to wait that long.
 func (b *litellmHandler) evaluateOutput(ctx context.Context, call *scanCall, pol *policy.Policy, texts []string, present []int, toolCalls []json.RawMessage) (ev scanEval, outcome string) {
 	h := b.scan
 	ev.action = policy.ActionPass
@@ -505,10 +527,12 @@ func (b *litellmHandler) evaluateOutput(ctx context.Context, call *scanCall, pol
 	if pol.OutputRules == nil || !pol.OutputRules.Enabled {
 		return ev, ""
 	}
-	winMs := pol.OutputRules.ScanWindowMs
-	if winMs <= 0 {
-		winMs = 200
+	budget := b.answerBudget
+	if win := time.Duration(pol.OutputRules.ScanWindowMs) * time.Millisecond; win > budget {
+		budget = win
 	}
+	ctx, cancel := context.WithTimeout(ctx, budget)
+	defer cancel()
 	pipelineCfg, _ := h.pipeline()
 	registry := h.cfg.Registry.Without(scanExcluded...)
 	provider := ProviderFor(scanProvider)
@@ -548,7 +572,8 @@ func (b *litellmHandler) evaluateOutput(ctx context.Context, call *scanCall, pol
 		} else if got, ok := answerText(raw); !ok || got != texts[i] {
 			return ev, "segment_mismatch"
 		}
-		res, err := scanResponseBody(ctx, registry, h.cfg.OutputOnlyRegistry, pol, provider, raw, winMs, pipelineCfg)
+		// No window of its own: ctx carries the budget of the whole answer.
+		res, err := scanResponseBody(ctx, registry, h.cfg.OutputOnlyRegistry, pol, provider, raw, 0, pipelineCfg)
 		if res.incomplete != "" {
 			// It was to be masked and the scan behind the masking was cut
 			// short. The proxy withholds such an answer with a 503.
