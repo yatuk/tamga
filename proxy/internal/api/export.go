@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/yatuk/tamga/internal/events"
+	"github.com/yatuk/tamga/internal/providers"
 	"github.com/yatuk/tamga/internal/store"
 )
 
@@ -84,8 +85,7 @@ func (cfg Config) handleEventsExport(w http.ResponseWriter, r *http.Request) {
 			}
 			if provider != "" && provider != "all" {
 				if provider == "shadow" {
-					p := strings.ToLower(e.Provider)
-					if p == "" || enterpriseProviders[p] {
+					if !providers.IsShadow(e.Provider) {
 						continue
 					}
 				} else if !strings.EqualFold(e.Provider, provider) {
@@ -142,14 +142,4 @@ func csvSafe(v string) string {
 		return "'" + v
 	}
 	return v
-}
-
-// enterpriseProviders mirrors the dashboard "shadow AI" heuristic.
-var enterpriseProviders = map[string]bool{
-	"openai":        true,
-	"anthropic":     true,
-	"google":        true,
-	"azure":         true,
-	"azure_openai":  true,
-	"google_vertex": true,
 }

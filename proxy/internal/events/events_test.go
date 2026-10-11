@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"github.com/yatuk/tamga/internal/providers"
 	"github.com/yatuk/tamga/internal/scanner"
 )
 
@@ -880,5 +881,29 @@ func TestMatchEventSearch_SeveralActions(t *testing.T) {
 	}
 	if !match(passed, "all") || !match(passed, "") {
 		t.Fatal(`"all" and an empty filter should match everything`)
+	}
+}
+
+// The filter over the events in memory is providers.IsShadow, whatever the
+// case of the recorded provider: it used to compare case-sensitively, so
+// "OpenAI" was shadow here and not in the database.
+func TestMatchEventSearch_ShadowIsTheProvidersDefinition(t *testing.T) {
+	now := time.Now()
+	for _, p := range []string{
+		"deepseek", "DeepSeek", " groq ", "openai2", "azure-openai",
+		"openai", "OpenAI", " anthropic ", "google", "azure", "azure_openai", "google_vertex",
+		"litellm", "LiteLLM", "", "  ",
+	} {
+		e := Event{Provider: p, Timestamp: now}
+		want := providers.IsShadow(p)
+		for _, viaKeyword := range []bool{false, true} {
+			provider := ""
+			if viaKeyword {
+				provider = "shadow"
+			}
+			if got := MatchEventSearch(e, "", provider, !viaKeyword, "", "", "", "", "", time.Time{}, time.Time{}); got != want {
+				t.Errorf("provider %q (keyword %v): shadow = %v, want %v", p, viaKeyword, got, want)
+			}
+		}
 	}
 }

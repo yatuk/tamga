@@ -194,7 +194,7 @@ func MatchEventSearch(e Event, action, provider string, shadowOnly bool, finding
 	}
 	p := strings.ToLower(strings.TrimSpace(provider))
 	if shadowOnly || p == "shadow" {
-		if e.Provider == "" || providers.IsEnterprise(e.Provider) || e.Provider == providers.LiteLLMBridge {
+		if !providers.IsShadow(e.Provider) {
 			return false
 		}
 	} else if p != "" && p != "all" {

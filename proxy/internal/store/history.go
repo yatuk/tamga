@@ -450,6 +450,17 @@ LIMIT $%d`, where, len(args)+1), append(args, max+1)...)
 	return out, false, nil
 }
 
+// shadowCondition is the filter for shadow AI on request_logs, with the
+// argument it takes at place arg. It is providers.IsShadow in SQL: a
+// provider is named (a row with none, NULL or empty, is not shadow) and,
+// without case or surrounding space, is not in providers.NotShadow. The
+// list is an argument, so there is one list and no name is ever part of the
+// statement.
+func shadowCondition(arg int) (string, []string) {
+	return fmt.Sprintf(`COALESCE(btrim(lower(provider)), '') <> '' AND NOT (btrim(lower(provider)) = ANY($%d::text[]))`, arg),
+		providers.NotShadow()
+}
+
 // eventSearchWhere builds the WHERE clause and its arguments for a search of
 // one organisation's request_logs. The window defaults to the last 7 days.
 func eventSearchWhere(org uuid.UUID, p EventSearchParams) (string, []interface{}) {
@@ -476,7 +487,9 @@ func eventSearchWhere(org uuid.UUID, p EventSearchParams) (string, []interface{}
 	}
 	prov := strings.ToLower(strings.TrimSpace(p.Provider))
 	if p.ShadowOnly || prov == "shadow" {
-		where.WriteString(` AND lower(provider) NOT IN ('openai','anthropic','google','azure','azure_openai','google_vertex','` + providers.LiteLLMBridge + `')`)
+		cond, known := shadowCondition(next())
+		where.WriteString(" AND " + cond)
+		args = append(args, known)
 	} else if prov != "" && prov != "all" {
 		i := next()
 		fmt.Fprintf(&where, " AND lower(provider) = $%d", i)
