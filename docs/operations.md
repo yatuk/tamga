@@ -797,13 +797,48 @@ may hold 0 for the times; averages and percentiles leave those out.
 #### Hashed findings
 
 A finding is stored with its match as the scanner let it out: for PII the
-masked value, its first and last two characters (`10*******46`), never the
-whole value. With `data.hash_findings: true` the match is replaced by a
+masked value, its first and last two characters (`10*******46`; for a card
+number the first six and last four digits), never the whole value. With
+`data.hash_findings: true` the match is replaced by a
 keyed hash, `hmac-sha256:` and 64 hex characters: HMAC-SHA-256 of that
 masked match. The same value gives the same hash, so repeated findings can
 still be told to be of one value and a person's rows can still be found;
 without the key the hash cannot be computed, and so cannot be undone by
 hashing every possible value.
+
+The option is applied once, when a request's event is published, so it
+holds everywhere a finding is kept or sent, not only in the table:
+
+| Where | With the option on |
+|---|---|
+| `request_logs` (`findings`, `output_findings`), by the bus or by NATS | the hash |
+| Events held in memory: the event list, the event detail and the export when there is no database or it cannot be reached | the hash |
+| The live feed (`/api/v1/live/events`) | the hash |
+| The NATS envelope (`findings`, `output_findings`; kept by the stream for seven days) | the hash, and `findings_hashed: true` in the payload |
+| What the operator-state scanner hands the analyzer | the hash |
+| Alerts, webhook payloads, CEF and LEEF lines, the process log | no match, with the option on or off: type, category and severity only |
+
+The console shows the hash where it showed the masked value, and a search
+of events by a masked value finds nothing. The request is masked or
+stripped before its event exists, from the positions in the text, so
+`REDACT`, `STRIP` and the vault are not affected. The answer to
+`POST /api/v1/policies/simulate` shows the masked match of the text you
+sent it; that answer is not stored. Envelopes that were already in the
+NATS stream when the option was turned on, or when the proxy was upgraded,
+are not rewritten: they hold the masked match until the stream drops them
+after seven days.
+
+A finding's `metadata` is reduced at the same time to the keys that say how
+the finding was made:
+
+| Kept | Hashed with the same key | Dropped |
+|---|---|---|
+| `detected_via`, `denylist_match`, `card_brand`, `card_type`, `variants`, `spans_segments`, `layer`, `kind`, `count`, `blocks`, `chars`, `signal`, `threshold`, `current_state`, `required_state`, `note_state`, `rule`, `action_on_fail`, `last_verified`, `ttl_seconds`, `needs_deep_analysis` | `operator_id` (dropped when there is no key) | `bin`, `bank_name`, `country`, `denylist_reason`, `decision_id`, `note_id`, `message`, `detail`, and any key that is not in the first two columns |
+
+`bin` is the first six or eight digits of a card number, and `bank_name`
+and `country` follow from it; `denylist_reason` is different for every
+known test number; `decision_id` and `note_id` are the match again. With
+the option off all of them are stored as before.
 
 The key is `TAMGA_FINDING_HASH_KEY`: standard base64 of 32 random bytes or
 more (`openssl rand -base64 32`). When it is not set a key is derived from
@@ -816,9 +851,11 @@ rows hashed under the old key are no longer found by a national id. Set
 
 With `data.hash_findings` on and neither variable set, or with one that is
 not usable, no hash is stored: the match is written as
-`[not stored: no finding hash key]`, the finding keeps its type, category
+`[not stored: no finding hash key]`, in the table and in every other place
+of the list above, the finding keeps its type, category
 and severity, and such rows cannot be found by a national id. The proxy says
-so at startup and, at error level, the first time it happens.
+so at startup and, at error level, the first time it happens: once for the
+process, not once for each place.
 
 Rows written before v0.9.0 hold an unkeyed `sha256:` hash of the masked
 match. Whoever can read the table can recover the masked match from it by
@@ -848,7 +885,9 @@ requests of one selector, the first that is given of:
 - `user_id` or `email`: compared with the user identifier stored on the
   request, that is, with the sender.
 - `tckn_hash`: the 64 hex characters of a stored hash, as copied from a row
-  or an export. It finds the rows whose findings hold exactly that hash.
+  or an export, without its `hmac-sha256:` or `sha256:` prefix. It finds
+  the rows with a finding, of the request or of the response, whose match
+  is exactly that hash under either prefix. Anything else is refused.
 - `tckn`: a Turkish national id, as the person gave it (11 digits; one that
   fails its checksum is refused). The proxy computes the forms the log may
   hold it in (the masked match, its keyed hash, and the unkeyed hash of

@@ -913,9 +913,12 @@ export interface paths {
          *     not written to the audit log and not repeated in the answer.
          *
          *     `tckn_hash` is a stored hash as it is: the 64 lower-case hex
-         *     characters after the prefix, copied from a row. Anything else is
-         *     400. Stored hashes are keyed since v0.9.0, so a caller cannot
-         *     compute one; send `tckn`.
+         *     characters after the prefix, copied from a row. It finds the rows
+         *     with a finding, of the request or of the response, whose match is
+         *     exactly that hash under either prefix (`hmac-sha256:` or the
+         *     `sha256:` of earlier versions). Anything else is 400. Stored
+         *     hashes are keyed since v0.9.0, so a caller cannot compute one;
+         *     send `tckn`.
          *
          *     Every call that names a subject is written to the audit log as
          *     `privacy.subject_access`, with the verified actor and, in `detail`,
@@ -5012,6 +5015,7 @@ export interface components {
         SecurityFinding: {
             type?: string;
             severity?: string;
+            /** @description What the scanner let out of the matched text; for PII the masked value (`10*******46`). With `data.hash_findings` on it is a keyed hash of that (`hmac-sha256:` and 64 hex characters), or `[not stored: no finding hash key]` when the deployment has no hash key, wherever the finding is read from (the request log, the events held in memory, the export and the live feed). */
             match?: string;
             category?: string;
             /** @description Offset in the text of the segment at `path`; in the raw body when `path` is empty. */
@@ -5023,6 +5027,7 @@ export interface components {
             path?: string;
             confidence?: number;
             action_taken?: string;
+            /** @description What the scanner adds about the finding. With `data.hash_findings` on, only the keys that describe the detection are kept (such as `detected_via`, `denylist_match`, `card_brand`); those that describe the value (`bin`, `bank_name`, `country`, `denylist_reason` and others) are left out, and `operator_id` is a keyed hash. */
             metadata?: {
                 [key: string]: string;
             };
