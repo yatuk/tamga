@@ -1,9 +1,9 @@
 // Package scanner — content moderation scanner (toxicity, refusal, banned code/topics).
 //
-// Ported from the Python analyzer's heuristic fallback in toxicity.py.
-// These are pure regex patterns that run inline in the Go proxy at <1ms
-// latency — no ML/LLM required. The Python analyzer retains the LLM Guard
-// ML-based classifiers for cases that genuinely need semantic reasoning.
+// Ported from the heuristic fallback the Python analyzer once had. These are
+// pure regex patterns that run inline in the Go proxy at <1ms latency — no
+// ML/LLM required. The analyzer has no classifier for these any more: this
+// scanner is the only one.
 package scanner
 
 import (

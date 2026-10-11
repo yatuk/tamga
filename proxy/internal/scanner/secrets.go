@@ -414,7 +414,7 @@ func (s *SecretScanner) Scan(ctx context.Context, content []byte) ([]Finding, er
 	// entities. A match in one of them is put back on the bytes it was read
 	// from. Folded keeps the case, which the patterns for vendor keys need;
 	// Canonical is the lower-cased reading the generic patterns also match.
-	views := normalize.ApplyViews(text, normalize.Default())
+	views := readingsFor(ctx, text, normalize.Default())
 	if views.Folded.Text != text {
 		if !scanSecretView(st, &findings, views.Folded, viaNormalized) {
 			return findings, st.err

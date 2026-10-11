@@ -1,0 +1,68 @@
+# public-sector: a starting point for a public body, a municipality or a
+# university that routes model traffic through the proxy.
+#
+# This is a starting point, not legal advice, and using it does not make a
+# deployment compliant with anything. It supports holding back citizens'
+# identifiers and documents that carry a classification marking; it does
+# not know what a document is about.
+#
+# What it follows (docs/research/turkish-dlp-landscape.md):
+#   - "Data types": the identifiers DLP vendors document for Türkiye, which
+#     in a public body are citizens' data (national id, passport, phone,
+#     plate), and Law 6698.
+#   - "Policy wording": the published university rules that were read
+#     forbid personal data, unpublished research data, exam questions and
+#     confidential documents in public AI tools (Ankara, Sakarya, Sinop
+#     universities, ÇOMÜ YDYO draft). No published guidance of a ministry or
+#     of the Dijital Dönüşüm Ofisi on staff use of generative AI was found.
+#
+# What it does: identifiers of a person are blocked, contact details and
+# vehicle plates are masked, a text that carries one of two classification
+# markings is blocked. Not covered: exam questions, research data, health
+# and other special categories written as prose.
+version: "1.0"
+name: "public-sector"
+
+rules:
+  pii:
+    action: BLOCK
+    sensitivity: medium
+    types: [tc_kimlik, credit_card, passport_tr]
+
+  pii_detection:
+    action: REDACT
+    sensitivity: medium
+    types: [email, phone_tr, phone, iban, vkn, mersis_no, imei, license_plate_tr, date_of_birth, ip_public, ip_private]
+
+  secret_detection:
+    action: BLOCK
+    sensitivity: low
+
+  injection:
+    action: BLOCK
+    sensitivity: medium
+
+# A document that says in capitals that it is classified. The two markings
+# are written here from common practice; the regulation that defines the
+# markings was not read for this template. Add the markings and the file
+# number formats your institution uses.
+custom_entities:
+  - name: "gizlilik_derecesi"
+    pattern: "ÇOK GİZLİ|HİZMETE ÖZEL"
+    description: "Gizlilik derecesi ibaresi taşıyan belge"
+    severity: "high"
+    action: BLOCK
+    confidence: 0.85
+
+output_rules:
+  enabled: true
+  block_on: [tc_kimlik, credit_card]
+  redact_on: [email, phone_tr, iban, passport_tr, license_plate_tr]
+
+data:
+  hash_findings: false
+
+rate_limit:
+  max_requests_per_minute: 60
+  max_tokens_per_day: 500000
+  action_on_exceed: BLOCK

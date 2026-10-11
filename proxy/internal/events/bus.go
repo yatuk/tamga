@@ -74,6 +74,11 @@ type Event struct {
 	// of their match (data.hash_findings was on when it was published, see
 	// Bus.SetPrepare). Whoever stores or sends them takes them as they are.
 	FindingsHashed bool
+	// RoutePool is the internal pool a ROUTE verdict named for the request.
+	// With the action ROUTE the request was answered there. With the action
+	// BLOCK the pool could not take it and the request was stopped: it is
+	// never sent to the provider instead.
+	RoutePool string
 }
 
 const defaultChanCap = 1000

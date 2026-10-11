@@ -181,6 +181,6 @@ func TestScanCache_OnlyLongTextAndPureScanners(t *testing.T) {
 		t.Fatal("a short message went through the cache")
 	}
 	if _, pure := pureScannerName(NewCustomScanner(func() []CustomEntitySpec { return nil })); pure {
-		t.Fatal("the custom scanner depends on patterns edited at runtime and must not be cached")
+		t.Fatal("the custom scanner depends on patterns edited at runtime: it is cached under their fingerprint, never as a pure scanner")
 	}
 }

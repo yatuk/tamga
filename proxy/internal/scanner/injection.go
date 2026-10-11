@@ -201,11 +201,23 @@ func (s *InjectionScanner) Scan(ctx context.Context, content []byte) ([]Finding,
 
 	if dfa := LoadDFA(); dfa != nil {
 		matches := dfa.ScanBytes(content)
+		fromContent := len(matches)
 		if !st.stopped() {
 			matches = append(matches, dfa.ScanBytes(normBytes)...)
 		}
-		for _, m := range matches {
+		for i, m := range matches {
 			if m.Type != "injection" {
+				continue
+			}
+			// A phrase is matched as a substring. One that ends in a Turkish
+			// verb is also the start of that verb's other forms ("…atla" in
+			// "…atlamaya çalışmamalıdır"), so it counts only where the verb
+			// is still a command (injection_turkish.go).
+			source := text
+			if i >= fromContent {
+				source = normText
+			}
+			if !turkishVerbIsCommand(source, m.End, m.Pattern) {
 				continue
 			}
 			// Recover base confidence from local definition list by phrase+category.
@@ -226,7 +238,7 @@ func (s *InjectionScanner) Scan(ctx context.Context, content []byte) ([]Finding,
 			if st.stopped() {
 				break
 			}
-			if start, end, ok := findFoldTurkish(text, def.phrase); ok {
+			if start, end, ok := findFoldTurkish(text, def.phrase); ok && turkishVerbIsCommand(text, end, def.phrase) {
 				rawMatches = append(rawMatches, struct {
 					start, end int
 					def        injectionPatternDef
@@ -244,7 +256,7 @@ func (s *InjectionScanner) Scan(ctx context.Context, content []byte) ([]Finding,
 		if st.stopped() {
 			break
 		}
-		if start, end, ok := findFoldTurkish(text, def.phrase); ok {
+		if start, end, ok := findFoldTurkish(text, def.phrase); ok && turkishVerbIsCommand(text, end, def.phrase) {
 			already := false
 			for i := range rawMatches {
 				if rawMatches[i].start == start && rawMatches[i].end == end && rawMatches[i].def.category == def.category {

@@ -310,6 +310,15 @@ func (b *litellmHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		ev, outcome = h.evaluateInput(r.Context(), call, requestID, who, pol, in)
+		// The guardrail contract can let a request through, change its
+		// texts or block it. It has no way to send a request somewhere
+		// else, and LiteLLM would send it on to its own provider: so a
+		// request the policy routes to an internal model is blocked here.
+		if outcome == "" && ev.action == policy.ActionRoute {
+			ev.action = policy.ActionBlock
+			ev.fallback = litellmRouteFallback
+			ev.headers = append(ev.headers, [2]string{"X-Tamga-Route-Fallback", "block:bridge"})
+		}
 		// A finding names its place in what LiteLLM sent, not in the
 		// request the scan was run on.
 		for i := range ev.findings {
@@ -362,6 +371,10 @@ func (b *litellmHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	reply(ev, out)
 }
+
+// litellmRouteFallback is the reason given for a request the policy routes
+// to an internal model, which the bridge can only block.
+const litellmRouteFallback = "the policy routes this request to an internal model, and routing is not possible over the LiteLLM bridge"
 
 // litellmObjects returns the entries of a list LiteLLM sent, without the
 // nulls: a tool or a tool call that is null is none.
@@ -461,6 +474,8 @@ func (b *litellmHandler) record(ctx context.Context, call *scanCall, requestID s
 		OutputRisk:     none,
 		PolicyName:     pol.Name,
 		PolicyVersion:  pol.Version,
+		// Set when the rules said ROUTE and the bridge blocked instead.
+		RoutePool: ev.route,
 	}
 	if ev.action == policy.ActionBlock {
 		e.EventType = "request_blocked"

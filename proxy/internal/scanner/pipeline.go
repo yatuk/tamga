@@ -143,6 +143,12 @@ func NewPipelineWithConfig(entries []ScannerEntry, cfg PipelineConfig) *Pipeline
 // A panicking scanner in async/adaptive modes is recovered; in sync mode panics
 // propagate (they indicate a bug that needs fixing).
 func (p *Pipeline) Scan(ctx context.Context, content []byte) ([]Finding, error) {
+	// What one scanner works out about the text and another needs (its
+	// normalised readings, its digest for the scan cache) is worked out once
+	// for this run. One scanner has nobody to share with.
+	if len(p.fast)+len(p.slow) > 1 {
+		ctx = withScanShared(ctx, content)
+	}
 	switch p.cfg.Mode {
 	case ModeSync:
 		return p.scanSync(ctx, content)

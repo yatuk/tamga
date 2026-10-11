@@ -45,13 +45,17 @@ func NewCustomScanner(getSpecs func() []CustomEntitySpec) *CustomScanner {
 
 func (s *CustomScanner) Name() string { return "custom" }
 
+// fingerprintSpecs names a set of custom entities by what the scanner makes
+// of them: name, pattern, severity and confidence, each written so that no
+// two different sets read the same. The order they are listed in is left
+// out. It is "" for no entities.
 func fingerprintSpecs(specs []CustomEntitySpec) string {
 	if len(specs) == 0 {
 		return ""
 	}
 	rows := make([]string, 0, len(specs))
 	for _, sp := range specs {
-		rows = append(rows, sp.Name+"\x00"+sp.Pattern+"\x00"+sp.Severity+"\x00"+strconv.FormatFloat(sp.Confidence, 'g', -1, 64))
+		rows = append(rows, strconv.Quote(sp.Name)+" "+strconv.Quote(sp.Pattern)+" "+strconv.Quote(sp.Severity)+" "+strconv.FormatFloat(sp.Confidence, 'g', -1, 64))
 	}
 	sort.Strings(rows)
 	h := sha256.Sum256([]byte(strings.Join(rows, "\n")))
@@ -126,23 +130,50 @@ func (s *CustomScanner) Fingerprint() string {
 	return s.fp
 }
 
+// snapshot returns the compiled patterns together with the fingerprint of
+// the entities they were compiled from, read under one lock: the two always
+// belong to each other.
+func (s *CustomScanner) snapshot() (string, []*customCompiled) {
+	s.mu.RLock()
+	fp, compiled := s.fp, s.compiled
+	s.mu.RUnlock()
+
+	// Lazy-init on first scan (tests and callers that don't call Refresh).
+	if compiled == nil {
+		s.mu.Lock()
+		if s.compiled == nil {
+			s.refreshLocked()
+		}
+		fp, compiled = s.fp, s.compiled
+		s.mu.Unlock()
+	}
+	return fp, compiled
+}
+
+// patternSnapshot is what the scan cache keys this scanner's findings on
+// (see patternSetScanner).
+func (s *CustomScanner) patternSnapshot() (string, func(context.Context, []byte) ([]Finding, error)) {
+	fp, compiled := s.snapshot()
+	if len(compiled) == 0 {
+		return "", nil
+	}
+	return fp, func(ctx context.Context, content []byte) ([]Finding, error) {
+		return s.scanWith(ctx, compiled, content)
+	}
+}
+
 // Scan searches content for every custom pattern. It stops when the context
 // ends, when the time budget is spent or at MaxFindingsPerScan findings, and
 // then returns what it found together with an ErrScanDegraded error: the
 // text was not searched completely, and the caller must not read the result
 // as clean.
 func (s *CustomScanner) Scan(ctx context.Context, content []byte) ([]Finding, error) {
-	s.mu.RLock()
-	compiled := s.compiled
-	s.mu.RUnlock()
+	_, compiled := s.snapshot()
+	return s.scanWith(ctx, compiled, content)
+}
 
-	// Lazy-init on first scan (tests and callers that don't call Refresh).
-	if compiled == nil {
-		s.Refresh()
-		s.mu.RLock()
-		compiled = s.compiled
-		s.mu.RUnlock()
-	}
+// scanWith is Scan with the patterns given.
+func (s *CustomScanner) scanWith(ctx context.Context, compiled []*customCompiled, content []byte) ([]Finding, error) {
 	if len(compiled) == 0 {
 		return nil, nil
 	}
@@ -194,7 +225,7 @@ func (s *CustomScanner) Scan(ctx context.Context, content []byte) ([]Finding, er
 	// The same patterns over the text read for what its characters show,
 	// so that an entity in fullwidth digits or split by a zero-width space
 	// is found, and where (see patternReadings).
-	for _, view := range patternReadings(text) {
+	for _, view := range patternReadings(ctx, text) {
 		if err := scanView(view, viaNormalized); err != nil {
 			return findings, err
 		}

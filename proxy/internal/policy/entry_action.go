@@ -21,7 +21,7 @@ import (
 //     "competitor_detection") applies as it does to any other finding, with
 //     its types (entry names), roles and sensitivity.
 //   - When both apply the stronger action wins, as it does between the two
-//     rule keys of a type: BLOCK > STRIP > REDACT > WARN > LOG > PASS. An
+//     rule keys of a type: BLOCK > ROUTE > STRIP > REDACT > WARN > LOG > PASS. An
 //     entry cannot be made weaker than a rule that covers it, and a rule
 //     cannot weaken an entry.
 //   - scan.default_action is for findings nothing was decided about. An
@@ -41,7 +41,7 @@ import (
 func parseEntryAction(s string) (Action, bool) {
 	a := Action(strings.ToUpper(strings.TrimSpace(s)))
 	switch a {
-	case ActionBlock, ActionStrip, ActionRedact, ActionWarn, ActionLog, ActionPass:
+	case ActionBlock, ActionRoute, ActionStrip, ActionRedact, ActionWarn, ActionLog, ActionPass:
 		return a, true
 	}
 	return ActionPass, false
@@ -89,7 +89,7 @@ func entryActionIssues(p *Policy) []ValidationIssue {
 		}
 		if _, ok := parseEntryAction(value); !ok {
 			issues = append(issues, boundError(field, "enum",
-				"unknown action %q (use BLOCK, STRIP, REDACT, WARN, LOG or PASS)", printableValue(value)))
+				"unknown action %q (use BLOCK, ROUTE, STRIP, REDACT, WARN, LOG or PASS)", printableValue(value)))
 		}
 	}
 	for i, ce := range p.CustomEntities {

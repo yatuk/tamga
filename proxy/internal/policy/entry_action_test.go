@@ -154,7 +154,7 @@ func TestEntryAction_UnknownValueIsRefused(t *testing.T) {
 		if len(issues.Issues) != 1 || issues.Issues[0].Field != tt.field || issues.Issues[0].Rule != "enum" {
 			t.Errorf("%s: issues = %+v", tt.field, issues.Issues)
 		}
-		if !strings.Contains(issues.Issues[0].Message, "BLOCK, STRIP, REDACT, WARN, LOG or PASS") {
+		if !strings.Contains(issues.Issues[0].Message, "BLOCK, ROUTE, STRIP, REDACT, WARN, LOG or PASS") {
 			t.Errorf("%s: the message does not name the actions: %s", tt.field, issues.Issues[0].Message)
 		}
 	}

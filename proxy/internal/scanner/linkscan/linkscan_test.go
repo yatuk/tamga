@@ -17,6 +17,9 @@ func TestPackageImportsNothingThatReachesTheNetwork(t *testing.T) {
 	allowed := map[string]bool{
 		"errors": true, "fmt": true, "sort": true, "strings": true,
 		"unicode": true, "unicode/utf8": true,
+		// Unicode tables and nothing else: it takes a letter and its accent
+		// apart, which is how a look-alike of a protected host is read.
+		"golang.org/x/text/unicode/norm": true,
 	}
 	files, err := filepath.Glob("*.go")
 	if err != nil || len(files) == 0 {

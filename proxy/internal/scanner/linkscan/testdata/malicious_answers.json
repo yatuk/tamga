@@ -123,5 +123,12 @@
     "name": "text shows another host name",
     "text": "Log in at [isbank.example.com.tr](https://isbank-giris.example.net/).",
     "category": "link_text_mismatch"
-  }
+  },
+  {"name": "dotless i in a source host", "text": "Clone it from https://gıthub.com/acme/tooling.git and run the installer.", "category": "link_homoglyph"},
+  {"name": "barred l in a payment name", "text": "[PayPal](https://www.paypał.com/signin) asks you to confirm the payment.", "category": "link_homoglyph"},
+  {"name": "accent in a bank name", "text": "Hesabınızı doğrulamak için https://www.akbánk.com/giris adresine gidin.", "category": "link_homoglyph"},
+  {"name": "punycode of a latin look-alike", "text": "The release is at [the repository](https://xn--gthub-n4a.com/acme/tooling/releases).", "category": "link_homoglyph"},
+  {"name": "dotted capital i", "text": "Sign in at https://gİthub.com/login to continue.", "category": "link_homoglyph"},
+  {"name": "stroked o under a login host", "text": "Your session expired: https://accounts.gøøgle.com/ServiceLogin?continue=mail", "category": "link_homoglyph"},
+  {"name": "accent in a registry name", "text": "Install the package from [npm](https://www.npmjś.com/package/left-pad).", "category": "link_homoglyph"}
 ]

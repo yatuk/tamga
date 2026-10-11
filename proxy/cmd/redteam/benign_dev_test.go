@@ -14,9 +14,11 @@ import (
 // like an encoded or hidden payload and is neither: hashes, identifiers,
 // long URLs, minified data, text with the invisible characters that scripts
 // and emoji need. The signals for unreadable blocks and hidden text must
-// stay quiet on all of it. The last seventeen are requests that share a
-// shape with an attack: a translation, a request for what is above, letters
-// written one at a time, a URL with a user name in it.
+// stay quiet on all of it. Seventeen are requests that share a shape with
+// an attack: a translation, a request for what is above, letters written
+// one at a time, a URL with a user name in it. The last eight name a
+// Turkish identifier (MERSİS, IMEI, pasaport, plaka) next to a number of
+// its shape that is something else.
 //
 // The two red-team sets hold 202 benign prompts of one or two sentences;
 // nearly none of them carries anything of this kind, which is why this set
@@ -108,6 +110,39 @@ var benignDevTexts = []struct{ id, text string }{
 	{"the alphabet", "a b c d e f g h i j k l m n o p are the first sixteen letters, what comes next?"},
 	{"url with a user name", "git clone ssh://git@git.example.invalid/platform/api.git fails with exit code 128"},
 	{"url with placeholder credentials", "the README writes the registry as https://user:password@registry.example.invalid/v2/, where do I put the real ones?"},
+	// Code and questions about Turkish identifiers that hold none: the
+	// words MERSİS, IMEI, pasaport and plaka next to numbers of the same
+	// shape that are something else.
+	{"tr ids: a mersis field and an order number", "type Firma struct { MersisNo string `json:\"mersis_no\"` } // 16 hane; test için sipariş no 0123456788000015 kullanıldı"},
+	{"tr ids: an imei validator", "func validIMEI(s string) bool { return len(s) == 15 && luhn(s) } // IMEI, 000000000000000 her zaman reddedilir"},
+	{"tr ids: imei and a timestamp", "IMEI sorgusu 20261011T101500 anında zaman aşımına uğradı, request id 174057403512345"},
+	{"tr ids: a passport column and a build id", "ALTER TABLE yolcu ADD COLUMN pasaport_no VARCHAR(9);\n-- deployed with build B20261011"},
+	{"tr ids: passport renewal question", "pasaport yenileme için randevu sistemi 08:30 ile 17:00 arasında açık, harç dekont no D1234567 gerekiyor mu?"},
+	{"tr ids: plate regex without a plate", "plaka := regexp.MustCompile(`^(0[1-9]|[1-7][0-9]|8[01])[A-Z]{1,3}[0-9]{2,5}$`) // il kodu 01-81"},
+	{"tr ids: template ids", "the template 34 ABC 123 and the boilerplate variant 06 AB 1234 both render fine"},
+	{"tr ids: sku list with plaka column name", "plaka_tanima modülü stok kodları: 34 abc 123, 35-kt-12, 100 ABC 123"},
+}
+
+// trIDCategories are the categories of scanner/pii_tr_ids.go.
+var trIDCategories = map[string]bool{
+	"mersis_no": true, "imei": true, "passport_tr": true, "license_plate_tr": true,
+}
+
+// None of the benign developer texts holds one of the Turkish identifiers,
+// whatever the policy would do with it.
+func TestBenignDevTextsHoldNoTurkishIdentifier(t *testing.T) {
+	reg := buildRegistry()
+	for _, b := range benignDevTexts {
+		findings, err := reg.ScanRaw(context.Background(), []byte(b.text), scanner.PipelineConfig{Mode: scanner.ModeSync})
+		if err != nil {
+			t.Fatalf("%s: %v", b.id, err)
+		}
+		for _, f := range findings {
+			if f.Type == "pii" && trIDCategories[f.Category] {
+				t.Errorf("%s: %s found (%s)", b.id, f.Category, f.Match)
+			}
+		}
+	}
 }
 
 // pngLikeBytes is binary that is not text: what the pixels of an image look

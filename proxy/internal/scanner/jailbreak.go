@@ -18,11 +18,12 @@ func NewJailbreakScanner() *JailbreakScanner { return &JailbreakScanner{} }
 func (s *JailbreakScanner) Name() string { return "jailbreak" }
 
 var (
-	manyShotRE     = regexp.MustCompile(`(?i)(user\s*:\s*.{3,}\n\s*assistant\s*:\s*.{3,}\n.*){3,}`)
-	systemClaimRE  = regexp.MustCompile(`(?i)(<\|im_start\|>|<\|system\|>|<system>|\[\[system\]\])`)
-	asciiArtRE     = regexp.MustCompile("(?m)^([ \t]*[^\\p{L}\\p{N}\\s]{3,}[ \t]*){2,}$")
-	ignoreRulesTR  = regexp.MustCompile(`(?i)(tüm|bütün).*(kural|talimat).*(unut|yoksay|görmezden)`)
-	roleTakeoverTR = regexp.MustCompile(`(?i)(sen artık|artık sen|bundan sonra sen).{0,30}(ol|olacaksın|rol yap)`)
+	manyShotRE    = regexp.MustCompile(`(?i)(user\s*:\s*.{3,}\n\s*assistant\s*:\s*.{3,}\n.*){3,}`)
+	systemClaimRE = regexp.MustCompile(`(?i)(<\|im_start\|>|<\|system\|>|<system>|\[\[system\]\])`)
+	asciiArtRE    = regexp.MustCompile("(?m)^([ \t]*[^\\p{L}\\p{N}\\s]{3,}[ \t]*){2,}$")
+	ignoreRulesTR = regexp.MustCompile(`(?i)(tüm|bütün).*(kural|talimat).*(unut|yoksay|görmezden)`)
+	// "ol" as a word: as a substring it is in "kontrol", "olur" and "yol".
+	roleTakeoverTR = regexp.MustCompile(`(?i)(sen artık|artık sen|bundan sonra sen).{0,30}(\bol\b|\bolacaksın|\brol yap)`)
 )
 
 // Scan returns findings for the jailbreak heuristics applied to both the raw
@@ -116,7 +117,10 @@ func (s *JailbreakScanner) Scan(ctx context.Context, content []byte) ([]Finding,
 	// Verb-on-target rules, on the normalised and decoded views. They read
 	// the view from before de-leeting, which rewrites digits as letters:
 	// several rules read numbers ("DAN 11.0", "first 50 tokens").
-	out = append(out, scanIntentRules(append(append(intentViews(norm.Plain, norm.Decoded), spelled...), leet...), st)...)
+	// What the text holds in quotation marks, joined, is one more view: an
+	// instruction handed over in parts (injection_turkish.go, quotedPieces).
+	views := append(append(intentViews(norm.Plain, norm.Decoded), spelled...), leet...)
+	out = append(out, scanIntentRules(append(views, quotedPieces(norm.Plain)...), st)...)
 	if st.stopped() {
 		return out, st.err
 	}

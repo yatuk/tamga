@@ -3,9 +3,12 @@ package linkscan
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"golang.org/x/text/unicode/norm"
 )
 
 // Limits on the lists an operator supplies.
@@ -15,6 +18,12 @@ const (
 	// the bound is on what a policy holds in memory.
 	MaxDenyHosts  = 5000
 	MaxAllowHosts = 1000
+	// MaxProtectedHosts bounds the names an operator adds to the protected
+	// ones. The check costs one map read per label of a host that is not
+	// ASCII, whatever the size of the list; a long list is a list nobody
+	// has looked at, and every name on it is a name some honest host can
+	// read as.
+	MaxProtectedHosts = 200
 )
 
 // Lists are the hosts an operator denies and the ones it vouches for.
@@ -23,8 +32,13 @@ const (
 // every host under it. "*.example.com" covers the hosts under example.com
 // and not example.com itself. An IP address is an entry for that address
 // alone.
+//
+// The third list is the protected names: hosts whose look-alikes are
+// reported (see protectedSet). It always holds the built-in names; the
+// operator's are added with Protect.
 type Lists struct {
 	deny, allow hostSet
+	protect     *protectedSet
 }
 
 type hostSet struct {
@@ -136,6 +150,238 @@ func (hs hostSet) has(host string) bool {
 
 func (l *Lists) denied(host string) bool  { return l != nil && l.deny.has(host) }
 func (l *Lists) allowed(host string) bool { return l != nil && l.allow.has(host) }
+
+// A host can be written in Latin letters only and still read as a name it
+// is not: gıthub.com with a dotless ı, paypał.com with a barred ł, gíthub.com
+// with an accent. No letter of it is of another script, so the mixed-script
+// check does not see it. Reporting every host with such a letter is not an
+// option: ı is an ordinary Turkish letter, and ışık.com.tr, münchen.de and
+// café.fr are honest names. What is reported is narrower: a host that,
+// with its Latin look-alikes folded to plain letters, is one of a short list
+// of protected names, or a host under one, while as written it is not.
+//
+// The same holds the other way round for a protected name that is itself
+// written with such letters (an operator's şekerbank.example.com.tr): the
+// plain sekerbank.example.com.tr reads as it and is reported.
+//
+// The check is by host, not by label: gıthub.com reads as github.com, and
+// gıthub.example does not read as any protected host. A look-alike under
+// another top-level domain is reported when that host is protected too.
+
+// builtinProtected are the names protected without any policy. The list is
+// short on purpose and was written by hand, from what is publicly reported;
+// nothing is downloaded. A name is on it when both hold:
+//
+//   - it is a host where a developer's or a customer's credentials are
+//     entered and that phishing imitates as a matter of record: the source
+//     hosts and package registries whose users have been phished through
+//     look-alike domains (github.com, gitlab.com, npmjs.com, pypi.org), the
+//     consumer brands that lead the published brand-phishing rankings year
+//     after year and include the two textbook homograph cases (google.com,
+//     microsoft.com, apple.com, amazon.com, paypal.com), and large Turkish
+//     retail banks (akbank.com, garantibbva.com.tr, ziraatbank.com.tr);
+//   - its own spelling is plain ASCII in the language of its users, so that
+//     an honest host does not come out of it by writing the name properly.
+//     That is why isbank.com.tr, yapikredi.com.tr, vakifbank.com.tr and
+//     turkiye.gov.tr are not here: İş, Yapı, Vakıf and Türkiye are how
+//     those names are spelled, and a host written that way is as likely the
+//     organisation's own as an imitation. An operator who wants them
+//     protected adds them in output_rules.links.protected_hosts.
+//
+// One honest collision is known: äpple is the Swedish word for apple, so
+// äpple.com reads as apple.com to this check as it does to a reader.
+var builtinProtected = []string{
+	"github.com", "gitlab.com", "npmjs.com", "pypi.org",
+	"google.com", "microsoft.com", "apple.com", "amazon.com", "paypal.com",
+	"akbank.com", "garantibbva.com.tr", "ziraatbank.com.tr",
+}
+
+// BuiltinProtectedHosts returns the names protected without any policy.
+func BuiltinProtectedHosts() []string {
+	return append([]string(nil), builtinProtected...)
+}
+
+// protectedSet holds the protected names by what they fold to.
+type protectedSet struct {
+	// byFold maps a folded name to the protected hosts that fold to it.
+	byFold map[string][]string
+	// plainOnly says every protected host is ASCII, so an ASCII host cannot
+	// be the look-alike of one.
+	plainOnly bool
+}
+
+var defaultProtected = mustProtectedSet(builtinProtected)
+
+func mustProtectedSet(hosts []string) *protectedSet {
+	ps, err := newProtectedSet(hosts)
+	if err != nil {
+		panic("linkscan: built-in protected host: " + err.Error())
+	}
+	return ps
+}
+
+func newProtectedSet(hosts []string) (*protectedSet, error) {
+	ps := &protectedSet{byFold: make(map[string][]string, len(hosts)), plainOnly: true}
+	for _, h := range hosts {
+		host, err := parseProtected(h)
+		if err != nil {
+			return nil, err
+		}
+		folded := foldLatin(host)
+		known := false
+		for _, have := range ps.byFold[folded] {
+			known = known || have == host
+		}
+		if known {
+			continue
+		}
+		ps.byFold[folded] = append(ps.byFold[folded], host)
+		sort.Strings(ps.byFold[folded])
+		if !isASCII(host) {
+			ps.plainOnly = false
+		}
+	}
+	return ps, nil
+}
+
+// CheckProtectedHost reports why an entry of the protected names is not
+// accepted. It has to be a registered name: a wildcard protects nothing a
+// plain entry does not, and an address or a single label has no look-alike.
+func CheckProtectedHost(entry string) error {
+	_, err := parseProtected(entry)
+	return err
+}
+
+func parseProtected(entry string) (string, error) {
+	host, wildcard, err := parseEntry(entry)
+	switch {
+	case err != nil:
+		return "", err
+	case wildcard:
+		return "", errors.New("a protected host is written without \"*.\": the hosts under it are covered")
+	case strings.HasPrefix(host, "[") || !strings.Contains(host, "."):
+		return "", errors.New("a protected host must be a domain name")
+	}
+	if ip, _ := ipHost(host); ip {
+		return "", errors.New("a protected host must be a domain name")
+	}
+	return writtenHost(host), nil
+}
+
+// Protect adds the operator's names to the built-in protected ones.
+func (l *Lists) Protect(hosts []string) error {
+	if len(hosts) == 0 {
+		return nil
+	}
+	ps, err := newProtectedSet(append(BuiltinProtectedHosts(), hosts...))
+	if err != nil {
+		return err
+	}
+	l.protect = ps
+	return nil
+}
+
+// imitated returns the protected host that written reads as and is not, or
+// "". written is a host as it stands in the address.
+func (l *Lists) imitated(written string) string {
+	ps := defaultProtected
+	if l != nil && l.protect != nil {
+		ps = l.protect
+	}
+	if ps.plainOnly && isASCII(written) && !strings.Contains(written, "xn--") && !strings.Contains(written, "XN--") {
+		return ""
+	}
+	host := writtenHost(written)
+	folded := foldLatin(host)
+	for rest := folded; ; {
+		if names := ps.byFold[rest]; len(names) > 0 {
+			own := false
+			for _, name := range names {
+				// The protected host itself, or a host under it.
+				own = own || host == name || strings.HasSuffix(host, "."+name)
+			}
+			if !own {
+				return names[0]
+			}
+		}
+		dot := strings.IndexByte(rest, '.')
+		if dot < 0 {
+			return ""
+		}
+		rest = rest[dot+1:]
+	}
+}
+
+func isASCII(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] >= utf8.RuneSelf {
+			return false
+		}
+	}
+	return true
+}
+
+// writtenHost returns a host as a browser reads it, for comparing two hosts:
+// punycode labels decoded and letters in lower case. A dotted capital İ is
+// left as it is; a browser makes "i" and a combining dot of it, which is
+// another host than the one with a plain i.
+func writtenHost(host string) string {
+	if isASCII(host) {
+		host = strings.ToLower(host)
+		if !strings.Contains(host, "xn--") {
+			return host
+		}
+	}
+	labels := strings.Split(host, ".")
+	for i, label := range labels {
+		if len(label) > 4 && strings.EqualFold(label[:4], "xn--") {
+			if decoded, ok := punycodeDecode(label[4:]); ok {
+				label = decoded
+			}
+		}
+		labels[i] = strings.Map(func(r rune) rune {
+			if r == '\u0130' {
+				return r
+			}
+			return unicode.ToLower(r)
+		}, label)
+	}
+	return strings.Join(labels, ".")
+}
+
+// latinAlike are the Latin letters that have no accent to take off and are
+// drawn like a plain letter all the same.
+var latinAlike = map[rune]rune{
+	'ı': 'i', 'ɨ': 'i', 'ɩ': 'i', 'ȷ': 'j',
+	'ł': 'l', 'ŀ': 'l', 'ƚ': 'l',
+	'đ': 'd', 'ɗ': 'd',
+	'ø': 'o', 'ɵ': 'o',
+	'ħ': 'h', 'ŧ': 't', 'ƶ': 'z', 'ĸ': 'k',
+	'ɡ': 'g', 'ɑ': 'a',
+}
+
+// foldLatin reads a host the way the eye does: accents and other marks are
+// dropped, and the letters of latinAlike become the plain letter they are
+// drawn like. Only Latin is folded; letters of other scripts stay, and are
+// the business of lookalikeHost.
+func foldLatin(host string) string {
+	if isASCII(host) {
+		return strings.ToLower(host)
+	}
+	var b strings.Builder
+	b.Grow(len(host))
+	for _, r := range norm.NFD.String(host) {
+		if unicode.Is(unicode.Mn, r) {
+			continue
+		}
+		r = unicode.ToLower(r)
+		if plain, ok := latinAlike[r]; ok {
+			r = plain
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
 
 // latinLookalikes are the Cyrillic and Greek letters that are drawn like a
 // Latin letter in most typefaces.

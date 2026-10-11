@@ -45,6 +45,8 @@ type RequestLog struct {
 	// PolicyName and PolicyVersion name the policy the request was decided with.
 	PolicyName    string
 	PolicyVersion string
+	// RoutePool is the internal pool a ROUTE verdict named (events.Event.RoutePool).
+	RoutePool string
 }
 
 // SecurityEvent is a row from request_logs for dashboard listing.

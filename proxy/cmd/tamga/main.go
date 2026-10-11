@@ -491,7 +491,7 @@ func main() {
 	registry.Register(scanner.NewJailbreakScanner())
 	registry.SetSpeed("jailbreak", scanner.SpeedSlow)
 	// Content moderation runs pure regex patterns inline — no external
-	// service call needed. Offloads Python toxicity.py heuristic fallback.
+	// service call needed. The analyzer has no scanner for it.
 	registry.Register(scanner.NewContentModerationScanner())
 	registry.SetSpeed("content_moderation", scanner.SpeedSlow)
 	if err := scanner.InitDFA(); err != nil {

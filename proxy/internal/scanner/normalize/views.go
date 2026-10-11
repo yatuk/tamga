@@ -545,6 +545,44 @@ func ApplyViews(s string, opts Options) Views {
 	if s == "" {
 		return Views{}
 	}
+	return NewStem(s, opts).Views(opts)
+}
+
+// Stem is the first part of ApplyViews for one text: everything up to the
+// folded reading. The scanners ask for readings under different options, but
+// the options they differ in (lower case, number words, leet, split words,
+// credentials) all apply after it, so a text that several scanners read is
+// taken this far once and each of them finishes it with Views.
+//
+// A Stem is not changed after NewStem and may be used from several
+// goroutines.
+type Stem struct {
+	src     string
+	opts    Options
+	rot     View
+	folded  View
+	decoded []string
+}
+
+// stemOptions keeps the options a Stem depends on.
+func stemOptions(o Options) Options {
+	return Options{
+		StripZeroWidth: o.StripZeroWidth,
+		NFKC:           o.NFKC,
+		TryBase64:      o.TryBase64,
+		TryHex:         o.TryHex,
+		TryROT13:       o.TryROT13,
+		FoldHomoglyphs: o.FoldHomoglyphs,
+		FoldDiacritics: o.FoldDiacritics,
+	}
+}
+
+// NewStem reads s as far as the options the scanners share take it.
+func NewStem(s string, opts Options) *Stem {
+	st := &Stem{src: s, opts: stemOptions(opts)}
+	if s == "" {
+		return st
+	}
 	pre := unescapeView(SourceView(s))
 	decoded := make([]string, 0, 2)
 	if opts.StripZeroWidth {
@@ -576,7 +614,24 @@ func ApplyViews(s string, opts Options) Views {
 	if opts.FoldDiacritics {
 		cur = foldDiacriticsView(cur)
 	}
-	folded := cur
+	st.rot, st.folded, st.decoded = rot, cur, decoded
+	return st
+}
+
+// Views finishes the readings under opts. It gives what ApplyViews gives for
+// the same text and options; options that differ from the Stem's in what the
+// Stem depends on are answered by reading the text again.
+func (st *Stem) Views(opts Options) Views {
+	if st.src == "" {
+		return Views{}
+	}
+	if stemOptions(opts) != st.opts {
+		return NewStem(st.src, opts).Views(opts)
+	}
+	cur, rot, folded := st.folded, st.rot, st.folded
+	// The rest appends to the list and rewrites its entries.
+	decoded := make([]string, len(st.decoded), len(st.decoded)+2)
+	copy(decoded, st.decoded)
 	if opts.NormalizeCredentials {
 		if cleaned := normalizeCredentials(cur.Text); cleaned != cur.Text {
 			decoded = append(decoded, cleaned)

@@ -28,6 +28,11 @@ var ErrEndpointRefused = errors.New("upstream: pool endpoint is not allowed")
 type Egress struct {
 	rules     *policy.UpstreamRules
 	transport *http.Transport
+	// public connects to public addresses only, whatever the operator
+	// listed. An internal pool that does not set allow_private_addresses
+	// uses it, so a listed name that resolves to a private address is
+	// refused for that pool when it is dialled.
+	public *http.Transport
 }
 
 // NewEgress builds the guarded transport for the given rules. Nil rules are
@@ -44,25 +49,32 @@ func NewEgressWith(rules *policy.UpstreamRules, resolver egress.Resolver, dial f
 		cfg.AllowNets = rules.AllowNets
 	}
 	guard := egress.New(cfg)
+	strict := egress.New(egress.Config{Resolver: resolver, Dial: dial})
 	return &Egress{
 		rules: rules,
-		// The settings of the handler's streaming transport, with the
-		// guard's dialer. A vendor name that resolves to an internal address
-		// is refused here, whatever the URL looked like.
-		transport: &http.Transport{
-			// No proxy: behind one the guard would judge the proxy's address
-			// and the destination would be resolved out of sight.
-			Proxy:                 nil,
-			DialContext:           guard.DialContext,
-			ForceAttemptHTTP2:     true,
-			MaxIdleConns:          100,
-			MaxIdleConnsPerHost:   32,
-			IdleConnTimeout:       90 * time.Second,
-			TLSHandshakeTimeout:   10 * time.Second,
-			ExpectContinueTimeout: 1 * time.Second,
-			// Long-lived streams: do not abort while response headers are slow to arrive.
-			ResponseHeaderTimeout: 0,
-		},
+		// A vendor name that resolves to an internal address is refused
+		// here, whatever the URL looked like.
+		transport: guardedTransport(guard),
+		public:    guardedTransport(strict),
+	}
+}
+
+// guardedTransport has the settings of the handler's streaming transport,
+// with the guard's dialer.
+func guardedTransport(guard *egress.Guard) *http.Transport {
+	return &http.Transport{
+		// No proxy: behind one the guard would judge the proxy's address
+		// and the destination would be resolved out of sight.
+		Proxy:                 nil,
+		DialContext:           guard.DialContext,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          100,
+		MaxIdleConnsPerHost:   32,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+		// Long-lived streams: do not abort while response headers are slow to arrive.
+		ResponseHeaderTimeout: 0,
 	}
 }
 

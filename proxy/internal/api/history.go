@@ -102,6 +102,8 @@ type requestStats struct {
 	scanAvgMs                        float64
 	// avgRiskPct is nil when it could not be worked out.
 	avgRiskPct *int
+	// routed: requests answered by an internal pool (action ROUTE).
+	routed int64
 }
 
 // loadRequestStats reads a window's statistics from the request history.
@@ -124,6 +126,8 @@ func loadRequestStats(ctx context.Context, h requestHistory, orgID string, from,
 			st.redacted += c.Requests
 		case "WARN":
 			st.warned += c.Requests
+		case "ROUTE":
+			st.routed += c.Requests
 		}
 		st.providers[c.Provider] += c.Requests
 		latencySum += c.ScanLatencySumMs
@@ -291,6 +295,7 @@ func storedEventJSON(rec store.RequestRecord) events.EventJSON {
 		OutputAction:   strings.ToUpper(rec.OutputAction),
 		PolicyName:     rec.PolicyName,
 		PolicyVersion:  rec.PolicyVersion,
+		RoutePool:      rec.RoutePool,
 	}
 }
 
@@ -341,6 +346,9 @@ func storedEventDetail(rec store.RequestRecord) map[string]interface{} {
 	}
 	if rec.PolicyVersion != "" {
 		out["policy_version"] = rec.PolicyVersion
+	}
+	if rec.RoutePool != "" {
+		out["route_pool"] = rec.RoutePool
 	}
 	if rec.OutputAction != "" {
 		out["output_action"] = strings.ToUpper(rec.OutputAction)

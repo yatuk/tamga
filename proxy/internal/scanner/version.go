@@ -25,17 +25,34 @@ package scanner
 // patterns are read in those readings; leetspeak instructions are read. An
 // answer a build of 1.5.0 stored as clean can hold a key in fullwidth
 // letters or an instruction in leetspeak.
-const ScannerVersion = "1.6.0"
+//
+// 1.7.0: four Turkish identifiers are read where the text names them
+// (mersis_no, imei, passport_tr, license_plate_tr), and an IMEI or a MERSİS
+// number named as one is no longer a credit_card finding. An answer a build
+// of 1.6.0 stored as clean can hold one of the four, which a policy that
+// lists it in output_rules masks or blocks.
+//
+// 1.8.0: Turkish instructions are read by stem and ending
+// (injection_turkish.go), instructions handed over in quoted parts are
+// read, and a request to send all of some personal data to an address is a
+// finding (data_exfiltration). An answer a build of 1.7.0 stored as clean
+// can hold a Turkish instruction this build blocks under output_rules.
+//
+// 1.9.0: a link whose host reads as a protected name and is not it
+// (gıthub.com with a dotless ı) is a link_homoglyph finding. An answer a
+// build of 1.8.0 stored as clean can hold such a link, which a policy that
+// lists malicious_link in output_rules masks or blocks.
+const ScannerVersion = "1.10.0"
 
 // ScannerVersions maps each scanner name to its current semantic version.
 var ScannerVersions = map[string]string{
-	"pii":                "1.4.0", // a value in a normalised reading has the position of what it was read from
-	"injection":          "1.2.0", // reads leetspeak for the words the rules know
+	"pii":                "1.5.0", // mersis_no, imei, passport_tr, license_plate_tr (pii_tr_ids.go)
+	"injection":          "1.3.0", // a phrase that ends in a Turkish verb counts only where the verb is a command
 	"secret":             "1.2.0", // read in the folded reading with the case kept, with positions
 	"content_moderation": "1.0.0",
-	"jailbreak":          "1.4.0", // leetspeak; a phrase in plain sight is not an encoded override
+	"jailbreak":          "1.5.0", // Turkish rules by stem and ending; quoted parts joined; data_exfiltration
 	"custom":             "1.1.0", // patterns are also run on the normalised readings
-	"malicious_link":     "1.0.0", // answers only: links judged by form and by the policy's host lists
+	"malicious_link":     "1.1.0", // look-alikes of protected names written in Latin letters only
 	"output_schema":      "1.0.0", // answers only: output_rules.json_schema
 }
 

@@ -174,6 +174,11 @@ func scanI18nRegex(text string, st *scanStop) []struct {
 			// extracted from the correct text layer (not re-extracted later
 			// from possibly-misaligned original offsets).
 			matched := text[loc[0]:loc[1]]
+			// A Turkish pattern that ends in a verb stem is also the start
+			// of the verb's other forms; see turkishVerbIsCommand.
+			if !turkishVerbIsCommand(text, loc[1], matched) {
+				continue
+			}
 			matches = append(matches, struct {
 				start, end int
 				def        injectionPatternDef

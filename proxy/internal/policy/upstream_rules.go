@@ -51,6 +51,52 @@ type UpstreamRules struct {
 	listed *egress.Guard
 }
 
+// CheckInternalEndpoint judges where an endpoint of an internal pool points.
+// Such a pool receives what a ROUTE rule kept away from the provider, so it
+// has no vendor host and no route override to fall back on: every endpoint
+// must be a host or address the operator listed in TAMGA_UPSTREAM_ALLOW.
+//
+// allowPrivate is the pool's own allow_private_addresses. Without it an
+// endpoint written as a private, loopback or otherwise internal address is
+// refused here, and a name that resolves to one is refused when it is
+// dialled (upstream.Egress). The two together are the allowance: the
+// operator lists the address, and the pool says it means to go there. There
+// is no setting that lifts the check for every pool.
+//
+// It is called when a policy is loaded and again before every request.
+func (r *UpstreamRules) CheckInternalEndpoint(u *url.URL, allowPrivate bool) error {
+	if u == nil || u.Opaque != "" || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.RawFragment != "" {
+		return ErrEndpointURL
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return ErrEndpointURL
+	}
+	if u.Hostname() == "" {
+		return ErrEndpointURL
+	}
+	for i := 0; i < len(u.Host); i++ {
+		if u.Host[i] <= ' ' || u.Host[i] >= 0x7f || u.Host[i] == '%' {
+			return ErrEndpointURL
+		}
+	}
+	host, port := normalHost(u.Hostname()), effectivePort(u)
+	if strings.HasPrefix(host, ".") || strings.HasSuffix(host, ".") || strings.Contains(host, "..") {
+		return ErrEndpointURL
+	}
+	if !r.hostListed(host, port) {
+		return notAllowed("base_url of an internal pool must be a host and port the operator listed in TAMGA_UPSTREAM_ALLOW: " +
+			"a policy cannot by itself name where routed requests are sent")
+	}
+	if !cleanBasePath(u) {
+		return notAllowed("base_url path must be plain segments, without \".\", \"..\", empty or encoded segments")
+	}
+	if ip, err := netip.ParseAddr(host); err == nil && egress.BlockedAddr(ip) && !allowPrivate {
+		return notAllowed("base_url is a private, loopback or otherwise internal address: set allow_private_addresses: true " +
+			"on the pool to say that is where it is meant to go")
+	}
+	return nil
+}
+
 // ErrEndpointURL is a base_url that is not a plain absolute URL;
 // ErrEndpointNotAllowed is one that points where a pool on that route may
 // not send. Neither message repeats the URL: it can carry credentials.
@@ -466,11 +512,16 @@ func upstreamIssues(p *Policy, rules *UpstreamRules) []ValidationIssue {
 	sort.Strings(keys)
 	var issues []ValidationIssue
 	for _, route := range keys {
+		if p.Providers.Pools[route].Internal {
+			// An internal pool is named freely and judged by its own rules
+			// (internalPoolIssues in route.go).
+			continue
+		}
 		if !knownRoute(route) {
 			issues = append(issues, ValidationIssue{
 				Field:    fmt.Sprintf("providers.pools[%q]", route),
 				Rule:     "unknown_route",
-				Message:  "a pool must be defined under one of the proxy's routes, written exactly: " + strings.Join(upstreamRoutes, ", "),
+				Message:  "a pool must be defined under one of the proxy's routes, written exactly: " + strings.Join(upstreamRoutes, ", ") + "; only a pool marked internal: true, the target of the ROUTE action, has a name of its own",
 				Severity: "error",
 			})
 			continue

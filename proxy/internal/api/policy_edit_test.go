@@ -317,7 +317,8 @@ func TestPolicyActionSeverity(t *testing.T) {
 		action policy.Action
 		want   int
 	}{
-		{"block", policy.ActionBlock, 5},
+		{"block", policy.ActionBlock, 6},
+		{"route", policy.ActionRoute, 5},
 		{"strip", policy.ActionStrip, 4},
 		{"redact", policy.ActionRedact, 3},
 		{"warn", policy.ActionWarn, 2},

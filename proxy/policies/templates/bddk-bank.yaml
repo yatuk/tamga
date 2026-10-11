@@ -1,0 +1,97 @@
+# bddk-bank: a starting point for a bank, or a supplier that handles a
+# bank's data, that routes model traffic through the proxy.
+#
+# This is a starting point, not legal advice, and using it does not make a
+# deployment compliant with anything. Tamga recognises formats, not "müşteri
+# sırrı": a customer's name, an account history or a credit decision written
+# as prose passes every rule here. Whether a request may be sent to a model
+# provider at all is a question for the bank's legal and compliance teams.
+# Read docs/compliance/bddk.md for what Tamga does not cover.
+#
+# What it follows (docs/research/turkish-dlp-landscape.md):
+#   - "Data types": Bankacılık Kanunu No. 5411 Md. 73 (data of a person
+#     that arises after the customer relationship is a customer secret, and
+#     is not shared with third parties without the customer's request), and
+#     the identifiers DLP vendors document for Turkish finance (national
+#     id, IBAN, tax number, card number).
+#   - "Policy wording": no published BDDK or TBB text on staff use of
+#     generative AI was found; the rules below are this project's reading
+#     of the secrecy rule, not a regulator's list.
+#
+# What it does: every identifier that ties a text to a customer is blocked,
+# not masked: a masked request still goes to the provider with the rest of
+# its text. Contact details and device identifiers are masked. Answers are
+# read. Findings are stored as keyed hashes.
+version: "1.0"
+name: "bddk-bank"
+
+rules:
+  pii:
+    action: BLOCK
+    sensitivity: medium
+    types: [tc_kimlik, credit_card, iban, vkn, mersis_no, passport_tr]
+
+  pii_detection:
+    action: REDACT
+    sensitivity: medium
+    types: [email, phone_tr, phone, imei, license_plate_tr, date_of_birth, ip_public, ip_private]
+
+  secret_detection:
+    action: BLOCK
+    sensitivity: low
+
+  injection:
+    action: BLOCK
+    sensitivity: medium
+
+# Your own numbers. These two patterns are examples and match the words
+# "müşteri no" and "hesap no" followed by digits; a bank's real customer
+# and account numbers have a format of their own (a prefix, a length, a
+# check digit). Replace the patterns with yours before relying on them.
+custom_entities:
+  - name: "musteri_no"
+    pattern: "(?i)m[üu][şs]ter[iİ]\\s*(?:no|numaras[ıi])\\s*[:#.]?\\s*[0-9]{6,12}"
+    description: "Müşteri numarası (örnek desen; kendi biçiminizle değiştirin)"
+    severity: "high"
+    action: BLOCK
+    confidence: 0.85
+
+  - name: "hesap_no"
+    pattern: "(?i)hesap\\s*(?:no|numaras[ıi])\\s*[:#.]?\\s*[0-9]{6,16}"
+    description: "Hesap numarası (örnek desen; kendi biçiminizle değiştirin)"
+    severity: "high"
+    action: BLOCK
+    confidence: 0.85
+
+output_rules:
+  enabled: true
+  block_on: [tc_kimlik, credit_card, iban, secret]
+  redact_on: [email, phone_tr, vkn, malicious_link]
+  streaming:
+    enabled: true
+    max_buffer_bytes: 8192
+
+# A finding's masked match (the first and last two characters of a national
+# id) is replaced in the log by an HMAC-SHA-256 of it. The key is
+# TAMGA_FINDING_HASH_KEY, or one derived from TAMGA_VAULT_KEY. Set one of
+# them before turning this on: without a key nothing is stored for the
+# match, and rows cannot be found by a national id. Keep the key the same on
+# every replica and across restarts (docs/operations.md, "What a stored
+# request holds").
+data:
+  hash_findings: true
+
+# Uncomment to send requests only to the providers you have assessed. A
+# model hosted inside the bank is the other way to keep text in the country.
+# providers:
+#   allowed: [azure]
+
+# Uncomment so that a policy change needs a second person
+# (docs/operations.md, "Two people for a change").
+# governance:
+#   require_dual_control: true
+
+rate_limit:
+  max_requests_per_minute: 60
+  max_tokens_per_day: 500000
+  action_on_exceed: BLOCK

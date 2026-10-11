@@ -70,6 +70,8 @@ type RequestRecord struct {
 	OutputRisk     json.RawMessage
 	PolicyName     string
 	PolicyVersion  string
+	// RoutePool is empty when no ROUTE verdict named a pool for the request.
+	RoutePool string
 }
 
 // RequestCount is the number of requests for one provider and action, with
@@ -90,6 +92,7 @@ type RequestBucket struct {
 	Blocked     int64
 	Redacted    int64
 	Warned      int64
+	Routed      int64 // answered by an internal pool (action ROUTE)
 	ScanP95Ms   float64
 	ScanSamples int64
 }
@@ -124,7 +127,7 @@ func scanRequestRecord(row pgx.Row) (RequestRecord, error) {
 		&rec.Endpoint, &rec.ActionTaken, &rec.InputTokens, &rec.OutputTokens,
 		&findings, &rec.FindingsCount, &rec.ScanLatencyMs, &rec.TotalLatencyMs, &rec.CreatedAt,
 		&rec.CostUSD, &rec.CacheStatus, &outputFindings, &rec.OutputAction, &outputRisk,
-		&rec.PolicyName, &rec.PolicyVersion)
+		&rec.PolicyName, &rec.PolicyVersion, &rec.RoutePool)
 	if err != nil {
 		return rec, err
 	}
@@ -236,6 +239,7 @@ SELECT date_trunc($4::text, created_at AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' AS
   COUNT(*) FILTER (WHERE upper(btrim(action_taken)) = 'BLOCK'),
   COUNT(*) FILTER (WHERE upper(btrim(action_taken)) = 'REDACT'),
   COUNT(*) FILTER (WHERE upper(btrim(action_taken)) = 'WARN'),
+  COUNT(*) FILTER (WHERE upper(btrim(action_taken)) = 'ROUTE'),
   COALESCE(round((percentile_disc(0.95) WITHIN GROUP (ORDER BY scan_latency_ms)
     FILTER (WHERE scan_latency_ms > 0))::numeric, 3), 0)::float8,
   COUNT(*) FILTER (WHERE scan_latency_ms > 0)
@@ -251,7 +255,7 @@ LIMIT $5`, org, from.UTC(), to.UTC(), bucket, timeseriesLimit+1)
 	var out []RequestBucket
 	for rows.Next() {
 		var b RequestBucket
-		if err := rows.Scan(&b.Start, &b.Total, &b.Blocked, &b.Redacted, &b.Warned, &b.ScanP95Ms, &b.ScanSamples); err != nil {
+		if err := rows.Scan(&b.Start, &b.Total, &b.Blocked, &b.Redacted, &b.Warned, &b.Routed, &b.ScanP95Ms, &b.ScanSamples); err != nil {
 			return nil, err
 		}
 		b.Start = b.Start.UTC()

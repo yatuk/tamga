@@ -88,6 +88,7 @@ func boundsIssues(p *Policy) []ValidationIssue {
 	issues = append(issues, ruleBoundIssues(p)...)
 	issues = append(issues, entryActionIssues(p)...)
 	issues = append(issues, maskIssues(p)...)
+	issues = append(issues, routeIssues(p, ActiveUpstreamRules())...)
 	issues = append(issues, limitIssues(p)...)
 	issues = append(issues, outputBoundIssues(p)...)
 	issues = append(issues, outputContentIssues(p)...)
@@ -200,20 +201,20 @@ func ruleBoundIssues(p *Policy) []ValidationIssue {
 		// action is left to the rule's own default, as before.
 		if rule.Action != "" {
 			switch rule.Action {
-			case ActionBlock, ActionStrip, ActionRedact, ActionWarn, ActionLog, ActionPass:
+			case ActionBlock, ActionRoute, ActionStrip, ActionRedact, ActionWarn, ActionLog, ActionPass:
 			default:
 				issues = append(issues, boundError("rules."+name+".action", "enum",
-					"unknown action %q (use BLOCK, STRIP, REDACT, WARN, LOG or PASS, in upper case)", printableValue(string(rule.Action))))
+					"unknown action %q (use BLOCK, ROUTE, STRIP, REDACT, WARN, LOG or PASS, in upper case)", printableValue(string(rule.Action))))
 			}
 		}
 		if rule.OverrideAction != nil {
 			// The engine compares the value as written, so anything but
 			// one of these exact names acts as PASS.
 			switch *rule.OverrideAction {
-			case ActionBlock, ActionStrip, ActionRedact, ActionWarn, ActionLog, ActionPass:
+			case ActionBlock, ActionRoute, ActionStrip, ActionRedact, ActionWarn, ActionLog, ActionPass:
 			default:
 				issues = append(issues, boundError("rules."+name+".override_action", "enum",
-					"unknown override_action %q (use BLOCK, STRIP, REDACT, WARN, LOG or PASS, in upper case)", printableValue(string(*rule.OverrideAction))))
+					"unknown override_action %q (use BLOCK, ROUTE, STRIP, REDACT, WARN, LOG or PASS, in upper case)", printableValue(string(*rule.OverrideAction))))
 			}
 		}
 	}

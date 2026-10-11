@@ -89,6 +89,7 @@ func RequestLogFromEvent(e events.Event, defaultOrgID string, getPolicy func() *
 		OutputAction:  strings.ToLower(strings.TrimSpace(e.OutputAction)),
 		PolicyName:    e.PolicyName,
 		PolicyVersion: e.PolicyVersion,
+		RoutePool:     e.RoutePool,
 	}
 	if e.CostKnown {
 		cost := e.CostUSD
@@ -158,6 +159,7 @@ func eventFromV2(ev events.EventV2) (events.Event, bool) {
 		OutputAction:   payloadString(p, "output_action"),
 		PolicyName:     payloadString(p, "policy_name"),
 		PolicyVersion:  payloadString(p, "policy_version"),
+		RoutePool:      payloadString(p, "route_pool"),
 	}
 	// Older envelopes always said cost_usd: 0. Only one that says the cost
 	// is known is believed.

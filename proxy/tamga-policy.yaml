@@ -2,11 +2,14 @@ version: "1.0"
 name: "default-policy"
 
 rules:
-  # Contact-style PII is redacted before the request is forwarded.
+  # Contact-style PII is redacted before the request is forwarded. So are a
+  # MERSİS number, an IMEI and a Turkish passport number that the text names
+  # as one. A vehicle plate (license_plate_tr) is detected and not listed
+  # here; policies/templates/ has starting points that mask it.
   pii_detection:
     action: REDACT
     sensitivity: medium
-    types: [iban, email, phone_tr, phone, vkn, ip_public, ip_private]
+    types: [iban, email, phone_tr, phone, vkn, ip_public, ip_private, mersis_no, imei, passport_tr]
     notify:
       - channel: slack
         webhook: ${SLACK_WEBHOOK_URL}
@@ -258,7 +261,27 @@ providers:
 # (BLOCK, WARN, LOG or PASS). It does not affect findings a rule leaves
 # alone on purpose (below its sensitivity, outside its types or roles).
 #
-# Actions, strongest first: BLOCK, STRIP, REDACT, WARN, LOG, PASS.
+# Actions, strongest first: BLOCK, ROUTE, STRIP, REDACT, WARN, LOG, PASS.
+#   ROUTE sends the request, as written, to a pool of model servers you run
+#   yourself and not to the provider: the caller gets an answer and the text
+#   does not leave. If the pool cannot take it the request is blocked; it is
+#   never sent to the provider instead. Every ROUTE of a policy names the
+#   same pool. The pool is defined under providers.pools with internal: true,
+#   and its address must be in TAMGA_UPSTREAM_ALLOW in the proxy's
+#   environment. See docs/operations.md, "Routing to an internal model".
+#
+#   rules:
+#     pii: { action: ROUTE, route_to: internal-llm, sensitivity: low, types: [tc_kimlik, credit_card] }
+#   providers:
+#     pools:
+#       internal-llm:
+#         internal: true                  # model servers of your own
+#         dialect: openai                 # openai or anthropic; no translation between them
+#         model: llama-3.1-70b            # replaces the model the caller named (optional)
+#         allow_private_addresses: true   # needed for a private or loopback address
+#         providers:
+#           - { name: vllm-1, base_url: "http://10.0.4.12:8000", api_key_env: INTERNAL_LLM_API_KEY, priority: 1 }
+#
 #   STRIP replaces the whole piece of text a finding is in with a placeholder
 #   and forwards the request. It is for agents: an injection in a tool result
 #   is taken out and the session goes on, where BLOCK would end the turn. To

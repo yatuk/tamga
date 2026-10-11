@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"sort"
@@ -36,9 +37,28 @@ import (
 // about a document can be said before then, so where a mismatch withholds
 // the answer the text is kept back until the end (configureStreamSchema).
 //
-// What the guard reads is the model's prose. A streamed tool call's
-// arguments and streamed reasoning are not text events of the shapes
-// extract.ParseStreamEvent knows, and pass unread.
+// The answer's text is not all a stream carries. Three more things are read,
+// each on a channel of its own, so that none of them waits for another:
+//
+//   - reasoning (thinking), which many clients show. It is scanned like the
+//     answer's text. Where the provider signs it (Anthropic's thinking
+//     blocks), a mask would break the signature the client has to send
+//     back, so a finding the policy redacts ends the stream instead
+//     (redact_signed_thinking). Signatures and encrypted reasoning are
+//     opaque and pass untouched.
+//   - a tool call's arguments. They are a JSON document that arrives in
+//     pieces and that the client acts on only when it is complete, so the
+//     pieces are kept back until the tool call ends, the whole document is
+//     scanned the way a buffered answer's arguments are, and then it goes
+//     out in one piece: as it was, or with the values the policy redacts
+//     masked inside their strings, or not at all (takeArgs, completeArgs).
+//     The events that carried the pieces go out as they come, with an empty
+//     piece each, so the client sees the tool call start and everything
+//     else in those events is on time.
+//   - values an event carries whole: a Gemini function call, the "done"
+//     events of the Responses API that repeat what the deltas carried, a
+//     content block that starts with its content. They are scanned when
+//     they come and masked where they stand (judgeSegments).
 
 const (
 	// defaultHoldback is how much of the newest text is kept back. It has to
@@ -73,6 +93,10 @@ type streamGuard struct {
 	// scan runs the output scanners over a piece of text; nil means the
 	// response is not scanned (vault or canary only).
 	scan func(text []byte) ([]scanner.Finding, error)
+	// scanSegs runs them over segments that say what they are: reasoning, a
+	// tool call's arguments, a value carried whole. When it is nil, scan is
+	// used for those too.
+	scanSegs func(segs []extract.Segment) ([]scanner.Finding, error)
 	// blocks and redacts say what the policy does with a finding.
 	blocks  func(scanner.Finding) bool
 	redacts func(scanner.Finding) bool
@@ -86,6 +110,10 @@ type streamGuard struct {
 	holdback  int
 	maxHeld   int
 	tokenHold int
+	// argsMax is the most of one tool call's arguments that is kept back to
+	// be scanned whole: what a buffered answer may be (buffer_bytes). A
+	// longer one cannot be scanned as a document, and fail_open decides.
+	argsMax int
 
 	// schema judges the whole text of a channel when it ends; nil means no
 	// schema applies. bad is true for a text that was not accepted.
@@ -97,6 +125,12 @@ type streamGuard struct {
 
 	channels map[string]*streamChannel
 
+	// judged remembers what was found in a value that was scanned whole, by
+	// kind and text: the Responses API sends the same text again in up to
+	// four closing events. judgedBytes bounds it.
+	judged      map[string][]scanner.Finding
+	judgedBytes int
+
 	// What happened, for the event record.
 	findings   []scanner.Finding
 	leaked     bool
@@ -106,8 +140,22 @@ type streamGuard struct {
 }
 
 type streamChannel struct {
+	// kind and path say what the channel carries: the answer's text (path
+	// empty), reasoning, or a tool call's arguments. sealed marks reasoning
+	// the provider signs.
+	kind   string
+	path   string
+	sealed bool
+
 	pending string // text not yet released
 	context string // tail of what was released
+
+	// args are the pieces of a tool call's arguments that have come and are
+	// kept back; last is the piece they came in last. unread is set when
+	// the arguments grew past argsMax and were let go unscanned.
+	args   []byte
+	last   extract.StreamDelta
+	unread bool
 	// doc is the whole text of the channel, kept while a schema is to judge
 	// it. docOver says it grew past schemaMax and is not kept any more;
 	// judged that the schema has had its say. unheld is set when text held
@@ -128,7 +176,16 @@ type streamTemplate struct {
 }
 
 func newStreamGuard() *streamGuard {
-	return &streamGuard{holdback: defaultHoldback, maxHeld: defaultMaxHeld, tokenHold: defaultTokenHold, channels: make(map[string]*streamChannel)}
+	return &streamGuard{holdback: defaultHoldback, maxHeld: defaultMaxHeld, tokenHold: defaultTokenHold, argsMax: maxOutputScanBytes, channels: make(map[string]*streamChannel)}
+}
+
+// scans reports whether the response is scanned.
+func (g *streamGuard) scans() bool { return g.scan != nil || g.scanSegs != nil }
+
+// answer reports whether the channel carries the answer's own text, the one
+// a schema judges.
+func (ch *streamChannel) answer() bool {
+	return ch.path == "" && (ch.kind == "" || ch.kind == extract.KindText)
 }
 
 func (g *streamGuard) channel(name string) *streamChannel {
@@ -187,71 +244,112 @@ func (g *streamGuard) event(raw []byte) (out []byte, stop bool) {
 		return append(flush, raw...), false
 	}
 	ev, ok := extract.ParseStreamEvent(data)
-	if !ok || (len(ev.Deltas) == 0 && len(ev.Ends) == 0 && !ev.EndsAll) {
+	if !ok || (len(ev.Deltas) == 0 && len(ev.Ends) == 0 && !ev.EndsAll && len(ev.Whole) == 0) {
 		return raw, false
 	}
 
-	ending := make(map[string]bool, len(ev.Ends))
-	for _, ch := range ev.Ends {
-		ending[ch] = true
+	if len(ev.Deltas) == 0 && len(ev.Whole) == 0 {
+		// The event carries nothing of the model's; it closes channels. What
+		// they hold goes out first, in events shaped like the ones that
+		// carried it.
+		flush, stopped := g.flushEnded(ev, nil)
+		if stopped {
+			return flush, true
+		}
+		return append(flush, raw...), false
 	}
 
-	var buf []byte
-	if len(ev.Deltas) > 0 {
-		g.recognised++
-		texts := make([]string, len(ev.Deltas))
-		for i, d := range ev.Deltas {
-			ch := g.channel(d.Channel)
+	g.recognised++
+	texts := make([]string, len(ev.Deltas))
+	var settled map[string]bool
+	for i, d := range ev.Deltas {
+		ch := g.channel(d.Channel)
+		ch.kind, ch.path, ch.sealed = d.Kind, d.Path, ch.sealed || d.Sealed
+		final := ev.EndsAll || endsChannel(ev.Ends, d.Channel)
+		var released string
+		var stopped bool
+		if d.Kind == extract.KindToolArgs {
+			released, stopped = g.takeArgs(ch, d, final)
+		} else {
 			if g.take(ch, d.Text) {
 				return g.termination(), true
 			}
-			ch.template = &streamTemplate{head: head, data: data, tail: tail, deltas: ev.Deltas, index: i}
-			released, stopped := g.release(ch, ending[d.Channel] || ev.EndsAll)
-			if stopped {
-				return g.termination(), true
-			}
-			texts[i] = released
-			if ending[d.Channel] {
-				delete(ending, d.Channel) // released in this event already
-			}
+			released, stopped = g.release(ch, final)
 		}
-		buf = append(buf, head...)
-		buf = append(buf, extract.ReplaceStreamText(data, ev.Deltas, texts)...)
-		buf = append(buf, tail...)
-		if ev.EndsAll {
-			// Anything held on other channels goes out before this event.
-			flush, stopped := g.flushAll()
-			if stopped {
-				return flush, true
-			}
-			return append(flush, buf...), false
+		if stopped {
+			return g.termination(), true
 		}
-		return buf, false
+		ch.template = &streamTemplate{head: head, data: data, tail: tail, deltas: ev.Deltas, index: i}
+		texts[i] = released
+		if final {
+			if settled == nil {
+				settled = make(map[string]bool, len(ev.Deltas))
+			}
+			settled[d.Channel] = true // released in this event already
+		}
 	}
 
-	// The event carries no text; it closes channels. What they hold goes
-	// out first, in events shaped like the ones that carried the text.
-	var flush []byte
-	var stopped bool
-	if ev.EndsAll {
-		flush, stopped = g.flushAll()
-	} else {
-		for _, name := range ev.Ends {
-			if !ending[name] {
-				continue
-			}
-			var part []byte
-			part, stopped = g.flush(name)
-			flush = append(flush, part...)
-			if stopped {
-				break
-			}
+	var edits []extract.Edit
+	if len(ev.Whole) > 0 {
+		var stopped bool
+		if edits, stopped = g.judgeSegments(ev.Whole, ev.SealedThinking, true); stopped {
+			return g.termination(), true
 		}
 	}
+	body, err := extract.RewriteStreamEvent(data, ev, texts, edits)
+	if err != nil {
+		// A value that was to be masked could not be put back into the
+		// event. Sending the event as it came is not an option.
+		scanner.RecordDegraded("redact_stream_event_failed")
+		g.stopReason = "redact_stream_event"
+		return g.termination(), true
+	}
+	buf := make([]byte, 0, len(head)+len(body)+len(tail))
+	buf = append(buf, head...)
+	buf = append(buf, body...)
+	buf = append(buf, tail...)
+	if len(ev.Ends) == 0 && !ev.EndsAll {
+		return buf, false
+	}
+	// Anything held on the other channels the event closes goes out before
+	// it.
+	flush, stopped := g.flushEnded(ev, settled)
 	if stopped {
 		return flush, true
 	}
-	return append(flush, raw...), false
+	return append(flush, buf...), false
+}
+
+// endsChannel reports whether closing the channels named in ends closes
+// name: it is one of them, or part of one ("c0.t1" is part of "c0").
+func endsChannel(ends []string, name string) bool {
+	for _, e := range ends {
+		if name == e || (len(name) > len(e) && name[len(e)] == '.' && name[:len(e)] == e) {
+			return true
+		}
+	}
+	return false
+}
+
+// flushEnded releases what is held on the channels an event closes, except
+// those in settled, in the order of their names.
+func (g *streamGuard) flushEnded(ev extract.StreamEvent, settled map[string]bool) ([]byte, bool) {
+	names := make([]string, 0, len(g.channels))
+	for name := range g.channels {
+		if !settled[name] && (ev.EndsAll || endsChannel(ev.Ends, name)) {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	var out []byte
+	for _, name := range names {
+		part, stopped := g.flush(name)
+		if stopped {
+			return part, true
+		}
+		out = append(out, part...)
+	}
+	return out, false
 }
 
 // finish is called when the provider's stream ends. It sends what is still
@@ -284,14 +382,20 @@ func (g *streamGuard) flush(name string) ([]byte, bool) {
 	if !ok {
 		return nil, false
 	}
-	if ch.pending == "" && !g.holds(ch) {
+	var released string
+	var stopped bool
+	switch {
+	case ch.kind == extract.KindToolArgs:
+		released, stopped = g.completeArgs(ch)
+	case ch.pending == "" && !g.holds(ch):
 		// Nothing to send, but the channel is over: the schema judges it.
 		if g.judge(ch) {
 			return g.termination(), true
 		}
 		return nil, false
+	default:
+		released, stopped = g.release(ch, true)
 	}
-	released, stopped := g.release(ch, true)
 	if stopped {
 		return g.termination(), true
 	}
@@ -299,13 +403,239 @@ func (g *streamGuard) flush(name string) ([]byte, bool) {
 		return nil, false
 	}
 	t := ch.template
-	texts := make([]string, len(t.deltas))
-	texts[t.index] = released
 	var out []byte
 	out = append(out, t.head...)
-	out = append(out, extract.ReplaceStreamText(t.data, t.deltas, texts)...)
+	out = append(out, extract.StandaloneStreamEvent(t.data, t.deltas, t.index, released)...)
 	out = append(out, t.tail...)
 	return out, false
+}
+
+// takeArgs adds a piece of a tool call's arguments to its channel and
+// returns what the event that carried it sends in its place: nothing while
+// the arguments are kept back, and the whole of them, scanned, when final
+// says this event ends the tool call.
+func (g *streamGuard) takeArgs(ch *streamChannel, d extract.StreamDelta, final bool) (released string, stopped bool) {
+	if !g.scans() || ch.unread {
+		return d.Text, false
+	}
+	if len(ch.args)+len(d.Text) > g.argsMax {
+		// More than is kept to be scanned as one document. fail_open
+		// decides, as it does for an answer too long to hold to its schema:
+		// the stream ends, or the arguments go out unread and counted.
+		scanner.RecordDegraded("stream_tool_call_too_large")
+		if !g.failOpen {
+			g.stopReason = "tool_call_unscanned_too_large"
+			return "", true
+		}
+		released = string(ch.args) + d.Text
+		ch.args, ch.unread = nil, true
+		return released, false
+	}
+	ch.args = append(ch.args, d.Text...)
+	ch.last = d
+	if !final {
+		return "", false
+	}
+	return g.completeArgs(ch)
+}
+
+// completeArgs scans the arguments a tool-call channel has kept back, now
+// that the tool call is over, and returns what goes out: the arguments as
+// they were, or with the values the policy redacts masked. stopped means the
+// stream must end.
+//
+// A mask is put inside the string it was found in and the string is encoded
+// again where it stood, so a document that was JSON still is. Where that
+// cannot be done or shown, the stream ends (redact_tool_call): arguments
+// that were to be masked are not sent as they are.
+func (g *streamGuard) completeArgs(ch *streamChannel) (released string, stopped bool) {
+	args := string(ch.args)
+	ch.args = nil
+	if args == "" {
+		return "", false
+	}
+	doc, segs := extract.ArgumentSegments(ch.last, args)
+	edits, stopped := g.judgeSegments(segs, false, false)
+	if stopped {
+		return "", true
+	}
+	if len(edits) == 0 {
+		return args, false
+	}
+	masked, err := extract.RewriteArguments(doc, segs, edits)
+	if err != nil || (json.Valid([]byte(args)) && !json.Valid([]byte(masked))) {
+		scanner.RecordDegraded("redact_stream_tool_call_failed")
+		g.stopReason = "redact_tool_call"
+		return "", true
+	}
+	return masked, false
+}
+
+// maxJudgedBytes bounds what judgeSegments remembers of one stream.
+const maxJudgedBytes = 4 << 20
+
+// judgeSegments scans values that are complete (a tool call's arguments, a
+// value an event carries whole) and returns the edits that mask what the
+// policy redacts in them. stopped means the stream must end: a finding the
+// policy blocks, one it redacts that has no place or lies in signed
+// reasoning, or a scan that failed with fail_open off.
+//
+// repeats says the values may repeat text the guard has already read piece
+// by piece (the closing events of the Responses API): what was recorded for
+// that text is not recorded a second time. It is acted on every time.
+func (g *streamGuard) judgeSegments(segs []extract.Segment, sealedThinking, repeats bool) (edits []extract.Edit, stopped bool) {
+	if g.canary != "" {
+		for _, s := range segs {
+			if !strings.Contains(s.Text, g.canary) {
+				continue
+			}
+			if !g.leaked {
+				g.leaked = true
+				g.findings = append(g.findings, canaryLeakFinding())
+			}
+			if g.canaryBlocks {
+				g.stopReason = "system_prompt_leak"
+				return nil, true
+			}
+		}
+	}
+	if !g.scans() || len(segs) == 0 {
+		return nil, false
+	}
+
+	// What was found in the same value before is not looked for again.
+	type judged struct {
+		f    scanner.Finding
+		seen bool // remembered: recorded when it was first found
+	}
+	var found []judged
+	var fresh []extract.Segment
+	var freshAt []int
+	for i, s := range segs {
+		if s.Text == "" {
+			continue
+		}
+		if known, ok := g.judged[s.Kind+"\x00"+s.Text]; ok {
+			for _, f := range known {
+				f.Seg, f.Role, f.Path = i, string(s.Role), s.Path
+				found = append(found, judged{f, true})
+			}
+			continue
+		}
+		fresh = append(fresh, s)
+		freshAt = append(freshAt, i)
+	}
+	var scanErr error
+	if len(fresh) > 0 {
+		got, err := g.scanSegments(fresh)
+		if err != nil && !g.failOpen {
+			g.stopReason = "scanner_unavailable"
+			return nil, true
+		}
+		scanErr = err
+		per := make([][]scanner.Finding, len(fresh))
+		for _, f := range got {
+			if f.Seg < 0 || f.Seg >= len(fresh) {
+				continue
+			}
+			per[f.Seg] = append(per[f.Seg], f)
+			f.Seg = freshAt[f.Seg]
+			found = append(found, judged{f, false})
+		}
+		if err == nil {
+			for k, s := range fresh {
+				if g.judgedBytes+len(s.Text) > maxJudgedBytes {
+					break
+				}
+				if g.judged == nil {
+					g.judged = make(map[string][]scanner.Finding)
+				}
+				g.judged[s.Kind+"\x00"+s.Text] = per[k]
+				g.judgedBytes += len(s.Text)
+			}
+		}
+	}
+
+	record := func(j judged) {
+		if j.seen {
+			return
+		}
+		if repeats && segs[j.f.Seg].Kind == extract.KindText {
+			// The text of the answer was read as it streamed.
+			for _, have := range g.findings {
+				if have.Type == j.f.Type && have.Category == j.f.Category && have.Match == j.f.Match {
+					return
+				}
+			}
+		}
+		g.findings = append(g.findings, j.f)
+	}
+	for _, j := range found {
+		f := j.f
+		switch {
+		case g.blocks != nil && g.blocks(f):
+			record(j)
+			g.stopReason = "content_blocked_by_policy"
+			return nil, true
+		case g.redacts != nil && g.redacts(f):
+			record(j)
+			switch {
+			case scanErr != nil:
+				g.stopReason = "redaction_incomplete"
+				scanner.RecordDegraded("redact_stream_incomplete_" + scanner.IncompleteReason(scanErr))
+				return nil, true
+			case !f.Placed() || !scanner.MaskableType(f.Type) || f.EndPos > len(segs[f.Seg].Text):
+				g.stopReason = "redact_unplaced"
+				return nil, true
+			case sealedThinking && segs[f.Seg].Kind == extract.KindThinking:
+				scanner.RecordDegraded("redact_stream_signed_thinking")
+				g.stopReason = "redact_signed_thinking"
+				return nil, true
+			}
+			edits = append(edits, extract.Edit{Seg: f.Seg, From: f.StartPos, To: f.EndPos, Replacement: scanner.MaskMarker(f)})
+			if !j.seen {
+				g.redacted++
+			}
+		}
+	}
+	return edits, false
+}
+
+// scanSegments runs the output scanners over segments.
+func (g *streamGuard) scanSegments(segs []extract.Segment) ([]scanner.Finding, error) {
+	if g.scanSegs != nil {
+		return g.scanSegs(segs)
+	}
+	var all []scanner.Finding
+	var firstErr error
+	for i, s := range segs {
+		found, err := g.scan([]byte(s.Text))
+		if err != nil && firstErr == nil {
+			firstErr = err
+		}
+		for _, f := range found {
+			f.Seg, f.Role, f.Path = i, string(s.Role), s.Path
+			all = append(all, f)
+		}
+	}
+	return all, firstErr
+}
+
+// scanText scans a window of a text channel: the answer's text as it always
+// was, reasoning as what it is.
+func (g *streamGuard) scanText(ch *streamChannel, window string) ([]scanner.Finding, error) {
+	if g.scanSegs == nil || (ch.answer() && g.scan != nil) {
+		return g.scan([]byte(window))
+	}
+	path := ch.path
+	if path == "" {
+		path = "stream"
+	}
+	kind := ch.kind
+	if kind == "" {
+		kind = extract.KindText
+	}
+	return g.scanSegs([]extract.Segment{{Role: extract.RoleAssistant, Kind: kind, Path: path, Text: window}})
 }
 
 // release scans what a channel holds and returns the text that can go out.
@@ -357,8 +687,8 @@ func (g *streamGuard) release(ch *streamChannel, final bool) (released string, s
 	}
 	var masks []mask
 
-	if g.scan != nil && ch.pending != "" {
-		found, err := g.scan([]byte(window))
+	if g.scans() && ch.pending != "" {
+		found, err := g.scanText(ch, window)
 		if err != nil && !g.failOpen {
 			g.stopReason = "scanner_unavailable"
 			return "", true
@@ -406,6 +736,16 @@ func (g *streamGuard) release(ch *streamChannel, final bool) (released string, s
 						holdFrom = f.StartPos
 					}
 					continue
+				}
+				if ch.sealed {
+					// The provider signs this reasoning and the client
+					// sends it back as it came. A mask would make the next
+					// request fail on the signature, and sending the value
+					// is what the policy forbids: the stream ends.
+					g.findings = append(g.findings, f)
+					scanner.RecordDegraded("redact_stream_signed_thinking")
+					g.stopReason = "redact_signed_thinking"
+					return "", true
 				}
 				from := f.StartPos
 				if from < ctxLen {
@@ -491,6 +831,11 @@ func (g *streamGuard) release(ch *streamChannel, final bool) (released string, s
 		g.stopReason = "holdback_overflow"
 		return "", true
 	}
+	if ch.sealed {
+		// Signed reasoning goes back to the provider as it came. A
+		// placeholder in it stays one.
+		return released, false
+	}
 	for placeholder, original := range g.restore {
 		if strings.Contains(released, placeholder) {
 			released = strings.ReplaceAll(released, placeholder, original)
@@ -543,7 +888,7 @@ func runBreak(r rune) bool {
 
 // take adds a piece of text to a channel. stopped means the stream must end.
 func (g *streamGuard) take(ch *streamChannel, text string) (stopped bool) {
-	if g.schema == nil {
+	if g.schema == nil || !ch.answer() {
 		ch.pending += text
 		return false
 	}
@@ -578,7 +923,7 @@ func (g *streamGuard) take(ch *streamChannel, text string) (stopped bool) {
 // holds reports whether the channel's text is being kept back for the
 // schema.
 func (g *streamGuard) holds(ch *streamChannel) bool {
-	return g.schema != nil && g.schemaHold && !ch.unheld
+	return g.schema != nil && g.schemaHold && !ch.unheld && ch.answer()
 }
 
 // judge puts the whole text of a channel that has ended to the schema,
@@ -586,7 +931,7 @@ func (g *streamGuard) holds(ch *streamChannel) bool {
 // the policy withholds such an answer, or it could not be judged and
 // fail_open is off.
 func (g *streamGuard) judge(ch *streamChannel) (stopped bool) {
-	if g.schema == nil || ch.judged {
+	if g.schema == nil || ch.judged || !ch.answer() {
 		return false
 	}
 	ch.judged = true
@@ -619,6 +964,13 @@ func (g *streamGuard) judge(ch *streamChannel) (stopped bool) {
 // several transformed views is reported once and with a position.
 func scanStreamText(ctx context.Context, reg, outputOnly *scanner.Registry, text []byte, cfg scanner.PipelineConfig) ([]scanner.Finding, error) {
 	segs := []extract.Segment{{Role: extract.RoleAssistant, Kind: "text", Path: "stream", Text: string(text)}}
+	return scanStreamSegments(ctx, reg, outputOnly, segs, cfg)
+}
+
+// scanStreamSegments scans segments of a streamed answer with the scanners
+// a buffered answer is scanned with: the request's and the ones that read
+// answers only (links, source code).
+func scanStreamSegments(ctx context.Context, reg, outputOnly *scanner.Registry, segs []extract.Segment, cfg scanner.PipelineConfig) ([]scanner.Finding, error) {
 	found, err := reg.ScanSegments(ctx, segs, cfg)
 	if outputOnly != nil {
 		extra, extraErr := outputOnly.ScanSegments(ctx, segs, cfg)
@@ -628,6 +980,14 @@ func scanStreamText(ctx context.Context, reg, outputOnly *scanner.Registry, text
 		}
 	}
 	return found, err
+}
+
+// streamSegmentScanner is scanStreamSegments bound to a request, for
+// streamGuard.scanSegs.
+func streamSegmentScanner(ctx context.Context, reg, outputOnly *scanner.Registry, cfg scanner.PipelineConfig) func([]extract.Segment) ([]scanner.Finding, error) {
+	return func(segs []extract.Segment) ([]scanner.Finding, error) {
+		return scanStreamSegments(ctx, reg, outputOnly, segs, cfg)
+	}
 }
 
 // tailString returns at most n trailing bytes of s, starting on a rune.

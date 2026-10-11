@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -47,14 +48,23 @@ func NewCompetitorScanner(getSpecs func() []CompetitorSpec) *CompetitorScanner {
 
 func (s *CompetitorScanner) Name() string { return "competitor" }
 
+// competitorFingerprint names a competitor list by what the scanner makes
+// of it: each entry's name, patterns, severity, action and whether it is
+// enabled, written so that no two different lists read the same. The order
+// of the entries is left out. It is "" for an empty list.
 func competitorFingerprint(specs []CompetitorSpec) string {
 	if len(specs) == 0 {
 		return ""
 	}
 	rows := make([]string, 0, len(specs))
 	for _, c := range specs {
-		pat := strings.Join(c.Patterns, "\x00")
-		rows = append(rows, c.Name+"\x00"+pat+"\x00"+c.Severity+"\x00"+c.Action)
+		var b strings.Builder
+		b.WriteString(strconv.Quote(c.Name))
+		b.WriteString(" " + strconv.Quote(c.Severity) + " " + strconv.Quote(c.Action) + " " + strconv.FormatBool(c.Enabled))
+		for _, p := range c.Patterns {
+			b.WriteString(" " + strconv.Quote(p))
+		}
+		rows = append(rows, b.String())
 	}
 	sort.Strings(rows)
 	return strings.Join(rows, "\n")
@@ -147,21 +157,48 @@ func (s *CompetitorScanner) Fingerprint() string {
 	return hex.EncodeToString(sum[:])
 }
 
+// snapshot returns the compiled patterns together with the fingerprint of
+// the list they were compiled from, read under one lock: the two always
+// belong to each other.
+func (s *CompetitorScanner) snapshot() (string, []*competitorCompiled) {
+	s.mu.RLock()
+	fp, compiled := s.fp, s.compiled
+	s.mu.RUnlock()
+
+	if compiled == nil {
+		s.mu.Lock()
+		if s.compiled == nil {
+			s.refreshLocked()
+		}
+		fp, compiled = s.fp, s.compiled
+		s.mu.Unlock()
+	}
+	return fp, compiled
+}
+
+// patternSnapshot is what the scan cache keys this scanner's findings on
+// (see patternSetScanner).
+func (s *CompetitorScanner) patternSnapshot() (string, func(context.Context, []byte) ([]Finding, error)) {
+	fp, compiled := s.snapshot()
+	if len(compiled) == 0 {
+		return "", nil
+	}
+	return fp, func(ctx context.Context, content []byte) ([]Finding, error) {
+		return s.scanWith(ctx, compiled, content)
+	}
+}
+
 // Scan checks content for competitor mentions and returns findings. The
 // match is masked like every other stored match: a pattern is the analyst's,
 // and what it matched in a prompt is not theirs to read back. Scan stops on
 // the same limits as CustomScanner.Scan and reports them the same way.
 func (s *CompetitorScanner) Scan(ctx context.Context, content []byte) ([]Finding, error) {
-	s.mu.RLock()
-	compiled := s.compiled
-	s.mu.RUnlock()
+	_, compiled := s.snapshot()
+	return s.scanWith(ctx, compiled, content)
+}
 
-	if compiled == nil {
-		s.Refresh()
-		s.mu.RLock()
-		compiled = s.compiled
-		s.mu.RUnlock()
-	}
+// scanWith is Scan with the patterns given.
+func (s *CompetitorScanner) scanWith(ctx context.Context, compiled []*competitorCompiled, content []byte) ([]Finding, error) {
 	if len(compiled) == 0 {
 		return nil, nil
 	}
@@ -212,7 +249,7 @@ func (s *CompetitorScanner) Scan(ctx context.Context, content []byte) ([]Finding
 	}
 	// The same patterns over the text read for what its characters show:
 	// a name in look-alike letters is the same name (see patternReadings).
-	for _, view := range patternReadings(text) {
+	for _, view := range patternReadings(ctx, text) {
 		if err := scanView(view, viaNormalized); err != nil {
 			return findings, err
 		}

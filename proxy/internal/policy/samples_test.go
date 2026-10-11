@@ -109,6 +109,11 @@ func TestDocPolicySamplesLoad(t *testing.T) {
 	if len(samples) == 0 {
 		t.Skip("no docs directory next to the module")
 	}
+	// The worked example of ROUTE in docs/operations.md has the operator set
+	// TAMGA_UPSTREAM_ALLOW=10.0.4.12:8000 before the policy is written, and
+	// its sample loads only with that. Nothing else is listed here, so every
+	// other sample is still judged by the strict default.
+	t.Cleanup(SetUpstreamRules(&UpstreamRules{AllowHostPorts: []string{"10.0.4.12:8000"}}))
 	root := filepath.Join("..", "..", "..")
 	perFile := map[string]int{}
 	for _, s := range samples {

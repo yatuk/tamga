@@ -378,7 +378,7 @@ func (cfg Config) handleStats(w http.ResponseWriter, r *http.Request) {
 	// request_logs: the counts and what is said about them (providers,
 	// findings, latency, risk) describe the same requests.
 	if st, ok := cfg.storedStats(ctx, "stats", from, to); ok {
-		passed := st.total - st.blocked - st.redacted - st.warned
+		passed := st.total - st.blocked - st.redacted - st.warned - st.routed
 		if passed < 0 {
 			passed = 0
 		}
@@ -387,6 +387,7 @@ func (cfg Config) handleStats(w http.ResponseWriter, r *http.Request) {
 			"blocked_requests":       st.blocked,
 			"redacted_requests":      st.redacted,
 			"warned_requests":        st.warned,
+			"routed_requests":        st.routed,
 			"passed_requests":        passed,
 			"top_providers":          st.providers,
 			"top_finding_types":      st.findingTypes,
@@ -406,7 +407,11 @@ func (cfg Config) handleStats(w http.ResponseWriter, r *http.Request) {
 	// whatever the range.
 	totalRequests, blockedRequests, redactedRequests, warnedRequests, _ = cfg.processCounts()
 
-	passedRequests := totalRequests - blockedRequests - redactedRequests - warnedRequests
+	var routedRequests int64
+	if cfg.Metrics != nil {
+		routedRequests = cfg.Metrics.Routed.Load()
+	}
+	passedRequests := totalRequests - blockedRequests - redactedRequests - warnedRequests - routedRequests
 	if passedRequests < 0 {
 		passedRequests = 0
 	}
@@ -419,6 +424,7 @@ func (cfg Config) handleStats(w http.ResponseWriter, r *http.Request) {
 		"blocked_requests":       blockedRequests,
 		"redacted_requests":      redactedRequests,
 		"warned_requests":        warnedRequests,
+		"routed_requests":        routedRequests,
 		"passed_requests":        passedRequests,
 		"top_providers":          topProviders,
 		"top_finding_types":      topFindingTypes,
@@ -590,6 +596,9 @@ func (cfg Config) handleEventDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	if ev.OutputAction != "" {
 		detail["output_action"] = ev.OutputAction
+	}
+	if ev.RoutePool != "" {
+		detail["route_pool"] = ev.RoutePool
 	}
 	writeSourced(w, sourceMemory, detail)
 }

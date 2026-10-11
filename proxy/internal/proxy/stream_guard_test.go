@@ -88,7 +88,9 @@ func run(t *testing.T, g *streamGuard, events ...[]byte) (wire string, text stri
 		}
 		if ev, ok := extract.ParseStreamEvent(data); ok {
 			for _, d := range ev.Deltas {
-				text += d.Text
+				if d.Kind == extract.KindText {
+					text += d.Text
+				}
 			}
 		}
 	}
@@ -192,7 +194,10 @@ func TestStreamGuard_EventsItDoesNotUnderstandPassUntouched(t *testing.T) {
 		[]byte(": keep-alive\n\n"),
 		[]byte("event: ping\ndata: {\"type\":\"ping\"}\n\n"),
 		[]byte("event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"m1\",\"content\":[]}}\n\n"),
-		[]byte("event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"path\\\":\"}}\n\n"),
+		// A signature is opaque: nothing in it is read or changed.
+		[]byte("event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"signature_delta\",\"signature\":\"EqQBCgIYAhIM1gbcDa9GJwZA2b3hGgxBdjrkzLoky3dl1pkiMOYds\"}}\n\n"),
+		[]byte("event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"name\":\"read_file\",\"input\":{}}}\n\n"),
+		[]byte("event: response.created\ndata: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_1\",\"status\":\"in_progress\",\"output\":[]}}\n\n"),
 		[]byte("data: not json\n\n"),
 		[]byte("data: one\ndata: two\n\n"),
 	} {
@@ -327,19 +332,34 @@ func TestParseStreamEvent_Shapes(t *testing.T) {
 	tests := []struct {
 		name, data string
 		channel    string
+		kind       string
+		path       string
 		text       string
 		ends       bool
 	}{
-		{"OpenAI chat", `{"choices":[{"index":0,"delta":{"content":"hi"},"finish_reason":null}]}`, "c0", "hi", false},
-		{"OpenAI finish", `{"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}`, "", "", true},
-		{"OpenAI legacy completion", `{"choices":[{"index":2,"text":"hi","finish_reason":null}]}`, "c2", "hi", false},
-		{"OpenAI Responses", `{"type":"response.output_text.delta","output_index":0,"content_index":1,"delta":"hi"}`, "r0.1", "hi", false},
-		{"OpenAI Responses done", `{"type":"response.completed","response":{}}`, "", "", true},
-		{"Anthropic text", `{"type":"content_block_delta","index":3,"delta":{"type":"text_delta","text":"hi"}}`, "b3", "hi", false},
-		{"Anthropic block stop", `{"type":"content_block_stop","index":3}`, "", "", true},
-		{"Anthropic message stop", `{"type":"message_stop"}`, "", "", true},
-		{"Gemini", `{"candidates":[{"content":{"role":"model","parts":[{"text":"hi"}]}}]}`, "g0", "hi", false},
-		{"Gemini last chunk", `{"candidates":[{"content":{"parts":[{"text":"hi"}]},"finishReason":"STOP"}]}`, "g0", "hi", true},
+		{"OpenAI chat", `{"choices":[{"index":0,"delta":{"content":"hi"},"finish_reason":null}]}`, "c0", "text", "", "hi", false},
+		{"OpenAI finish", `{"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}`, "", "", "", "", true},
+		{"OpenAI legacy completion", `{"choices":[{"index":2,"text":"hi","finish_reason":null}]}`, "c2", "text", "", "hi", false},
+		{"OpenAI refusal", `{"choices":[{"index":0,"delta":{"refusal":"no"},"finish_reason":null}]}`, "c0.refusal", "text", "choices[0].message.refusal", "no", false},
+		{"OpenAI reasoning", `{"choices":[{"index":1,"delta":{"reasoning_content":"hm"},"finish_reason":null}]}`, "c1.reasoning_content", "thinking", "choices[1].message.reasoning_content", "hm", false},
+		{"OpenAI tool call", `{"choices":[{"index":0,"delta":{"tool_calls":[{"index":2,"function":{"arguments":"{\"a\":"}}]},"finish_reason":null}]}`, "c0.t2", "tool_args", "choices[0].message.tool_calls[2].function.arguments", `{"a":`, false},
+		{"OpenAI custom tool call", `{"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"custom":{"input":"ls"}}]},"finish_reason":null}]}`, "c0.t0", "tool_args", "choices[0].message.tool_calls[0].custom.input", "ls", false},
+		{"OpenAI function_call", `{"choices":[{"index":0,"delta":{"function_call":{"arguments":"{}"}},"finish_reason":null}]}`, "c0.fc", "tool_args", "choices[0].message.function_call.arguments", "{}", false},
+		{"OpenAI Responses", `{"type":"response.output_text.delta","output_index":0,"content_index":1,"delta":"hi"}`, "r0.1", "text", "", "hi", false},
+		{"OpenAI Responses arguments", `{"type":"response.function_call_arguments.delta","output_index":3,"item_id":"fc_1","delta":"{\"a\""}`, "r3.args", "tool_args", "output[3].arguments", `{"a"`, false},
+		{"OpenAI Responses custom tool input", `{"type":"response.custom_tool_call_input.delta","output_index":1,"delta":"ls"}`, "r1.args", "tool_args", "output[1].input", "ls", false},
+		{"OpenAI Responses reasoning summary", `{"type":"response.reasoning_summary_text.delta","output_index":0,"summary_index":2,"delta":"hm"}`, "r0.s2", "thinking", "output[0].summary", "hm", false},
+		{"OpenAI Responses reasoning text", `{"type":"response.reasoning_text.delta","output_index":0,"content_index":0,"delta":"hm"}`, "r0.0.reasoning", "thinking", "output[0].content", "hm", false},
+		{"OpenAI Responses done", `{"type":"response.completed","response":{}}`, "", "", "", "", true},
+		{"OpenAI Responses item done", `{"type":"response.output_item.done","output_index":0,"item":{"type":"function_call","arguments":""}}`, "", "", "", "", true},
+		{"Anthropic text", `{"type":"content_block_delta","index":3,"delta":{"type":"text_delta","text":"hi"}}`, "b3", "text", "", "hi", false},
+		{"Anthropic thinking", `{"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"hm"}}`, "b0", "thinking", "content[0].thinking", "hm", false},
+		{"Anthropic tool input", `{"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"a\":"}}`, "b1", "tool_args", "content[1].input", `{"a":`, false},
+		{"Anthropic block stop", `{"type":"content_block_stop","index":3}`, "", "", "", "", true},
+		{"Anthropic message stop", `{"type":"message_stop"}`, "", "", "", "", true},
+		{"Gemini", `{"candidates":[{"content":{"role":"model","parts":[{"text":"hi"}]}}]}`, "g0", "text", "", "hi", false},
+		{"Gemini thought", `{"candidates":[{"content":{"role":"model","parts":[{"text":"hm","thought":true}]},"index":1}]}`, "g1.thought", "thinking", "candidates[1].content.parts[0].text", "hm", false},
+		{"Gemini last chunk", `{"candidates":[{"content":{"parts":[{"text":"hi"}]},"finishReason":"STOP"}]}`, "g0", "text", "", "hi", true},
 	}
 	for _, tt := range tests {
 		ev, ok := extract.ParseStreamEvent([]byte(tt.data))
@@ -347,7 +367,7 @@ func TestParseStreamEvent_Shapes(t *testing.T) {
 			t.Errorf("%s: not parsed", tt.name)
 			continue
 		}
-		if tt.text != "" && (len(ev.Deltas) != 1 || ev.Deltas[0].Text != tt.text || ev.Deltas[0].Channel != tt.channel) {
+		if tt.text != "" && (len(ev.Deltas) != 1 || ev.Deltas[0].Text != tt.text || ev.Deltas[0].Channel != tt.channel || ev.Deltas[0].Kind != tt.kind || ev.Deltas[0].Path != tt.path) {
 			t.Errorf("%s: deltas = %+v", tt.name, ev.Deltas)
 		}
 		if tt.text == "" && len(ev.Deltas) != 0 {
@@ -357,10 +377,89 @@ func TestParseStreamEvent_Shapes(t *testing.T) {
 			t.Errorf("%s: ends = %v, want %v", tt.name, ended, tt.ends)
 		}
 	}
-	// Tool input is not model prose and is left alone.
-	ev, _ := extract.ParseStreamEvent([]byte(`{"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{}"}}`))
-	if len(ev.Deltas) != 0 {
-		t.Fatalf("tool input was treated as text: %+v", ev.Deltas)
+
+	// What is signed or encrypted is not text: nothing is yielded for it.
+	for _, opaque := range []string{
+		`{"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"EqQBCgIYAhIM"}}`,
+		`{"type":"content_block_start","index":0,"content_block":{"type":"redacted_thinking","data":"EmwKAhgBEgy3va3p"}}`,
+		`{"type":"response.output_item.done","output_index":0,"item":{"type":"reasoning","id":"rs_1","encrypted_content":"gAAAAABo","summary":[]}}`,
+		`{"candidates":[{"content":{"role":"model","parts":[{"thoughtSignature":"CpcCAdHtim9"}]}}]}`,
+	} {
+		ev, ok := extract.ParseStreamEvent([]byte(opaque))
+		if !ok || len(ev.Deltas) != 0 || len(ev.Whole) != 0 {
+			t.Errorf("an opaque value was read: %s -> %+v", opaque, ev)
+		}
+	}
+
+	// Anthropic signs its thinking, and Gemini a thought that carries a
+	// signature; a reasoning summary is signed by nobody.
+	sealed := map[string]bool{
+		`{"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"hm"}}`:       true,
+		`{"candidates":[{"content":{"parts":[{"text":"hm","thought":true,"thoughtSignature":"CpcC"}]}}]}`:  true,
+		`{"candidates":[{"content":{"parts":[{"text":"hm","thought":true}]}}]}`:                            false,
+		`{"type":"response.reasoning_summary_text.delta","output_index":0,"summary_index":0,"delta":"hm"}`: false,
+		`{"choices":[{"index":0,"delta":{"reasoning":"hm"},"finish_reason":null}]}`:                        false,
+	}
+	for data, want := range sealed {
+		ev, _ := extract.ParseStreamEvent([]byte(data))
+		if len(ev.Deltas) != 1 || ev.Deltas[0].Sealed != want {
+			t.Errorf("%s: sealed = %+v, want %v", data, ev.Deltas, want)
+		}
+	}
+
+	// Values an event carries whole, with the roles and the rules the
+	// buffered extractor has for them.
+	whole := []struct {
+		data             string
+		path, kind, text string
+	}{
+		{`{"candidates":[{"content":{"role":"model","parts":[{"functionCall":{"name":"f","args":{"city":"Ankara"}}}]}}]}`, "candidates[0].content.parts[0].functionCall.args.city", "tool_args", "Ankara"},
+		{`{"type":"response.function_call_arguments.done","output_index":0,"arguments":"{\"city\":\"Ankara\"}"}`, "arguments#city", "tool_args", "Ankara"},
+		{`{"type":"response.output_text.done","output_index":0,"content_index":0,"text":"Ankara"}`, "text", "text", "Ankara"},
+		{`{"type":"response.output_item.done","output_index":0,"item":{"type":"function_call","name":"f","arguments":"{\"city\":\"Ankara\"}"}}`, "item[0].arguments#city", "tool_args", "Ankara"},
+		{`{"type":"response.completed","response":{"output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Ankara"}]}]}}`, "response.output[0].content[0].text", "text", "Ankara"},
+		{`{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"t","name":"f","input":{"city":"Ankara"}}}`, "content_block.input.city", "tool_args", "Ankara"},
+	}
+	for _, tt := range whole {
+		ev, ok := extract.ParseStreamEvent([]byte(tt.data))
+		if !ok || len(ev.Whole) != 1 {
+			t.Errorf("%s: whole = %+v", tt.data, ev.Whole)
+			continue
+		}
+		s := ev.Whole[0]
+		if s.Path != tt.path || s.Kind != tt.kind || s.Text != tt.text || s.Role != extract.RoleAssistant {
+			t.Errorf("%s: segment = %+v", tt.data, s)
+		}
+	}
+}
+
+// An event that carries one piece and nothing else: what the guard sends
+// when it lets go of text or arguments it kept back.
+func TestStandaloneStreamEvent(t *testing.T) {
+	for _, tt := range []struct{ name, data, want string }{
+		{"a chat chunk loses the id and the name a client would add twice",
+			`{"id":"c1","model":"m","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":1,"id":"call_a","type":"function","function":{"name":"f","arguments":"{}"}}]},"finish_reason":null}],"usage":null}`,
+			`{"id":"c1","model":"m","choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":"NEW"}}]},"finish_reason":null}],"usage":null}`},
+		{"a chat chunk's content",
+			`{"id":"c1","choices":[{"index":3,"delta":{"role":"assistant","content":"old"},"finish_reason":"stop"}]}`,
+			`{"id":"c1","choices":[{"index":3,"delta":{"content":"NEW"},"finish_reason":null}]}`},
+		{"an Anthropic delta is such an event already",
+			`{"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"old"}}`,
+			`{"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"NEW"}}`},
+		{"a Responses delta keeps its item",
+			`{"type":"response.function_call_arguments.delta","item_id":"fc_1","output_index":2,"delta":"old"}`,
+			`{"type":"response.function_call_arguments.delta","item_id":"fc_1","output_index":2,"delta":"NEW"}`},
+		{"a Gemini chunk loses its other parts",
+			`{"candidates":[{"content":{"role":"model","parts":[{"text":"old"},{"functionCall":{"name":"f","args":{}}}]},"finishReason":"STOP","index":0}],"modelVersion":"m"}`,
+			`{"candidates":[{"content":{"role":"model","parts":[{"text":"NEW"}]},"index":0}],"modelVersion":"m"}`},
+	} {
+		ev, ok := extract.ParseStreamEvent([]byte(tt.data))
+		if !ok || len(ev.Deltas) != 1 {
+			t.Fatalf("%s: parse: %+v", tt.name, ev)
+		}
+		if got := string(extract.StandaloneStreamEvent([]byte(tt.data), ev.Deltas, 0, "NEW")); got != tt.want {
+			t.Errorf("%s:\n got %s\nwant %s", tt.name, got, tt.want)
+		}
 	}
 }
 

@@ -286,6 +286,11 @@ type KeyParts struct {
 	// two moments or two replicas: the scanner build and the patterns stored
 	// at runtime.
 	Scan string
+	// Route names the internal pool the request was sent to by a ROUTE
+	// verdict, and is empty for a request that went to the provider. The two
+	// are answered by different models: an answer from one is never served
+	// for a request that would go to the other.
+	Route string
 }
 
 // localKeyPrefix marks a key built on a credential digest. Such an entry is
@@ -299,7 +304,7 @@ func Key(p KeyParts) string {
 		return ""
 	}
 	h := sha256.New()
-	writeField(h, "tamga-cache-v3")
+	writeField(h, "tamga-cache-v4")
 	if p.Verified {
 		writeField(h, "verified")
 	} else {
@@ -313,6 +318,7 @@ func Key(p KeyParts) string {
 	writeField(h, queryWithoutCredential(p.Query))
 	writeField(h, p.Policy)
 	writeField(h, p.Scan)
+	writeField(h, p.Route)
 	h.Write(p.Body)
 	key := hex.EncodeToString(h.Sum(nil))
 	if p.Identity.local {

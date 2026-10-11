@@ -12,8 +12,9 @@
 //     conversation to that host with no click at all;
 //   - one that is not what it reads as: a host hidden behind user
 //     information (https://bank.example@evil.example), a host written with
-//     letters of another script that look like Latin ones, a link whose text
-//     names one host while it goes to another;
+//     letters of another script that look like Latin ones, a host that reads
+//     as a protected name and is not it (gıthub.com with a dotless ı), a
+//     link whose text names one host while it goes to another;
 //   - one that runs code or opens a local file when followed (javascript:,
 //     data:, file:, vbscript:);
 //   - one to a bare public address or an unusual port;
@@ -86,6 +87,9 @@ type Hit struct {
 	// Payload is the size in bytes of what the address carries, for an
 	// exfiltration hit.
 	Payload int
+	// Imitates is the protected host the link's host reads as, for a
+	// homoglyph hit made against the protected names (see Lists).
+	Imitates string
 }
 
 // Scan returns what is found about the links in text, ordered by position.
@@ -473,6 +477,9 @@ func (s *scan) judge(from, to int, kind, label string) {
 	}
 	if lookalikeHost(u.host) {
 		hit(Homoglyph, 0)
+	} else if name := s.lists.imitated(u.written); name != "" {
+		hit(Homoglyph, 0)
+		s.hits[len(s.hits)-1].Imitates = name
 	}
 	if n := payload(u, kind == KindImage); n > 0 {
 		hit(Exfiltration, n)
@@ -533,9 +540,13 @@ func publicName(host string) bool {
 type url struct {
 	scheme string
 	// rest is what follows "scheme:" for an address without a host.
-	rest             string
-	user             string
-	host, port       string
+	rest       string
+	user       string
+	host, port string
+	// written is the host with the case and the letters it was written in
+	// (host is lower-cased, and lower-casing turns a dotted capital İ into
+	// a plain i, which is not what a browser makes of it).
+	written          string
 	path, query      string
 	hasAuthoritySign bool
 }
@@ -600,14 +611,15 @@ func parseURL(raw string) (url, bool) {
 			break
 		}
 	}
-	host = strings.TrimSuffix(strings.ToLower(percentDecode(host)), ".")
+	host = strings.TrimSuffix(percentDecode(host), ".")
 	if len(host) > maxHostBytes {
 		host = host[:maxHostBytes]
 		for len(host) > 0 && !utf8.ValidString(host) {
 			host = host[:len(host)-1]
 		}
 	}
-	u.host = host
+	u.written = host
+	u.host = strings.ToLower(host)
 	if hash := strings.IndexByte(tail, '#'); hash >= 0 {
 		// The part after "#" stays with the client; it is not sent.
 		tail = tail[:hash]

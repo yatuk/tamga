@@ -140,7 +140,10 @@ type scanResponse struct {
 	Action   string        `json:"action"`
 	Findings []scanFinding `json:"findings"`
 	// RedactedText is set only when the action is REDACT.
-	RedactedText  *string       `json:"redacted_text,omitempty"`
+	RedactedText *string `json:"redacted_text,omitempty"`
+	// RouteTo is set only when the action is ROUTE: the internal pool the
+	// proxy would send the request to. A scan sends nothing anywhere.
+	RouteTo       string        `json:"route_to,omitempty"`
 	Policy        scanPolicyRef `json:"policy"`
 	ScanLatencyMs float64       `json:"scan_latency_ms"`
 }
@@ -422,6 +425,9 @@ type scanEval struct {
 	fallback string
 	// headers are response headers the evaluation asks for.
 	headers [][2]string
+	// route is the internal pool the policy names for the action ROUTE, set
+	// when that was the verdict of the rules.
+	route string
 }
 
 // scanInput is what evaluate reads: a chat request in OpenAI's shape, built
@@ -678,6 +684,13 @@ func (h *scanHandler) evaluateInput(ctx context.Context, call *scanCall, request
 		}
 	}
 
+	// ROUTE is reported, with the pool, and not carried out: a scan sends
+	// nothing. The proxy path would also strip what a STRIP rule covers on
+	// the way to the pool; no text is rewritten here for it.
+	if action == policy.ActionRoute {
+		ev.route = pol.RoutePool()
+	}
+
 	ev.action, ev.findings, ev.actionOf = action, findings, actionOf
 	return ev, ""
 }
@@ -781,6 +794,9 @@ func (h *scanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if ev.action == policy.ActionRedact && len(ev.rewritten) == 1 {
 		out.RedactedText = &ev.rewritten[0]
 	}
+	if ev.action == policy.ActionRoute {
+		out.RouteTo = ev.route
+	}
 	coarse := who.Scope == apikeys.ScopeProxy
 	call.byType = map[string]int{}
 	for _, f := range ev.findings {
@@ -838,14 +854,14 @@ func messageTexts(body []byte, n int) ([]string, error) {
 // scanActs reports whether a verdict stops the text or rewrites it, as
 // opposed to letting it through as it is.
 func scanActs(a policy.Action) bool {
-	return a == policy.ActionBlock || a == policy.ActionStrip || a == policy.ActionRedact
+	return a == policy.ActionBlock || a == policy.ActionRoute || a == policy.ActionStrip || a == policy.ActionRedact
 }
 
 // scanVerdict is an action as the scan API names it. LOG forwards the
 // request untouched on the proxy path, which to a caller is a PASS.
 func scanVerdict(a policy.Action) string {
 	switch a {
-	case policy.ActionBlock, policy.ActionStrip, policy.ActionRedact, policy.ActionWarn:
+	case policy.ActionBlock, policy.ActionRoute, policy.ActionStrip, policy.ActionRedact, policy.ActionWarn:
 		return string(a)
 	}
 	return string(policy.ActionPass)

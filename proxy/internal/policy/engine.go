@@ -20,6 +20,11 @@ type Action string
 
 const (
 	ActionBlock  Action = "BLOCK"
+	// ActionRoute sends the request, as written, to a pool of model servers
+	// the organisation runs itself, and not to the provider the caller
+	// addressed. The caller gets an answer and the text does not leave. See
+	// route.go.
+	ActionRoute  Action = "ROUTE"
 	// ActionStrip replaces the whole piece of text a finding is in with a
 	// placeholder and forwards the request. It is what an agent session
 	// needs when a tool result carries an injection: the model never sees
@@ -53,6 +58,9 @@ type Rule struct {
 	// caller not to do that: safe when your own server builds the request,
 	// not when end users reach the proxy directly.
 	AppliesTo []string `yaml:"applies_to" json:"applies_to,omitempty"`
+	// RouteTo names the internal pool (providers.pools) a rule with the
+	// action ROUTE sends the request to. See route.go.
+	RouteTo string `yaml:"route_to,omitempty" json:"route_to,omitempty"`
 }
 
 // MessageRoles are the roles a rule's applies_to may name.
@@ -100,6 +108,22 @@ type Providers struct {
 type ProviderUpstreamPool struct {
 	Strategy  string                     `yaml:"strategy" json:"strategy"` // fallback_chain | round_robin
 	Endpoints []ProviderUpstreamEndpoint `yaml:"providers" json:"providers"`
+	// The four below describe an internal pool, the target of the ROUTE
+	// action (route.go). They are left out of the JSON form when unset, so a
+	// policy without them keeps its digest.
+	//
+	// Internal marks the pool as model servers the organisation runs itself.
+	// Such a pool is named freely, not after a route, and is used only by
+	// ROUTE; ROUTE accepts no other kind.
+	Internal bool `yaml:"internal,omitempty" json:"internal,omitempty"`
+	// Dialect is the API the pool's servers speak: "openai" or "anthropic".
+	Dialect string `yaml:"dialect,omitempty" json:"dialect,omitempty"`
+	// Model, when set, replaces the model name of a routed request.
+	Model string `yaml:"model,omitempty" json:"model,omitempty"`
+	// AllowPrivateAddresses lets the pool connect to a private or loopback
+	// address. The address must still be one the operator listed in
+	// TAMGA_UPSTREAM_ALLOW; this says the policy means to go there.
+	AllowPrivateAddresses bool `yaml:"allow_private_addresses,omitempty" json:"allow_private_addresses,omitempty"`
 }
 
 // BreakerConfig overrides gobreaker defaults for an endpoint.
@@ -126,6 +150,8 @@ type CustomEntity struct {
 	Severity    string  `yaml:"severity" json:"severity"`
 	Action      string  `yaml:"action" json:"action"`
 	Confidence  float64 `yaml:"confidence" json:"confidence"`
+	// RouteTo names the internal pool for the action ROUTE (route.go).
+	RouteTo string `yaml:"route_to,omitempty" json:"route_to,omitempty"`
 }
 
 // Competitor defines a competitor brand or product to detect in LLM prompts.
@@ -135,9 +161,11 @@ type Competitor struct {
 	Name        string   `yaml:"name" json:"name"`               // e.g. "Lakera Guard"
 	Patterns    []string `yaml:"patterns" json:"patterns"`       // regex patterns to match (case-insensitive)
 	Severity    string   `yaml:"severity" json:"severity"`       // "low" | "medium" | "high"
-	Action      string   `yaml:"action" json:"action"`           // BLOCK, STRIP, REDACT, WARN, LOG or PASS; see entry_action.go
+	Action      string   `yaml:"action" json:"action"`           // BLOCK, ROUTE, STRIP, REDACT, WARN, LOG or PASS; see entry_action.go
 	Description string   `yaml:"description" json:"description"` // human-readable note
 	Enabled     bool     `yaml:"enabled" json:"enabled"`         // per-competitor toggle
+	// RouteTo names the internal pool for the action ROUTE (route.go).
+	RouteTo string `yaml:"route_to,omitempty" json:"route_to,omitempty"`
 }
 
 // OutputStreamScan configures sliding-window scanning of SSE / NDJSON streams (FAZ1 Prompt 2).
@@ -627,7 +655,7 @@ func containsOutputKey(list []string, typ, cat string) bool {
 func ParseAction(s string) Action {
 	a := Action(strings.ToUpper(strings.TrimSpace(s)))
 	switch a {
-	case ActionBlock, ActionStrip, ActionRedact, ActionWarn, ActionLog, ActionPass:
+	case ActionBlock, ActionRoute, ActionStrip, ActionRedact, ActionWarn, ActionLog, ActionPass:
 		return a
 	default:
 		return ActionPass
@@ -785,7 +813,7 @@ func (s *PolicyStore) Reload(path string) error {
 
 // Evaluate determines the action to take for a set of findings.
 // When multiple rules apply, the highest-severity action wins:
-// BLOCK > STRIP > REDACT > WARN > LOG > PASS.
+// BLOCK > ROUTE > STRIP > REDACT > WARN > LOG > PASS.
 func (p *Policy) Evaluate(findings []scanner.Finding) Action {
 	if len(findings) == 0 {
 		return ActionPass
@@ -921,6 +949,8 @@ func meetsThreshold(findingSeverity, ruleSensitivity string) bool {
 func actionSeverity(a Action) int {
 	switch a {
 	case ActionBlock:
+		return 6
+	case ActionRoute:
 		return 5
 	case ActionStrip:
 		return 4

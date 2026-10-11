@@ -316,12 +316,18 @@ func (cfg Config) handlePolicySimulate(w http.ResponseWriter, r *http.Request) {
 		FindingSpan(body.SampleText, f).Put(item)
 		out = append(out, item)
 	}
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	result := map[string]interface{}{
 		"policy_name":    pol.Name,
 		"policy_version": pol.Version,
 		"action":         string(topAction),
 		"findings":       out,
-	})
+	}
+	// A simulation sends nothing anywhere. For ROUTE it names the internal
+	// pool the proxy would send the request to.
+	if topAction == policy.ActionRoute {
+		result["route_to"] = pol.RoutePool()
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 // simulateMatch is the match as the simulation shows it. What a pattern of
@@ -337,6 +343,8 @@ func simulateMatch(f scanner.Finding) string {
 func policyActionSeverity(a policy.Action) int {
 	switch a {
 	case policy.ActionBlock:
+		return 6
+	case policy.ActionRoute:
 		return 5
 	case policy.ActionStrip:
 		return 4

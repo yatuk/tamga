@@ -136,6 +136,26 @@ func TestLinkScanner_ThroughSegmentsIsRedactable(t *testing.T) {
 	}
 }
 
+// A host that reads as a protected name is a link_homoglyph finding that
+// says which name, and is masked like any other link.
+func TestLinkScanner_ProtectedLookalike(t *testing.T) {
+	text := "Clone it from https://gıthub.com/acme/tooling.git and run make."
+	found, err := NewLinkScanner(nil).Scan(context.Background(), []byte(text))
+	if err != nil || len(found) != 1 {
+		t.Fatalf("findings = %+v, err = %v", found, err)
+	}
+	f := found[0]
+	if f.Category != linkscan.Homoglyph || f.Severity != "high" || f.Match != "gıthub.com" || f.Metadata["imitates"] != "github.com" {
+		t.Errorf("finding is %+v", f)
+	}
+	if got, want := extract.ApplyEdits(text, RedactEdits(found)), "Clone it from [link_homoglyph_REDACTED] and run make."; got != want {
+		t.Errorf("\n got %q\nwant %q", got, want)
+	}
+	if f, _ := NewLinkScanner(nil).Scan(context.Background(), []byte("See https://ışık.example.com.tr/ürünler and https://github.com/acme")); len(f) != 0 {
+		t.Errorf("honest hosts reported: %+v", f)
+	}
+}
+
 func TestLinkScanner_ListsAreReadOnEveryScan(t *testing.T) {
 	var current *linkscan.Lists
 	s := NewLinkScanner(func() *linkscan.Lists { return current })

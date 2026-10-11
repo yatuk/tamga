@@ -207,6 +207,9 @@ func loadCSV(path string) ([]sample, error) {
 	defer func() { _ = f.Close() }()
 	r := csv.NewReader(f)
 	r.FieldsPerRecord = -1
+	// A set may open with lines that say what it is and how it may be used
+	// (tr_locked.csv). Every row starts with its id, never with a '#'.
+	r.Comment = '#'
 	var out []sample
 	first := true
 	for {

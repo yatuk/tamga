@@ -35,6 +35,9 @@ type requestOutcome struct {
 	outputScanned  bool
 	outputAction   string
 	outputFindings []scanner.Finding
+
+	// routePool is the internal pool a ROUTE verdict named (events.Event.RoutePool).
+	routePool string
 }
 
 type outcomeKey struct{}
@@ -128,6 +131,7 @@ func (o *requestOutcome) fill(e *events.Event) {
 	defer o.mu.Unlock()
 	e.PolicyName, e.PolicyVersion = o.policyName, o.policyVersion
 	e.OrgVerified = o.verified
+	e.RoutePool = o.routePool
 	e.InputTokens, e.OutputTokens = o.inTok, o.outTok
 	if o.costKnown {
 		e.CostKnown, e.CostUSD = true, o.costUSD

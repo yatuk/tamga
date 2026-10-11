@@ -57,6 +57,8 @@ type Metrics struct {
 	Blocked       atomic.Int64
 	Redacted      atomic.Int64
 	Warned        atomic.Int64
+	// Routed counts requests answered by an internal pool (action ROUTE).
+	Routed atomic.Int64
 }
 
 // MetricsHandler updates counters from event stream.
@@ -76,6 +78,8 @@ func MetricsHandler(m *Metrics) func(Event) {
 				m.Redacted.Add(1)
 			case "WARN":
 				m.Warned.Add(1)
+			case "ROUTE":
+				m.Routed.Add(1)
 			}
 		case "output_scan_hint":
 			// not counted toward request totals

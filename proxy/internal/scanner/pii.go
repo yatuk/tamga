@@ -32,6 +32,15 @@ type piiPattern struct {
 	// skip, when set, rejects a match for where it stands in the text: it
 	// is something else there than what the pattern is looking for.
 	skip func(text string, loc []int) bool
+	// gate, when set, names ASCII stems of which one must occur in a text
+	// (in any case) for the pattern to be run on it at all.
+	gate []string
+	// fingerprint, when set, tells apart two values with the same masked
+	// match (Finding.fp).
+	fingerprint func(matched string) uint64
+	// factor, when it has a format part, is the pattern's confidence
+	// breakdown; without it calculatePIIConfidence decides.
+	factor ConfidenceFactor
 }
 
 // accept decides whether the match at loc is a finding for p, and returns the
@@ -83,6 +92,9 @@ func compilePIIPatterns() {
 				}
 				return validLuhn(d)
 			},
+			// An IMEI or a MERSİS number that the text names as one
+			// (pii_tr_ids.go).
+			skip:       labelledNotACard,
 			confidence: 0.95,
 		},
 		{
@@ -210,6 +222,7 @@ func compilePIIPatterns() {
 			confidence: 0.85,
 		},
 	}
+	piiPatterns = append(piiPatterns, trIDPatterns()...)
 }
 
 // PIIScanner detects personally identifiable information using compiled regexp patterns.
@@ -242,7 +255,7 @@ func (s *PIIScanner) Scan(ctx context.Context, content []byte) ([]Finding, error
 	// it would erase the digits that number-word expansion just produced.
 	normOpts := normalize.Default()
 	normOpts.Deleet = false
-	views := normalize.ApplyViews(contentStr, normOpts)
+	views := readingsFor(ctx, contentStr, normOpts)
 
 	// The text as written.
 	if !scanPIIView(st, &findings, normalize.SourceView(contentStr), "", false) {
@@ -326,6 +339,9 @@ func scanPIIView(st *scanStop, findings *[]Finding, view normalize.View, via str
 		if reversed && p.forwardOnly {
 			continue
 		}
+		if len(p.gate) > 0 && !anyStemFold(text, p.gate) {
+			continue
+		}
 		if st.stopped() {
 			return false
 		}
@@ -345,6 +361,12 @@ func scanPIIView(st *scanStop, findings *[]Finding, view normalize.View, via str
 			if p.Name == "credit_card" {
 				addCardMetadata(metadata, matched)
 				fp = cardFingerprint(matched)
+			}
+			if p.fingerprint != nil {
+				fp = p.fingerprint(matched)
+			}
+			if p.factor.Format > 0 {
+				score = CalculateConfidence(p.factor)
 			}
 			if p.Name == "tc_kimlik" {
 				d := digitsOnly(matched)

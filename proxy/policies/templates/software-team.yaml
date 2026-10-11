@@ -1,0 +1,76 @@
+# software-team: a starting point for developers and coding agents that
+# send code, logs and configuration to a model through the proxy.
+#
+# This is a starting point, not legal advice, and using it does not make a
+# deployment compliant with anything. Tamga does not know what a trade
+# secret is: source code passes unless it holds a credential or a pattern of
+# yours matches it.
+#
+# What it follows (docs/research/turkish-dlp-landscape.md):
+#   - "Policy wording": the authority's text on generative AI at work names
+#     source code, product designs and trade secrets shared with external
+#     tools as a risk. Of those, a pattern can recognise credentials.
+#   - "Data types": test data and logs carry the same identifiers as
+#     production (national id, card, IBAN, phone).
+#
+# What it does: every credential is blocked. Personal data is masked and
+# not blocked, so that a session over a log file or a fixture goes on with
+# the values replaced. In text that tools return (files, web pages, command
+# output) an injection removes that piece and the session continues.
+# IP addresses are left alone: configuration is full of them.
+version: "1.0"
+name: "software-team"
+
+rules:
+  secret_detection:
+    action: BLOCK
+    sensitivity: low
+
+  # Masked where they stand. A value found only inside an encoded block
+  # (base64, hex) cannot be masked, and such a request is blocked.
+  pii_detection:
+    action: REDACT
+    sensitivity: medium
+    types: [tc_kimlik, credit_card, iban, email, phone_tr, phone, vkn, mersis_no, imei, passport_tr]
+
+  # In tool results: remove the piece and carry on (docs/agents.md).
+  injection_detection:
+    action: STRIP
+    sensitivity: low
+    applies_to: [tool]
+
+  # Anywhere else: stop.
+  injection:
+    action: BLOCK
+    sensitivity: medium
+    applies_to: [system, user, assistant, tool_definition, request]
+
+# Your own markers: a project code name, an internal host name pattern, a
+# licence header. This one is an example.
+custom_entities:
+  - name: "internal_host"
+    pattern: "[a-z0-9-]+\\.corp\\.example\\.invalid"
+    description: "Internal host name (example; replace the domain)"
+    severity: "medium"
+    action: REDACT
+    confidence: 0.85
+
+# A model must not answer with a credential it was shown. code_leak is not
+# listed: answers with code are what this traffic is for.
+output_rules:
+  enabled: true
+  block_on: [secret]
+  redact_on: [tc_kimlik, credit_card, malicious_link]
+
+# An agent with subagents goes over the chat defaults in minutes.
+rate_limit:
+  max_requests_per_minute: 600
+  max_tokens_per_day: 20000000
+  action_on_exceed: BLOCK
+
+body_limits:
+  default:
+    max_bytes: 1048576
+  per_provider:
+    anthropic:
+      max_bytes: 33554432

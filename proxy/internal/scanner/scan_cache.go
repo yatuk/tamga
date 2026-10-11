@@ -1,6 +1,7 @@
 package scanner
 
 import (
+	"context"
 	"crypto/sha256"
 	"sync"
 	"sync/atomic"
@@ -14,8 +15,12 @@ import (
 // piece of text is remembered for a while and reused.
 //
 // Only text of some length is remembered; a chat message scans faster than
-// it hashes. Scanners whose answer depends on anything but the text (the
-// request, the policy, patterns edited at runtime) are never cached.
+// it hashes. A scanner whose answer depends on the request is never cached.
+// One whose answer depends on the text and on a set of patterns that can
+// change (the policy's custom entities and competitors, the pattern store)
+// is cached under the fingerprint of the set it scanned with: after a change
+// the same text asks under another key and is scanned, and nothing has to be
+// evicted (see patternSetScanner).
 const (
 	scanCacheMinBytes = 2 << 10
 	scanCacheTTL      = 10 * time.Minute
@@ -24,7 +29,10 @@ const (
 
 type scanCacheKey struct {
 	scanner string
-	sum     [sha256.Size]byte
+	// rules is the fingerprint of the pattern set the findings were made
+	// with; empty for a scanner whose patterns are built in.
+	rules string
+	sum   [sha256.Size]byte
 }
 
 type scanCacheItem struct {
@@ -49,6 +57,51 @@ func pureScannerName(s Scanner) (string, bool) {
 	return "", false
 }
 
+// patternSetScanner is a scanner whose findings depend on the text and on a
+// set of patterns that changes while the proxy runs.
+//
+// patternSnapshot returns the fingerprint of the set the scanner has
+// compiled and a scan that uses exactly that set, taken together under the
+// scanner's lock. That pairing is what makes the cache exact: the findings
+// stored under a fingerprint were made with the patterns it names, also when
+// the policy changes while the scan runs. Two sets with the same fingerprint
+// are the same names, patterns, severities and actions. scan is nil when
+// there are no patterns, and then there is nothing to scan or to remember.
+type patternSetScanner interface {
+	Scanner
+	patternSnapshot() (fingerprint string, scan func(ctx context.Context, content []byte) ([]Finding, error))
+}
+
+// cachedScan runs one scanner over content, answering from the scan cache
+// when it can.
+func cachedScan(ctx context.Context, s Scanner, content []byte) ([]Finding, error) {
+	if len(content) < scanCacheMinBytes {
+		return s.Scan(ctx, content)
+	}
+	key := scanCacheKey{}
+	scan := s.Scan
+	if ps, ok := s.(patternSetScanner); ok {
+		fp, bound := ps.patternSnapshot()
+		if bound == nil {
+			return nil, nil
+		}
+		key.scanner, key.rules, scan = s.Name(), fp, bound
+	} else if name, pure := pureScannerName(s); pure {
+		key.scanner = name
+	} else {
+		return s.Scan(ctx, content)
+	}
+	key.sum = contentSum(ctx, content)
+	if found, ok := scanCacheGet(key); ok {
+		return found, nil
+	}
+	found, err := scan(ctx, content)
+	if err == nil {
+		scanCachePut(key, found)
+	}
+	return found, err
+}
+
 // ScanCacheStats returns how many scans were answered from the cache and how
 // many were not.
 func ScanCacheStats() (hits, misses int64) {
@@ -56,7 +109,8 @@ func ScanCacheStats() (hits, misses int64) {
 }
 
 // ResetScanCache empties the cache. Tests use it; so does a change that
-// alters what a pure scanner finds (the phrase automaton being rebuilt).
+// alters what a pure scanner finds (the phrase automaton being rebuilt). A
+// change of the policy's patterns needs no reset: it changes the key.
 func ResetScanCache() {
 	scanCache.mu.Lock()
 	scanCache.items = make(map[scanCacheKey]scanCacheItem)

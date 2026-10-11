@@ -42,6 +42,43 @@ type ProviderPool struct {
 	// egress judges and dials every endpoint; nil is the strict default.
 	egress    *Egress
 	rrCounter atomic.Uint64 // round-robin position; incremented atomically on each attempt
+
+	// internal marks the target of the ROUTE action: model servers the
+	// organisation runs itself (policy.ProviderUpstreamPool.Internal). Its
+	// endpoints are judged by CheckInternalEndpoint, the caller's provider
+	// credential is never sent to it, and RouteKey is the pool's own name.
+	internal     bool
+	allowPrivate bool
+	dialect      string
+	model        string
+}
+
+// Internal reports whether the pool is an internal one.
+func (p *ProviderPool) Internal() bool { return p != nil && p.internal }
+
+// Dialect is the API an internal pool's servers speak.
+func (p *ProviderPool) Dialect() string {
+	if p == nil {
+		return ""
+	}
+	return p.dialect
+}
+
+// Model is the model name an internal pool's requests are rewritten to, or
+// "" to leave the caller's.
+func (p *ProviderPool) Model() string {
+	if p == nil {
+		return ""
+	}
+	return p.model
+}
+
+// checkEndpoint is the judgement of one endpoint, made before every use.
+func (p *ProviderPool) checkEndpoint(rules *policy.UpstreamRules, ep *poolEndpoint) error {
+	if p.internal {
+		return rules.CheckInternalEndpoint(ep.base, p.allowPrivate)
+	}
+	return rules.CheckEndpoint(p.RouteKey, ep.base)
 }
 
 type poolEndpoint struct {
@@ -51,6 +88,9 @@ type poolEndpoint struct {
 	route     string
 	base      *url.URL
 	apiKeyEnv string
+	// internal and dialect are the pool's (see ProviderPool.internal).
+	internal bool
+	dialect  string
 	// rules decide whether apiKeyEnv may be read; nil is the strict default.
 	rules    *policy.UpstreamRules
 	priority int
@@ -171,6 +211,8 @@ func NewProviderPoolFromSpec(routeKey string, spec policy.ProviderUpstreamPool, 
 			base:  base,
 			// Not trimmed: the name the validator judged is the name read.
 			apiKeyEnv:  ep.APIKeyEnv,
+			internal:   spec.Internal,
+			dialect:    spec.Dialect,
 			rules:      eg.rules,
 			priority:   ep.Priority,
 			timeout:    dur,
@@ -195,6 +237,11 @@ func NewProviderPoolFromSpec(routeKey string, spec policy.ProviderUpstreamPool, 
 		endpoints:  eps,
 		totalSleep: maxDur,
 		egress:     eg,
+
+		internal:     spec.Internal,
+		allowPrivate: spec.AllowPrivateAddresses,
+		dialect:      spec.Dialect,
+		model:        spec.Model,
 	}
 }
 
@@ -328,7 +375,7 @@ func (p *ProviderPool) tryEndpoint(ctx context.Context, req *http.Request, body 
 	eg := p.egress.orStrict()
 	// Judged again on every use, whatever validation let through: the caller's
 	// body and credentials are about to be sent to this host.
-	if err := eg.rules.CheckEndpoint(p.RouteKey, ep.base); err != nil {
+	if err := p.checkEndpoint(eg.rules, ep); err != nil {
 		ep.lastFailUnix.Store(time.Now().Unix())
 		ep.lastFailReason.Store(FailNotAllowed)
 		if ep.refusalLogged.CompareAndSwap(false, true) {
@@ -338,6 +385,9 @@ func (p *ProviderPool) tryEndpoint(ctx context.Context, req *http.Request, body 
 		return nil, ErrEndpointRefused
 	}
 	var rt http.RoundTripper = eg.transport
+	if p.internal && !p.allowPrivate {
+		rt = eg.public
+	}
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		// The endpoint's timeout bounds the wait for its answer to begin. The
 		// context then has to outlive this function: the body is read by the
@@ -473,12 +523,24 @@ func cloneRequestForEndpoint(orig *http.Request, body []byte, ep *poolEndpoint, 
 		out.Header.Set("Content-Length", strconv.Itoa(len(body)))
 	}
 	out.Header = orig.Header.Clone()
+	if ep.internal {
+		// What the caller sent to authenticate is a credential for the
+		// provider it addressed, and names its account there. None of it
+		// goes to the organisation's own servers.
+		for _, name := range callerCredentialHeaders {
+			out.Header.Del(name)
+		}
+	}
 	// Only a variable the rules let a policy name is read. Anything else
 	// (the proxy's own TAMGA_* secrets above all) is left alone, even for an
 	// endpoint that got here without being validated.
 	if ep.apiKeyEnv != "" && ep.rules.KeyEnvAllowed(ep.apiKeyEnv) {
 		if key := strings.TrimSpace(os.Getenv(ep.apiKeyEnv)); key != "" {
 			out.Header.Set("Authorization", "Bearer "+key)
+			if ep.internal && ep.dialect == policy.DialectAnthropic {
+				// Servers that speak Anthropic's API read the key here.
+				out.Header.Set("X-Api-Key", key)
+			}
 		}
 	}
 	// The proxy signs a Bedrock request with the host's AWS credentials
@@ -501,6 +563,13 @@ func cloneRequestForEndpoint(orig *http.Request, body []byte, ep *poolEndpoint, 
 		}
 	}
 	return out
+}
+
+// callerCredentialHeaders are the request headers that carry, or name, the
+// caller's account at an outside provider.
+var callerCredentialHeaders = []string{
+	"Authorization", "Proxy-Authorization", "X-Api-Key", "Api-Key", "X-Goog-Api-Key",
+	"Cookie", "OpenAI-Organization", "OpenAI-Project",
 }
 
 func isRetryableNetErr(err error) bool {
@@ -561,6 +630,7 @@ func (p *ProviderPool) healthSummary() map[string]interface{} {
 	}
 	return map[string]interface{}{
 		"pool":          p.RouteKey,
+		"internal":      p.internal,
 		"healthy_count": healthy,
 		"total_count":   len(p.endpoints),
 		"providers":     rows,

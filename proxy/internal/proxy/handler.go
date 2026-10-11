@@ -735,6 +735,65 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 		}
 	}
 
+	// ROUTE sends the request to an internal pool as written (route.go). A
+	// finding whose own rule says STRIP is still stripped on the way, and
+	// when that cannot be done the request is blocked, as it is without
+	// ROUTE. The pool is looked up here, before anything is sent: a ROUTE
+	// that cannot be carried out blocks the request, and nothing below
+	// sends it to the provider instead.
+	//
+	// routeName is the pool the verdict named and stays set when the pool
+	// could not take the request; routeFailed then says why.
+	routeName, routeFailed := "", ""
+	var routePool *upstream.ProviderPool
+	if action == policy.ActionRoute {
+		routeName = pol.RoutePool()
+		strips := false
+		for _, f := range findings {
+			if actionOf(f) == policy.ActionStrip {
+				strips = true
+				break
+			}
+		}
+		if strips && scanIncomplete != "" {
+			// As for a STRIP verdict above: text is not sent stripped in part.
+			logger.Warn().Str("action", string(action)).Str("reason", scanIncomplete).
+				Msg("scan incomplete and the routed request was to be stripped: request refused")
+			scanner.RecordDegraded("strip_incomplete_" + scanIncomplete)
+			span.SetAttributes(attribute.Bool("tamga.blocked", true))
+			polSpan.SetAttributes(attribute.String("policy.action", string(action)))
+			polSpan.End()
+			writeRewriteIncomplete(w, requestID, scanIncomplete)
+			return
+		}
+		if strips {
+			res, stripErr := stripSegments(provider, body, segs, findings, stripOnly(actionOf), false)
+			if stripErr != nil {
+				reason := stripFailure(stripErr)
+				logger.Warn().Str("error_kind", errkind.Of(stripErr)).Str("reason", reason).Msg("STRIP not possible on a routed request, blocking instead")
+				scanner.RecordDegraded("strip_" + reason)
+				w.Header().Set("X-Tamga-Strip-Fallback", "block:"+reason)
+				action = policy.ActionBlock
+				routeName = ""
+			} else {
+				stripped = res
+				body = res.body
+			}
+		}
+		// Offline mode calls nothing, so it needs no pool.
+		mock := cfg.Config != nil && cfg.Config.MockUpstream
+		if action == policy.ActionRoute && !mock {
+			if routePool, routeFailed = routePoolFor(cfg, provider, routeName); routePool == nil {
+				logger.Warn().Str("pool", routeName).Str("reason", routeFailed).
+					Msg("ROUTE not possible, blocking instead: the request is not sent to the provider")
+				upstream.RecordRouteUnavailable(routeName, routeFailed)
+				action = policy.ActionBlock
+			} else {
+				body = rewriteModel(body, routePool.Model())
+			}
+		}
+	}
+
 	polSpan.SetAttributes(attribute.String("policy.action", string(action)))
 	polSpan.SetAttributes(attribute.Int("policy.exceptions_applied", len(exceptionMatches)))
 	polSpan.End()
@@ -752,7 +811,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 	}
 	// What the response tells the proxy is collected here and goes out with
 	// the request's event, which is published when the request is over.
-	outcome := &requestOutcome{policyName: pol.Name, policyVersion: pol.Version, verified: who.verified()}
+	outcome := &requestOutcome{policyName: pol.Name, policyVersion: pol.Version, verified: who.verified(), routePool: routeName}
 	ctx = withOutcome(ctx, outcome)
 	// A decision on the response is published from the upstream callbacks,
 	// which have this context and not the request.
@@ -785,7 +844,12 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 
 		setRiskHeaders(w.Header(), inputRisk, outputRisk)
 		setConfidenceHeaders(w.Header(), findings)
-		writeSecurityBlock(w, requestID, findings)
+		if routeFailed != "" {
+			// No rule blocked it: it was to be routed and could not be.
+			writeRouteUnavailable(w, requestID, routeFailed)
+		} else {
+			writeSecurityBlock(w, requestID, findings)
+		}
 		span.SetAttributes(attribute.Bool("tamga.blocked", true))
 		publishEvent(ctx, cfg, r, requestID, provider, body, findings, action, "request_blocked",
 			durationMs(scanDuration), durationMs(time.Since(start)), inputRisk, outputRisk)
@@ -839,6 +903,26 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 			Str("risk_level", inputRisk.Level).
 			Msg("✂ STRIP content removed — request forwarded")
 
+	case policy.ActionRoute:
+		// The body was prepared above: stripped where a rule says so, and
+		// naming the pool's model.
+		if stripped.stripped > 0 {
+			w.Header().Set("X-Tamga-Stripped-Count", strconv.Itoa(stripped.stripped))
+		}
+		if routedModel := extractModelFromBody(body); routedModel != "" {
+			model = routedModel
+		}
+		logger.Info().
+			Int("findings", len(findings)).
+			Int("stripped_segments", stripped.stripped).
+			Int64("total_ms", time.Since(start).Milliseconds()).
+			Str("action", "ROUTE").
+			Str("pool", routeName).
+			Str("model", model).
+			Int("input_risk", inputRisk.Percentage).
+			Str("risk_level", inputRisk.Level).
+			Msg("ROUTE request sent to the internal pool")
+
 	case policy.ActionWarn:
 		logger.Warn().
 			Int("findings", len(findings)).
@@ -878,6 +962,9 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 	if cfg.Config != nil && cfg.Config.MockUpstream {
 		setRiskHeaders(w.Header(), inputRisk, outputRisk)
 		setConfidenceHeaders(w.Header(), findings)
+		if action == policy.ActionRoute {
+			w.Header().Set(routedToHeader, routeName)
+		}
 		mockWriteResponse(w, r, requestID, requestIDShort, provider, action, redactedCount, redactedTypes, body, vaultMapping)
 		publishEvent(ctx, cfg, r, requestID, provider, body, findings, action, "request_scanned",
 			durationMs(scanDuration), durationMs(time.Since(start)), inputRisk, outputRisk)
@@ -909,6 +996,26 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 	if cfg.UpstreamRegistry != nil {
 		providerPool = cfg.UpstreamRegistry.Pool(provider)
 		upstreamHooks = cfg.UpstreamRegistry.Hooks()
+	}
+	// A routed request has one way out: the internal pool. The route's own
+	// pool and the provider's host are not used for it (resilientTransport
+	// refuses to send a routed request without its pool).
+	routed := action == policy.ActionRoute
+	if routed {
+		providerPool = routePool
+	}
+	// A routed request was answered by the organisation's own servers: the
+	// provider's price list does not apply, and its cost is not known.
+	price := func(model string, inTok, outTok int) (float64, bool) {
+		if routed {
+			return 0, false
+		}
+		return priceFor(cfg.PricingResolver, provider, model, inTok, outTok)
+	}
+	unpriced := func(model string) {
+		if !routed {
+			warnUnpriced(provider, model)
+		}
 	}
 
 	// Phase 3C — the cache key, worked out once on the body that is about to
@@ -944,6 +1051,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 				Body:     body,
 				Policy:   generation,
 				Scan:     cacheScan,
+				Route:    routeName,
 			})
 		}
 	}
@@ -1008,6 +1116,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 			breaker:       cfg.Breaker,
 			providerPool:  providerPool,
 			upstreamHooks: upstreamHooks,
+			routed:        routed,
 		},
 		// Flush SSE chunks to the client promptly (OpenAI/Anthropic streaming).
 		FlushInterval: 100 * time.Millisecond,
@@ -1019,6 +1128,9 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 				upSpan.SetAttributes(attribute.String("upstream.provider", p))
 			}
 			resp.Header.Set("X-Tamga-Request-Id", requestID)
+			if routed {
+				resp.Header.Set(routedToHeader, routeName)
+			}
 			resp.Header.Set("X-Tamga-Scan-Ms", strconv.FormatInt(scanDuration.Milliseconds(), 10))
 			resp.Header.Set("X-Tamga-Scan-Latency-Ms", strconv.FormatInt(scanDuration.Milliseconds(), 10))
 			resp.Header.Set("X-Tamga-Scanner-Version", scanner.ScannerVersion)
@@ -1099,9 +1211,9 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 				model := extractModelFromBody(body)
 				// Conservative: treat all preflight tokens as input since
 				// output tokens are unknown for streams.
-				costUSD, priced := priceFor(cfg.PricingResolver, provider, model, preflightTokens, 0)
+				costUSD, priced := price(model, preflightTokens, 0)
 				if !priced {
-					warnUnpriced(provider, model)
+					unpriced(model)
 				}
 				cfg.Budget.Record(orgID, preflightTokens, costUSD)
 				resp.Header.Set("X-Tamga-Tokens-Estimated", strconv.Itoa(preflightTokens))
@@ -1125,6 +1237,13 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 					g.failOpen = pol.OutputRules.FailOpen
 					if n := pol.OutputRules.Streaming.MaxBufferBytes; n > 0 {
 						g.maxHeld = n
+					}
+					// Reasoning and tool-call arguments are scanned as what
+					// they are; one tool call's arguments are kept back up
+					// to what a buffered answer may be.
+					g.scanSegs = streamSegmentScanner(ctx, cfg.Registry, cfg.OutputOnlyRegistry, pipeCfg)
+					if n := pol.OutputRules.BufferBytes; n > 0 {
+						g.argsMax = n
 					}
 					configureStreamSchema(ctx, g, pol, body)
 					resp.Header.Set("X-Tamga-Stream-Scan", "enabled")
@@ -1193,7 +1312,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 				if inTok+outTok > 0 {
 					orgID := orgIDForRequest(r, cfg)
 					model := extractModelFromBody(body)
-					costUSD, priced := priceFor(cfg.PricingResolver, provider, model, inTok, outTok)
+					costUSD, priced := price(model, inTok, outTok)
 					outcome.setUsage(inTok, outTok)
 					if priced {
 						outcome.setCost(costUSD)
@@ -1207,7 +1326,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 					if priced {
 						resp.Header.Set("X-Tamga-Cost-USD", strconv.FormatFloat(costUSD, 'f', 6, 64))
 					} else {
-						warnUnpriced(provider, model)
+						unpriced(model)
 					}
 					span.SetAttributes(
 						attribute.Int("gen_ai.usage.input_tokens", inTok),
@@ -1362,6 +1481,14 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 			upSpan.RecordError(err)
 			upSpan.SetStatus(codes.Error, err.Error())
 			log.Error().Err(err).Str("component", "proxy").Str("request_id", requestID).Msg("upstream proxy error")
+			if routed {
+				// No endpoint of the internal pool gave an answer. The
+				// request stops here; it is not sent to the provider.
+				routeFailed = upstream.RouteUpstream
+				upstream.RecordRouteUnavailable(routeName, routeFailed)
+				writeRouteUnavailable(rw, requestID, routeFailed)
+				return
+			}
 			rw.Header().Set("Content-Type", "application/json")
 			rw.Header().Set("X-Tamga-Request-Id", requestID)
 			rw.WriteHeader(http.StatusBadGateway)
@@ -1395,6 +1522,10 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 			if entry, ok := cfg.Cache.Get(cacheKey); ok {
 				w.Header().Set("X-Tamga-Request-Id", requestID)
 				w.Header().Set("X-Tamga-Cache", "hit")
+				if routed {
+					// The entry was stored under this pool (cache.KeyParts.Route).
+					w.Header().Set(routedToHeader, routeName)
+				}
 				w.Header().Set("X-Tamga-Scan-Ms", strconv.FormatInt(scanDuration.Milliseconds(), 10))
 				w.Header().Set("X-Tamga-Scan-Latency-Ms", strconv.FormatInt(scanDuration.Milliseconds(), 10))
 				w.Header().Set("X-Tamga-Scanner-Version", scanner.ScannerVersion)
@@ -1455,7 +1586,15 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 		Str("risk_level", inputRisk.Level).
 		Msg(requestLogMessage(action))
 
-	publishEvent(withCacheStatus(ctx, cacheStatus), cfg, r, requestID, provider, body, findings, action, "request_scanned",
+	eventType := "request_scanned"
+	if routed && routeFailed != "" {
+		// The pool did not answer and the request was stopped: it is
+		// recorded as the block it was.
+		action, eventType = policy.ActionBlock, "request_blocked"
+		applyFindingActionTaken(findings, action)
+		span.SetAttributes(attribute.Bool("tamga.blocked", true))
+	}
+	publishEvent(withCacheStatus(ctx, cacheStatus), cfg, r, requestID, provider, body, findings, action, eventType,
 		durationMs(scanDuration), durationMs(total), inputRisk, outputRisk)
 }
 
@@ -1468,11 +1607,17 @@ type resilientTransport struct {
 
 	providerPool  *upstream.ProviderPool
 	upstreamHooks upstream.Hooks
+	// routed marks a request a ROUTE verdict sends to an internal pool. It
+	// goes through providerPool or not at all.
+	routed bool
 }
 
 func (t *resilientTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if t == nil || t.base == nil {
 		return nil, errors.New("resilient transport not initialized")
+	}
+	if t.routed && (t.providerPool == nil || !t.providerPool.Internal()) {
+		return nil, errors.New("routed request without an internal pool")
 	}
 	if t.providerPool != nil {
 		retries := t.maxRetries
@@ -1697,6 +1842,8 @@ func requestLogMessage(a policy.Action) string {
 	switch a {
 	case policy.ActionPass:
 		return "✓ PASS request proxied"
+	case policy.ActionRoute:
+		return "ROUTE request answered by the internal pool"
 	case policy.ActionRedact:
 		return "↻ REDACT request proxied"
 	case policy.ActionStrip:

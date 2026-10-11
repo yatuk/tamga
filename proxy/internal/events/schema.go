@@ -101,6 +101,9 @@ func eventToV2(e Event) EventV2 {
 	if e.PolicyVersion != "" {
 		payload["policy_version"] = e.PolicyVersion
 	}
+	if e.RoutePool != "" {
+		payload["route_pool"] = e.RoutePool
+	}
 
 	var traceID string
 	if e.TraceContext != nil {

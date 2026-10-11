@@ -190,6 +190,16 @@ output_rules:
   enabled: true
   links: {allow_hosts: [example.com, "*.com"]}
 `, "output_rules.links.allow_hosts[1]", "host"},
+		"protected entry that is a wildcard": {`
+output_rules:
+  enabled: true
+  links: {protected_hosts: [bank.example.com.tr, "*.example.com"]}
+`, "output_rules.links.protected_hosts[1]", "host"},
+		"protected entry that is not a domain": {`
+output_rules:
+  enabled: true
+  links: {protected_hosts: [intranet]}
+`, "output_rules.links.protected_hosts[0]", "host"},
 		"schema mismatch cannot be redacted": {`
 output_rules:
   enabled: true
@@ -234,6 +244,56 @@ func TestOutputContent_ListBounds(t *testing.T) {
 	}
 	if !found {
 		t.Error("a deny list over the limit is accepted")
+	}
+}
+
+// The policy's protected names reach the link scanner, next to the built-in
+// ones.
+func TestOutputContent_ProtectedHosts(t *testing.T) {
+	p, err := LoadFromBytes([]byte(`
+output_rules:
+  enabled: true
+  redact_on: [malicious_link]
+  links:
+    protected_hosts: [şekerbank.example.com.tr, portal.example.org]
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lists := p.LinkLists()
+	if lists == nil {
+		t.Fatal("no lists")
+	}
+	for text, want := range map[string]string{
+		"Giriş: https://sekerbank.example.com.tr/giris": "şekerbank.example.com.tr",
+		"Giriş: https://şekerbank.example.com.tr/giris": "",
+		"Portal: https://pörtal.example.org/":           "portal.example.org",
+		"Portal: https://portal.example.org/":           "",
+		"Kod: https://gıthub.com/acme/x":                "github.com",
+	} {
+		got := ""
+		for _, h := range linkscan.Scan(text, lists) {
+			if h.Category != linkscan.Homoglyph {
+				t.Errorf("%q: %s", text, h.Category)
+			}
+			got = h.Imitates
+		}
+		if got != want {
+			t.Errorf("%q: imitates %q, want %q", text, got, want)
+		}
+	}
+
+	hosts := make([]string, linkscan.MaxProtectedHosts+1)
+	for i := range hosts {
+		hosts[i] = "h" + strings.Repeat("x", i%7) + ".example.net"
+	}
+	over := &Policy{OutputRules: &OutputRules{Enabled: true, Links: &OutputLinks{ProtectedHosts: hosts}}}
+	found := false
+	for _, is := range boundsIssues(over) {
+		found = found || (is.Field == "output_rules.links.protected_hosts" && is.Rule == "too_many")
+	}
+	if !found {
+		t.Error("a protected list over the limit is accepted")
 	}
 }
 

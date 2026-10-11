@@ -7,6 +7,10 @@ this directory holds only this document. The source of truth is the code:
 - [`../injection_i18n.go`](../injection_i18n.go): more phrases appended to `injectionPatterns` at init
   (Turkish, German, Russian), and regular expressions (`i18nRegexPatterns`) for the same
   phrases written with irregular whitespace.
+- [`../injection_turkish.go`](../injection_turkish.go): no phrases. A Turkish phrase of the list that
+  ends in a verb ("… unut", "… atla", "… göster") counts only where the verb is still a command in
+  the text (`turkishVerbIsCommand`), because as a substring it is also the start of the verb's other
+  forms. The Turkish rules proper are not phrases but a target, a verb and an ending, and live there.
 - [`../dfa.go`](../dfa.go): builds one Aho-Corasick automaton from these phrases plus secret
   prefixes and context keywords.
 

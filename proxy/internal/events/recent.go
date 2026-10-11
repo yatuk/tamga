@@ -291,6 +291,8 @@ type EventJSON struct {
 	OutputAction  string   `json:"output_action,omitempty"`
 	PolicyName    string   `json:"policy_name,omitempty"`
 	PolicyVersion string   `json:"policy_version,omitempty"`
+	// RoutePool: see Event.RoutePool.
+	RoutePool string `json:"route_pool,omitempty"`
 }
 
 // EventToJSON converts an internal Event to its JSON-serialisable representation.
@@ -332,6 +334,7 @@ func EventToJSON(e Event) EventJSON {
 		j.OutputAction = e.OutputAction
 		j.PolicyName = e.PolicyName
 		j.PolicyVersion = e.PolicyVersion
+		j.RoutePool = e.RoutePool
 	}
 	return j
 }

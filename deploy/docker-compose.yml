@@ -187,6 +187,7 @@ services:
       - ./migrations/017_request_record.up.sql:/docker-entrypoint-initdb.d/017_request_record.sql:ro
       - ./migrations/018_drop_tenant_rls.up.sql:/docker-entrypoint-initdb.d/018_drop_tenant_rls.sql:ro
       - ./migrations/019_drop_unused_tables.up.sql:/docker-entrypoint-initdb.d/019_drop_unused_tables.sql:ro
+      - ./migrations/020_route_pool.up.sql:/docker-entrypoint-initdb.d/020_route_pool.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tamga}"]
       interval: 5s

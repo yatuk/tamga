@@ -82,6 +82,11 @@ func (s *LinkScanner) Scan(ctx context.Context, content []byte) ([]Finding, erro
 		if h.Payload > 0 {
 			meta["chars"] = strconv.Itoa(h.Payload)
 		}
+		if h.Imitates != "" {
+			// The protected name the host reads as. It is a name from the
+			// policy or the built-in list, never text of the answer.
+			meta["imitates"] = h.Imitates
+		}
 		findings = append(findings, Finding{
 			Type:           LinkFindingType,
 			Category:       h.Category,

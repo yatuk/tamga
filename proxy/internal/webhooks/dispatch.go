@@ -286,7 +286,7 @@ func AlertFromEvent(e events.Event, defaultOrg string) (Alert, bool) {
 		return Alert{}, false
 	}
 	switch a.Action {
-	case "BLOCK", "STRIP", "REDACT", "WARN":
+	case "BLOCK", "ROUTE", "STRIP", "REDACT", "WARN":
 		return a, true
 	}
 	return Alert{}, false
@@ -376,7 +376,9 @@ func (d *Dispatcher) NotifyURLs(urls []string, a Alert) {
 func wants(w Webhook, a Alert) bool {
 	switch a.Action {
 	case "BLOCK", "STRIP", "WARN":
-	case "REDACT":
+	case "REDACT", "ROUTE":
+		// ROUTE, like REDACT, is a request that was changed and answered,
+		// and can be every request of a team that works with such data.
 		if w.ThresholdCount <= 1 && w.CooldownSecs <= 0 {
 			return false
 		}

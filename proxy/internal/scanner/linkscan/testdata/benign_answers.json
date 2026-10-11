@@ -49,5 +49,12 @@
   "![Small inline icon](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==)",
   "E-posta ile de ulaşabilirsiniz: [destek@example.com.tr](mailto:destek@example.com.tr?subject=Destek%20talebi) ya da [0 850 000 00 00](tel:+908500000000).",
   "Wikipedia: [İstanbul](https://tr.wikipedia.org/wiki/%C4%B0stanbul) · [Boğaziçi Köprüsü](https://tr.wikipedia.org/wiki/15_Temmuz_%C5%9Eehitler_K%C3%B6pr%C3%BCs%C3%BC) · [Rumeli Hisarı (müze)](https://tr.wikipedia.org/wiki/Rumeli_Hisar%C4%B1_(m%C3%BCze)).",
-  "The Yandex page is at https://яндекс.рф/ and the Greek ministry at https://υπουργείο.example.gr/."
+  "The Yandex page is at https://яндекс.рф/ and the Greek ministry at https://υπουργείο.example.gr/.",
+  "Sipariş için https://çiçekçi.example.com.tr/sipariş sayfasını ya da [Güneş Kırtasiye](https://güneşkırtasiye.example.com.tr/ürünler) mağazasını kullanabilirsiniz.",
+  "Belediyenin duyuruları [şişli.example.bel.tr](https://şişli.example.bel.tr/duyurular) adresinde, kütüphane kataloğu ise https://kütüphane.example.edu.tr/katalog?q=ışık sayfasında.",
+  "Alan adının punycode yazımı da aynı siteye gider: https://xn--k-ekaa7p.example.com.tr/ ile https://ışık.example.com.tr/ aynıdır; [xn--ar-3ia9t9c.example.com.tr](https://xn--ar-3ia9t9c.example.com.tr/hakkında) da öyle.",
+  "Banka şubesinin sayfası [işbankası.example.com.tr](https://işbankası.example.com.tr/şubeler), kredi başvurusu https://www.yapıkredi.example.com.tr/başvuru ve vakıf duyuruları https://vakıf.example.org.tr/ adresinde.",
+  "İstanbul için https://İstanbul.example.bel.tr/ulaşım, Iğdır için https://ığdır.example.bel.tr/ ve Ağrı için [ağrı.example.bel.tr](https://ağrı.example.bel.tr/) sayfalarına bakın.",
+  "The Munich transport site is https://www.münchen.example.de/verkehr and the café's menu is at [café-lumière.example.fr](https://café-lumière.example.fr/carte); for Łódź see https://łódź.example.pl/ and for Danish sandwiches https://smørrebrød.example.dk/.",
+  "Names close to well-known ones are still their own: https://gıda.example.com.tr/, https://gitar.example.com.tr/, [göl.example.com.tr](https://göl.example.com.tr/) and https://äpple.example.se/ are ordinary sites, and https://docs.github.com/en/get-started is GitHub's own."
 ]

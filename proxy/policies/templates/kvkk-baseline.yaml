@@ -1,0 +1,67 @@
+# kvkk-baseline: a starting point for an organisation that sends text to an
+# external model and holds personal data under Law 6698 (KVKK).
+#
+# This is a starting point, not legal advice, and using it does not make a
+# deployment compliant with anything. It supports limiting which identifiers
+# leave through the proxy; whether a transfer has a legal basis, and what else
+# in a text is personal data, is for the organisation and a qualified person
+# to decide. Read docs/compliance/kvkk.md for what Tamga does not cover.
+#
+# What it follows (docs/research/turkish-dlp-landscape.md):
+#   - "Data types": the identifiers that DLP vendors document for Türkiye
+#     (national id, IBAN, tax number, passport, phone) and that Law 6698
+#     Md. 3 makes personal data when they point to a person.
+#   - "Policy wording": the authority's text on generative AI at work asks
+#     for anonymised and general wording and more care with health,
+#     financial and legal data. A pattern can hold back an identifier; it
+#     cannot recognise a diagnosis or a court file written as prose.
+#
+# What it does: identifiers that single out one person are blocked, contact
+# and business identifiers are masked, secrets and injections are blocked.
+# Not covered: names, postal addresses, and the special categories of Md. 6
+# (health, religion, union membership, criminal record and the rest). Add
+# your own identifiers under custom_entities.
+version: "1.0"
+name: "kvkk-baseline"
+
+rules:
+  # Masked before the request is forwarded. A plate and an IMEI are found
+  # only where the text names them (plaka, IMEI); see the research document
+  # for why. date_of_birth needs the words "doğum tarihi" or "DOB".
+  pii_detection:
+    action: REDACT
+    sensitivity: medium
+    types: [email, phone_tr, phone, iban, vkn, mersis_no, imei, license_plate_tr, date_of_birth, ip_public]
+
+  # Stopped. tc_kimlik also covers a foreigner's identity number (99...),
+  # which has the same check digits.
+  pii:
+    action: BLOCK
+    sensitivity: medium
+    types: [tc_kimlik, credit_card, passport_tr]
+
+  secret_detection:
+    action: BLOCK
+    sensitivity: low
+
+  injection:
+    action: BLOCK
+    sensitivity: medium
+
+# Answers are read too: a model can repeat an identifier it was given
+# earlier or was trained on.
+output_rules:
+  enabled: true
+  block_on: [tc_kimlik, credit_card]
+  redact_on: [email, phone_tr, iban, passport_tr]
+
+# The vault sends masked values as numbered placeholders and puts the
+# originals back in the answer. It is reversible tokenisation, not
+# anonymisation in the sense of Md. 3; it needs TAMGA_VAULT_KEY.
+vault:
+  enabled: false
+
+rate_limit:
+  max_requests_per_minute: 60
+  max_tokens_per_day: 500000
+  action_on_exceed: BLOCK

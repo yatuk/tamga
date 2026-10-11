@@ -19,7 +19,7 @@ import (
 //
 // The response is:
 //
-//	{ "range": "...", "bucket": "...", "points": [ { "t": ISO, "total", "blocked", "redacted", "warned", "scan_p95" } ] }
+//	{ "range": "...", "bucket": "...", "points": [ { "t": ISO, "total", "blocked", "redacted", "warned", "routed", "scan_p95" } ] }
 func (cfg Config) handleTimeseries(w http.ResponseWriter, r *http.Request) {
 	rng := strings.ToLower(r.URL.Query().Get("range"))
 	if rng == "" {
@@ -62,6 +62,7 @@ func (cfg Config) handleTimeseries(w http.ResponseWriter, r *http.Request) {
 					Blocked:  int(row.Blocked),
 					Redacted: int(row.Redacted),
 					Warned:   int(row.Warned),
+					Routed:   int(row.Routed),
 					scanP95:  row.ScanP95Ms,
 				}
 			}
@@ -98,6 +99,8 @@ func (cfg Config) handleTimeseries(w http.ResponseWriter, r *http.Request) {
 					p.Redacted++
 				case "WARN":
 					p.Warned++
+				case "ROUTE":
+					p.Routed++
 				}
 				p.scanLatencies = append(p.scanLatencies, e.ScanLatencyMs)
 			}
@@ -133,6 +136,7 @@ func (cfg Config) handleTimeseries(w http.ResponseWriter, r *http.Request) {
 			"blocked":  p.Blocked,
 			"redacted": p.Redacted,
 			"warned":   p.Warned,
+			"routed":   p.Routed,
 			"scan_p95": p95,
 		})
 	}
@@ -154,6 +158,7 @@ type tsPoint struct {
 	Blocked       int
 	Redacted      int
 	Warned        int
+	Routed        int
 	scanP95       float64 // from the database; the buffer path fills scanLatencies
 	scanLatencies []float64
 }

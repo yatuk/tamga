@@ -16,6 +16,7 @@ import (
 //	  links:
 //	    deny_hosts:  [files.example.net, "*.tracker.example"]
 //	    allow_hosts: [charts.example.com]
+//	    protected_hosts: [bank.example.com.tr]
 //	  json_schema:
 //	    when: requested
 //	    schema: {type: object, required: [answer], properties: {answer: {type: string}}}
@@ -37,6 +38,13 @@ type OutputLinks struct {
 	// operator's own domains, a chart service the application uses. The
 	// deny list still applies to them.
 	AllowHosts []string `yaml:"allow_hosts" json:"allow_hosts,omitempty"`
+	// ProtectedHosts are names whose look-alikes are reported: a host that
+	// reads as one of them once its Latin look-alike letters are folded to
+	// plain ones, and is not it or under it, is a link_homoglyph finding.
+	// They are added to the scanner's built-in names
+	// (linkscan.BuiltinProtectedHosts); the operator's own domains belong
+	// here.
+	ProtectedHosts []string `yaml:"protected_hosts" json:"protected_hosts,omitempty"`
 }
 
 // Values of output_rules.json_schema.when.
@@ -80,8 +88,8 @@ var (
 	lastSchema atomic.Pointer[compiledSchema]
 )
 
-// LinkLists returns the deny and allow lists of the policy for the link
-// scanner, nil when it has none. A policy that loaded has lists that
+// LinkLists returns the deny and allow lists and the protected names of the
+// policy for the link scanner, nil when it has none. A policy that loaded has lists that
 // compile; for one built in code with a bad entry the lists are nil.
 func (p *Policy) LinkLists() *linkscan.Lists {
 	if p == nil || p.OutputRules == nil || p.OutputRules.Links == nil {
@@ -92,6 +100,9 @@ func (p *Policy) LinkLists() *linkscan.Lists {
 		return c.lists
 	}
 	lists, err := linkscan.NewLists(l.DenyHosts, l.AllowHosts)
+	if err == nil {
+		err = lists.Protect(l.ProtectedHosts)
+	}
 	if err != nil {
 		lists = nil
 	}
@@ -161,7 +172,15 @@ func outputContentIssues(p *Policy) []ValidationIssue {
 		}
 		check("output_rules.links.deny_hosts", l.DenyHosts)
 		check("output_rules.links.allow_hosts", l.AllowHosts)
-		if !or.Enabled && (len(l.DenyHosts) > 0 || len(l.AllowHosts) > 0) {
+		if n := len(l.ProtectedHosts); n > linkscan.MaxProtectedHosts {
+			issues = append(issues, boundError("output_rules.links.protected_hosts", "too_many", "%d hosts, the limit is %d", n, linkscan.MaxProtectedHosts))
+		}
+		for i, h := range l.ProtectedHosts {
+			if err := linkscan.CheckProtectedHost(h); err != nil {
+				issues = append(issues, boundError(fmt.Sprintf("output_rules.links.protected_hosts[%d]", i), "host", "%v", err))
+			}
+		}
+		if !or.Enabled && (len(l.DenyHosts) > 0 || len(l.AllowHosts) > 0 || len(l.ProtectedHosts) > 0) {
 			issues = append(issues, boundWarning("output_rules.links", "no_effect", "links has no effect while output_rules.enabled is false: answers are not scanned"))
 		}
 	}

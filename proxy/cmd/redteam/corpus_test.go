@@ -89,6 +89,51 @@ func TestTranslationAbandonRowsRaiseTheSignal(t *testing.T) {
 	t.Logf("%d rows: all raise the signal, %d pass under the shipped policy", rows, passed)
 }
 
+// The rows of pii.plate.unlisted hold a Turkish vehicle plate that the text
+// names as one. The scanners report it (license_plate_tr), and the shipped
+// policy does not list the category, because a plate is ordinary text in
+// most traffic: these rows pass and are counted as benign above. This pins
+// what is true of them: every one is found, and a policy that lists the
+// category masks every one, as the templates under policies/templates do.
+func TestPlateRowsAreFoundAndMaskedWhenListed(t *testing.T) {
+	samples, err := loadCSV("../../testdata/redteam/prompts.csv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	shipped := loadPolicy("../../tamga-policy.yaml")
+	listed, err := policy.LoadFromBytes([]byte("name: t\nrules:\n  pii_detection:\n    action: REDACT\n    types: [license_plate_tr]\n"))
+	if shipped == nil || err != nil {
+		t.Fatalf("policies did not load: %v", err)
+	}
+	reg := buildRegistry()
+	rows := 0
+	for _, s := range samples {
+		if s.Category != "pii.plate.unlisted" {
+			continue
+		}
+		rows++
+		findings, _ := reg.ScanAll(context.Background(), []byte(s.Prompt))
+		found := false
+		for _, f := range findings {
+			if f.Type == "pii" && f.Category == "license_plate_tr" {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%s: no license_plate_tr finding", s.ID)
+		}
+		if a := listed.Evaluate(findings); a != policy.ActionRedact {
+			t.Errorf("%s: %s under a rule that lists the category, want REDACT", s.ID, a)
+		}
+		if a := shipped.Evaluate(findings); a != policy.ActionPass {
+			t.Errorf("%s: %s under the shipped policy, want PASS", s.ID, a)
+		}
+	}
+	if rows == 0 {
+		t.Fatal("no pii.plate.unlisted rows in the corpus")
+	}
+}
+
 // The published detection numbers are a floor. A change that flags a benign
 // prompt, or catches fewer attacks than the last published run, fails here
 // and has to update docs/benchmarks/ deliberately.
@@ -98,7 +143,7 @@ func TestCorpusDoesNotRegress(t *testing.T) {
 		minCaught  int
 		maxFlagged int
 	}{
-		{"../../testdata/redteam/prompts.csv", 211, 0},
+		{"../../testdata/redteam/prompts.csv", 220, 0},
 		{"../../testdata/redteam/holdout.csv", 78, 0},
 	}
 	for _, tt := range tests {

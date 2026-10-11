@@ -32,6 +32,22 @@ func Rewrite(body []byte, segs []Segment, edits []Edit) ([]byte, error) {
 	if len(edits) == 0 {
 		return body, nil
 	}
+	reps, err := tokenReplacements(body, segs, edits)
+	if err != nil {
+		return nil, err
+	}
+	return applyReplacements(body, reps)
+}
+
+// replacement puts token in place of body[start:end].
+type replacement struct {
+	start, end int
+	token      []byte
+}
+
+// tokenReplacements turns edits into one replacement per string token of
+// the body that holds an edited segment.
+func tokenReplacements(body []byte, segs []Segment, edits []Edit) ([]replacement, error) {
 	bySeg := map[int][]Edit{}
 	for _, e := range edits {
 		if e.Seg < 0 || e.Seg >= len(segs) {
@@ -57,10 +73,6 @@ func Rewrite(body []byte, segs []Segment, edits []Edit) ([]byte, error) {
 		k := tokenKey{segs[i].Start, segs[i].End}
 		tokens[k] = append(tokens[k], i)
 	}
-	type replacement struct {
-		start, end int
-		token      []byte
-	}
 	var reps []replacement
 	for k, idxs := range tokens {
 		first := segs[idxs[0]]
@@ -79,6 +91,12 @@ func Rewrite(body []byte, segs []Segment, edits []Edit) ([]byte, error) {
 		}
 		reps = append(reps, replacement{k.start, k.end, tok})
 	}
+	return reps, nil
+}
+
+// applyReplacements writes body with the replacements made. Two that
+// overlap are an error.
+func applyReplacements(body []byte, reps []replacement) ([]byte, error) {
 	sort.Slice(reps, func(i, j int) bool { return reps[i].start < reps[j].start })
 
 	var out bytes.Buffer

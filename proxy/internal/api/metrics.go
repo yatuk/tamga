@@ -10,6 +10,7 @@ import (
 	"github.com/yatuk/tamga/internal/extract"
 	"github.com/yatuk/tamga/internal/scanner"
 	"github.com/yatuk/tamga/internal/store"
+	"github.com/yatuk/tamga/internal/upstream"
 	"github.com/yatuk/tamga/internal/webhooks"
 )
 
@@ -34,6 +35,9 @@ func (cfg Config) handleMetrics(w http.ResponseWriter, _ *http.Request) {
 		_, _ = fmt.Fprintln(w, "# HELP tamga_warned_total Total requests that triggered a WARN action.")
 		_, _ = fmt.Fprintln(w, "# TYPE tamga_warned_total counter")
 		_, _ = fmt.Fprintf(w, "tamga_warned_total %d\n", cfg.Metrics.Warned.Load())
+		_, _ = fmt.Fprintln(w, "# HELP tamga_routed_total Total requests answered by an internal pool (action ROUTE).")
+		_, _ = fmt.Fprintln(w, "# TYPE tamga_routed_total counter")
+		_, _ = fmt.Fprintf(w, "tamga_routed_total %d\n", cfg.Metrics.Routed.Load())
 	}
 
 	// Latency histogram approximation from RecentBuffer — real bucket metrics
@@ -87,6 +91,14 @@ func (cfg Config) handleMetrics(w http.ResponseWriter, _ *http.Request) {
 	_, _ = fmt.Fprintln(w, "# TYPE tamga_scanner_detections_total counter")
 	for name, count := range scanner.ScannerDetectionStats() {
 		_, _ = fmt.Fprintf(w, "tamga_scanner_detections_total{scanner=\"%s\"} %d\n", name, count)
+	}
+
+	// Requests a ROUTE verdict could not send to its internal pool. Each was
+	// blocked; none went to the provider instead.
+	_, _ = fmt.Fprintln(w, "# HELP tamga_route_unavailable_total Requests blocked because the internal pool of a ROUTE verdict could not take them, by pool and reason.")
+	_, _ = fmt.Fprintln(w, "# TYPE tamga_route_unavailable_total counter")
+	for key, count := range upstream.RouteUnavailableStats() {
+		_, _ = fmt.Fprintf(w, "tamga_route_unavailable_total{pool=%q,reason=%q} %d\n", key[0], key[1], count)
 	}
 
 	// Scans that ran with reduced coverage (scanner panic/error, pool shedding,
