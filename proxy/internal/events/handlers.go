@@ -33,8 +33,8 @@ func LogHandler(log zerolog.Logger) func(Event) {
 			Int("findings", len(e.Findings)).
 			Time("timestamp", e.Timestamp).
 			Logger()
-		if len(e.Body) > 0 {
-			ev = ev.With().Int("body_bytes", len(e.Body)).Logger()
+		if n := max(e.BodyBytes, len(e.Body)); n > 0 {
+			ev = ev.With().Int("body_bytes", n).Logger()
 		}
 		if e.EventType == "request_scanned" || e.EventType == "request_blocked" {
 			lvl := e.InputRisk.Level
@@ -108,45 +108,91 @@ type AnalyzerClient interface {
 	Analyze(ctx context.Context, req *pb.AnalyzeRequest) (*pb.AnalyzeResponse, error)
 }
 
+// Why the analyzer handler leaves an event alone. analyzerTakes is the one
+// statement of it: the handler acts on what it returns, and AnalyzerWants
+// answers the bus from it, so the copy of a request is made for exactly the
+// events the handler would send.
+type analyzerSkip int
+
+const (
+	analyzerTakes       analyzerSkip = iota // the handler sends this event's text
+	analyzerSkipOff                         // no analyzer, or not connected
+	analyzerSkipType                        // not a request's own forwarded event
+	analyzerSkipBlocked                     // the proxy blocked the request
+	analyzerSkipLow                         // risk below hybridSkipLow
+	analyzerSkipHigh                        // risk above hybridSkipHigh
+)
+
+func analyzerDecision(client AnalyzerClient, e Event) analyzerSkip {
+	if client == nil || !client.Enabled() {
+		return analyzerSkipOff
+	}
+	if e.EventType != "request_scanned" {
+		return analyzerSkipType
+	}
+	// A request the proxy blocked is not analysed further. The analyzer
+	// is another service and can call a model provider of its own (its
+	// LLM judge): text that was refused to one provider is not handed
+	// on towards another. The proxy does not put a blocked request's
+	// text on its event; this holds whatever published the event.
+	if e.Action == "BLOCK" {
+		return analyzerSkipBlocked
+	}
+	// Hybrid confidence gate — skip trivially clean or already-certain events.
+	if e.InputRisk.Score < hybridSkipLow {
+		return analyzerSkipLow
+	}
+	if e.InputRisk.Score > hybridSkipHigh {
+		return analyzerSkipHigh
+	}
+	return analyzerTakes
+}
+
+// AnalyzerWants reports, for the handler AnalyzerHandler(client) returns,
+// whether it would send an event's text to the analyzer: the analyzer is
+// connected, the event is a forwarded request's, and its risk is inside
+// [hybridSkipLow, hybridSkipHigh]. It is what Bus.WantsContent asks before a
+// request is copied onto its event.
+func AnalyzerWants(client AnalyzerClient) func(Event) bool {
+	return func(e Event) bool {
+		return analyzerDecision(client, e) == analyzerTakes
+	}
+}
+
+// SubscribeAnalyzer registers the analyzer handler on b as the subscriber
+// that is given request text, for the events AnalyzerWants names and no
+// others.
+func SubscribeAnalyzer(b *Bus, client AnalyzerClient) {
+	b.SubscribeContentWhen(AnalyzerHandler(client), AnalyzerWants(client))
+}
+
 // AnalyzerHandler hands requests that were forwarded to the Python analyzer over gRPC (fail-open).
 // Hybrid routing: skips dispatch when input risk is outside [hybridSkipLow, hybridSkipHigh].
 // It sends nothing for a blocked request, and nothing at all unless the event
 // carries the request's text, which it does only when the operator turned
 // that on (see Event.Body). What comes back is logged; it changes no verdict
-// and is not stored.
+// and is not stored. It reads the text and so is registered with
+// SubscribeAnalyzer; under Subscribe it would get none and send nothing.
 func AnalyzerHandler(client AnalyzerClient) func(Event) {
 	return func(e Event) {
-		if client == nil || !client.Enabled() {
-			return
-		}
-		if e.EventType != "request_scanned" {
-			return
-		}
-		// A request the proxy blocked is not analysed further. The analyzer
-		// is another service and can call a model provider of its own (its
-		// LLM judge): text that was refused to one provider is not handed
-		// on towards another. The proxy does not put a blocked request's
-		// text on its event; this holds whatever published the event.
-		if e.Action == "BLOCK" {
-			return
-		}
-
-		// Hybrid confidence gate — skip trivially clean or already-certain events.
 		risk := e.InputRisk.Score
-		if risk < hybridSkipLow {
+		switch analyzerDecision(client, e) {
+		case analyzerTakes:
+		case analyzerSkipLow:
 			log.Debug().
 				Str("component", "analyzer_handler").
 				Str("request_id", e.RequestID).
 				Float64("input_risk", risk).
 				Msg("analyzer: skip (risk below threshold)")
 			return
-		}
-		if risk > hybridSkipHigh {
+		case analyzerSkipHigh:
 			log.Debug().
 				Str("component", "analyzer_handler").
 				Str("request_id", e.RequestID).
 				Float64("input_risk", risk).
 				Msg("analyzer: skip (risk above ceiling — fast scanner certain)")
+			return
+		default:
 			return
 		}
 
@@ -240,11 +286,11 @@ func OperatorStateAnalyzerHandler(client AnalyzerClient) func(Event) {
 		decisionRefs, _ := json.Marshal(req.DecisionRefs)
 		noteRefs, _ := json.Marshal(req.NoteRefs)
 		fastFindings, _ := json.Marshal(req.FastFindings)
-		// The prompt is not sent. This event is published while the request
-		// is still being scanned, before anyone knows whether it will be
-		// blocked, and the analyzer has no operator-state judge that would
-		// read it (see above). It gets the decision references and the
-		// fast tier's findings.
+		// The prompt is not sent, and is not on the event. This event is
+		// published while the request is still being scanned, before anyone
+		// knows whether it will be blocked, and the analyzer has no
+		// operator-state judge that would read it (see above). It gets the
+		// decision references and the fast tier's findings.
 		resp, err := client.Analyze(ctx, &pb.AnalyzeRequest{
 			RequestId: req.RequestID,
 			Content:   "",

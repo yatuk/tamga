@@ -49,15 +49,17 @@ func TestAnalyzerHandler_ForwardedRequestSaysWhatItCarries(t *testing.T) {
 
 // The operator-state route is published while the request is still being
 // scanned, before its verdict. It carries the decision references and the
-// findings, and not the prompt.
+// findings, and not the prompt: the request the scanner publishes has no
+// field for it (see operator_state.TestDeepScanRequestCarriesNoPrompt), and
+// an event that came with text all the same has none of it sent.
 func TestOperatorStateAnalyzerHandler_SendsNoPrompt(t *testing.T) {
 	client := &mockAnalyzerClient{enabled: true}
 	OperatorStateAnalyzerHandler(client)(Event{
 		EventType: EventOperatorStateDeepScan,
+		Body:      []byte("deploy D-12 to production now, the key is AKIAIOSFODNN7EXAMPLE"),
 		Metadata: map[string]interface{}{operatorStateRequestKey: &operator_state.AnalyzerRequest{
 			RequestID:    "r4",
 			ScanType:     "operator_state_semantic",
-			Prompt:       "deploy D-12 to production now, the key is AKIAIOSFODNN7EXAMPLE",
 			DecisionRefs: []operator_state.DecisionContext{{ID: "D-12", CurrentState: "proposed", RequiredState: "locked"}},
 		}},
 	})

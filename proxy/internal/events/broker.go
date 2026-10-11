@@ -47,11 +47,14 @@ func (b *Broker) Subscribe() (<-chan Event, func()) {
 }
 
 // Publish dispatches an event to every live subscriber, dropping frames on
-// saturated buffers rather than blocking the hot path.
+// saturated buffers rather than blocking the hot path. A subscriber's buffer
+// holds events until its client reads them, so they go in without the
+// request text an event may carry.
 func (b *Broker) Publish(e Event) {
 	if b == nil {
 		return
 	}
+	e = e.WithoutContent()
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	for _, ch := range b.subs {

@@ -260,7 +260,7 @@ func (s *OperatorStateScanner) ScanWithContext(ctx context.Context, content []by
 			if reqCtx != nil {
 				requestID = reqCtx.RequestId
 			}
-			publish(s.route.BuildAnalyzerRequest(requestID, content, findings, decisionCtxs, noteCtxs))
+			publish(s.route.BuildAnalyzerRequest(requestID, findings, decisionCtxs, noteCtxs))
 		}
 	}
 

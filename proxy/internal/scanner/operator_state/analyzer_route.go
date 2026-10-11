@@ -22,10 +22,14 @@ func NewSemanticRoute() *SemanticRoute {
 
 // AnalyzerRequest is a payload sent to the Python analyzer for semantic comparison.
 // It is published as part of an event on the event bus post-scan.
+//
+// It does not carry the prompt. The event is published before the request's
+// verdict is known and is kept by subscribers (the ring of recent events,
+// the live feed), and nothing downstream reads the prompt: the analyzer is
+// sent the decision references and the fast tier's findings.
 type AnalyzerRequest struct {
 	RequestID    string            `json:"request_id"`
 	ScanType     string            `json:"scan_type"` // "operator_state_semantic"
-	Prompt       string            `json:"prompt"`
 	DecisionRefs []DecisionContext `json:"decision_refs"`
 	NoteRefs     []NoteContext     `json:"note_refs"`
 	FastFindings []json.RawMessage `json:"fast_findings"` // serialized scanner.Findings from fast tier
@@ -60,11 +64,10 @@ func (r *SemanticRoute) NeedsDeepAnalysis(findings []scanner.Finding) bool {
 	return false
 }
 
-// BuildAnalyzerRequest constructs an analyzer payload from the prompt and
-// fast-tier findings for semantic comparison.
+// BuildAnalyzerRequest constructs an analyzer payload from the fast-tier
+// findings and the state of what they refer to, for semantic comparison.
 func (r *SemanticRoute) BuildAnalyzerRequest(
 	requestID string,
-	content []byte,
 	findings []scanner.Finding,
 	decisions map[string]DecisionContext,
 	notes map[string]NoteContext,
@@ -90,7 +93,6 @@ func (r *SemanticRoute) BuildAnalyzerRequest(
 	return &AnalyzerRequest{
 		RequestID:    requestID,
 		ScanType:     "operator_state_semantic",
-		Prompt:       string(content),
 		DecisionRefs: decisionRefs,
 		NoteRefs:     noteRefs,
 		FastFindings: fastFindings,

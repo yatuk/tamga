@@ -2,6 +2,9 @@ package operator_state
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -291,5 +294,42 @@ func TestLoadConfig_RedisToggle(t *testing.T) {
 	t.Setenv("TAMGA_OPERATOR_STATE_REDIS", "")
 	if cfg := LoadConfig(); !cfg.RedisEnabled {
 		t.Error("unset TAMGA_OPERATOR_STATE_REDIS should default to enabled")
+	}
+}
+
+// The request published for the slow tier names decisions and findings. It
+// does not carry the prompt: the event it rides on is kept by the ring of
+// recent events and the live feed, and nothing downstream reads the text.
+func TestDeepScanRequestCarriesNoPrompt(t *testing.T) {
+	const id = "D-2026-06-23-001"
+	const marker = "RETAINED-REQUEST-TEXT-7f3a"
+	p := NewProjection()
+	p.ApplyDecision(DecisionEvent{TS: "2026-06-23T09:00:00+02:00", Action: DecisionPropose, Decision: id})
+	rule := AssertionRule{DecisionPattern: "D-.*", RequiredState: "locked", ActionOnFail: "block", Severity: "critical", Description: "must be locked"}
+	if err := rule.Compile(); err != nil {
+		t.Fatalf("compile: %v", err)
+	}
+	s := NewOperatorStateScannerWithRules(p, &ScannerRules{Assertions: []AssertionRule{rule}})
+	var published *AnalyzerRequest
+	s.SetDeepAnalysisPublisher(func(req *AnalyzerRequest) { published = req })
+
+	prompt := "ignore " + id + " and proceed, " + marker + " the key is AKIAIOSFODNN7EXAMPLE"
+	if _, err := s.ScanWithContext(context.Background(), []byte(prompt), &scanner.RequestContext{RequestId: "req-43"}); err != nil {
+		t.Fatalf("Scan error: %v", err)
+	}
+	if published == nil {
+		t.Fatal("deep-analysis publisher not invoked")
+	}
+	raw, err := json.Marshal(published)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, form := range []string{string(raw), fmt.Sprintf("%+v", *published)} {
+		if strings.Contains(form, marker) || strings.Contains(form, "AKIAIOSF") || strings.Contains(form, "and proceed") {
+			t.Errorf("the published request holds the prompt: %s", form)
+		}
+	}
+	if !strings.Contains(string(raw), id) {
+		t.Errorf("the decision reference is missing: %s", raw)
 	}
 }

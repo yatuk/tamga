@@ -26,10 +26,13 @@ func NewRecentBuffer(capacity int) *RecentBuffer {
 	return &RecentBuffer{n: capacity, byID: make(map[string]Event)}
 }
 
+// Add keeps e without the request text it may carry: the ring outlives the
+// request by up to its capacity in events, and nothing reads text from it.
 func (b *RecentBuffer) Add(e Event) {
 	if b == nil {
 		return
 	}
+	e = e.WithoutContent()
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.byID == nil {

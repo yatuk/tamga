@@ -25,9 +25,14 @@ type Event struct {
 	OutputAction   string            // action taken on response (PASS/REDACT/BLOCK)
 	Action         string
 	// Body is the request as it was forwarded, for the analyzer's deep
-	// analysis. It is nil unless TAMGA_ANALYZER_SEND_CONTENT is on, and
-	// always nil for a request that was blocked.
+	// analysis. It is nil unless TAMGA_ANALYZER_SEND_CONTENT is on and a
+	// content subscriber will take it (see Bus.WantsContent), and always
+	// nil for a request that was blocked. It is the one field of an
+	// event that holds request text, and only a handler registered with
+	// SubscribeContent is given it: every other subscriber gets the event
+	// with Body nil and BodyBytes saying how long it was.
 	Body           []byte
+	BodyBytes      int
 	ContentType    string // e.g. response Content-Type for output_scan_hint
 	Endpoint       string
 	ScanLatencyMs  float64
@@ -73,10 +78,35 @@ type Event struct {
 
 const defaultChanCap = 1000
 
+// WithoutContent returns e without the request text it carries (see Body).
+// Nothing else on an event is request or response text: findings hold masked
+// matches or digests, and Metadata holds identifiers and states.
+func (e Event) WithoutContent() Event {
+	if e.Body != nil {
+		e.BodyBytes = len(e.Body)
+		e.Body = nil
+	}
+	return e
+}
+
+// subscriber is a handler and whether it is given an event's request text.
+// wants narrows a content subscriber to the events whose text it reads; nil
+// means every event.
+type subscriber struct {
+	fn      func(Event)
+	content bool
+	wants   func(Event) bool
+}
+
+// takes reports whether the subscriber is given e's request text.
+func (s subscriber) takes(e Event) bool {
+	return s.content && (s.wants == nil || s.wants(e))
+}
+
 // Bus is a buffered, non-blocking publish / fan-out subscriber bus.
 type Bus struct {
 	ch       chan Event
-	handlers []func(Event)
+	handlers []subscriber
 	prepare  func(Event) Event
 	mu       sync.RWMutex
 	wg       sync.WaitGroup
@@ -92,13 +122,57 @@ func NewBus() *Bus {
 }
 
 // Subscribe registers a handler. Not safe to call after Start (document: call before Start).
+// The handler gets every event without its request text (see
+// Event.WithoutContent), so one that keeps events, as the ring of recent
+// events and the live feed do, keeps no text.
 func (b *Bus) Subscribe(fn func(Event)) {
+	b.subscribe(fn, false, nil)
+}
+
+// SubscribeContent registers a handler that is given the event as it was
+// published, request text included. It is for a handler that needs the text
+// at delivery and does not keep the event: the analyzer's. Like Subscribe,
+// call it before Start.
+func (b *Bus) SubscribeContent(fn func(Event)) {
+	b.subscribe(fn, true, nil)
+}
+
+// SubscribeContentWhen is SubscribeContent for a handler that reads the text
+// of some events only. wants says which: it is asked when an event is about
+// to be published (WantsContent), so that no copy of a request is made for a
+// handler that would not read it, and again at delivery, where an event it
+// does not want arrives without its text. wants is called on the publisher's
+// goroutine and must not block; nil means every event.
+func (b *Bus) SubscribeContentWhen(fn func(Event), wants func(Event) bool) {
+	b.subscribe(fn, true, wants)
+}
+
+func (b *Bus) subscribe(fn func(Event), content bool, wants func(Event) bool) {
 	if b == nil || fn == nil {
 		return
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	b.handlers = append(b.handlers, fn)
+	b.handlers = append(b.handlers, subscriber{fn: fn, content: content, wants: wants})
+}
+
+// WantsContent reports whether some subscriber would be given, and read, the
+// request text of e. A publisher asks before it copies a request onto an
+// event: with no content subscriber, or none that wants this event, the copy
+// would be made, queued and thrown away. e is the event as it will be
+// published, without its Body.
+func (b *Bus) WantsContent(e Event) bool {
+	if b == nil || b.closed.Load() {
+		return false
+	}
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	for _, h := range b.handlers {
+		if h.takes(e) {
+			return true
+		}
+	}
+	return false
 }
 
 // SetPrepare sets a function every event goes through when it is published,
@@ -131,11 +205,16 @@ func (b *Bus) Start() {
 
 func (b *Bus) dispatch(e Event) {
 	b.mu.RLock()
-	hs := make([]func(Event), len(b.handlers))
+	hs := make([]subscriber, len(b.handlers))
 	copy(hs, b.handlers)
 	b.mu.RUnlock()
+	bare := e.WithoutContent()
 	for _, h := range hs {
-		h(e)
+		if e.Body != nil && h.takes(e) {
+			h.fn(e)
+		} else {
+			h.fn(bare)
+		}
 	}
 }
 
@@ -165,6 +244,9 @@ func (b *Bus) PublishContext(ctx context.Context, e Event) {
 	if prepare != nil {
 		e = prepare(e)
 	}
+	// The queue holds an event, and its text, until it is dispatched and no
+	// longer: a receive clears the slot. An event dropped here was never
+	// queued, so nothing holds its text once this returns.
 	select {
 	case b.ch <- e:
 	default:
