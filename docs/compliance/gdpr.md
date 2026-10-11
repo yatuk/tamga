@@ -64,7 +64,8 @@ a keyed hash of it (HMAC-SHA-256) with `data.hash_findings: true`), the user ide
 application sent in `X-Tamga-User-Id`, the name and version of the policy,
 and, when the response was read, tokens, cost and the findings of the
 response. The text of the prompt and of the response is not stored. A
-masked match keeps its first and last characters, and a user identifier is
+masked match keeps its first and last two characters (a card number its
+last four digits, with the issuer's name beside it), and a user identifier is
 often an e-mail address, so the log is personal data in most deployments.
 It needs its own purpose, basis, retention period and place in the
 organisation's records. It is kept in PostgreSQL when `TAMGA_DB_URL` is

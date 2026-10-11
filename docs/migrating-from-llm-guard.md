@@ -97,12 +97,14 @@ and, for `REDACT`, `redacted_text`. It is the closest thing to
   not numbered placeholders, and there is no call that restores them.
 - An unfinished scan is a 503, whatever `scan.on_error` says.
 
-## Tamga uses LLM Guard itself, in one optional service
+## Tamga does not use LLM Guard
 
-You will find `llm-guard==0.3.14` in `analyzer/requirements.txt`, so here is
-exactly what it is used for.
+Until 2026-10-11 `analyzer/requirements.txt` had `llm-guard==0.3.14` in it.
+It no longer does, and no part of Tamga imports LLM Guard; a test in
+`analyzer/tests/test_no_llm_guard.py` fails if that changes. What it was used
+for, and what is there now:
 
-- The proxy, which makes every decision, is written in Go and does not use
+- The proxy, which makes every decision, is written in Go and never used
   LLM Guard.
 - The `analyzer` is a separate Python service. With
   `TAMGA_ANALYZER_SEND_CONTENT=true` (off by default) the proxy sends it a
@@ -111,17 +113,19 @@ exactly what it is used for.
   A request the proxy blocked is never sent. What the analyzer
   finds never changes a verdict. In the gRPC path the proxy uses, the proxy
   writes the number of findings to its log and does nothing else with them.
-- `analyzer/app/scanners/toxicity.py` imports four LLM Guard output scanners:
-  `Toxicity`, `NoRefusal`, `BanCode` and `BanTopics`. They run only when a
-  caller asks the analyzer for the scan type `toxicity`. The proxy asks for
-  `pii` and `injection` (and `operator_state`), never for `toxicity`. So no
-  traffic through Tamga reaches an LLM Guard scanner today. That code path
-  has not been run as part of writing this page.
-- The analyzer's other two scanners do not use LLM Guard: Presidio with spaCy
-  for names and places, and an LLM judge (see
-  [where data goes](#where-secrets-and-data-go)).
-
-Removing the dependency is planned; see [what is planned](#what-is-planned).
+- The analyzer had a toxicity scanner that imported four LLM Guard output
+  scanners: `Toxicity`, `NoRefusal`, `BanCode` and `BanTopics`. They ran only
+  when a caller asked the analyzer for the scan type `toxicity`, and the
+  proxy asks for `pii` and `injection` (and `operator_state`), never for
+  `toxicity`: no traffic through Tamga reached them. The scanner was deleted,
+  not rewritten. Nothing replaces `NoRefusal`, `BanCode` on answers or
+  `BanTopics`, and for `Toxicity` there is the proxy's phrase list (see the
+  tables below). The scan type now returns nothing, and its setting
+  `TAMGA_BAN_TOPICS` is no longer read; the analyzer logs either once.
+- The analyzer's two remaining scanners never used LLM Guard: Presidio with
+  spaCy for names and places, called directly, and an LLM judge (see
+  [where data goes](#where-secrets-and-data-go)). That, and rendering the PDF
+  reports, is what the analyzer does.
 
 ## The mapping table
 
@@ -703,15 +707,16 @@ does.
 Two items that stood here were done on 2026-10-11 and are in the table:
 invisible text and more secret formats (`InvisibleText`, `Secrets`), and the
 signals for encoded blocks and for a change of script (`Gibberish`,
-`Language`, both still "none" as replacements).
+`Language`, both still "none" as replacements). A third was done the same
+day and changes no row: the analyzer no longer depends on `llm-guard`, and
+its toxicity scanner was removed with it (see
+[above](#tamga-does-not-use-llm-guard)).
 
 - **Output scanners.** In responses: the same PII scanners in the stream
   path, malicious links by a local list and a format check with no outbound
   request, and structured output that does not match an expected JSON schema.
 - **Banned topics.** Topics described in free text in the policy, judged by
   zero-shot classification in the classifier service.
-- **The analyzer without LLM Guard.** Remove the `llm-guard` dependency from
-  `analyzer/requirements.txt`, including the toxicity scanner.
 
 The plan sets these aside: `Toxicity`, `Bias`, `Sentiment`, `ReadingTime`
 and `NoRefusal` (its reason: heavy models of little use against data

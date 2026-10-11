@@ -73,7 +73,12 @@ place.
 **Answers** (`input_type: response`) are judged by `output_rules`, exactly as
 the proxy judges an answer: `block_on` blocks, `redact_on` masks, and with
 `output_rules` off every answer passes. The input rules are not applied to
-answers.
+answers. The link scanner reads an answer's texts here as on the proxy path.
+`output_rules.json_schema` applies over the bridge only with `when: always`
+(an answer call does not carry the request's `response_format`), and each
+text is judged as one document: a streamed answer that LiteLLM hands over in
+parts is `not_json` until it is whole, so do not block on it with streaming
+checks on.
 
 **Roles.** The contract's `texts` carry no role. On LiteLLM's chat routes the
 call also carries the conversation (`structured_messages`); when its texts

@@ -635,8 +635,24 @@ export interface paths {
                     };
                     content: {
                         "application/json": {
+                            /** @description One page of the matching requests, newest first. At most `limit` (200). */
                             events?: components["schemas"]["SecurityEvent"][];
+                            /**
+                             * @description How many requests match the filters in the window, over
+                             *     all pages. Not the length of `events`.
+                             */
                             total?: number;
+                            /**
+                             * @description The matching requests by action (upper case: `BLOCK`,
+                             *     `REDACT`, `STRIP`, `WARN`, `LOG`, `PASS`), counted over
+                             *     every match in the window and not over the page. The
+                             *     values add up to `total`. An action with no match is
+                             *     absent. Left out when the database could not be asked
+                             *     for the counts; the list and `total` stand without it.
+                             */
+                            action_counts?: {
+                                [key: string]: number;
+                            };
                         };
                     };
                 };
@@ -1195,7 +1211,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get a single incident by request ID */
+        /**
+         * Get the triage state of a request
+         * @description A request nobody has triaged has no record. That is not an error:
+         *     the answer is 200 with `status: Open` and `untouched: true`, and no
+         *     dates. The endpoint does not check that a request of this id exists;
+         *     `GET /api/v1/events/{request_id}` answers that.
+         */
         get: {
             parameters: {
                 query?: never;
@@ -1224,13 +1246,6 @@ export interface paths {
                     content?: never;
                 };
                 403: components["responses"]["PermissionDenied"];
-                /** @description Incident not found */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
                 /** @description Incidents store unavailable */
                 503: {
                     headers: {
@@ -1538,6 +1553,10 @@ export interface paths {
                     content: {
                         "application/json": {
                             items?: components["schemas"]["AuditEntry"][];
+                            /**
+                             * @description How many entries the log holds, whatever `limit` was
+                             *     asked for. Not the length of `items`.
+                             */
                             total?: number;
                         };
                     };
@@ -5015,7 +5034,7 @@ export interface components {
         SecurityFinding: {
             type?: string;
             severity?: string;
-            /** @description What the scanner let out of the matched text; for PII the masked value (`10*******46`). With `data.hash_findings` on it is a keyed hash of that (`hmac-sha256:` and 64 hex characters), or `[not stored: no finding hash key]` when the deployment has no hash key, wherever the finding is read from (the request log, the events held in memory, the export and the live feed). */
+            /** @description What the scanner let out of the matched text; for PII the masked value, its first and last two characters (`10*******46`), and for a card number its last four digits only (`************0366`; rows written before v0.9.0 hold the first six and last four). A secret shows its vendor marker or `****`. With `data.hash_findings` on it is a keyed hash of that (`hmac-sha256:` and 64 hex characters), or `[not stored: no finding hash key]` when the deployment has no hash key, wherever the finding is read from (the request log, the events held in memory, the export and the live feed). */
             match?: string;
             category?: string;
             /** @description Offset in the text of the segment at `path`; in the raw body when `path` is empty. */
@@ -5027,7 +5046,7 @@ export interface components {
             path?: string;
             confidence?: number;
             action_taken?: string;
-            /** @description What the scanner adds about the finding. With `data.hash_findings` on, only the keys that describe the detection are kept (such as `detected_via`, `denylist_match`, `card_brand`); those that describe the value (`bin`, `bank_name`, `country`, `denylist_reason` and others) are left out, and `operator_id` is a keyed hash. */
+            /** @description What the scanner adds about the finding. With `data.hash_findings` on, only the keys that describe the detection are kept (such as `detected_via`, `denylist_match`, `card_brand`); those that describe the value (`bank_name`, `country`, `denylist_reason` and others) are left out, and `operator_id` is a keyed hash. A card finding has no `bin` key with the option on or off; rows written before v0.9.0 have one. */
             metadata?: {
                 [key: string]: string;
             };
@@ -5144,7 +5163,10 @@ export interface components {
                 /** Format: date-time */
                 created_at?: string;
             }[];
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description Absent, with `created_at`, while `untouched` is true.
+             */
             updated_at?: string;
             /** Format: date-time */
             created_at?: string;
@@ -5153,6 +5175,11 @@ export interface components {
             /** Format: date-time */
             resolved_at?: string;
             resolution?: string;
+            /**
+             * @description True when nobody has triaged the request: there is no record and
+             *     the state is the default, Open. Absent once a record exists.
+             */
+            untouched?: boolean;
         };
         IncidentPatch: {
             status?: components["schemas"]["IncidentStatus"];
@@ -5289,10 +5316,45 @@ export interface components {
             type?: string;
             category?: string;
             severity?: string;
+            /** @description The matched text, masked as it would be stored. */
             match?: string;
             confidence?: number;
             action?: string;
+            position?: components["schemas"]["TextPosition"];
+            /**
+             * @description Where the finding begins in `sample_text`, as a byte offset into
+             *     the text as UTF-8. Present, with the three offsets below, only
+             *     when `position` is `exact`.
+             */
+            start?: number;
+            /** @description Byte offset just past the finding. */
+            end?: number;
+            /**
+             * @description The same place in UTF-16 code units, which is how JavaScript
+             *     indexes a string: `sample_text.slice(start_utf16, end_utf16)` is
+             *     the matched text. A Turkish letter is two bytes and one unit, an
+             *     emoji outside the basic plane four bytes and two units.
+             */
+            start_utf16?: number;
+            /** @description UTF-16 code unit just past the finding. */
+            end_utf16?: number;
         };
+        /**
+         * @description Whether a finding has a place in the text the caller submitted.
+         *     `exact`: the offsets delimit it in the text as sent. That includes a
+         *     value read through width or look-alike folding, with invisible
+         *     characters or separators removed, from entities or number words:
+         *     the offsets are those of the characters it was read from.
+         *     `normalised_view`: the value was found only in a text the submitted
+         *     one decodes to (base64, hex, percent escapes, hidden characters), so
+         *     it has no offsets in the text as sent.
+         *     `none`: the detector reports no position (a classifier reads the text
+         *     as a whole), or the endpoint does not report one for this type.
+         *     Positions are given for a text submitted in the same request only;
+         *     a stored event carries none of these fields.
+         * @enum {string}
+         */
+        TextPosition: "exact" | "normalised_view" | "none";
         PolicySimulateResult: {
             policy_name?: string;
             policy_version?: string;
@@ -5314,15 +5376,24 @@ export interface components {
             category: string;
             /** @enum {string} */
             severity: "critical" | "high" | "medium" | "low";
+            position: components["schemas"]["TextPosition"];
             /**
              * @description Byte offset into the text as UTF-8 where the finding begins.
              *     Absent with `end` for injection, jailbreak, content moderation
-             *     and classifier findings, and for a value seen only in a
-             *     normalised view of the text.
+             *     and classifier findings (`position: none`), and for a value seen
+             *     only in a text the submitted one decodes to
+             *     (`position: normalised_view`).
              */
             start?: number;
             /** @description Byte offset just past the finding */
             end?: number;
+            /**
+             * @description The same place in UTF-16 code units, for a caller that indexes
+             *     strings that way (JavaScript). Present whenever `start` is.
+             */
+            start_utf16?: number;
+            /** @description UTF-16 code unit just past the finding */
+            end_utf16?: number;
             /**
              * @description What the policy does about this finding on its own
              * @enum {string}
