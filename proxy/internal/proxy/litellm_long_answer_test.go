@@ -26,6 +26,12 @@ func longAnswer(n int, tail string) string {
 // scanners needed longer for was a 503, which LiteLLM turns into a refused
 // request. What is near the end is still found.
 func TestLiteLLM_LongAnswerGetsAVerdict(t *testing.T) {
+	if raceDetector {
+		// It checks that the largest answer is scanned inside the route's
+		// ten-second budget. Instrumented, the same scan took just over ten
+		// seconds on a CI runner: that measures the detector, not the route.
+		t.Skip("a wall-time bound; not meaningful under the race detector")
+	}
 	// Just under the limit on what one call may carry to be scanned.
 	const size = scanMaxBodyBytes - 1024
 	cases := []struct {
