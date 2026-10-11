@@ -65,6 +65,10 @@ services:
       - TAMGA_GITHUB_CLIENT_ID=${TAMGA_GITHUB_CLIENT_ID:-}
       - TAMGA_GITHUB_CLIENT_SECRET=${TAMGA_GITHUB_CLIENT_SECRET:-}
       - TAMGA_GITHUB_OAUTH_CALLBACK_URL=${TAMGA_GITHUB_OAUTH_CALLBACK_URL:-}
+      # Key for the hashes of finding matches in the request log, used when
+      # the policy has data.hash_findings on (openssl rand -base64 32).
+      # Empty, and without TAMGA_VAULT_KEY, those matches are not stored.
+      - TAMGA_FINDING_HASH_KEY=${TAMGA_FINDING_HASH_KEY:-}
       # Empty refuses a signed-in account nobody gave a role; "viewer" lets
       # it in as a viewer. The proxy does not start on any other value.
       - TAMGA_SSO_DEFAULT_ROLE=${TAMGA_SSO_DEFAULT_ROLE:-}

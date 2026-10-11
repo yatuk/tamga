@@ -77,6 +77,7 @@ func fullRequestEvent() events.Event {
 }
 
 func TestRequestLog_BothWritersBuildTheSameRow(t *testing.T) {
+	useTestFindingHasher(t)
 	hashing := func() *policy.Policy { return &policy.Policy{Data: &policy.DataControl{HashFindings: true}} }
 	blocked := fullRequestEvent()
 	blocked.EventType, blocked.Action = "request_blocked", "BLOCK"
@@ -113,7 +114,7 @@ func TestRequestLog_BothWritersBuildTheSameRow(t *testing.T) {
 			}
 			if tc.getPolicy != nil {
 				for _, raw := range [][]byte{viaNATS.Findings, viaNATS.OutputFindings} {
-					if !strings.Contains(string(raw), `"match":"sha256:`) || strings.Contains(string(raw), "example.com") || strings.Contains(string(raw), "05**") {
+					if !strings.Contains(string(raw), `"match":"hmac-sha256:`) || strings.Contains(string(raw), "example.com") || strings.Contains(string(raw), "05**") {
 						t.Errorf("data.hash_findings is on and the NATS writer stored %s", raw)
 					}
 				}

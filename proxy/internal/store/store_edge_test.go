@@ -375,6 +375,7 @@ func TestHashFindingMatches_AllEmptyMatches(t *testing.T) {
 }
 
 func TestHashFindingMatches_AllHashed(t *testing.T) {
+	useTestFindingHasher(t)
 	findings := []scanner.Finding{
 		{Type: "pii", Match: "alice@example.com", Severity: "high"},
 		{Type: "secret", Match: "sk-1234567890abcdef", Severity: "critical"},
@@ -390,9 +391,9 @@ func TestHashFindingMatches_AllHashed(t *testing.T) {
 		if f.Match == findings[i].Match {
 			t.Errorf("finding %d match: should be hashed, got original %q", i, f.Match)
 		}
-		// Verify format: sha256: prefix.
-		if len(f.Match) < 7 || f.Match[:7] != "sha256:" {
-			t.Errorf("finding %d match: want 'sha256:' prefix, got %q", i, f.Match)
+		// Verify format: the keyed digest's prefix.
+		if len(f.Match) < len(KeyedMatchPrefix) || f.Match[:len(KeyedMatchPrefix)] != KeyedMatchPrefix {
+			t.Errorf("finding %d match: want %q prefix, got %q", i, KeyedMatchPrefix, f.Match)
 		}
 	}
 }

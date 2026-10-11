@@ -214,14 +214,22 @@ export class TamgaClient {
 
   /**
    * GDPR Art. 15 / KVKK madde 11 subject access — get events for a data subject.
-   * @param params - At least one of `user_id`, `email`, or `tckn_hash`.
+   * @param params - At least one of `user_id`, `email`, `tckn_hash`, or `tckn`.
+   *   `tckn_hash` is the 64 hex characters of a stored hash, as copied from a
+   *   row: stored hashes are keyed and cannot be computed by a caller. `tckn`
+   *   is a national id (11 digits); it is sent in a POST body, never in the
+   *   URL, and the proxy finds the rows whose findings hold it.
    * @returns `{ subject, rows, count }`
    */
   async getSubjectEvents(params: {
     user_id?: string;
     email?: string;
     tckn_hash?: string;
+    tckn?: string;
   }): Promise<Record<string, unknown>> {
+    if (params.tckn && !params.user_id && !params.email && !params.tckn_hash) {
+      return this.request('POST', '/api/v1/events/subject', { tckn: params.tckn });
+    }
     const qs = new URLSearchParams();
     if (params.user_id) qs.set('user_id', params.user_id);
     if (params.email) qs.set('email', params.email);
@@ -232,13 +240,16 @@ export class TamgaClient {
 
   /**
    * GDPR/KVKK subject erase — delete events for a data subject.
-   * @param body - Exactly one identifier: `user_id`, `email`, or `tckn_hash`.
+   * @param body - Exactly one identifier: `user_id`, `email`, `tckn_hash`, or
+   *   `tckn` (a national id). Rows are found by the masked form of a national
+   *   id, which another id can share: read with `getSubjectEvents` first.
    * @returns `{ ok, deleted }`
    */
   async deleteSubjectEvents(body: {
     user_id?: string;
     email?: string;
     tckn_hash?: string;
+    tckn?: string;
   }): Promise<Record<string, unknown>> {
     return this.request('DELETE', '/api/v1/events/subject', body);
   }

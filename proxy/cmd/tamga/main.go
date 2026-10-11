@@ -211,6 +211,17 @@ func main() {
 	}
 
 	var requestStore store.Store
+	// The key the request log hashes finding matches under when the policy
+	// has data.hash_findings on. Without one no digest is stored at all.
+	if hasher, err := store.NewFindingHasher(cfg.FindingHashKey, cfg.VaultKey); err != nil {
+		log.Error().Err(err).Msg("request log: no usable finding hash key; with data.hash_findings on, matches are not stored")
+	} else if hasher == nil {
+		log.Warn().Msg("request log: neither TAMGA_FINDING_HASH_KEY nor TAMGA_VAULT_KEY is set; with data.hash_findings on, matches are not stored and cannot be looked up")
+	} else {
+		store.SetFindingHasher(hasher)
+		log.Info().Str("key_source", hasher.Source()).Msg("request log: finding matches are hashed with HMAC-SHA-256 when data.hash_findings is on")
+	}
+
 	var pgStore *store.PostgresStore
 	if cfg.DatabaseURL != "" {
 		ps, err := store.NewPostgresStore(context.Background(), cfg.DatabaseURL, log.Logger)

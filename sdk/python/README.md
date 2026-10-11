@@ -127,8 +127,8 @@ The role is the least privileged role that may make the call, as declared in
 | `get_events(page, limit, action, provider, shadow, finding_type, severity, category, technique, q, range, since, until)` | `GET /api/v1/events` | viewer |
 | `get_event_detail(request_id)` | `GET /api/v1/events/{request_id}` | viewer |
 | `export_events(format, action, provider, range, request_id)` | `GET /api/v1/events/export` | analyst |
-| `get_subject_events(user_id, email, tckn_hash)` | `GET /api/v1/events/subject` | admin |
-| `erase_subject(user_id, email, tckn_hash)` | `DELETE /api/v1/events/subject` | admin |
+| `get_subject_events(user_id, email, tckn_hash, tckn)` | `GET /api/v1/events/subject`; `POST` with `tckn`, a national id, which goes in the body | admin |
+| `erase_subject(user_id, email, tckn_hash, tckn)` | `DELETE /api/v1/events/subject` | admin |
 | `get_timeseries(range, bucket)` | `GET /api/v1/timeseries` | viewer |
 | `get_findings_breakdown(range)` | `GET /api/v1/findings/breakdown` | viewer |
 | `list_incidents(limit)` | `GET /api/v1/incidents` | viewer |

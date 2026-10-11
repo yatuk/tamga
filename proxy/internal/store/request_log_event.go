@@ -30,8 +30,9 @@ func isRequestEvent(eventType string) bool {
 // when there is no default.
 //
 // When the active policy has data.hash_findings on, the match of every
-// finding, of the request and of the response, is replaced by its SHA-256
-// (KVKK/GDPR): the text cannot be recovered from the row.
+// finding, of the request and of the response, is replaced by its keyed
+// digest (KVKK/GDPR, see FindingHasher): the text cannot be recovered from
+// the row.
 func RequestLogFromEvent(e events.Event, defaultOrgID string, getPolicy func() *policy.Policy) (RequestLog, bool) {
 	if !isRequestEvent(e.EventType) {
 		return RequestLog{}, false

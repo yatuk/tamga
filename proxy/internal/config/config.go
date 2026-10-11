@@ -56,6 +56,11 @@ type Config struct {
 	// tokenization (TAMGA_VAULT_KEY). Empty mints an ephemeral single-instance
 	// key at startup (mappings do not survive restart / cross-instance).
 	VaultKey string
+	// FindingHashKey is the standard-base64 key (32 bytes or more) the
+	// request log hashes finding matches under when data.hash_findings is
+	// on (TAMGA_FINDING_HASH_KEY). Empty derives one from VaultKey; with
+	// neither, no digest is stored.
+	FindingHashKey string
 	// VaultTTLSeconds is how long an encrypted vault mapping lives in the store
 	// (TAMGA_VAULT_TTL_SECONDS). Default 300.
 	VaultTTLSeconds int
@@ -270,6 +275,7 @@ func Load() (*Config, error) {
 		MaxBodyBytes:             envOrDefaultInt("TAMGA_MAX_BODY_BYTES", 1024*1024),
 		MockUpstream:             envOrDefaultBool("TAMGA_MOCK_UPSTREAM", false),
 		VaultKey:                 envOrDefault("TAMGA_VAULT_KEY", ""),
+		FindingHashKey:           envOrDefault("TAMGA_FINDING_HASH_KEY", ""),
 		VaultTTLSeconds:          envOrDefaultInt("TAMGA_VAULT_TTL_SECONDS", 300),
 		UpstreamMaxRetries:       envOrDefaultInt("TAMGA_UPSTREAM_MAX_RETRIES", 1),
 		BreakerFailureThreshold:  envOrDefaultInt("TAMGA_BREAKER_FAILURE_THRESHOLD", 3),

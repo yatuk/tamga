@@ -271,16 +271,25 @@ class TamgaClient:
         user_id: Optional[str] = None,
         email: Optional[str] = None,
         tckn_hash: Optional[str] = None,
+        tckn: Optional[str] = None,
     ) -> dict:
         """GDPR Art. 15 / KVKK madde 11 subject access request.
 
-        Corresponds to ``GET /api/v1/events/subject``.
+        Corresponds to ``GET /api/v1/events/subject``, and to
+        ``POST /api/v1/events/subject`` when ``tckn`` is given: a national
+        id is sent in the body, never in the URL.
 
         Args:
             user_id: Subject user ID.
             email: Subject email address.
-            tckn_hash: SHA-256 of the subject's TCKN.
+            tckn_hash: The 64 hex characters of a stored hash, as copied
+                from a row. Not a hash computed by the caller: stored
+                hashes are keyed and cannot be computed outside the proxy.
+            tckn: The subject's national id (11 digits). The proxy finds
+                the rows whose findings hold it, by its masked form.
         """
+        if tckn and not (user_id or email or tckn_hash):
+            return self._request("POST", "/api/v1/events/subject", json={"tckn": tckn})
         params = self._build_query(user_id=user_id, email=email, tckn_hash=tckn_hash)
         return self._request("GET", "/api/v1/events/subject", params=params)
 
@@ -290,6 +299,7 @@ class TamgaClient:
         user_id: Optional[str] = None,
         email: Optional[str] = None,
         tckn_hash: Optional[str] = None,
+        tckn: Optional[str] = None,
     ) -> dict:
         """KVKK/GDPR subject erase.
 
@@ -298,7 +308,11 @@ class TamgaClient:
         Args:
             user_id: Subject user ID.
             email: Subject email address.
-            tckn_hash: SHA-256 of the subject's TCKN.
+            tckn_hash: The 64 hex characters of a stored hash, as copied
+                from a row.
+            tckn: The subject's national id (11 digits). Rows are found by
+                its masked form, which another id can share: read with
+                ``get_subject_events(tckn=...)`` before erasing.
         """
         body: dict[str, str] = {}
         if user_id:
@@ -307,6 +321,8 @@ class TamgaClient:
             body["email"] = email
         elif tckn_hash:
             body["tckn_hash"] = tckn_hash
+        elif tckn:
+            body["tckn"] = tckn
         return self._request("DELETE", "/api/v1/events/subject", json=body)
 
     # ==================================================================

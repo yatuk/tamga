@@ -341,6 +341,28 @@ def test_get_subject_events():
         assert result["subject"]["user_id"] == "u1"
 
 
+def test_subject_by_national_id_goes_in_the_body():
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"rows": [], "count": 0, "ok": True, "deleted": 0})
+
+    hc = httpx.Client(transport=httpx.MockTransport(handler))
+    c = TamgaClient.__new__(TamgaClient)
+    c._base_url = "http://localhost:8443"
+    c._headers = {"X-Tamga-Admin-Key": "sk-test"}
+    c._client = hc
+    with hc:
+        c.get_subject_events(tckn="10000000146")
+        c.erase_subject(tckn="10000000146")
+    assert [r.method for r in seen] == ["POST", "DELETE"]
+    for r in seen:
+        # A national id is never part of a URL.
+        assert "10000000146" not in str(r.url)
+        assert json.loads(r.content) == {"tckn": "10000000146"}
+
+
 def test_erase_subject():
     fake = {"ok": True, "deleted": 5}
     c, hc = _mock_client(fake)

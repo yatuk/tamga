@@ -118,7 +118,7 @@ The role is the least privileged role that may make the call, as declared in
 | `getEventDetail(requestId)` | `GET /api/v1/events/{request_id}` | viewer |
 | `exportEvents(params?)` | `GET /api/v1/events/export` | analyst |
 | `exportEventsPost(params?)` | `POST /api/v1/events/export` | analyst |
-| `getSubjectEvents(params)` | `GET /api/v1/events/subject` | admin |
+| `getSubjectEvents(params)` | `GET /api/v1/events/subject`; `POST` with `tckn`, a national id, which goes in the body | admin |
 | `deleteSubjectEvents(body)` | `DELETE /api/v1/events/subject` | admin |
 | `getTimeseries(range?, bucket?)` | `GET /api/v1/timeseries` | viewer |
 | `getFindingsBreakdown(range?)` | `GET /api/v1/findings/breakdown` | viewer |

@@ -15,6 +15,7 @@ import (
 )
 
 func TestHashFindingMatches(t *testing.T) {
+	useTestFindingHasher(t)
 	t.Run("hashes_match_field", func(t *testing.T) {
 		findings := []scanner.Finding{
 			{Type: "pii", Category: "EMAIL", Match: "user@example.com", Severity: "high", Confidence: 0.95},
@@ -24,20 +25,20 @@ func TestHashFindingMatches(t *testing.T) {
 		if len(out) != 2 {
 			t.Fatalf("want 2 findings, got %d", len(out))
 		}
-		// First finding: match should be sha256-prefixed
-		if !strings.HasPrefix(out[0].Match, "sha256:") {
-			t.Fatalf("want sha256: prefix, got %s", out[0].Match)
+		// First finding: match should be the keyed digest
+		if !strings.HasPrefix(out[0].Match, KeyedMatchPrefix) {
+			t.Fatalf("want %s prefix, got %s", KeyedMatchPrefix, out[0].Match)
 		}
-		if len(out[0].Match) != 7+64 { // "sha256:" + 64 hex chars
-			t.Fatalf("want 71 chars, got %d: %s", len(out[0].Match), out[0].Match)
+		if len(out[0].Match) != len(KeyedMatchPrefix)+64 { // the prefix and 64 hex chars
+			t.Fatalf("want %d chars, got %d: %s", len(KeyedMatchPrefix)+64, len(out[0].Match), out[0].Match)
 		}
 		// Other fields should be preserved
 		if out[0].Type != "pii" || out[0].Category != "EMAIL" || out[0].Severity != "high" {
 			t.Fatalf("fields not preserved: %+v", out[0])
 		}
 		// Second finding should also be hashed
-		if !strings.HasPrefix(out[1].Match, "sha256:") {
-			t.Fatalf("want sha256: prefix on second finding, got %s", out[1].Match)
+		if !strings.HasPrefix(out[1].Match, KeyedMatchPrefix) {
+			t.Fatalf("want %s prefix on second finding, got %s", KeyedMatchPrefix, out[1].Match)
 		}
 	})
 
@@ -104,6 +105,7 @@ func (s *spyStore) Ping(_ context.Context) error { return nil }
 func (s *spyStore) Close() error                 { return nil }
 
 func TestDBHandler_HashFindings_Enabled(t *testing.T) {
+	useTestFindingHasher(t)
 	spy := &spyStore{}
 	getPolicy := func() *policy.Policy {
 		return &policy.Policy{
@@ -128,11 +130,11 @@ func TestDBHandler_HashFindings_Enabled(t *testing.T) {
 	if len(stored) != 1 {
 		t.Fatalf("want 1 finding, got %d", len(stored))
 	}
-	if !strings.HasPrefix(stored[0].Match, "sha256:") {
+	if !strings.HasPrefix(stored[0].Match, KeyedMatchPrefix) {
 		t.Fatalf("expected hashed match, got: %s", stored[0].Match)
 	}
 	// Verify it's a real hash (64 hex chars after prefix)
-	hashPart := strings.TrimPrefix(stored[0].Match, "sha256:")
+	hashPart := strings.TrimPrefix(stored[0].Match, KeyedMatchPrefix)
 	if len(hashPart) != 64 {
 		t.Fatalf("expected 64 hex chars, got %d", len(hashPart))
 	}
@@ -244,6 +246,7 @@ func TestHashFindingMatches_PreservesFields(t *testing.T) {
 }
 
 func TestHashFindingMatches_SpecialCharacters(t *testing.T) {
+	useTestFindingHasher(t)
 	findings := []scanner.Finding{
 		{Type: "pii", Match: "user+tag@example.com"},
 		{Type: "pii", Match: "line1\\nline2"},
@@ -251,7 +254,7 @@ func TestHashFindingMatches_SpecialCharacters(t *testing.T) {
 	}
 	out := hashFindingMatches(findings)
 	for i, f := range out {
-		if !strings.HasPrefix(f.Match, "sha256:") {
+		if !strings.HasPrefix(f.Match, KeyedMatchPrefix) {
 			t.Errorf("finding %d: match not hashed: %s", i, f.Match)
 		}
 	}

@@ -363,7 +363,9 @@ LIMIT $%d OFFSET $%d`, w, limPos, offPos)
 
 // EraseSubject deletes (or soft-redacts) every request_logs row that
 // references the given data subject. Use user_id for Clerk IDs, email for
-// legacy exports, and tckn_hash for SHA-256'ed TCKN lookups.
+// legacy exports, and tckn_hash for a stored digest given as its 64 hex
+// characters (keyed or not). A national id itself goes through
+// EraseSubjectByMatch.
 func (s *PostgresStore) EraseSubject(ctx context.Context, orgID, userID, email, tcknHash string) (int, error) {
 	ctx2, cancel := context.WithTimeout(ctx, getStatsTimeout)
 	defer cancel()
@@ -434,6 +436,63 @@ func (s *PostgresStore) SubjectAccess(ctx context.Context, orgID, userID, email,
 		out = append(out, r)
 	}
 	return out, rows.Err()
+}
+
+// subjectMatchWhere selects the rows that hold a finding, of the request or
+// of the response, whose match is exactly one of the given stored forms. $2
+// is the forms as containment documents (see matchContainmentDocs): the
+// comparison is of whole values, so no form can select by a part of another.
+const subjectMatchWhere = `org_id = $1 AND EXISTS (
+	SELECT 1 FROM unnest($2::text[]) AS form(doc)
+	WHERE findings @> form.doc::jsonb OR output_findings @> form.doc::jsonb)`
+
+// SubjectAccessByMatch returns the rows that hold a finding whose stored
+// match is one of forms (see SubjectMatchForms), newest first.
+func (s *PostgresStore) SubjectAccessByMatch(ctx context.Context, orgID string, forms []string, limit int) ([]RequestLogRow, error) {
+	docs := matchContainmentDocs(forms)
+	if len(docs) == 0 {
+		return nil, fmt.Errorf("no subject identifier provided")
+	}
+	if limit <= 0 {
+		limit = 500
+	}
+	ctx2, cancel := context.WithTimeout(ctx, getStatsTimeout)
+	defer cancel()
+	rows, err := s.pool.Query(ctx2,
+		`SELECT request_id, org_id, provider, model, user_identifier, created_at, findings, input_tokens, output_tokens, COALESCE(cost_usd,0)
+		 FROM request_logs WHERE `+subjectMatchWhere+`
+		 ORDER BY created_at DESC LIMIT $3`, orgID, docs, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []RequestLogRow
+	for rows.Next() {
+		var r RequestLogRow
+		var findings []byte
+		if err := rows.Scan(&r.RequestID, &r.OrgID, &r.Provider, &r.Model, &r.UserID, &r.CreatedAt, &findings, &r.TokensIn, &r.TokensOut, &r.CostUSD); err != nil {
+			return out, err
+		}
+		r.Findings = findings
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// EraseSubjectByMatch deletes the rows SubjectAccessByMatch would return,
+// without its limit.
+func (s *PostgresStore) EraseSubjectByMatch(ctx context.Context, orgID string, forms []string) (int, error) {
+	docs := matchContainmentDocs(forms)
+	if len(docs) == 0 {
+		return 0, fmt.Errorf("no subject identifier provided")
+	}
+	ctx2, cancel := context.WithTimeout(ctx, getStatsTimeout)
+	defer cancel()
+	cmd, err := s.pool.Exec(ctx2, `DELETE FROM request_logs WHERE `+subjectMatchWhere, orgID, docs)
+	if err != nil {
+		return 0, err
+	}
+	return int(cmd.RowsAffected()), nil
 }
 
 // RequestLogRow is a single row returned by SubjectAccess.

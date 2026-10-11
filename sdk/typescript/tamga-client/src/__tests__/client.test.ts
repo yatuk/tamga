@@ -222,6 +222,15 @@ describe('subject events (privacy)', () => {
     expect(lastFetchUrl()).toContain('/api/v1/events/subject');
   });
 
+  it('getSubjectEvents sends a national id in a POST body, never in the URL', async () => {
+    mockFetch(200, { subject: {}, rows: [], count: 0 });
+    const client = new TamgaClient(BASE_URL, ADMIN_KEY);
+    await client.getSubjectEvents({ tckn: '10000000146' });
+    expect(lastFetchInit()?.method).toBe('POST');
+    expect(lastFetchUrl()).not.toContain('10000000146');
+    expect(lastFetchBody()).toEqual({ tckn: '10000000146' });
+  });
+
   it('deleteSubjectEvents sends identifier body via DELETE', async () => {
     mockFetch(200, { ok: true, deleted: 3 });
     const client = new TamgaClient(BASE_URL, ADMIN_KEY);
