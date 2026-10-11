@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, InlineNotification, SkeletonText, TextInput } from "@carbon/react";
-import { Diff, diffLines, diffWords } from "@/components/console/diff";
+import { compare, Diff, diffWords, sameBut } from "@/components/console/diff";
 import { clockTime, dayLabel } from "@/components/console/names";
 import { Remove, Section } from "@/components/console/page";
 import { api, type PolicyProposal } from "@/lib/api";
@@ -34,8 +34,8 @@ function sameLayout(text: string): string | null {
 /** What a proposal would change against the policy the proxy is running. */
 function ProposedChange({ proposal, running }: { proposal: PolicyProposal; running: string }) {
   const text = useMemo(() => sameLayout(proposal.yaml), [proposal.yaml]);
-  const lines = useMemo(() => (text === null ? [] : diffLines(running, text)), [running, text]);
-  if (text === null) {
+  const compared = useMemo(() => (text === null ? null : compare(running, text)), [running, text]);
+  if (compared === null) {
     return (
       <details>
         <summary>Read the proposed policy</summary>
@@ -50,7 +50,8 @@ function ProposedChange({ proposal, running }: { proposal: PolicyProposal; runni
       </details>
     );
   }
-  if (lines.length === 0) return <p className="t-note">It is the same as the policy the proxy is running.</p>;
+  const { lines } = compared;
+  if (lines.length === 0) return <p className="t-note">It is the same as the policy the proxy is running{sameBut(compared)}.</p>;
   return (
     <details>
       <summary>What it would change: {diffWords(lines)}</summary>
@@ -167,7 +168,7 @@ export function Proposals({
   }
 
   return (
-    <div className="t-hunt" style={{ gridTemplateColumns: "minmax(0, 1fr) 24rem", marginTop: 0 }}>
+    <div className="t-hunt" data-form="true" style={{ marginTop: 0 }}>
       <Section
         id="proposals"
         title="Waiting for a decision"

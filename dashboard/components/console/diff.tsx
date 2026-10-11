@@ -40,6 +40,29 @@ export function diffLines(a: string, b: string): DiffLine[] {
   return out;
 }
 
+/**
+ * What a page shows of two documents. `lines` is empty when no line was added
+ * or removed: there is then nothing to draw, and the page says the two are
+ * the same. `lineEndingsOnly` says they are not the same text all the same:
+ * one ends its lines with CRLF where the other has LF, which changes nothing
+ * the proxy reads.
+ */
+export type Comparison = { lines: DiffLine[]; lineEndingsOnly: boolean };
+
+/** Compares two documents for a page. Pages call this, not `diffLines`, so that each of them decides "the same" the same way. */
+export function compare(a: string, b: string): Comparison {
+  const lines = diffLines(a, b);
+  if (lines.some((line) => line.type !== " ")) return { lines, lineEndingsOnly: false };
+  // Every line is unchanged. Lines are split at LF and CRLF alone, so texts
+  // that differ without a changed line differ in those.
+  return { lines: [], lineEndingsOnly: a !== b };
+}
+
+/** After "…are the same": what is not, when something is not. */
+export function sameBut({ lineEndingsOnly }: Comparison) {
+  return lineEndingsOnly ? ", apart from line endings" : "";
+}
+
 function diffStats(lines: DiffLine[]) {
   let added = 0;
   let removed = 0;

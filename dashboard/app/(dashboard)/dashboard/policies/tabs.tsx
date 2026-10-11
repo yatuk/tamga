@@ -19,7 +19,7 @@ import {
   TextInput,
 } from "@carbon/react";
 import { Play } from "@carbon/icons-react";
-import { Diff, diffLines, diffWords } from "@/components/console/diff";
+import { compare, Diff, diffWords, sameBut } from "@/components/console/diff";
 import { ActionMark } from "@/components/console/events";
 import { clockTime, dayLabel } from "@/components/console/names";
 import { Remove, Section } from "@/components/console/page";
@@ -36,7 +36,8 @@ const when = (iso?: string) => (iso ? `${dayLabel(iso)}, ${clockTime(iso)}` : "N
 
 /** What the draft changes against the policy the proxy is running. */
 export function Changes({ original, draft }: { original: string; draft: string }) {
-  const lines = useMemo(() => diffLines(original, draft), [original, draft]);
+  const compared = useMemo(() => compare(original, draft), [original, draft]);
+  const { lines } = compared;
   // A draft written with an admin key and read against the policy as a lower
   // key sees it (or the other way round) differs where the addresses are masked.
   const maskDiffers = lines.some((l) => l.type !== " " && l.text.includes(NOTIFY_MASK));
@@ -49,7 +50,7 @@ export function Changes({ original, draft }: { original: string; draft: string }
         </p>
       ) : null}
       {lines.length === 0 ? (
-        <p className="t-empty">The draft is the same as the policy the proxy is running.</p>
+        <p className="t-empty">The draft is the same as the policy the proxy is running{sameBut(compared)}.</p>
       ) : (
         <div style={{ marginTop: "1rem" }}>
           <Diff lines={lines} />
@@ -144,10 +145,11 @@ export function History({ adminKey }: { adminKey: string }) {
     enabled: !!adminKey && !!to,
     staleTime: 60_000,
   });
-  const lines = useMemo(
-    () => (left.data && right.data ? diffLines(left.data.yaml || "", right.data.yaml || "") : []),
+  const compared = useMemo(
+    () => (left.data && right.data ? compare(left.data.yaml || "", right.data.yaml || "") : null),
     [left.data, right.data],
   );
+  const lines = compared?.lines ?? [];
 
   if (list.isLoading) return <SkeletonText paragraph lineCount={4} />;
   if (list.isError) return <p className="t-empty">The saved revisions could not be read.</p>;
@@ -182,13 +184,13 @@ export function History({ adminKey }: { adminKey: string }) {
       <Section
         id="rev-changes"
         title="What changed between them"
-        note={left.data && right.data && lines.length > 0 ? diffWords(lines) : `${sorted.length} revisions saved`}
+        note={lines.length > 0 ? diffWords(lines) : `${sorted.length} revisions saved`}
         style={{ marginTop: "2.5rem" }}
       >
-        {!left.data || !right.data ? (
+        {!compared ? (
           <SkeletonText paragraph lineCount={6} />
         ) : lines.length === 0 ? (
-          <p className="t-empty">These two revisions are the same.</p>
+          <p className="t-empty">These two revisions are the same{sameBut(compared)}.</p>
         ) : (
           <div style={{ marginTop: "1rem" }}>
             <Diff lines={lines} />
@@ -272,7 +274,7 @@ export function Entities({
   const items = list.data?.items ?? [];
 
   return (
-    <div className="t-hunt" style={{ gridTemplateColumns: "minmax(0, 1fr) 24rem", marginTop: 0 }}>
+    <div className="t-hunt" data-form="true" style={{ marginTop: 0 }}>
       <Section id="entities" title="Custom entities" note={items.length > 0 ? `${items.length} defined` : undefined}>
         {dualControl ? (
           <p className="t-note" style={{ marginTop: "1rem" }}>

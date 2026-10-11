@@ -180,6 +180,10 @@ html {
   margin-left: 16rem;
   padding: 5rem 2rem 4rem;
   max-width: 106rem;
+  /* A model name, a key label or an address can be one word of a hundred
+     characters. Where it would leave its box it breaks; a box that sizes
+     itself to its text (a table cell) is not made narrower by this. */
+  overflow-wrap: break-word;
 }
 .tamga .t-shellstate {
   display: flex;
@@ -421,6 +425,10 @@ html {
   padding-bottom: 0.75rem;
   border-bottom: 1px solid var(--tamga-rule);
 }
+/* A title that is one long name (a pool, a pattern) wraps in the room it has. */
+.tamga .t-sectionhead > * {
+  min-width: 0;
+}
 .tamga .t-note {
   font-size: 0.8125rem;
   color: var(--cds-text-secondary);
@@ -457,10 +465,14 @@ html {
 }
 .tamga .t-figureline {
   display: flex;
+  /* A figure of nine digits leaves no room beside it: its sentence then goes
+     under it, instead of over the column to the right. */
+  flex-wrap: wrap;
   align-items: flex-end;
   gap: 1.25rem;
 }
 .tamga .t-figureline p {
+  flex: 1 1 12rem;
   padding-bottom: 0.5rem;
   font-size: 1.375rem;
   line-height: 1.3;
@@ -544,6 +556,8 @@ html {
   color: var(--cds-text-secondary);
 }
 .tamga .t-facts dd {
+  /* A value with no place to break (a version, a path) wraps beside its label. */
+  min-width: 0;
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
@@ -608,6 +622,13 @@ html {
 .tamga .t-work .cds--data-table tbody tr:hover td {
   background: var(--tamga-hover);
 }
+/* A wide table scrolls in this box. Positioned, so that it also holds what
+   is placed out of the flow inside the table (a header written for screen
+   readers alone): left where the table put it, that text would sit past the
+   box and make the whole page scroll sideways. */
+.tamga .cds--data-table-content {
+  position: relative;
+}
 /* A row that is the proxy's last answer, from before it stopped answering. */
 .tamga .cds--data-table tbody tr[data-stale="true"] td {
   color: var(--cds-text-secondary);
@@ -622,6 +643,11 @@ html {
 }
 .tamga .t-kinds td:nth-child(2) {
   white-space: nowrap;
+}
+/* The name is the one column that gives way: a long one wraps, so the table
+   stays as wide as its column of the page. */
+.tamga .t-kinds td:first-child {
+  overflow-wrap: anywhere;
 }
 .tamga .t-kinds .t-num {
   text-align: right;
@@ -645,7 +671,8 @@ html {
 }
 .tamga .t-queue li {
   display: grid;
-  grid-template-columns: 4.5rem minmax(0, 1fr) auto;
+  /* The last column is as wide as its text, up to two fifths of the row. */
+  grid-template-columns: 4.5rem minmax(0, 1fr) fit-content(40%);
   gap: 1rem;
   align-items: baseline;
   padding: 0.5rem 0; /* as .t-facts: body line height, tighter padding */
@@ -656,6 +683,10 @@ html {
 .tamga .t-queue .t-where {
   color: var(--cds-text-secondary);
   font-variant-numeric: tabular-nums;
+}
+.tamga .t-queue li > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 /* Days as bars. */
@@ -1099,6 +1130,16 @@ html {
   bottom: 0;
   justify-content: flex-end;
 }
+/* A mark in the right half writes to the left of its tick, where there is
+   room at any width; to the right it would run off the end of the line. */
+.tamga .t-mark[data-side="left"] {
+  transform: translateX(-100%);
+  align-items: flex-end;
+  padding-left: 0;
+  padding-right: 0.375rem;
+  border-left: 0;
+  border-right: 2px solid var(--tamga-ink);
+}
 
 /* The console is a desk tool, but a narrow window should still read. */
 @media (max-width: 72rem) {
@@ -1187,6 +1228,10 @@ html {
   gap: 4rem;
   margin-top: 2rem;
 }
+/* Beside the list is a form, which needs a wider column than a short list does. */
+.tamga .t-hunt[data-form="true"] {
+  grid-template-columns: minmax(0, 1fr) 24rem;
+}
 .tamga .t-fields {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1246,7 +1291,8 @@ html {
   white-space: nowrap;
 }
 @media (max-width: 72rem) {
-  .tamga .t-hunt {
+  .tamga .t-hunt,
+  .tamga .t-hunt[data-form="true"] {
     grid-template-columns: minmax(0, 1fr);
     gap: 2.5rem;
   }
@@ -1700,7 +1746,19 @@ html {
   .tamga .t-figureline {
     flex-wrap: wrap;
   }
-  .tamga .t-controls {
+  .tamga .t-controls,
+  .tamga .t-formrow {
     flex-wrap: wrap;
+  }
+  /* A count of a thousand million is thirteen characters: it is set as large as the window lets it be. */
+  .tamga .t-figure {
+    font-size: min(5rem, 13vw);
+  }
+  /* The filter boxes go onto a second line instead of past the edge. */
+  .tamga .t-filters fieldset.cds--checkbox-group--horizontal {
+    flex-wrap: wrap;
+    flex-shrink: 1;
+    min-width: 0;
+    row-gap: 0.5rem;
   }
 }

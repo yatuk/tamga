@@ -44,7 +44,9 @@ export function EventsView() {
   const p = useEventsPage();
   const { filters, events, total, windowTotals } = p;
   const filtered = filters.actions.length > 0 || filters.provider !== "";
-  const fresh = useFresh(events, !p.isLoading);
+  // The filters and the window are the question; the rows answer it once they are read.
+  const question = `${filters.actions.join(",")}|${filters.provider}|${filters.range}`;
+  const fresh = useFresh(events, p.isLoading || p.isPlaceholderData ? null : question);
   const { openId, open, missing, toggle, close } = useOpenEvent(events, p.adminKey);
   const left = total - events.length;
 
@@ -135,7 +137,7 @@ export function EventsView() {
         <EventTable
           label="Events"
           events={events}
-          swapKey={`${filters.actions.join(",")}|${filters.provider}|${filters.range}`}
+          swapKey={question}
           fresh={fresh}
           openId={openId}
           open={open}

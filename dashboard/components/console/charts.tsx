@@ -238,6 +238,8 @@ export function Scale({ marks, format, label }: { marks: { name: string; value: 
     <div className="t-scaleline" role="img" aria-label={label}>
       {marks.map((m) => {
         const left = `${(m.value / top) * 100}%`;
+        // Past the middle the words go to the left of the tick: on the right they would run off the line.
+        const side = m.value / top > 0.5 ? "left" : "right";
         const words = (
           <>
             <b>{format(m.value)}</b>
@@ -245,11 +247,11 @@ export function Scale({ marks, format, label }: { marks: { name: string; value: 
           </>
         );
         return still ? (
-          <div key={m.name} className="t-mark" style={{ left }}>
+          <div key={m.name} className="t-mark" data-side={side} style={{ left }}>
             {words}
           </div>
         ) : (
-          <motion.div key={m.name} className="t-mark" initial={false} animate={{ left }} transition={{ duration: 0.4, ease: EXPRESSIVE }}>
+          <motion.div key={m.name} className="t-mark" data-side={side} initial={false} animate={{ left }} transition={{ duration: 0.4, ease: EXPRESSIVE }}>
             {words}
           </motion.div>
         );

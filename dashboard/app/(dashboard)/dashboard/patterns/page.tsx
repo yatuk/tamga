@@ -78,7 +78,7 @@ export default function PatternsPage() {
 
       <DataNotice adminKey={adminKey} error={m.error} what="the patterns" />
 
-      <div className="t-hunt" style={{ gridTemplateColumns: "minmax(0, 1fr) 24rem" }}>
+      <div className="t-hunt" data-form="true">
         <Section id="list" title="Your patterns" note={m.items.length > 0 ? `${enabled} of ${m.items.length} switched on` : undefined}>
           {m.isLoading ? (
             <DataTableSkeleton columnCount={5} rowCount={4} showHeader={false} showToolbar={false} />

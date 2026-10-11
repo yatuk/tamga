@@ -11,8 +11,8 @@ import type { Page, Route } from "@playwright/test";
 
 const API = "**/api/v1/**";
 
-/** What a mocked call answers: 200 unless it says otherwise. */
-export type Answer = { status?: number; json: unknown };
+/** What a mocked call answers: 200 unless it says otherwise, and JSON unless it carries `text` (the metrics are plain text). */
+export type Answer = { status?: number; json?: unknown; text?: string };
 /** One answer per path under /api/v1, for example "/stats". */
 export type Answers = Record<string, (url: URL) => Answer | Promise<Answer>>;
 
@@ -136,7 +136,8 @@ export async function mockProxy(page: Page, answers: Answers = {}) {
     const path = url.pathname.replace(/^.*\/api\/v1/, "");
     // The live feed is a connection that stays open; no test here reads it.
     if (path.startsWith("/live/")) return route.abort();
-    const { status = 200, json } = (await table[path]?.(url)) ?? { json: {} };
+    const { status = 200, json = {}, text } = (await table[path]?.(url)) ?? {};
+    if (text !== undefined) return route.fulfill({ status, headers: CORS, contentType: "text/plain", body: text });
     await route.fulfill({ status, headers: CORS, contentType: "application/json", body: JSON.stringify(json) });
   });
 }

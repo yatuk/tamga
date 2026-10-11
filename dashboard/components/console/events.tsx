@@ -63,13 +63,22 @@ export function useOpenEvent(events: SecurityEvent[], adminKey: string) {
  * The rows that arrived on top since the list was last read. They show
  * themselves once. The first load is not news, and neither are older rows
  * loaded below the ones already there, nor the rows another filter brings.
+ *
+ * `question` names what `events` answers: the filters, the window and the
+ * page the caller asked for. Rows are news only when the same question gets
+ * a newer answer. Pass null while `events` is not the answer to the question
+ * on screen: nothing has been read yet, or the query client is still showing
+ * the rows of the previous question (`isPlaceholderData`).
  */
-export function useFresh(events: SecurityEvent[], ready: boolean) {
-  const known = useRef<string[] | null>(null);
+export function useFresh(events: SecurityEvent[], question: string | null) {
+  const known = useRef<{ question: string; ids: string[] } | null>(null);
   const fresh = useMemo(() => {
     const ids = new Set<string>();
-    const before = known.current;
-    if (!before || before.length === 0) return ids;
+    // Another question's rows may well be these with others on top (a filter
+    // cleared, a longer window). That is a different list, not new requests.
+    if (question === null || known.current?.question !== question) return ids;
+    const before = known.current.ids;
+    if (before.length === 0) return ids;
     const at = events.findIndex((e) => e.request_id === before[0]);
     // News sits on top of the rows that were there, in the order they were
     // in. Anything else is a different list, not new requests.
@@ -78,12 +87,12 @@ export function useFresh(events: SecurityEvent[], ready: boolean) {
     }
     for (let i = 0; i < at; i++) ids.add(events[i].request_id);
     return ids;
-  }, [events]);
+  }, [events, question]);
   useEffect(() => {
-    // A list that is being read for the first time (another filter, another
-    // window) replaces the one on screen: what it brings is not on top of it.
-    known.current = ready ? events.map((e) => e.request_id) : null;
-  }, [events, ready]);
+    // Rows that do not answer the question on screen are forgotten: the
+    // answer, when it comes, is read for the first time.
+    known.current = question === null ? null : { question, ids: events.map((e) => e.request_id) };
+  }, [events, question]);
   return fresh;
 }
 

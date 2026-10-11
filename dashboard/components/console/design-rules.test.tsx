@@ -390,6 +390,15 @@ describe("reduced motion", () => {
     expect(lefts()).toEqual([93, 93]);
   });
 
+  it("writes a scale mark's words on the side of its tick that has room", () => {
+    reduced.value = true;
+    const format = (n: number) => `${n} ms`;
+    const marks = [{ name: "Median", value: 3 }, { name: "95th", value: 6 }, { name: "99th", value: 61 }];
+    const { container } = render(<Scale label="Scan time" format={format} marks={marks} />);
+    // The highest value sits near the end of the line: to its right there is no room on a narrow screen.
+    expect([...container.querySelectorAll(".t-mark")].map((mark) => mark.getAttribute("data-side"))).toEqual(["right", "right", "left"]);
+  });
+
   it("shows a figure's new value at once", () => {
     reduced.value = true;
     const { container, rerender } = render(<Count value={12} />);

@@ -35,7 +35,8 @@ export function Incidents() {
     [incidents],
   );
 
-  const fresh = useFresh(incidents, !!list.data);
+  // One question, always: the queue. The filters below only hide rows of its answer.
+  const fresh = useFresh(incidents, list.data && !list.isPlaceholderData ? "queue" : null);
 
   const rows = incidents.filter((e) => {
     if (action !== "All" && e.action !== action) return false;

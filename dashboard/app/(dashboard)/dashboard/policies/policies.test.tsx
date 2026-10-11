@@ -10,6 +10,7 @@ import { POLICY_DRAFT_STORAGE } from "./_constants";
 import PoliciesPage from "./page";
 import { maskedNotifyRules } from "./policyUtils";
 import { explainRefusal, sectionWords } from "./refusal";
+import { Changes } from "./tabs";
 
 // CodeMirror needs a real layout. The draft comes from this browser's storage, as it does after a reload.
 vi.mock("./policy-code-editor", () => ({ default: () => null }));
@@ -400,5 +401,32 @@ describe("Policies page: custom entities", () => {
     await user.click(screen.getByRole("button", { name: "Add entity" }));
 
     expect(await screen.findByText("The entity was not added. Edit the file there and choose Reload from disk, or mount it writable.")).toBeInTheDocument();
+  });
+});
+
+describe("Policies page: two documents that differ in line endings alone", () => {
+  const CRLF = "rules:\r\n  pii_detection:\r\n    action: block\r\n";
+  const LF = CRLF.replace(/\r\n/g, "\n");
+
+  it("says the draft is the same apart from line endings, and draws no diff", () => {
+    render(<Changes original={CRLF} draft={LF} />);
+
+    expect(screen.getByText("The draft is the same as the policy the proxy is running, apart from line endings.")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Line diff" })).toBeNull();
+    expect(screen.queryByText(/lines? added/)).toBeNull();
+  });
+
+  it("says a draft that is the same text is the same, with nothing after it", () => {
+    render(<Changes original={LF} draft={LF} />);
+
+    expect(screen.getByText("The draft is the same as the policy the proxy is running.")).toBeInTheDocument();
+  });
+
+  it("still draws the diff, with its count, when a line changed as well", () => {
+    render(<Changes original={CRLF} draft={LF.replace("block", "redact")} />);
+
+    expect(screen.getByRole("region", { name: "Line diff" })).toBeInTheDocument();
+    expect(screen.getByText("1 line added, 1 removed")).toBeInTheDocument();
+    expect(screen.queryByText(/apart from line endings/)).toBeNull();
   });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { render, screen, within } from "@testing-library/react";
-import { Diff, diffLines, diffWords } from "./diff";
+import { compare, Diff, diffLines, diffWords, sameBut } from "./diff";
 
 /** A diff written the way it is read: one line each, with its sign in front. */
 const signed = (a: string, b: string) => diffLines(a, b).map((line) => `${line.type}${line.text}`);
@@ -65,6 +65,49 @@ describe("diffLines", () => {
 
   it("a blank line added between two others is one added line", () => {
     expect(signed("a\nb", "a\n\nb")).toEqual([" a", "+", " b"]);
+  });
+});
+
+describe("compare", () => {
+  it("has no lines and no remark for two texts that are the same", () => {
+    expect(compare("a\nb", "a\nb")).toEqual({ lines: [], lineEndingsOnly: false });
+    expect(compare("a\r\nb", "a\r\nb")).toEqual({ lines: [], lineEndingsOnly: false });
+    expect(compare("", "")).toEqual({ lines: [], lineEndingsOnly: false });
+    expect(sameBut(compare("a\nb", "a\nb"))).toBe("");
+  });
+
+  it("has no lines to draw for two texts that differ in their line endings alone, and says that is the difference", () => {
+    const crlf = "rules:\r\n  pii: block\r\n";
+    const lf = "rules:\n  pii: block\n";
+    expect(compare(crlf, lf)).toEqual({ lines: [], lineEndingsOnly: true });
+    expect(compare(lf, crlf)).toEqual({ lines: [], lineEndingsOnly: true });
+    expect(sameBut(compare(crlf, lf))).toBe(", apart from line endings");
+  });
+
+  it("says the same of a text with both kinds of line ending in it", () => {
+    expect(compare("a\r\nb\nc", "a\nb\r\nc")).toEqual({ lines: [], lineEndingsOnly: true });
+  });
+
+  it("gives the whole diff, unchanged lines too, once a line was added or removed", () => {
+    const compared = compare("a\r\nb\r\nc", "a\nb\nd");
+    expect(compared.lineEndingsOnly).toBe(false);
+    expect(compared.lines.map((line) => `${line.type}${line.text}`)).toEqual([" a", " b", "-c", "+d"]);
+    expect(sameBut(compared)).toBe("");
+  });
+
+  it("counts a line break at the end as a line, not as a line ending", () => {
+    // "a\n" has an empty last line that "a" does not have.
+    expect(compare("a\n", "a").lines.map((line) => `${line.type}${line.text}`)).toEqual([" a", "-"]);
+    expect(compare("a\r\n", "a").lineEndingsOnly).toBe(false);
+  });
+
+  it("does not take a lone carriage return for a line ending", () => {
+    expect(compare("a\rb", "a\nb").lines.map((line) => `${line.type}${line.text}`)).toEqual(["-a\rb", "+a", "+b"]);
+  });
+
+  it("compares a document with an empty one as all added or all removed", () => {
+    expect(compare("", "a").lines).toEqual([{ type: "+", text: "a" }]);
+    expect(compare("a", "").lines).toEqual([{ type: "-", text: "a" }]);
   });
 });
 

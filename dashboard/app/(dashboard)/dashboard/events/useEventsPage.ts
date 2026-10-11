@@ -72,6 +72,7 @@ export function useEventsPage() {
   const {
     data,
     isLoading,
+    isPlaceholderData,
     error: queryError,
     hasNextPage,
     isFetchingNextPage,
@@ -138,6 +139,8 @@ export function useEventsPage() {
     updateFilters,
     toggleAction,
     isLoading,
+    /** The rows on screen are still those of the filters before the last change. */
+    isPlaceholderData,
     hasError,
     error: queryError,
     events,
