@@ -47,6 +47,10 @@ jobs:
 
   go-test:
     name: Go Test (race + E2E)
+    # Not on pull requests or pushes, by the owner's decision (2026-10-11): it
+    # takes about ten minutes. It runs on the weekly schedule or when started
+    # by hand, and the release workflow runs the same tests before a release.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
