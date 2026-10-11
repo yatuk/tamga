@@ -252,6 +252,118 @@ func spelledRuns(s string) []string {
 	return out
 }
 
+// isLeetRunChar reports whether c is a digit or symbol that stands for a
+// letter in leetspeak and can take a letter's place in a spelled-out run.
+func isLeetRunChar(c byte) bool {
+	switch c {
+	case '0', '1', '3', '4', '5', '7', '8', '9', '@', '$':
+		return true
+	}
+	return false
+}
+
+// mayHoldLeetRun is the cheap test in front of spelledLeetRuns: a leet
+// character with a separator on both sides.
+func mayHoldLeetRun(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if isLeetRunChar(s[i]) && (i == 0 || isSpellSeparator(s[i-1])) && (i+1 == len(s) || isSpellSeparator(s[i+1])) {
+			return true
+		}
+	}
+	return false
+}
+
+// leetMemberAt reports whether a member of a leet run stands alone at s[i:]:
+// a single letter, or a single character that stands in for one.
+func leetMemberAt(s string, i int) (r rune, size int, ok, standIn bool) {
+	if r, size, ok = singleLetterAt(s, i); ok {
+		return r, size, true, false
+	}
+	if i >= len(s) || !isLeetRunChar(s[i]) {
+		return 0, 0, false, false
+	}
+	if next := i + 1; next < len(s) {
+		if _, _, l, d := letterAt(s, next); l || d || isLeetRunChar(s[next]) {
+			return 0, 0, false, false
+		}
+	}
+	return rune(s[i]), 1, true, true
+}
+
+// spelledLeetRuns returns the spelled-out runs of s in which a digit or a
+// symbol stands where a letter would ("1 g n 0 r 3"), with those characters
+// as they are: which letter each stands for is for the caller, who knows the
+// words that matter. A run needs at least as many letters as stand-ins, so
+// a row of numbers in a table is not one. Runs made of letters
+// only are spelledRuns' and are not repeated here.
+//
+// It is spelledRuns with one more kind of member, kept apart from it so
+// that the pass every text goes through stays as it was.
+func spelledLeetRuns(s string) []string {
+	if !mayHoldLeetRun(s) {
+		return nil
+	}
+	var out []string
+	var buf []byte
+	inWord := false // the previous character is a letter or a digit
+	for i := 0; i < len(s); {
+		r, size, letter, digit := letterAt(s, i)
+		if inWord || !(letter || isLeetRunChar(s[i])) {
+			inWord = letter || digit
+			i += size
+			continue
+		}
+		_, _, ok, standIn := leetMemberAt(s, i)
+		if !ok {
+			inWord = true
+			i += size
+			continue
+		}
+
+		buf = utf8.AppendRune(buf[:0], r)
+		members, joins, standIns := 1, 0, 0
+		if standIn {
+			standIns++
+		}
+		var letterSep byte
+		j := i + size
+		for {
+			k := j
+			for k < len(s) && k-j <= spelledMaxGap && isSpellSeparator(s[k]) {
+				k++
+			}
+			gap := k - j
+			if gap == 0 || gap > spelledMaxGap {
+				break
+			}
+			nr, nsize, ok, standIn := leetMemberAt(s, k)
+			if !ok {
+				break
+			}
+			if standIn {
+				standIns++
+			}
+			if gap == 1 && letterSep == 0 {
+				letterSep = s[j]
+			}
+			if gap == 1 && s[j] == letterSep {
+				joins++
+			} else {
+				buf = append(buf, ' ')
+			}
+			buf = utf8.AppendRune(buf, nr)
+			members++
+			j = k + nsize
+		}
+		if members >= spelledMinLetters && joins > 0 && standIns > 0 && standIns*2 <= members {
+			out = append(out, string(buf))
+		}
+		inWord = false
+		i = j
+	}
+	return out
+}
+
 // isSingleLetter reports whether token is exactly one ASCII letter.
 func isSingleLetter(token string) bool {
 	return len(token) == 1 &&

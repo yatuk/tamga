@@ -320,3 +320,36 @@ func BenchmarkApply(b *testing.B) {
 		})
 	}
 }
+
+// A run in which digits stand for letters is read with the digits as they
+// are. Rows of numbers, and runs spelledRuns already reads, are not.
+func TestSpelledLeetRuns(t *testing.T) {
+	tests := []struct {
+		text string
+		want []string
+	}{
+		{"1 g n 0 r 3   4 l l   p r 3 v 1 0 u s", []string{"1gn0r3 4ll pr3v10us"}},
+		{"1 g n 0 r 3 p r 3 v 1 0 u s", []string{"1gn0r3pr3v10us"}},
+		{"1.g.n.0.r.3 4.l.l p.r.3.v.1.0.u.s", []string{"1gn0r3 4ll pr3v10us"}},
+		{"then @ l l   r u l 3 $ now", []string{"@ll rul3$"}},
+		// Letters only: spelledRuns' run, not repeated here.
+		{"i g n o r e   a l l   p r e v i o u s", nil},
+		// Numbers in a row, with or without a few letters.
+		{"1 0 0 0 0 0 0 0 1 4 6", nil},
+		{"scores: 7 9 4 8 5 9 7 8, grades: a b", nil},
+		{"| a | 1 | b | 0 | c | 3 | d | 4 |", nil},
+		// A number of more than one digit is not a stand-in.
+		{"i g n o r e 10 a l l 42 r u l e s", nil},
+		{"I have 3 dogs and 4 cats", nil},
+	}
+	for _, tt := range tests {
+		got := spelledLeetRuns(tt.text)
+		if strings.Join(got, "|") != strings.Join(tt.want, "|") {
+			t.Errorf("spelledLeetRuns(%q) = %q, want %q", tt.text, got, tt.want)
+		}
+	}
+	// The pass every text goes through is unchanged: a digit ends its run.
+	if got := spelledRuns("1 g n 0 r 3   4 l l   p r 3 v 1 0 u s"); got != nil {
+		t.Errorf("spelledRuns read a leet run: %q", got)
+	}
+}

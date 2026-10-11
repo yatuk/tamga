@@ -26,8 +26,19 @@ import (
 // a value, a placeholder or the token can be cut anywhere. Scanning each
 // piece on its own misses whatever lies across a cut. So the model's text is
 // reassembled per channel and its last holdback characters are kept back
-// until more text shows that nothing in them is still growing. Events are
-// forwarded as they come, each carrying the text that has been cleared.
+// until more text shows that nothing in them is still growing, along with
+// the whole of the run of characters the text ends in (defaultTokenHold).
+// Events are forwarded as they come, each carrying the text that has been
+// cleared.
+//
+// A fourth thing is done to an answer that is held to a schema
+// (output_rules.json_schema): its whole text is judged when it ends. Nothing
+// about a document can be said before then, so where a mismatch withholds
+// the answer the text is kept back until the end (configureStreamSchema).
+//
+// What the guard reads is the model's prose. A streamed tool call's
+// arguments and streamed reasoning are not text events of the shapes
+// extract.ParseStreamEvent knows, and pass unread.
 
 const (
 	// defaultHoldback is how much of the newest text is kept back. It has to
@@ -43,6 +54,16 @@ const (
 	defaultMaxHeld = 8 << 10
 	// maxEventBytes bounds one event. Larger ones are forwarded untouched.
 	maxEventBytes = 1 << 20
+	// defaultTokenHold is the longest run of characters without white space
+	// that is kept back whole until it ends. A value is written as one such
+	// run, and some are values only once they are complete: an e-mail
+	// address has no "@" until its local part is over, a key no length
+	// until its last character, a link no query until its host is done. The
+	// fixed hold-back let the start of any of them out once they were
+	// longer than it. 1024 covers an address (254), the keys the secret
+	// scanner knows, and a link up to where the link scanner reports it by
+	// its length; a longer run is held by the fixed amount only.
+	defaultTokenHold = 1024
 
 	vaultPlaceholderOpen = "[TAMGA_"
 )
@@ -62,8 +83,17 @@ type streamGuard struct {
 	canary       string
 	canaryBlocks bool
 
-	holdback int
-	maxHeld  int
+	holdback  int
+	maxHeld   int
+	tokenHold int
+
+	// schema judges the whole text of a channel when it ends; nil means no
+	// schema applies. bad is true for a text that was not accepted.
+	// schemaHold keeps the text back until then, because a mismatch is to
+	// withhold it; schemaMax is the most text that is kept to be judged.
+	schema     func(text string) (f scanner.Finding, bad bool, err error)
+	schemaHold bool
+	schemaMax  int
 
 	channels map[string]*streamChannel
 
@@ -78,6 +108,14 @@ type streamGuard struct {
 type streamChannel struct {
 	pending string // text not yet released
 	context string // tail of what was released
+	// doc is the whole text of the channel, kept while a schema is to judge
+	// it. docOver says it grew past schemaMax and is not kept any more;
+	// judged that the schema has had its say. unheld is set when text held
+	// for the schema has been let go.
+	doc     []byte
+	docOver bool
+	judged  bool
+	unheld  bool
 	// template is the last event that carried text on this channel, kept so
 	// that held text can be sent in an event of the same shape.
 	template *streamTemplate
@@ -90,7 +128,7 @@ type streamTemplate struct {
 }
 
 func newStreamGuard() *streamGuard {
-	return &streamGuard{holdback: defaultHoldback, maxHeld: defaultMaxHeld, channels: make(map[string]*streamChannel)}
+	return &streamGuard{holdback: defaultHoldback, maxHeld: defaultMaxHeld, tokenHold: defaultTokenHold, channels: make(map[string]*streamChannel)}
 }
 
 func (g *streamGuard) channel(name string) *streamChannel {
@@ -164,7 +202,9 @@ func (g *streamGuard) event(raw []byte) (out []byte, stop bool) {
 		texts := make([]string, len(ev.Deltas))
 		for i, d := range ev.Deltas {
 			ch := g.channel(d.Channel)
-			ch.pending += d.Text
+			if g.take(ch, d.Text) {
+				return g.termination(), true
+			}
 			ch.template = &streamTemplate{head: head, data: data, tail: tail, deltas: ev.Deltas, index: i}
 			released, stopped := g.release(ch, ending[d.Channel] || ev.EndsAll)
 			if stopped {
@@ -241,7 +281,14 @@ func (g *streamGuard) flushAll() ([]byte, bool) {
 // flush releases everything a channel holds, as one event.
 func (g *streamGuard) flush(name string) ([]byte, bool) {
 	ch, ok := g.channels[name]
-	if !ok || ch.pending == "" {
+	if !ok {
+		return nil, false
+	}
+	if ch.pending == "" && !g.holds(ch) {
+		// Nothing to send, but the channel is over: the schema judges it.
+		if g.judge(ch) {
+			return g.termination(), true
+		}
 		return nil, false
 	}
 	released, stopped := g.release(ch, true)
@@ -264,6 +311,15 @@ func (g *streamGuard) flush(name string) ([]byte, bool) {
 // release scans what a channel holds and returns the text that can go out.
 // final releases everything. stopped means the stream must end.
 func (g *streamGuard) release(ch *streamChannel, final bool) (released string, stopped bool) {
+	if g.holds(ch) {
+		if !final {
+			return "", false
+		}
+		ch.pending, ch.unheld = string(ch.doc), true
+	}
+	if final && g.judge(ch) {
+		return "", true
+	}
 	window := ch.context + ch.pending
 	ctxLen := len(ch.context)
 
@@ -281,6 +337,20 @@ func (g *streamGuard) release(ch *streamChannel, final bool) (released string, s
 	// holdFrom is where, in the window, text must be kept back because a
 	// match reaching the end of it may still be growing.
 	holdFrom := len(window)
+	// open is where the run of characters at the end of the window starts,
+	// when that run is short enough to be held whole (see defaultTokenHold).
+	// A finding that reaches into it is not settled: more of the run may
+	// make it longer ("…@mail.example" before ".com" has come), or make it
+	// something else.
+	open := len(window)
+	if !final {
+		if t := g.openRun(ch.pending); t >= 0 {
+			open = ctxLen + t
+		}
+	}
+	growing := func(f scanner.Finding) bool {
+		return !final && (f.EndPos > open || f.EndPos == len(window))
+	}
 	type mask struct {
 		from, to int
 		with     string
@@ -300,6 +370,16 @@ func (g *streamGuard) release(ch *streamChannel, final bool) (released string, s
 			}
 			switch {
 			case g.blocks != nil && g.blocks(f):
+				if placed && growing(f) {
+					// It reaches the end of what has arrived, so it may
+					// be the start of something else: eleven digits of a
+					// longer number, a host name that goes on. It is
+					// kept back, and judged when more text has come.
+					if f.StartPos < holdFrom {
+						holdFrom = f.StartPos
+					}
+					continue
+				}
 				g.findings = append(g.findings, f)
 				g.stopReason = "content_blocked_by_policy"
 				return "", true
@@ -321,7 +401,7 @@ func (g *streamGuard) release(ch *streamChannel, final bool) (released string, s
 					g.stopReason = "redact_unplaced"
 					return "", true
 				}
-				if f.EndPos == len(window) && !final {
+				if growing(f) {
 					if f.StartPos < holdFrom {
 						holdFrom = f.StartPos
 					}
@@ -393,6 +473,12 @@ func (g *streamGuard) release(ch *streamChannel, final bool) (released string, s
 				cut = open
 			}
 		}
+		// A run of characters that has not ended stays whole (see
+		// defaultTokenHold), as long as holding it cannot by itself fill
+		// the buffer.
+		if t := g.openRun(pending); t >= 0 && t < cut {
+			cut = t
+		}
 		for cut > 0 && cut < len(pending) && !utf8.RuneStart(pending[cut]) {
 			cut--
 		}
@@ -411,6 +497,121 @@ func (g *streamGuard) release(ch *streamChannel, final bool) (released string, s
 		}
 	}
 	return released, false
+}
+
+// openRunStart returns where the run of characters at the end of text
+// starts: the position after the last break in it. It returns -1 when that
+// run is longer than limit, and len(text) when the text ends in a break.
+func openRunStart(text string, limit int) int {
+	for i := len(text); i > 0; {
+		r, size := utf8.DecodeLastRuneInString(text[:i])
+		if runBreak(r) {
+			return i
+		}
+		i -= size
+		if len(text)-i > limit {
+			return -1
+		}
+	}
+	return 0
+}
+
+// openRun is openRunStart under the guard's limit.
+func (g *streamGuard) openRun(text string) int {
+	limit := g.tokenHold
+	if limit > g.maxHeld {
+		limit = g.maxHeld
+	}
+	return openRunStart(text, limit)
+}
+
+// runBreak reports whether a character ends a run: white space, or a
+// character of a script that is written without spaces between words
+// (Chinese, Japanese, Korean, Thai, Lao, Burmese, Khmer). Without the
+// second part a paragraph in such a script would be one run, and held.
+func runBreak(r rune) bool {
+	switch {
+	case r == ' ' || r == 0x0A || r == 0x09 || r == 0x0D:
+		return true
+	case r >= 0x2E80:
+		return true
+	case r >= 0x0E00 && r <= 0x109F, r >= 0x1780 && r <= 0x17FF:
+		return true
+	}
+	return false
+}
+
+// take adds a piece of text to a channel. stopped means the stream must end.
+func (g *streamGuard) take(ch *streamChannel, text string) (stopped bool) {
+	if g.schema == nil {
+		ch.pending += text
+		return false
+	}
+	holding := g.schemaHold && !ch.unheld
+	if !ch.docOver && len(ch.doc)+len(text) <= g.schemaMax {
+		ch.doc = append(ch.doc, text...)
+		if !holding {
+			ch.pending += text
+		}
+		return false
+	}
+	if !ch.docOver {
+		// More text than is kept to be judged. Where a mismatch only gets
+		// recorded the stream goes on, unjudged and counted as such. Where
+		// it withholds the answer, fail_open decides, as it does for text
+		// the scanners could not look at.
+		ch.docOver = true
+		scanner.RecordDegraded("schema_stream_too_large")
+		if holding {
+			if !g.failOpen {
+				g.stopReason = "schema_unjudged_too_large"
+				return true
+			}
+			ch.pending, ch.unheld = string(ch.doc), true
+		}
+		ch.doc = nil
+	}
+	ch.pending += text
+	return false
+}
+
+// holds reports whether the channel's text is being kept back for the
+// schema.
+func (g *streamGuard) holds(ch *streamChannel) bool {
+	return g.schema != nil && g.schemaHold && !ch.unheld
+}
+
+// judge puts the whole text of a channel that has ended to the schema,
+// once. stopped means the stream must end: the text was not accepted and
+// the policy withholds such an answer, or it could not be judged and
+// fail_open is off.
+func (g *streamGuard) judge(ch *streamChannel) (stopped bool) {
+	if g.schema == nil || ch.judged {
+		return false
+	}
+	ch.judged = true
+	if ch.docOver || strings.TrimSpace(string(ch.doc)) == "" {
+		return false
+	}
+	f, bad, err := g.schema(string(ch.doc))
+	ch.doc = nil
+	if err != nil {
+		scanner.RecordDegraded("schema_stream_unjudged")
+		if !g.failOpen {
+			g.stopReason = "scanner_unavailable"
+			return true
+		}
+		return false
+	}
+	if !bad {
+		return false
+	}
+	g.findings = append(g.findings, f)
+	if g.blocks != nil && g.blocks(f) {
+		g.stopReason = "schema_mismatch"
+		return true
+	}
+	return false
 }
 
 // scanStreamText scans a piece of streamed model text the way a response

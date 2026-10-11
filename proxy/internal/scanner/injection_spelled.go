@@ -20,8 +20,9 @@ import (
 // can only be blocked, never redacted. A view that could only add such
 // findings is not given to them.
 //
-// Leetspeak inside a spelled run ("1 g n 0 r e") is not read: a digit ends
-// the run.
+// Leetspeak inside a spelled run ("1 g n 0 r e") is not read here: a digit
+// ends the run. Such runs are read apart, with the leetspeak view
+// (injection_leet.go).
 
 // normalizeForInjection normalises text the way the injection and jailbreak
 // scanners read it: the default passes, and the spelled-out runs.

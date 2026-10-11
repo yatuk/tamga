@@ -37,9 +37,9 @@ type Finding struct {
 	// are then offsets into that segment's text.
 	Seg int `json:"-"`
 	// fp tells apart two values whose Match is the same because the Match
-	// holds none of the value (see secretFingerprint). Zero when the scanner
-	// set none, as for a finding that came over the wire. It is unexported
-	// so that no encoder writes it.
+	// holds none of the value, or too little of it (see secretFingerprint
+	// and cardFingerprint). Zero when the scanner set none, as for a finding
+	// that came over the wire. It is unexported so that no encoder writes it.
 	fp uint64
 }
 

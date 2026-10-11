@@ -3,6 +3,7 @@ package normalize
 import (
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 // wordNumEN maps English number words (digits, teens, tens, magnitudes) to
@@ -75,7 +76,7 @@ var wordNumTR = map[string]int{
 // two consecutive number words, so regular prose ("I have one dog") is
 // unaffected.
 func expandWordsToNumbers(s string) string {
-	if s == "" {
+	if s == "" || !mayHoldNumberRun(s) {
 		return s
 	}
 	// Tokenize on whitespace while preserving the original separators.
@@ -288,4 +289,83 @@ func itoa(n int) string {
 		buf[i] = '-'
 	}
 	return string(buf[i:])
+}
+
+// numberWordMaxLen is the length in bytes of the longest number word.
+var numberWordMaxLen = func() int {
+	n := 0
+	for _, m := range []map[string]int{wordNumEN, wordNumTR} {
+		for w := range m {
+			if len(w) > n {
+				n = len(w)
+			}
+		}
+	}
+	return n
+}()
+
+// mayHoldNumberRun reports whether s has two number words with nothing but
+// white space between them, which is the least expandWordsToNumbers
+// rewrites. It reads the tokens tokenize would make without making them, so
+// that text without spelled-out numbers, which is nearly all text, costs one
+// pass and no allocation.
+func mayHoldNumberRun(s string) bool {
+	prevNumber := false // the last word was a number word
+	onlySpace := true   // and only white space has followed it
+	var lower [32]byte
+	for i := 0; i < len(s); {
+		r, size := rune(s[i]), 1
+		if r >= utf8.RuneSelf {
+			r, size = utf8.DecodeRuneInString(s[i:])
+			if r == utf8.RuneError && size == 1 {
+				// The pass also writes the replacement character for a
+				// byte that is not UTF-8; leave that text to it.
+				return true
+			}
+		}
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) {
+			if !unicode.IsSpace(r) {
+				onlySpace = false
+			}
+			i += size
+			continue
+		}
+		start, ascii := i, true
+		for i < len(s) {
+			r, size = rune(s[i]), 1
+			if r >= utf8.RuneSelf {
+				r, size = utf8.DecodeRuneInString(s[i:])
+				if r == utf8.RuneError && size == 1 {
+					return true
+				}
+				ascii = false
+			}
+			if !unicode.IsLetter(r) && !unicode.IsDigit(r) {
+				break
+			}
+			i += size
+		}
+		number := false
+		if n := i - start; n <= numberWordMaxLen && n <= len(lower) {
+			if ascii {
+				for k := 0; k < n; k++ {
+					c := s[start+k]
+					if c >= 'A' && c <= 'Z' {
+						c += 'a' - 'A'
+					}
+					lower[k] = c
+				}
+				_, en := wordNumEN[string(lower[:n])]
+				_, tr := wordNumTR[string(lower[:n])]
+				number = en || tr
+			} else {
+				number = isNumberWord(s[start:i])
+			}
+		}
+		if number && prevNumber && onlySpace {
+			return true
+		}
+		prevNumber, onlySpace = number, true
+	}
+	return false
 }

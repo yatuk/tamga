@@ -16,6 +16,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"unicode/utf16"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -238,8 +239,11 @@ type scanResult struct {
 		Type     string `json:"type"`
 		Category string `json:"category"`
 		Severity string `json:"severity"`
+		Position string `json:"position"`
 		Start    *int   `json:"start"`
 		End      *int   `json:"end"`
+		Start16  *int   `json:"start_utf16"`
+		End16    *int   `json:"end_utf16"`
 		Action   string `json:"action"`
 	} `json:"findings"`
 	RedactedText *string `json:"redacted_text"`
@@ -605,6 +609,72 @@ func TestScan_Block(t *testing.T) {
 // The response is a projection of a finding, not the scanner's record.
 var scanLatencyField = regexp.MustCompile(`"scan_latency_ms":[0-9.eE+-]+`)
 
+// A position is given in bytes of the text as UTF-8 and in UTF-16 code
+// units, and each delimits the value in the text that was sent: Turkish
+// letters are two bytes and one unit, an emoji outside the basic plane four
+// bytes and two units, so neither offset equals the other here.
+func TestScan_PositionsInBothUnits(t *testing.T) {
+	g := newScanRig(t, scanRigOptions{})
+	text := "İstanbul'dan şöyle yazdı 😀👨‍👩‍👧: " + scanEmail + " adresine gönder."
+	out, raw := g.scan(t, text, "user")
+	if len(out.Findings) != 1 {
+		t.Fatalf("findings = %d, want the address alone: %s", len(out.Findings), raw)
+	}
+	f := out.Findings[0]
+	if f.Position != "exact" || f.Start == nil || f.End == nil || f.Start16 == nil || f.End16 == nil {
+		t.Fatalf("no exact position in both units: %s", raw)
+	}
+	if got := text[*f.Start:*f.End]; got != scanEmail {
+		t.Errorf("bytes [%d,%d) delimit %q, want the address", *f.Start, *f.End, got)
+	}
+	units := utf16.Encode([]rune(text))
+	if *f.End16 > len(units) {
+		t.Fatalf("end_utf16 %d is past the text's %d units", *f.End16, len(units))
+	}
+	if got := string(utf16.Decode(units[*f.Start16:*f.End16])); got != scanEmail {
+		t.Errorf("UTF-16 units [%d,%d) delimit %q, want the address", *f.Start16, *f.End16, got)
+	}
+	if *f.Start == *f.Start16 {
+		t.Error("the byte offset equals the UTF-16 offset: the text did not tell the two units apart")
+	}
+
+	// A value written in full-width letters is read where it stands: the
+	// position is that of the letters as sent.
+	wide := "ｊａｎｅ．ｄｏｅ＠ｅｘａｍｐｌｅ．ｃｏｍ"
+	text = "write to " + wide + " today"
+	out, raw = g.scan(t, text, "user")
+	found := false
+	for _, f := range out.Findings {
+		if f.Category != "email" {
+			continue
+		}
+		found = true
+		if f.Position != "exact" || f.Start == nil || f.End == nil || text[*f.Start:*f.End] != wide {
+			t.Errorf("the full-width address is not placed on its letters: %s", raw)
+		}
+	}
+	if !found {
+		t.Fatalf("the full-width address was not found, so its position was not checked: %s", raw)
+	}
+
+	// A value seen only in a decoded payload (base64 here) has no place in
+	// the text as sent, and says so instead of pointing at one.
+	out, raw = g.scan(t, "write to amFuZS5kb2VAZXhhbXBsZS5jb20= today", "user")
+	found = false
+	for _, f := range out.Findings {
+		if f.Category != "email" {
+			continue
+		}
+		found = true
+		if f.Position != "normalised_view" || f.Start != nil || f.Start16 != nil {
+			t.Errorf("a finding of a decoded payload carries position %q and offsets: %s", f.Position, raw)
+		}
+	}
+	if !found {
+		t.Fatalf("the encoded address was not found, so its position was not checked: %s", raw)
+	}
+}
+
 func TestScan_FindingsCarryNoMatchOrScore(t *testing.T) {
 	g := newScanRig(t, scanRigOptions{policy: classifierPolicy("pass", ""), scorer: &semanticScorer{}})
 	texts := []struct{ text, role string }{
@@ -612,7 +682,7 @@ func TestScan_FindingsCarryNoMatchOrScore(t *testing.T) {
 		{scanInjection, "tool"},
 		{semanticAttack, "tool"},
 	}
-	allowed := map[string]bool{"type": true, "category": true, "severity": true, "start": true, "end": true, "action": true}
+	allowed := map[string]bool{"type": true, "category": true, "severity": true, "position": true, "start": true, "end": true, "start_utf16": true, "end_utf16": true, "action": true}
 	kinds := map[string]bool{}
 	for _, tc := range texts {
 		_, raw := g.scan(t, tc.text, tc.role)
@@ -635,8 +705,14 @@ func TestScan_FindingsCarryNoMatchOrScore(t *testing.T) {
 			kinds[typ] = true
 			kinds[cat] = true
 			_, placed := f["start"]
-			// Where a detector matched an attack is not reported.
-			if (typ == "injection" || cat == "classifier") && placed {
+			// Where a detector matched an attack is not reported, in either
+			// unit, and the finding says that it has no position.
+			var position string
+			_ = json.Unmarshal(f["position"], &position)
+			if _, placed16 := f["start_utf16"]; placed16 != placed || placed != (position == "exact") {
+				t.Fatalf("position %q does not agree with the offsets given: %s", position, raw)
+			}
+			if (typ == "injection" || cat == "classifier") && (placed || position != "none") {
 				t.Fatalf("%s/%s finding carries a position: %s", typ, cat, raw)
 			}
 			if typ == "secret" && !placed {

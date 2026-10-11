@@ -220,6 +220,10 @@ func TestSignal(t *testing.T) {
 		{Finding{Type: "injection", Category: "hidden_text", Severity: "low"}, true},
 		{Finding{Type: "injection", Category: "hidden_text", Severity: "high"}, false},
 		{Finding{Type: "injection", Category: "ascii_art", Severity: "low"}, false},
+		{Finding{Type: "injection", Category: "above_text_request", Severity: "low"}, true},
+		{Finding{Type: "injection", Category: "translation_abandoned", Severity: "low"}, true},
+		{Finding{Type: "injection", Category: "translation_bypass", Severity: "medium"}, false},
+		{Finding{Type: "injection", Category: "translation_bypass", Severity: "low"}, false},
 		{Finding{Type: "secret", Category: "unreadable_block", Severity: "low"}, false},
 	}
 	for _, tt := range tests {

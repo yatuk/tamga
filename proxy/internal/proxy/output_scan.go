@@ -50,6 +50,12 @@ type outputScanResult struct {
 // and returns the combined outcome. The caller is responsible for reconstructing
 // the response stream.
 //
+// The registry is the one requests are scanned with, so the PII, secret and
+// custom scanners read an answer as they read a request; the output-only
+// registry adds what only an answer is looked at for (source code, links).
+// When the answer is held to output_rules.json_schema, a mismatch is one
+// more finding.
+//
 // outputReg is optional (may be nil) and contains scanners that should only
 // run on response bodies (e.g. code_leak).
 func scanResponseBody(ctx context.Context, reg *scanner.Registry, outputReg *scanner.Registry, pol *policy.Policy, provider Provider, raw []byte, windowMs int, pipeCfg scanner.PipelineConfig) (outputScanResult, error) {
@@ -72,6 +78,7 @@ func scanResponseBody(ctx context.Context, reg *scanner.Registry, outputReg *sca
 				err = extraErr
 			}
 		}
+		findings, err = withSchemaFindings(scanCtx, pol, raw, findings, err)
 		out := outputScanResult{findings: findings, action: pol.EvaluateOutput(findings)}
 		if out.action == policy.ActionRedact && err != nil {
 			// The scan did not reach the end of the answer: a scanner hit
@@ -114,6 +121,7 @@ func scanResponseBody(ctx context.Context, reg *scanner.Registry, outputReg *sca
 			err = extraErr
 		}
 	}
+	findings, err = withSchemaFindings(scanCtx, pol, raw, findings, err)
 
 	act := pol.EvaluateOutput(findings)
 	if act == policy.ActionRedact {
@@ -128,6 +136,21 @@ func scanResponseBody(ctx context.Context, reg *scanner.Registry, outputReg *sca
 		text:     text,
 		elapsed:  time.Since(start),
 	}, err
+}
+
+// withSchemaFindings adds what output_rules.json_schema finds about the
+// answer, when the answer is held to it (see answer_schema.go). A check the
+// window cut short makes the scan incomplete, like a scanner that stopped.
+func withSchemaFindings(ctx context.Context, pol *policy.Policy, raw []byte, findings []scanner.Finding, err error) ([]scanner.Finding, error) {
+	schema := answerSchema(ctx, pol)
+	if schema == nil {
+		return findings, err
+	}
+	found, schemaErr := schemaFindings(ctx, schema, raw)
+	if err == nil {
+		err = schemaErr
+	}
+	return append(findings, found...), err
 }
 
 // redactResponse masks the findings output_rules.redact_on names. It returns

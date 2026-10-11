@@ -114,11 +114,20 @@ type scanFinding struct {
 	Type     string `json:"type"`
 	Category string `json:"category"`
 	Severity string `json:"severity"`
-	// Start and End are byte offsets into the submitted text as UTF-8. They
-	// are absent for a finding with no position, and for the types in
-	// scanUnplacedTypes.
-	Start  *int   `json:"start,omitempty"`
-	End    *int   `json:"end,omitempty"`
+	// Position says whether the finding has a place in the submitted text:
+	// "exact", "normalised_view" (found only in a normalised view of it) or
+	// "none" (the detector gives none, or the type is in scanUnplacedTypes).
+	Position string `json:"position"`
+	// Start and End are byte offsets into the submitted text as UTF-8, and
+	// StartUTF16 and EndUTF16 the same span in UTF-16 code units, which is
+	// how a browser indexes a string. All four are absent unless Position
+	// is "exact".
+	Start      *int `json:"start,omitempty"`
+	End        *int `json:"end,omitempty"`
+	StartUTF16 *int `json:"start_utf16,omitempty"`
+	EndUTF16   *int `json:"end_utf16,omitempty"`
+	// One text is scanned, with one role: the offsets are into that text,
+	// and the role, which the caller chose, is not repeated on a finding.
 	Action string `json:"action"`
 }
 
@@ -784,11 +793,15 @@ func (h *scanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			Type:     f.Type,
 			Category: category,
 			Severity: f.Severity,
+			Position: api.PositionNone,
 			Action:   scanVerdict(ev.actionOf(f)),
 		}
-		if f.Placed() && !scanUnplacedTypes[f.Type] && !scanUnplacedTypes[f.Category] {
-			start, end := f.StartPos, f.EndPos
-			sf.Start, sf.End = &start, &end
+		if !scanUnplacedTypes[f.Type] && !scanUnplacedTypes[f.Category] {
+			// One text was scanned, as one segment: the finding's offsets
+			// are into it.
+			span := api.FindingSpan(text, f)
+			sf.Position = span.Position
+			sf.Start, sf.End, sf.StartUTF16, sf.EndUTF16 = span.Start, span.End, span.StartUTF16, span.EndUTF16
 		}
 		out.Findings = append(out.Findings, sf)
 	}

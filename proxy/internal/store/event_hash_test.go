@@ -17,8 +17,11 @@ import (
 	"github.com/yatuk/tamga/internal/scanner/operator_state"
 )
 
-// A card number that passes Luhn and belongs to nobody, as the scanner lets
-// it out, and what the scanner says about it beside the match.
+// A card number that passes Luhn and belongs to nobody, as scanners before
+// v0.9.0 let it out (the first six and last four digits, and the BIN beside
+// the match), and what the scanner says about it. A scanner service of an
+// earlier version still sends that shape, and it is the one that gives most
+// away, so it is the one the hashing is tested with.
 const (
 	testCardMasked = "453201******0366"
 	testCardBIN    = "453201"

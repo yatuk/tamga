@@ -68,7 +68,9 @@ func newEventRig(t *testing.T, policyYAML string, cfg *config.Config) *eventRig 
 	t.Helper()
 	g := &eventRig{}
 	bus := events.NewBus()
-	bus.Subscribe(func(e events.Event) {
+	// As the analyzer's handler is subscribed: with the request text, which
+	// is what these tests look at. Any other subscriber gets none.
+	bus.SubscribeContent(func(e events.Event) {
 		g.mu.Lock()
 		g.events = append(g.events, e)
 		g.mu.Unlock()

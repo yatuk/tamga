@@ -2,6 +2,8 @@ package scanner
 
 import (
 	"context"
+	"encoding/base64"
+	"strings"
 	"testing"
 )
 
@@ -139,10 +141,36 @@ func TestSecretScanner_NormalisedViewIsMarked(t *testing.T) {
 			t.Errorf("%s was found in the normalised view only and is not marked: %+v", f.Category, f)
 		}
 	}
+	// The reading knows where its bytes came from: the findings are put
+	// back on the text as written, fullwidth scheme included.
 	settled := SettleRaw(findings, []byte(text))
 	for _, f := range settled {
-		if f.Placed() {
-			t.Errorf("%s kept a position that is not one in the text", f.Category)
+		if !f.Placed() {
+			t.Errorf("%s has no position: %+v", f.Category, f)
+			continue
+		}
+		if f.Category == "connection_string" && !strings.HasPrefix(text[f.StartPos:f.EndPos], "ｐｏｓｔｇｒｅｓ://") {
+			t.Errorf("connection_string is placed at %q", text[f.StartPos:f.EndPos])
+		}
+	}
+	if got := string(RedactContent([]byte(text), settled)); strings.Contains(got, "s3cretpw") || strings.Contains(got, "ｐｏｓｔ") {
+		t.Errorf("masked text still holds the connection string: %s", got)
+	}
+
+	// A secret that only a decoded payload holds is another text's: it is
+	// marked, and it has no position in this one.
+	encoded := "run " + base64.StdEncoding.EncodeToString([]byte("postgres://app:s3cretpw@db.internal:5432/x")) + " now"
+	findings, err = NewSecretScanner().Scan(context.Background(), []byte(encoded))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(findings) == 0 {
+		t.Fatal("the encoded connection string was not found")
+	}
+	settled = SettleRaw(findings, []byte(encoded))
+	for _, f := range settled {
+		if f.Metadata["detected_via"] == "" || f.Placed() {
+			t.Errorf("%s from a decoded payload kept a position: %+v", f.Category, f)
 		}
 	}
 	if UnplacedRedactions(settled) == 0 {

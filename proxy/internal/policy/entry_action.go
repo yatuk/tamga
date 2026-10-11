@@ -118,12 +118,17 @@ var unmaskableOutputKeys = map[string]string{
 	"classifier":              "an injection finding is a verdict on the answer, not a value with a place in it",
 	"unreadable_block":        "an unreadable block is a mark on the answer, not a value to mask",
 	"hidden_text":             "hidden text is a mark on the answer, not a value to mask",
+	"above_text_request":      "a request for the text above is a mark on a message, not a value to mask",
+	"translation_abandoned":   "a dropped translation is a mark on the answer, not a value to mask",
 	"content_moderation":      "a content moderation finding is a verdict on the answer, not a value with a place in it",
 	"operator_state":          "an operator-state finding is a verdict, not a value with a place in the answer",
 	"operator_state_semantic": "an operator-state finding is a verdict, not a value with a place in the answer",
 	"code_leak":               "a code_leak finding marks the answer as a whole, not a part of it",
 	"source_code":             "a code_leak finding marks the answer as a whole, not a part of it",
 	"system_prompt_leak":      "a leaked canary is acted on by canary.block_on_leak",
+	"output_schema":           "a schema mismatch is a verdict on the answer as a document, not a part of it",
+	"schema_mismatch":         "a schema mismatch is a verdict on the answer as a document, not a part of it",
+	"not_json":                "an answer that is not JSON has no part that could be masked to make it JSON",
 }
 
 // ruleBaseType is the finding type a rule key decides about: "pii" for both

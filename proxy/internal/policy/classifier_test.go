@@ -157,6 +157,58 @@ func TestSignalsNeedARuleThatNamesThem(t *testing.T) {
 	}
 }
 
+// The two signals that need the conversation (a first message that asks
+// only for what is above it; a translation dropped inside one text) are
+// signals like the others: the shipped policy leaves them alone and a rule
+// that names them acts. An instruction to drop the translation that stands
+// in a tool result is a verdict, and the shipped policy blocks it.
+func TestConversationSignalsNeedARuleThatNamesThem(t *testing.T) {
+	above := scanner.Finding{Type: "injection", Category: "above_text_request", Severity: "low", Role: "user"}
+	abandoned := scanner.Finding{Type: "injection", Category: "translation_abandoned", Severity: "low", Role: "user"}
+	inToolResult := scanner.Finding{Type: "injection", Category: "translation_bypass", Severity: "medium", Role: "tool"}
+	for _, f := range []scanner.Finding{above, abandoned} {
+		if !scanner.Signal(f) {
+			t.Fatalf("%s at severity low is not a signal", f.Category)
+		}
+	}
+	if scanner.Signal(inToolResult) {
+		t.Fatal("translation_bypass is a verdict, not a signal")
+	}
+
+	shipped, err := LoadFromFile(defaultPolicyPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []scanner.Finding{above, abandoned} {
+		if a := shipped.Evaluate([]scanner.Finding{f}); a != ActionPass {
+			t.Errorf("%s under the shipped policy: %s, want PASS", f.Category, a)
+		}
+	}
+	if a := shipped.Evaluate([]scanner.Finding{inToolResult}); a != ActionBlock {
+		t.Errorf("translation_bypass in a tool result under the shipped policy: %s, want BLOCK", a)
+	}
+
+	strict, err := LoadFromBytes([]byte("name: t\nrules:\n  injection:\n    action: BLOCK\n    sensitivity: low\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	named, err := LoadFromBytes([]byte("name: t\nrules:\n  injection_detection:\n    action: WARN\n    types: [above_text_request, translation_abandoned]\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []scanner.Finding{above, abandoned} {
+		if a := strict.Evaluate([]scanner.Finding{f}); a != ActionPass {
+			t.Errorf("%s under an injection rule at low sensitivity without types: %s, want PASS", f.Category, a)
+		}
+		if a := named.Evaluate([]scanner.Finding{f}); a != ActionWarn {
+			t.Errorf("%s under a rule that names it: %s, want WARN", f.Category, a)
+		}
+	}
+	if _, err := LoadFromBytes([]byte("name: t\noutput_rules:\n  enabled: true\n  redact_on: [translation_abandoned]\n")); err == nil {
+		t.Error("redact_on [translation_abandoned] loaded; there is nothing to mask")
+	}
+}
+
 // In a response too: block_on naming "injection" does not mean the
 // signals, block_on naming the category does.
 func TestSignalsInOutputRules(t *testing.T) {

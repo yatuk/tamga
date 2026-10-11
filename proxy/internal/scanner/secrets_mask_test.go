@@ -2,6 +2,7 @@ package scanner
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -229,10 +230,10 @@ func countCategory(findings []Finding, category string) (placed, floating int) {
 // written does not match the pattern, the normalised view does.
 func hidden(key string) string { return key[:8] + "​" + key[8:] }
 
-// Two keys of one kind now have the same match. The one that only the
-// normalised view reveals must still be reported next to the one written
-// plainly: it has no position, and that is what stops a REDACT from letting
-// it through.
+// Two keys of one kind now have the same match. A second one, however it is
+// written, must still be reported next to the one written plainly: with its
+// own position when the reading it was found in knows it, and without one
+// otherwise, which is what stops a REDACT from letting it through.
 func TestSecretDedupe_SameKindDifferentValues(t *testing.T) {
 	plain := "sk-" + fill(mixed, 40)
 	other := "sk-" + fill("Zy8Kd3Nf5Hb", 40)
@@ -252,13 +253,33 @@ func TestSecretDedupe_SameKindDifferentValues(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// One hidden value can be reported from more than one view (lower-cased,
-	// de-leeted); how many is not the point.
-	if p, f := countCategory(both, "openai_key"); p != 1 || f == 0 {
-		t.Fatalf("plain and hidden key: placed=%d floating=%d, want 1 and at least 1", p, f)
+	// The key with a zero-width space in it is read where it stands: a
+	// second finding with its own position.
+	if p, f := countCategory(both, "openai_key"); p != 2 || f != 0 {
+		t.Fatalf("plain and hidden key: placed=%d floating=%d, want 2 and 0", p, f)
 	}
-	if UnplacedRedactions(both) == 0 {
-		t.Fatal("the hidden key was dropped as an echo of the plain one")
+	// The same key written twice, once plainly and once hidden, is two
+	// places to mask, not one value.
+	twice, err := reg.ScanRaw(context.Background(), []byte("use "+plain+" and "+hidden(plain)+" here"), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p, f := countCategory(twice, "openai_key"); p != 2 || f != 0 {
+		t.Fatalf("one key plain and hidden: placed=%d floating=%d, want 2 and 0", p, f)
+	}
+	// A key that only a decoded payload holds has no position and is not
+	// an echo of the plain one, whichever key it is.
+	for _, key := range []string{other, plain} {
+		encoded, err := reg.ScanRaw(context.Background(), []byte("use "+plain+" and "+base64.StdEncoding.EncodeToString([]byte(key))+" here"), cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if p, f := countCategory(encoded, "openai_key"); p != 1 || f == 0 {
+			t.Fatalf("plain and encoded key: placed=%d floating=%d, want 1 and at least 1", p, f)
+		}
+		if UnplacedRedactions(encoded) == 0 {
+			t.Fatal("the encoded key was dropped as an echo of the plain one")
+		}
 	}
 }
 
@@ -285,11 +306,15 @@ func TestSecretDedupe_FromTheScannerService(t *testing.T) {
 	if p, f := countCategory(two, "openai_key"); p != 2 || f != 0 {
 		t.Fatalf("two plain keys: placed=%d floating=%d, want 2 and 0", p, f)
 	}
-	both := remote("use " + plain + " and " + hidden(other) + " here")
-	// One hidden value can be reported from more than one view (lower-cased,
-	// de-leeted); how many is not the point.
-	if p, f := countCategory(both, "openai_key"); p != 1 || f == 0 {
-		t.Fatalf("plain and hidden key: placed=%d floating=%d, want 1 and at least 1", p, f)
+	for _, key := range []string{other, plain} {
+		both := remote("use " + plain + " and " + hidden(key) + " here")
+		if p, f := countCategory(both, "openai_key"); p != 2 || f != 0 {
+			t.Fatalf("plain and hidden key: placed=%d floating=%d, want 2 and 0", p, f)
+		}
+		both = remote("use " + plain + " and " + base64.StdEncoding.EncodeToString([]byte(key)) + " here")
+		if p, f := countCategory(both, "openai_key"); p != 1 || f == 0 {
+			t.Fatalf("plain and encoded key: placed=%d floating=%d, want 1 and at least 1", p, f)
+		}
 	}
 }
 

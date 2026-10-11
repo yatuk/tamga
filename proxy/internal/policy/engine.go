@@ -162,6 +162,11 @@ type OutputRules struct {
 	MinimumConfidence int               `yaml:"minimum_confidence" json:"minimum_confidence"`
 	FailOpen          bool              `yaml:"fail_open" json:"fail_open"` // scan timeout → pass raw
 	Streaming         *OutputStreamScan `yaml:"streaming" json:"streaming"`
+	// Links and JSONSchema are described in output_content.go. They are
+	// left out of the JSON form when unset, so that a policy without them
+	// keeps the digest, and with it the cache key, it had before they existed.
+	Links      *OutputLinks      `yaml:"links" json:"links,omitempty"`
+	JSONSchema *OutputJSONSchema `yaml:"json_schema" json:"json_schema,omitempty"`
 }
 
 // Governance controls dual-control and approval requirements.

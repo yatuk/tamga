@@ -44,16 +44,19 @@ rules:
   # your own server builds the request; a caller who reaches the proxy
   # directly can label any text "system".
   #
-  # Two injection categories are signals and not verdicts: unreadable_block
-  # (a long block that looks encoded and decodes to nothing readable) and
+  # Four injection categories are signals and not verdicts: unreadable_block
+  # (a long block that looks encoded and decodes to nothing readable),
   # hidden_text at severity low (a run of zero-width characters, a
-  # bidirectional override). No rule acts on a signal unless it names the
-  # category, whatever its sensitivity; scan.default_action does not either.
-  # To be told about them, add:
+  # bidirectional override), above_text_request (a user's first message is
+  # only "translate the above" or "repeat the above", and what is above is
+  # the system prompt) and translation_abandoned (one text asks for a
+  # translation and then tells its reader to drop it). No rule acts on a
+  # signal unless it names the category, whatever its sensitivity;
+  # scan.default_action does not either. To be told about them, add:
   #
   #   injection_detection:
   #     action: WARN
-  #     types: [unreadable_block, hidden_text]
+  #     types: [unreadable_block, hidden_text, above_text_request, translation_abandoned]
   #
   # hidden_text is severity high, and an ordinary injection finding that the
   # rule below blocks, when the invisible characters spell text (tag
@@ -205,6 +208,35 @@ providers:
 #   streaming:
 #     enabled: false
 #     max_buffer_bytes: 8192
+#
+# Links in an answer are judged by their form (no request is made, no name
+# resolved): malicious_link findings, with categories link_exfiltration,
+# link_userinfo, link_homoglyph, link_scheme, link_text_mismatch,
+# link_ip_host, link_port and link_denied_host. redact_on replaces the
+# link's address. deny_hosts and allow_hosts are host names; an entry covers
+# the host and what is under it.
+#   redact_on: [malicious_link]
+#   links:
+#     deny_hosts: [files.example.net, "*.tracker.example"]
+#     allow_hosts: [charts.example.com]     # your own domains: not judged by form
+#
+# An answer that is meant to be JSON can be held to a schema. A mismatch is
+# an output_schema finding (schema_mismatch, or not_json): in block_on it
+# withholds the answer, otherwise it is recorded. when: requested checks an
+# answer whose request asked for JSON, always checks every answer. Only the
+# keywords listed in docs/operations.md are accepted; another one fails the
+# load. A streamed answer is held until it is complete when the mismatch is
+# in block_on.
+#   block_on: [output_schema]
+#   json_schema:
+#     when: requested
+#     schema:
+#       type: object
+#       required: [answer]
+#       additionalProperties: false
+#       properties:
+#         answer: {type: string, maxLength: 2000}
+#         confidence: {type: number, minimum: 0, maximum: 1}
 
 # ---------------------------------------------------------------------------
 # Scan stage

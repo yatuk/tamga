@@ -512,13 +512,12 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 	var findings []scanner.Finding
 	if cfg.ScannerClient != nil && cfg.ScannerClient.Enabled() {
 		if segs != nil {
-			// The remote service takes one text. It gets the segments joined,
-			// and its findings are put back on the segment they fall in.
-			joined, starts := scanner.JoinSegments(segs)
-			findings, err = cfg.ScannerClient.Scan(scanCtx, joined)
-			if err == nil {
-				findings = scanner.AssignSegments(findings, segs, starts)
-			}
+			// The remote service takes one text, so it is asked once per
+			// segment and each finding stays with the segment it was
+			// found in. What needs more than one segment (an instruction
+			// split over two, what follows from the roles) is decided
+			// here, as ScanSegments does it: scanner.ScanSegmentsRemote.
+			findings, err = cfg.Registry.ScanSegmentsRemote(scanCtx, segs, cfg.ScannerClient.Scan)
 		} else {
 			findings, err = cfg.ScannerClient.Scan(scanCtx, body)
 			if err == nil {
@@ -1127,6 +1126,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 					if n := pol.OutputRules.Streaming.MaxBufferBytes; n > 0 {
 						g.maxHeld = n
 					}
+					configureStreamSchema(ctx, g, pol, body)
 					resp.Header.Set("X-Tamga-Stream-Scan", "enabled")
 				}
 				if vaultActive {
@@ -1150,14 +1150,29 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 						scanner.RecordDegraded("stream_unrecognised")
 					}
 					if len(g.findings) == 0 {
+						if g.stopReason != "" {
+							// Ended without a finding: the scanner failed, the
+							// buffer filled, or the answer was too long to be
+							// held to its schema. It was not read to the end,
+							// and it is recorded as the buffered answer in that
+							// state is.
+							recordOutput(ctx, nil, policy.ActionBlock, false)
+							return
+						}
 						if streamScan && g.recognised > 0 {
 							recordOutput(ctx, nil, policy.ActionPass, true)
 						}
 						return
 					}
-					act := policy.ActionRedact
-					if g.stopReason != "" || g.leaked {
+					// What is recorded is what was acted on: a stream that was
+					// ended, or text that was masked. The one finding recorded
+					// without either is a schema mismatch the policy lets through.
+					act := policy.ActionPass
+					switch {
+					case g.stopReason != "" || g.leaked:
 						act = policy.ActionBlock
+					case g.redacted > 0:
+						act = policy.ActionRedact
 					}
 					recordOutput(ctx, g.findings, act, streamScan)
 					publishOutputEvent(ctx, cfg, requestID, provider, g.findings, act, time.Since(streamStart))
@@ -1218,7 +1233,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 					Pool:     cfg.ScannerPool,
 					LoadShed: cfg.Config.ScannerLoadShed,
 				}
-				res, err := scanResponseBody(ctx, cfg.Registry, cfg.OutputOnlyRegistry, pol, prov, respBody, winMs, outPipeCfg)
+				res, err := scanResponseBody(withAnswerSchema(ctx, pol, body), cfg.Registry, cfg.OutputOnlyRegistry, pol, prov, respBody, winMs, outPipeCfg)
 				if err == nil && len(res.findings) == 0 {
 					recordOutput(ctx, nil, policy.ActionPass, true)
 				}
@@ -2274,7 +2289,6 @@ func publishEvent(ctx context.Context, cfg HandlerConfig, r *http.Request, reque
 		EventType:      eventType,
 		Findings:       findings,
 		Action:         string(action),
-		Body:           analyzerContent(cfg, body, action, eventType),
 		Endpoint:       endpoint,
 		ScanLatencyMs:  scanLatencyMs,
 		TotalLatencyMs: totalLatencyMs,
@@ -2285,6 +2299,9 @@ func publishEvent(ctx context.Context, cfg HandlerConfig, r *http.Request, reque
 		CacheStatus:    cacheStatusFrom(ctx),
 	}
 	out.fill(&e)
+	// Last, with the event as it goes out: the copy is made only for an
+	// event a content subscriber will take.
+	e.Body = analyzerContent(cfg, body, e)
 	cfg.Bus.PublishContext(ctx, e)
 }
 
@@ -2456,14 +2473,23 @@ func genericModelFamily(m string) string {
 //   - nothing, unless the operator turned it on (TAMGA_ANALYZER_SEND_CONTENT);
 //   - nothing for a request that was blocked: text the proxy refused to send
 //     to a provider is not sent anywhere else either;
+//   - nothing when that handler would not take it: no analyzer is connected,
+//     or the request's risk is outside the band it looks at. The bus answers
+//     that from the handler's own conditions (events.Bus.WantsContent), so
+//     no copy is made, queued and dropped unread;
 //   - otherwise the body as it was forwarded. Every caller passes the body
 //     after the action was applied, so what REDACT masked or STRIP removed
 //     is not in it.
-func analyzerContent(cfg HandlerConfig, body []byte, action policy.Action, eventType string) []byte {
+//
+// e is the request's event as it is about to be published.
+func analyzerContent(cfg HandlerConfig, body []byte, e events.Event) []byte {
 	if cfg.Config == nil || !cfg.Config.AnalyzerSendContent {
 		return nil
 	}
-	if action == policy.ActionBlock || eventType == "request_blocked" {
+	if e.Action == string(policy.ActionBlock) || e.EventType == "request_blocked" {
+		return nil
+	}
+	if !cfg.Bus.WantsContent(e) {
 		return nil
 	}
 	return copyBodyOptional(body)

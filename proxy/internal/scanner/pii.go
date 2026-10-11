@@ -242,37 +242,109 @@ func (s *PIIScanner) Scan(ctx context.Context, content []byte) ([]Finding, error
 	// it would erase the digits that number-word expansion just produced.
 	normOpts := normalize.Default()
 	normOpts.Deleet = false
-	normResult := normalize.Apply(contentStr, normOpts)
-	normText := normResult.Text()
-	normBytes := []byte(normText)
+	views := normalize.ApplyViews(contentStr, normOpts)
 
-	for _, p := range piiPatterns {
-		if st.stopped() {
+	// The text as written.
+	if !scanPIIView(st, &findings, normalize.SourceView(contentStr), "", false) {
+		return findings, st.err
+	}
+	findings = append(findings, scanIPv4(content)...)
+
+	// The same text read for what its characters show (fullwidth and
+	// mathematical digits, look-alike letters, zero-width splits, entities,
+	// number words). A match there is put back on the bytes it was read
+	// from, so it can be masked like any other.
+	if views.Canonical.Text != contentStr {
+		if !scanPIIView(st, &findings, views.Canonical, viaNormalized, false) {
 			return findings, st.err
 		}
-		matches := p.Regex.FindAllIndex(content, -1)
-		for _, loc := range matches {
-			loc, ok := p.accept(contentStr, loc)
+	}
+	if views.Rot13.Text != "" {
+		if !scanPIIView(st, &findings, views.Rot13, viaNormalized, false) {
+			return findings, st.err
+		}
+	}
+	// Digits with the separators between them removed, and eleven-digit
+	// runs read backwards (a TCKN written in reverse). Reversing is an
+	// evasion for checksummed identifiers; any number read backwards looks
+	// like some phone number, so the forward-only patterns stay off it.
+	stripped := normalize.StripDigitSeparators(views.Canonical)
+	if stripped.Text != views.Canonical.Text {
+		if !scanPIIView(st, &findings, stripped, viaDigitSeparators, false) {
+			return findings, st.err
+		}
+	}
+	if reversed := normalize.ReverseDigitRuns(stripped); reversed.Text != stripped.Text {
+		if !scanPIIView(st, &findings, reversed, viaReversedDigits, true) {
+			return findings, st.err
+		}
+	}
+
+	// What the text decodes to (base64, hex, hidden characters) is another
+	// text. A value found only there has no place in this one.
+	if len(views.Decoded) > 0 {
+		decoded := strings.Join(views.Decoded, "\n")
+		if !scanPIIView(st, &findings, normalize.View{Text: decoded}, viaNormalized, false) {
+			return findings, st.err
+		}
+		strippedText := normalize.StripDigitSeparators(normalize.View{Text: decoded}).Text
+		if strippedText != decoded {
+			if !scanPIIView(st, &findings, normalize.View{Text: strippedText}, viaDigitSeparators, false) {
+				return findings, st.err
+			}
+		}
+		if reversedText := normalize.ReverseDigitRuns(normalize.View{Text: strippedText}).Text; reversedText != strippedText {
+			if !scanPIIView(st, &findings, normalize.View{Text: reversedText}, viaReversedDigits, true) {
+				return findings, st.err
+			}
+		}
+	}
+
+	return findings, nil
+}
+
+// How a finding says the reading it was made in (Metadata["detected_via"]).
+const (
+	viaNormalized      = "unicode_normalization"
+	viaDigitSeparators = "digit_separators_removed"
+	viaReversedDigits  = "reversed_digits"
+)
+
+// scanPIIView runs the patterns over one reading of the text and appends
+// what they find. via names the reading and is empty for the text as
+// written. reversed keeps the forward-only patterns off a reading whose
+// digits were turned round. It returns false when the scan was stopped.
+//
+// A match in a reading that knows where its bytes came from (a located
+// view) is reported at the span of the text it was read from. One in a
+// reading that does not keeps the offsets of the reading, which
+// placeFinding discards: the value is known to be there, not where.
+func scanPIIView(st *scanStop, findings *[]Finding, view normalize.View, via string, reversed bool) bool {
+	text := view.Text
+	raw := []byte(text)
+	for _, p := range piiPatterns {
+		if reversed && p.forwardOnly {
+			continue
+		}
+		if st.stopped() {
+			return false
+		}
+		for _, loc := range p.Regex.FindAllIndex(raw, -1) {
+			loc, ok := p.accept(text, loc)
 			if !ok {
 				continue
 			}
-			matched := contentStr[loc[0]:loc[1]]
-			var masked string
+			matched := text[loc[0]:loc[1]]
+			masked := maskContent(matched)
 			if p.Name == "credit_card" {
 				masked = maskPAN(matched)
-			} else {
-				masked = maskContent(matched)
 			}
-			score := calculatePIIConfidence(p.Name, contentStr, loc[0], matched)
+			score := calculatePIIConfidence(p.Name, text, loc[0], matched)
 			metadata := map[string]string{}
+			var fp uint64
 			if p.Name == "credit_card" {
-				if bin := LookupBIN(matched); bin != nil {
-					metadata["card_brand"] = bin.Brand
-					metadata["card_type"] = bin.Type
-					metadata["bank_name"] = bin.BankName
-					metadata["country"] = bin.CountryCode
-					metadata["bin"] = bin.BIN
-				}
+				addCardMetadata(metadata, matched)
+				fp = cardFingerprint(matched)
 			}
 			if p.Name == "tc_kimlik" {
 				d := digitsOnly(matched)
@@ -288,7 +360,7 @@ func (s *PIIScanner) Scan(ctx context.Context, content []byte) ([]Finding, error
 					})
 				}
 			}
-			findings = append(findings, Finding{
+			f := Finding{
 				Type:            "pii",
 				Category:        p.Name,
 				Severity:        p.Severity,
@@ -298,146 +370,16 @@ func (s *PIIScanner) Scan(ctx context.Context, content []byte) ([]Finding, error
 				Confidence:      float64(score.Total) / 100.0,
 				ConfidenceScore: &score,
 				Metadata:        metadata,
-			})
+				fp:              fp,
+			}
+			if via != "" {
+				f.ActionTaken = string(ActionRedact)
+				locateInView(&f, view, via)
+			}
+			*findings = append(*findings, f)
 		}
 	}
-
-	if st.stopped() {
-		return findings, st.err
-	}
-	findings = append(findings, scanIPv4(content)...)
-	// Re-scan the normalized text to catch Unicode-evaded PII
-	// (mathematical bold digits, fullwidth/homoglyph characters, zero-width splits).
-	for _, p := range piiPatterns {
-		if st.stopped() {
-			return findings, st.err
-		}
-		for _, loc := range p.Regex.FindAllIndex(normBytes, -1) {
-			loc, ok := p.accept(normText, loc)
-			if !ok {
-				continue
-			}
-			matched := normText[loc[0]:loc[1]]
-			var masked string
-			if p.Name == "credit_card" {
-				masked = maskPAN(matched)
-			} else {
-				masked = maskContent(matched)
-			}
-			score := calculatePIIConfidence(p.Name, normText, loc[0], matched)
-			metadata := map[string]string{"detected_via": "unicode_normalization"}
-			if p.Name == "credit_card" {
-				if bin := LookupBIN(matched); bin != nil {
-					metadata["card_brand"] = bin.Brand
-					metadata["card_type"] = bin.Type
-					metadata["bank_name"] = bin.BankName
-					metadata["country"] = bin.CountryCode
-					metadata["bin"] = bin.BIN
-				}
-			}
-			if p.Name == "tc_kimlik" {
-				d := digitsOnly(matched)
-				if reason, ok := tckn.IsDenylisted(d); ok {
-					metadata["denylist_reason"] = reason
-					metadata["denylist_match"] = "true"
-					score = CalculateConfidence(ConfidenceFactor{
-						Format:    WFormat,
-						Algorithm: WAlgorithm,
-						Database:  WDatabase,
-						Context:   WContext,
-					})
-				}
-			}
-			findings = append(findings, Finding{
-				Type:            "pii",
-				Category:        p.Name,
-				Severity:        p.Severity,
-				Match:           masked,
-				StartPos:        loc[0],
-				EndPos:          loc[1],
-				ActionTaken:     string(ActionRedact),
-				Confidence:      float64(score.Total) / 100.0,
-				ConfidenceScore: &score,
-				Metadata:        metadata,
-			})
-		}
-	}
-
-	// Scan digit-normalized variants to catch format-evaded TCKN
-	// (separator-stripped and reversed digit sequences).
-	if st.stopped() {
-		return findings, st.err
-	}
-	digitVariants := normalize.NormalizeDigitGroups(normText)
-	for vi, variant := range digitVariants {
-		if vi == 0 || variant == normText {
-			continue // already scanned in the normalized pass above
-		}
-		tag := "digit_separators_removed"
-		if vi == 2 {
-			tag = "reversed_digits"
-		}
-		variantBytes := []byte(variant)
-		for _, p := range piiPatterns {
-			// Reversing is an evasion for checksummed identifiers. Any
-			// number read backwards looks like some phone number.
-			if vi == 2 && p.forwardOnly {
-				continue
-			}
-			if st.stopped() {
-				return findings, st.err
-			}
-			for _, loc := range p.Regex.FindAllIndex(variantBytes, -1) {
-				loc, ok := p.accept(variant, loc)
-				if !ok {
-					continue
-				}
-				matched := variant[loc[0]:loc[1]]
-				masked := maskContent(matched)
-				if p.Name == "credit_card" {
-					masked = maskPAN(matched)
-				}
-				score := calculatePIIConfidence(p.Name, variant, loc[0], matched)
-				metadata := map[string]string{"detected_via": tag}
-				if p.Name == "credit_card" {
-					if bin := LookupBIN(matched); bin != nil {
-						metadata["card_brand"] = bin.Brand
-						metadata["card_type"] = bin.Type
-						metadata["bank_name"] = bin.BankName
-						metadata["country"] = bin.CountryCode
-						metadata["bin"] = bin.BIN
-					}
-				}
-				if p.Name == "tc_kimlik" {
-					d := digitsOnly(matched)
-					if reason, ok := tckn.IsDenylisted(d); ok {
-						metadata["denylist_reason"] = reason
-						metadata["denylist_match"] = "true"
-						score = CalculateConfidence(ConfidenceFactor{
-							Format:    WFormat,
-							Algorithm: WAlgorithm,
-							Database:  WDatabase,
-							Context:   WContext,
-						})
-					}
-				}
-				findings = append(findings, Finding{
-					Type:            "pii",
-					Category:        p.Name,
-					Severity:        p.Severity,
-					Match:           masked,
-					StartPos:        loc[0],
-					EndPos:          loc[1],
-					ActionTaken:     string(ActionRedact),
-					Confidence:      float64(score.Total) / 100.0,
-					ConfidenceScore: &score,
-					Metadata:        metadata,
-				})
-			}
-		}
-	}
-
-	return findings, nil
+	return true
 }
 
 func scanIPv4(content []byte) []Finding {
@@ -895,15 +837,46 @@ func isPrivateOrSpecialIPv4(ip net.IP) bool {
 	return false
 }
 
-// maskPAN preserves first 6 (BIN) and last 4 digits of a card number.
-// Required by PCI-DSS v4.0 Requirement 3.4 for audit log display.
-// Example: 4532015112830366 → 453201******0366
+// maskPAN keeps the last four digits of a card number and nothing else of
+// it, as a receipt does.
+// Example: 4532015112830366 → ************0366
+//
+// The first six and the last four are the most PCI DSS lets be shown, and
+// only to someone who needs to see them (v4.0, 3.4.1). A finding's match
+// goes to a log, a live feed and an export that anyone who may read events
+// reads, so it holds the least that still lets an operator tell which card
+// a row is about. The number of digits is kept: the network, which the
+// finding names beside the match (card_brand), gives it away anyhow.
 func maskPAN(pan string) string {
 	d := digitsOnly(pan)
 	if len(d) < 13 {
 		return maskContent(pan) // fallback to generic masking
 	}
-	return d[:6] + strings.Repeat("*", len(d)-10) + d[len(d)-4:]
+	return strings.Repeat("*", len(d)-4) + d[len(d)-4:]
+}
+
+// addCardMetadata notes what the issuer table says about a card: its
+// network, whether it is a credit or a debit card, and the issuer and its
+// country. All four come from a public table and say what kind of card it
+// is. The prefix they were looked up by (the BIN, the number's first six or
+// eight digits) is part of the number and is not written down.
+func addCardMetadata(metadata map[string]string, pan string) {
+	bin := LookupBIN(pan)
+	if bin == nil {
+		return
+	}
+	metadata["card_brand"] = bin.Brand
+	metadata["card_type"] = bin.Type
+	metadata["bank_name"] = bin.BankName
+	metadata["country"] = bin.CountryCode
+}
+
+// cardFingerprint tells two card numbers apart whose matches are the same
+// because they end in the same four digits, as secretFingerprint does for
+// secrets. Separators are ignored: one number found as written and again in
+// a view without its spaces is one number.
+func cardFingerprint(pan string) uint64 {
+	return secretFingerprint(digitsOnly(pan))
 }
 
 // maskContent replaces middle characters with asterisks for safe logging.
@@ -931,12 +904,12 @@ func maskContent(s string) string {
 // Findings that overlap are one stretch of text and get one placeholder, the
 // first one's: the same value reported twice used to be masked twice, and a
 // finding starting inside another left the tail of the first in the output.
-// A finding made on a normalised view is skipped: its offsets are not
-// offsets into content.
+// A finding made in a reading of the text that does not know where its bytes
+// came from is skipped: its offsets are not offsets into content.
 func RedactContent(content []byte, findings []Finding) []byte {
 	var redactFindings []Finding
 	for _, f := range findings {
-		if !redactable(f) || f.Metadata["detected_via"] != "" {
+		if !redactable(f) || viewOnly(f) {
 			continue
 		}
 		if f.StartPos < 0 || f.EndPos < 0 || f.StartPos >= f.EndPos || f.EndPos > len(content) {

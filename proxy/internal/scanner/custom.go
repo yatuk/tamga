@@ -10,6 +10,8 @@ import (
 	"sync"
 
 	"github.com/rs/zerolog/log"
+
+	"github.com/yatuk/tamga/internal/scanner/normalize"
 )
 
 // CustomEntitySpec is policy-driven input for CustomScanner (avoids scanner → policy import).
@@ -146,26 +148,55 @@ func (s *CustomScanner) Scan(ctx context.Context, content []byte) ([]Finding, er
 	}
 
 	var findings []Finding
-	ps := newPatternScan(ctx, s.Name(), content)
-	for i := range ps.chunks {
-		for _, c := range compiled {
-			if c == nil || c.pat == nil {
-				continue
-			}
-			ok := ps.each(c.pat, i, func(start, end int) {
-				findings = append(findings, Finding{
-					Type:       "custom",
-					Category:   c.name,
-					Severity:   c.severity,
-					Match:      maskContent(string(content[start:end])),
-					StartPos:   start,
-					EndPos:     end,
-					Confidence: c.confidence,
+	seen := map[matchedAt]bool{}
+	// scanView runs the patterns over one reading of the text. Each reading
+	// has the limits of a scan of its own.
+	scanView := func(view normalize.View, via string) error {
+		text := []byte(view.Text)
+		ps := newPatternScan(ctx, s.Name(), text)
+		for i := range ps.chunks {
+			for _, c := range compiled {
+				if c == nil || c.pat == nil {
+					continue
+				}
+				ok := ps.each(c.pat, i, func(start, end int) {
+					f := Finding{
+						Type:       "custom",
+						Category:   c.name,
+						Severity:   c.severity,
+						Match:      maskContent(string(text[start:end])),
+						StartPos:   start,
+						EndPos:     end,
+						Confidence: c.confidence,
+					}
+					if via != "" {
+						locateInView(&f, view, via)
+					}
+					// The same place found again in another reading is one match.
+					at := matchedAt{f.Category, f.StartPos, f.EndPos, viewOnly(f)}
+					if seen[at] {
+						return
+					}
+					seen[at] = true
+					findings = append(findings, f)
 				})
-			})
-			if !ok {
-				return findings, ps.err
+				if !ok {
+					return ps.err
+				}
 			}
+		}
+		return nil
+	}
+	text := string(content)
+	if err := scanView(normalize.SourceView(text), ""); err != nil {
+		return findings, err
+	}
+	// The same patterns over the text read for what its characters show,
+	// so that an entity in fullwidth digits or split by a zero-width space
+	// is found, and where (see patternReadings).
+	for _, view := range patternReadings(text) {
+		if err := scanView(view, viaNormalized); err != nil {
+			return findings, err
 		}
 	}
 	return findings, nil

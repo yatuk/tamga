@@ -1,11 +1,10 @@
 // Command scanner-service runs the Tamga scanner pipeline as a standalone
 // gRPC service. It registers the same seven scanners as the main proxy
 // binary and exposes them over gRPC on port 50052 (configurable via
-// SCANNER_SERVICE_PORT).
+// SCANNER_SERVICE_PORT). The server itself is internal/scannerservice.
 package main
 
 import (
-	"context"
 	"net"
 	"os"
 	"os/signal"
@@ -15,74 +14,15 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/keepalive"
-	"google.golang.org/grpc/status"
 
-	"github.com/yatuk/tamga/internal/errkind"
 	"github.com/yatuk/tamga/internal/scanner"
+	"github.com/yatuk/tamga/internal/scannerservice"
 	"github.com/yatuk/tamga/internal/telemetry"
 	pb "github.com/yatuk/tamga/proto/scanner/v1"
 )
-
-type scannerServer struct {
-	pb.UnimplementedScannerServiceServer
-	registry *scanner.Registry
-	mode     scanner.PipelineMode
-	pool     *scanner.WorkerPool
-}
-
-// Scan runs the full scanner pipeline and returns all findings.
-func (s *scannerServer) Scan(ctx context.Context, req *pb.ScanRequest) (*pb.ScanResponse, error) {
-	start := time.Now()
-
-	mode := s.mode
-	if req.PipelineMode != "" {
-		mode = scanner.PipelineMode(req.PipelineMode)
-	}
-	if mode == "" {
-		mode = scanner.ModeAdaptive
-	}
-
-	cfg := scanner.PipelineConfig{
-		Mode:    mode,
-		Timeout: 5 * time.Second,
-		Pool:    s.pool,
-	}
-
-	// ScanRaw settles the findings before they leave: a value found in the
-	// text and again in a normalised view of it is reported once. That has
-	// to happen here, where the text is. A secret's match holds none of its
-	// value, so the proxy cannot tell an echo from a second secret.
-	findings, err := s.registry.ScanRaw(ctx, req.Content, cfg)
-	if err != nil {
-		// By kind only: a scanner's error can quote the text it read.
-		log.Warn().Str("reason", scanner.IncompleteReason(err)).Str("error_kind", errkind.Of(err)).Str("request_id", req.RequestId).Msg("scan failed")
-		// An empty response would read as a clean scan. The caller has to
-		// know the scan did not finish, so that its own scan.on_error applies.
-		code := codes.Unavailable
-		if ctx.Err() != nil {
-			code = codes.DeadlineExceeded
-		}
-		return nil, status.Error(code, "scan incomplete")
-	}
-
-	return &pb.ScanResponse{
-		RequestId:  req.RequestId,
-		Findings:   scanner.FindingsToProto(findings),
-		DurationMs: float64(time.Since(start).Microseconds()) / 1000.0,
-	}, nil
-}
-
-// HealthCheck reports the scanner service status.
-func (s *scannerServer) HealthCheck(ctx context.Context, req *pb.HealthRequest) (*pb.HealthResponse, error) {
-	return &pb.HealthResponse{
-		Status:  "SERVING",
-		Service: "tamga-scanner",
-	}, nil
-}
 
 func main() {
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
@@ -99,33 +39,13 @@ func main() {
 		mode = scanner.PipelineMode(m)
 	}
 
-	// Build scanner registry — same seven scanners as main proxy.
-	registry := scanner.NewRegistry()
-
-	// Fast scanners (< 1ms) — sequential.
-	registry.Register(scanner.NewPIIScanner())
-	registry.SetSpeed("pii", scanner.SpeedFast)
-	registry.Register(scanner.NewSecretScanner())
-	registry.SetSpeed("secret", scanner.SpeedFast)
-
-	// Custom scanner — spec getter returns nil for standalone mode
-	// (custom entities are policy-driven; scanner-service doesn't load policy YAML).
-	registry.Register(scanner.NewCustomScanner(func() []scanner.CustomEntitySpec { return nil }))
-	registry.SetSpeed("custom", scanner.SpeedFast)
-	registry.Register(scanner.NewCompetitorScanner(func() []scanner.CompetitorSpec { return nil }))
-	registry.SetSpeed("competitor", scanner.SpeedFast)
-
-	// Slow scanners (≥ 1ms) — parallel.
-	registry.Register(scanner.NewInjectionScanner())
-	registry.SetSpeed("injection", scanner.SpeedSlow)
+	// The scanners that need nothing but the text; custom entities and
+	// competitor names are the policy's and stay with the proxy.
+	registry := scannerservice.NewRegistry()
 	// DFA needs initialisation once before use.
 	if err := scanner.InitDFA(); err != nil {
 		log.Warn().Err(err).Msg("DFA init failed — injection scanner will use regex fallback")
 	}
-	registry.Register(scanner.NewJailbreakScanner())
-	registry.SetSpeed("jailbreak", scanner.SpeedSlow)
-	registry.Register(scanner.NewContentModerationScanner())
-	registry.SetSpeed("content_moderation", scanner.SpeedSlow)
 
 	// BIN database — try embedded, warn on failure.
 	if err := scanner.InitBINLookupEmbed(); err != nil {
@@ -162,11 +82,7 @@ func main() {
 		grpc.UnaryInterceptor(telemetry.UnaryServerTraceInterceptor()),
 	)
 
-	pb.RegisterScannerServiceServer(server, &scannerServer{
-		registry: registry,
-		mode:     mode,
-		pool:     pool,
-	})
+	pb.RegisterScannerServiceServer(server, scannerservice.New(registry, mode, pool))
 	healthServer := health.NewServer()
 	healthpb.RegisterHealthServer(server, healthServer)
 	healthServer.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)

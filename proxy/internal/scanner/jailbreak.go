@@ -39,6 +39,8 @@ func (s *JailbreakScanner) Scan(ctx context.Context, content []byte) ([]Finding,
 	// What the text spells one letter at a time, as words
 	// (injection_spelled.go).
 	spelled := spelledViews(norm.Spelled)
+	// What it says in leetspeak, as words (injection_leet.go).
+	leet := leetViews(norm)
 	// `combined` is the raw text + any decoded Base64/hex payloads so
 	// encoding-layer jailbreaks are covered by the same phrase regexes.
 	combined := text
@@ -46,6 +48,9 @@ func (s *JailbreakScanner) Scan(ctx context.Context, content []byte) ([]Finding,
 		combined = combined + "\n" + d
 	}
 	for _, v := range spelled {
+		combined = combined + "\n" + v
+	}
+	for _, v := range leet {
 		combined = combined + "\n" + v
 	}
 
@@ -111,7 +116,7 @@ func (s *JailbreakScanner) Scan(ctx context.Context, content []byte) ([]Finding,
 	// Verb-on-target rules, on the normalised and decoded views. They read
 	// the view from before de-leeting, which rewrites digits as letters:
 	// several rules read numbers ("DAN 11.0", "first 50 tokens").
-	out = append(out, scanIntentRules(append(intentViews(norm.Plain, norm.Decoded), spelled...), st)...)
+	out = append(out, scanIntentRules(append(append(intentViews(norm.Plain, norm.Decoded), spelled...), leet...), st)...)
 	if st.stopped() {
 		return out, st.err
 	}
@@ -120,7 +125,7 @@ func (s *JailbreakScanner) Scan(ctx context.Context, content []byte) ([]Finding,
 	// payloads that contain override phrases, flag as critical jailbreak.
 	// The same phrases spelled one letter at a time are an override behind
 	// a weaker disguise: the letters are in plain sight, so severity high.
-	if dec, ok := firstOverridePhrase(norm.Decoded); ok {
+	if dec, ok := hiddenOverridePhrase(norm.Decoded, norm.Plain); ok {
 		out = append(out, Finding{
 			Type: "injection", Category: "encoded_override", Severity: "critical",
 			Match:      truncate(dec, 0, len(dec), 80),
@@ -134,19 +139,51 @@ func (s *JailbreakScanner) Scan(ctx context.Context, content []byte) ([]Finding,
 			Confidence: 0.80,
 			Metadata:   map[string]string{"layer": "letter_spacing"},
 		})
+	} else if view, ok := hiddenOverridePhrase(leet, norm.Plain); ok {
+		// Leetspeak is the same kind of disguise: every character is in
+		// plain sight and stands for one letter.
+		out = append(out, Finding{
+			Type: "injection", Category: "encoded_override", Severity: "high",
+			Match:      truncate(view, 0, len(view), 80),
+			Confidence: 0.80,
+			Metadata:   map[string]string{"layer": "leetspeak"},
+		})
 	}
 
 	return out, nil
 }
+
+// overridePhrases are the phrases an encoded payload is escalated for.
+var overridePhrases = []string{"ignore previous", "system prompt", "jailbreak", "dan mode"}
 
 // firstOverridePhrase returns the first of the views that holds one of the
 // phrases an encoded payload is escalated for.
 func firstOverridePhrase(views []string) (string, bool) {
 	for _, v := range views {
 		lower := strings.ToLower(v)
-		if strings.Contains(lower, "ignore previous") || strings.Contains(lower, "system prompt") ||
-			strings.Contains(lower, "jailbreak") || strings.Contains(lower, "dan mode") {
-			return v, true
+		for _, p := range overridePhrases {
+			if strings.Contains(lower, p) {
+				return v, true
+			}
+		}
+	}
+	return "", false
+}
+
+// hiddenOverridePhrase is firstOverridePhrase for views that can be the whole
+// text read another way: the leetspeak views, and among the decoded ones the
+// second reading of the digit one and the text with its split words joined.
+// A phrase counts only when the reading made it. One the text also holds in
+// plain letters was not hidden: "is the system prompt in v1 different?" has a
+// second reading ("vl") that still says "system prompt", and that reading
+// was reported as an override behind an encoding.
+func hiddenOverridePhrase(views []string, plain string) (string, bool) {
+	for _, v := range views {
+		lower := strings.ToLower(v)
+		for _, p := range overridePhrases {
+			if strings.Contains(lower, p) && !strings.Contains(plain, p) {
+				return v, true
+			}
 		}
 	}
 	return "", false

@@ -403,68 +403,87 @@ func (s *SecretScanner) Scan(ctx context.Context, content []byte) ([]Finding, er
 		return nil, st.err
 	}
 	var findings []Finding
+	text := string(content)
 
-	// Normalize to defeat Unicode confusables and zero-width splits.
-	normResult := normalize.Apply(string(content), normalize.Default())
-	normText := normResult.Text()
-	normBytes := []byte(normText)
+	// The text as written.
+	if !scanSecretView(st, &findings, normalize.SourceView(text), "") {
+		return findings, st.err
+	}
 
+	// The readings that defeat Unicode confusables, zero-width splits and
+	// entities. A match in one of them is put back on the bytes it was read
+	// from. Folded keeps the case, which the patterns for vendor keys need;
+	// Canonical is the lower-cased reading the generic patterns also match.
+	views := normalize.ApplyViews(text, normalize.Default())
+	if views.Folded.Text != text {
+		if !scanSecretView(st, &findings, views.Folded, viaNormalized) {
+			return findings, st.err
+		}
+	}
+	if views.Canonical.Text != text && views.Canonical.Text != views.Folded.Text {
+		if !scanSecretView(st, &findings, views.Canonical, viaNormalized) {
+			return findings, st.err
+		}
+	}
+	if views.Rot13.Text != "" {
+		if !scanSecretView(st, &findings, views.Rot13, viaNormalized) {
+			return findings, st.err
+		}
+	}
+	// What the text decodes to is another text: a secret found only there
+	// has no place in this one, and a mask put at its offsets would land
+	// somewhere else.
+	if len(views.Decoded) > 0 {
+		decoded := normalize.View{Text: strings.Join(views.Decoded, "\n")}
+		if !scanSecretView(st, &findings, decoded, viaNormalized) {
+			return findings, st.err
+		}
+	}
+	return findings, nil
+}
+
+// scanSecretView runs the patterns over one reading of the text and appends
+// what they find. via names the reading and is empty for the text as
+// written. It returns false when the scan was stopped.
+func scanSecretView(st *scanStop, findings *[]Finding, view normalize.View, via string) bool {
+	content := []byte(view.Text)
+	add := func(f Finding) {
+		if via != "" {
+			locateInView(&f, view, via)
+		}
+		*findings = append(*findings, f)
+	}
 	for _, p := range secretPatterns {
 		if st.stopped() {
-			return findings, st.err
+			return false
 		}
 		if !p.worth(content) {
 			continue
 		}
-		matches := p.Regex.FindAllIndex(content, -1)
-		for _, loc := range matches {
+		for _, loc := range p.Regex.FindAllIndex(content, -1) {
 			matched := string(content[loc[0]:loc[1]])
 			if p.validate != nil && !p.validate(matched) {
 				continue
 			}
-			findings = append(findings, makeSecretFinding(p.Name, p.Severity, matched, loc[0], loc[1], p.confidence))
-		}
-	}
-
-	if st.stopped() {
-		return findings, st.err
-	}
-	findings = append(findings, scanConnectionStrings(content)...)
-	findings = append(findings, scanDotenvLines(content)...)
-
-	// Re-scan normalized text for Unicode-evaded secrets.
-	for _, p := range secretPatterns {
-		if st.stopped() {
-			return findings, st.err
-		}
-		if !p.worth(normBytes) {
-			continue
-		}
-		for _, loc := range p.Regex.FindAllIndex(normBytes, -1) {
-			matched := string(normBytes[loc[0]:loc[1]])
-			if p.validate != nil && !p.validate(matched) {
-				continue
-			}
-			f := makeSecretFinding(p.Name, p.Severity, matched, loc[0], loc[1], p.confidence)
-			if f.Metadata == nil {
-				f.Metadata = map[string]string{}
-			}
-			f.Metadata["detected_via"] = "unicode_normalization"
-			findings = append(findings, f)
+			add(makeSecretFinding(p.Name, p.Severity, matched, loc[0], loc[1], p.confidence))
 		}
 	}
 	if st.stopped() {
-		return findings, st.err
+		return false
 	}
-	// Their positions are offsets into the normalised text, like those of the
-	// patterns above, and are marked the same way: a mask put at them would
-	// land somewhere else in the text as written.
-	for _, f := range append(scanConnectionStrings(normBytes), scanDotenvLines(normBytes)...) {
-		f.Metadata = map[string]string{"detected_via": "unicode_normalization"}
-		findings = append(findings, f)
+	// Neither expression is run on a text that lacks the literal every
+	// match of it holds: a connection string has "://", a dotenv line "=".
+	if bytes.Contains(content, []byte("://")) {
+		for _, f := range scanConnectionStrings(content) {
+			add(f)
+		}
 	}
-
-	return findings, nil
+	if bytes.IndexByte(content, '=') >= 0 {
+		for _, f := range scanDotenvLines(content) {
+			add(f)
+		}
+	}
+	return true
 }
 
 func makeSecretFinding(name, severity, raw string, start, end int, conf float64) Finding {

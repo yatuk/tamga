@@ -1,14 +1,24 @@
 package proxy
 
 import (
+	"encoding/base32"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
+	"unicode"
+
+	"golang.org/x/text/unicode/norm"
 
 	"github.com/yatuk/tamga/internal/config"
 	"github.com/yatuk/tamga/internal/policy"
@@ -370,4 +380,441 @@ func streamedText(wire string) string {
 		}
 	}
 	return b.String()
+}
+
+// The same question for a value that is not written plainly: once in a form
+// only a normalised view of the text reveals, plainly and again in such a
+// form, or twice in such a form. The outcomes are the same two, masked or
+// blocked, and the one that must never happen is the same: some form of the
+// value in what was sent on.
+
+// obfKind is one kind of value a rule can mask.
+type obfKind struct {
+	name, value string
+	// rule is the request rule that masks it; key is its name in
+	// output_rules.redact_on.
+	rule, key string
+	// pii says the PII scanner reads it, which is the scanner that looks at
+	// digits with their separators removed.
+	pii bool
+}
+
+const obfEntities = `
+custom_entities:
+  - name: "musteri_no"
+    pattern: "MUSTERI-\\d{8}"
+    severity: "high"
+    action: LOG
+    confidence: 0.9
+competitors:
+  - name: "Acme"
+    patterns: ["acme\\s+guardian"]
+    severity: "high"
+    action: LOG
+    enabled: true
+`
+
+var obfKinds = []obfKind{
+	{name: "tckn", value: "10000000146", rule: "pii", key: "pii", pii: true},
+	{name: "card", value: "4111111111111111", rule: "pii", key: "pii", pii: true},
+	{name: "iban", value: "TR330006100519786457841326", rule: "pii", key: "pii", pii: true},
+	{name: "email", value: "ayse.yilmaz@example.com", rule: "pii", key: "pii", pii: true},
+	{name: "phone", value: "+905321234567", rule: "pii", key: "pii", pii: true},
+	{name: "secret", value: "AKIAIOSFODNN7EXAMPLE", rule: "secret_detection", key: "secret"},
+	{name: "custom", value: "MUSTERI-12345678", rule: "custom", key: "custom"},
+	{name: "competitor", value: "Acme Guardian", rule: "competitor", key: "competitor"},
+}
+
+var obfDigitWords = []string{"sıfır", "bir", "iki", "üç", "dört", "beş", "altı", "yedi", "sekiz", "dokuz"}
+
+var obfCyrillic = map[rune]rune{
+	'a': 'а', 'e': 'е', 'o': 'о', 'p': 'р', 'c': 'с', 'y': 'у', 'x': 'х', 'i': 'і', 'j': 'ј', 's': 'ѕ',
+	'A': 'А', 'B': 'В', 'E': 'Е', 'K': 'К', 'M': 'М', 'H': 'Н', 'O': 'О', 'P': 'Р', 'C': 'С', 'T': 'Т', 'X': 'Х', 'I': 'І', 'S': 'Ѕ',
+}
+
+var obfNumberShape = regexp.MustCompile(`^(\+|[A-Z]+-)?(\d+)$`)
+
+func mapRunes(v string, f func(rune) string) string {
+	var b strings.Builder
+	for _, r := range v {
+		b.WriteString(f(r))
+	}
+	return b.String()
+}
+
+// obfuscations are the ways of writing a value that the normaliser reads.
+// apply returns the value written that way, and false when the way does not
+// apply to it (a value without digits has no digits to spell out).
+var obfuscations = []struct {
+	name  string
+	apply func(k obfKind) (string, bool)
+}{
+	{"fullwidth", func(k obfKind) (string, bool) {
+		return mapRunes(k.value, func(r rune) string {
+			if r > 0x20 && r < 0x7F {
+				return string(r + 0xFEE0)
+			}
+			return string(r)
+		}), true
+	}},
+	{"zero-width space", func(k obfKind) (string, bool) {
+		return strings.Join(strings.Split(k.value, ""), "​"), true
+	}},
+	{"soft hyphen", func(k obfKind) (string, bool) {
+		return strings.Join(strings.Split(k.value, ""), "­"), true
+	}},
+	{"math bold digits", func(k obfKind) (string, bool) {
+		out := mapRunes(k.value, func(r rune) string {
+			if r >= '0' && r <= '9' {
+				return string(0x1D7CE + (r - '0'))
+			}
+			return string(r)
+		})
+		return out, out != k.value
+	}},
+	{"cyrillic look-alikes", func(k obfKind) (string, bool) {
+		out := mapRunes(k.value, func(r rune) string {
+			if c, ok := obfCyrillic[r]; ok {
+				return string(c)
+			}
+			return string(r)
+		})
+		return out, out != k.value
+	}},
+	{"html entities", func(k obfKind) (string, bool) {
+		return mapRunes(k.value, func(r rune) string { return fmt.Sprintf("&#%d;", r) }), true
+	}},
+	{"number words", func(k obfKind) (string, bool) {
+		m := obfNumberShape.FindStringSubmatch(k.value)
+		if m == nil {
+			return "", false
+		}
+		words := make([]string, 0, len(m[2]))
+		for _, d := range m[2] {
+			words = append(words, obfDigitWords[d-'0'])
+		}
+		return m[1] + strings.Join(words, " "), true
+	}},
+	{"dots between digits", func(k obfKind) (string, bool) {
+		if !k.pii {
+			return "", false
+		}
+		var b strings.Builder
+		for i := 0; i < len(k.value); i++ {
+			b.WriteByte(k.value[i])
+			if i+1 < len(k.value) && unicode.IsDigit(rune(k.value[i])) && unicode.IsDigit(rune(k.value[i+1])) {
+				b.WriteByte('.')
+			}
+		}
+		return b.String(), b.String() != k.value
+	}},
+	{"reversed digits", func(k obfKind) (string, bool) {
+		if k.name != "tckn" {
+			return "", false
+		}
+		b := []byte(k.value)
+		for i, j := 0, len(b)-1; i < j; i, j = i+1, j-1 {
+			b[i], b[j] = b[j], b[i]
+		}
+		return string(b), true
+	}},
+	{"base64", func(k obfKind) (string, bool) {
+		return base64.StdEncoding.EncodeToString([]byte(k.value)), true
+	}},
+	{"base32", func(k obfKind) (string, bool) {
+		return base32.StdEncoding.EncodeToString([]byte(k.value)), true
+	}},
+	{"hex", func(k obfKind) (string, bool) {
+		return hex.EncodeToString([]byte(k.value)), true
+	}},
+	{"percent escapes", func(k obfKind) (string, bool) {
+		return mapRunes(k.value, func(r rune) string { return fmt.Sprintf("%%%02X", r) }), true
+	}},
+	{"rot13", func(k obfKind) (string, bool) {
+		out := obfRot13(k.value)
+		return out, out != k.value
+	}},
+	{"tag characters", func(k obfKind) (string, bool) {
+		return "note" + mapRunes(k.value, func(r rune) string { return string(0xE0000 + r) }), true
+	}},
+}
+
+func obfRot13(s string) string {
+	return mapRunes(s, func(r rune) string {
+		switch {
+		case r >= 'a' && r <= 'z':
+			return string('a' + (r-'a'+13)%26)
+		case r >= 'A' && r <= 'Z':
+			return string('A' + (r-'A'+13)%26)
+		}
+		return string(r)
+	})
+}
+
+// obfPlacements are where the value stands in the text.
+var obfPlacements = []struct {
+	name string
+	text func(plain, hidden string) string
+}{
+	{"only obfuscated", func(_, h string) string { return "please keep this on file: " + h + " and thank you" }},
+	{"plain + obfuscated", func(p, h string) string {
+		return "please keep this on file: " + p + " and thank you, here it is again: " + h + " for the record"
+	}},
+	{"obfuscated twice", func(_, h string) string {
+		return "please keep this on file: " + h + " and thank you, here it is again: " + h + " for the record"
+	}},
+}
+
+var (
+	obfBase64Token  = regexp.MustCompile(`[A-Za-z0-9+/]{12,}`)
+	obfBase32Token  = regexp.MustCompile(`[A-Z2-7]{12,}`)
+	obfHexToken     = regexp.MustCompile(`[0-9A-Fa-f]{12,}`)
+	obfPercentToken = regexp.MustCompile(`(?:%[0-9A-Fa-f]{2})+`)
+)
+
+// obfReadings returns the ways a reader who knows the tricks could read
+// text. It is written without the scanner's normaliser, so that the test
+// does not ask the code under test what the code under test let through.
+func obfReadings(text string) []string {
+	text = html.UnescapeString(text)
+	// Tag characters are a copy of ASCII; the other format characters
+	// carry nothing.
+	text = mapRunes(text, func(r rune) string {
+		switch {
+		case r >= 0xE0020 && r <= 0xE007E:
+			return string(r - 0xE0000)
+		case unicode.Is(unicode.Cf, r):
+			return ""
+		}
+		return string(r)
+	})
+	text = norm.NFKC.String(text)
+	back := map[rune]rune{}
+	for latin, cyr := range obfCyrillic {
+		back[cyr] = latin
+	}
+	text = mapRunes(text, func(r rune) string {
+		if l, ok := back[r]; ok {
+			return string(l)
+		}
+		return string(r)
+	})
+
+	out := []string{text, obfRot13(text)}
+	rev := []rune(text)
+	for i, j := 0, len(rev)-1; i < j; i, j = i+1, j-1 {
+		rev[i], rev[j] = rev[j], rev[i]
+	}
+	out = append(out, string(rev))
+	words := text
+	for d, w := range obfDigitWords {
+		words = strings.ReplaceAll(words, w, fmt.Sprint(d))
+	}
+	out = append(out, words)
+	for _, tok := range obfBase64Token.FindAllString(text, -1) {
+		if b, err := base64.RawStdEncoding.DecodeString(tok); err == nil {
+			out = append(out, string(b))
+		}
+	}
+	for _, tok := range obfBase32Token.FindAllString(text, -1) {
+		if b, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(tok); err == nil {
+			out = append(out, string(b))
+		}
+	}
+	for _, tok := range obfHexToken.FindAllString(text, -1) {
+		if b, err := hex.DecodeString(tok); err == nil {
+			out = append(out, string(b))
+		}
+	}
+	for _, tok := range obfPercentToken.FindAllString(text, -1) {
+		if s, err := url.PathUnescape(tok); err == nil {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// obfCompact keeps the letters and digits of s, lower-cased, so that a value
+// compares equal however it was spaced or punctuated.
+func obfCompact(s string) string {
+	return mapRunes(s, func(r rune) string {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			return string(unicode.ToLower(r))
+		}
+		return ""
+	})
+}
+
+// obfLeaks reports whether text still holds the value, or the larger half of
+// it, in any reading.
+func obfLeaks(text, value string) bool {
+	want := obfCompact(value)
+	n := (len(want) + 1) / 2
+	if n < 6 {
+		n = len(want)
+	}
+	for _, reading := range obfReadings(text) {
+		got := obfCompact(reading)
+		for i := 0; i+n <= len(want); i++ {
+			if strings.Contains(got, want[i:i+n]) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// obfSentText returns the user's message from a chat request body.
+func obfSentText(body string) string {
+	var req struct {
+		Messages []struct {
+			Content string `json:"content"`
+		} `json:"messages"`
+	}
+	if json.Unmarshal([]byte(body), &req) != nil || len(req.Messages) == 0 {
+		return body
+	}
+	return req.Messages[len(req.Messages)-1].Content
+}
+
+// obfAnswerText returns the text a client reads from an answer, buffered or
+// streamed.
+func obfAnswerText(wire string, stream bool) string {
+	type choice struct {
+		Message struct {
+			Content string `json:"content"`
+		} `json:"message"`
+		Delta struct {
+			Content string `json:"content"`
+		} `json:"delta"`
+	}
+	type payload struct {
+		Choices []choice `json:"choices"`
+	}
+	if !stream {
+		var p payload
+		if json.Unmarshal([]byte(wire), &p) != nil || len(p.Choices) == 0 {
+			return wire
+		}
+		return p.Choices[0].Message.Content
+	}
+	var b strings.Builder
+	for _, line := range strings.Split(wire, "\n") {
+		data, ok := strings.CutPrefix(line, "data:")
+		if !ok {
+			continue
+		}
+		var p payload
+		if json.Unmarshal([]byte(strings.TrimSpace(data)), &p) != nil {
+			continue
+		}
+		for _, c := range p.Choices {
+			b.WriteString(c.Delta.Content)
+		}
+	}
+	return b.String()
+}
+
+// obfOutcome sends text through one path and says what happened to the
+// value in it.
+func obfOutcome(t *testing.T, k obfKind, text, path string) string {
+	t.Helper()
+	switch path {
+	case "request":
+		yaml := "version: \"1.0\"\nname: matrix\nrules:\n  " + k.rule + ":\n    action: REDACT\n    sensitivity: low\n" + obfEntities
+		pol, err := policy.LoadFromBytes([]byte(yaml))
+		if err != nil {
+			t.Fatal(err)
+		}
+		g := newMatrixRig(t, pol, nil, nil)
+		body := `{"model":"gpt-4o","messages":[{"role":"system","content":"You are helpful."},{"role":"user","content":` + jsonString(text) + `}]}`
+		resp, _ := g.send(t, "application/json", body)
+		hits, sent := g.upstream()
+		switch {
+		case hits == 0 && resp.StatusCode >= 400:
+			if resp.Header.Get("X-Tamga-Redact-Fallback") == "" {
+				return "blocked without saying why"
+			}
+			return outBlocked
+		case hits == 0:
+			return fmt.Sprintf("status %d and nothing sent", resp.StatusCode)
+		case obfLeaks(obfSentText(sent), k.value):
+			return outForwarded
+		case strings.Contains(sent, "_REDACTED]"):
+			return outMasked
+		}
+		return "sent without the value and without a marker"
+	default:
+		stream := path == "stream"
+		yaml := "version: \"1.0\"\nname: matrix\nrules: {}\n" + obfEntities +
+			"output_rules:\n  enabled: true\n  buffer_bytes: 262144\n  scan_window_ms: 2000\n  redact_on: [" + k.key + "]\n" +
+			"  streaming:\n    enabled: true\n    max_buffer_bytes: 8192\n"
+		pol, err := policy.LoadFromBytes([]byte(yaml))
+		if err != nil {
+			t.Fatal(err)
+		}
+		g := newMatrixRig(t, pol, nil, nil)
+		g.answer, g.stream = text, stream
+		body := `{"model":"gpt-4o","messages":[{"role":"user","content":"hello"}]}`
+		if stream {
+			body = `{"model":"gpt-4o","stream":true,"messages":[{"role":"user","content":"hello"}]}`
+		}
+		resp, got := g.send(t, "application/json", body)
+		delivered := obfAnswerText(got, stream)
+		switch {
+		// What reached the client before a stream was stopped counts too.
+		case obfLeaks(delivered, k.value), obfLeaks(got, k.value):
+			return outForwarded
+		case resp.StatusCode >= 400, strings.Contains(got, "event: error"), strings.Contains(got, `"error"`):
+			return outBlocked
+		case strings.Contains(delivered, "_REDACTED]"):
+			return outMasked
+		}
+		return "delivered without the value and without a marker"
+	}
+}
+
+// TestRewriteMatrix_Obfuscated: for every kind of value, every way of
+// writing it that the normaliser reads, and every place it can stand, no
+// form of the value is sent on under a rule that masks it. Either every
+// occurrence is masked or nothing is sent.
+func TestRewriteMatrix_Obfuscated(t *testing.T) {
+	counts := map[string]int{}
+	var leaks []string
+	for _, k := range obfKinds {
+		for _, o := range obfuscations {
+			hidden, ok := o.apply(k)
+			if !ok {
+				continue
+			}
+			for _, p := range obfPlacements {
+				text := p.text(k.value, hidden)
+				for _, path := range []string{"request", "answer", "stream"} {
+					cell := fmt.Sprintf("%s/%s/%s/%s", k.name, o.name, p.name, path)
+					t.Run(cell, func(t *testing.T) {
+						got := obfOutcome(t, k, text, path)
+						counts[got]++
+						t.Logf("MATRIX obfuscated | %-10s | %-20s | %-18s | %-7s | %s", k.name, o.name, p.name, path, got)
+						if got != outMasked && got != outBlocked {
+							leaks = append(leaks, cell+": "+got)
+							t.Errorf("outcome = %s, want masked or blocked", got)
+						}
+					})
+				}
+			}
+		}
+	}
+	names := make([]string, 0, len(counts))
+	total := 0
+	for name, n := range counts {
+		names = append(names, name)
+		total += n
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		t.Logf("MATRIX obfuscated total | %-45s | %d of %d", name, counts[name], total)
+	}
+	for _, l := range leaks {
+		t.Logf("MATRIX obfuscated leak | %s", l)
+	}
 }

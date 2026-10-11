@@ -9,6 +9,8 @@ import (
 	"sync"
 
 	"github.com/rs/zerolog/log"
+
+	"github.com/yatuk/tamga/internal/scanner/normalize"
 )
 
 // CompetitorSpec is a competitor detection rule from policy (avoids scanner → policy import).
@@ -165,26 +167,54 @@ func (s *CompetitorScanner) Scan(ctx context.Context, content []byte) ([]Finding
 	}
 
 	var findings []Finding
-	ps := newPatternScan(ctx, s.Name(), content)
-	for i := range ps.chunks {
-		for _, c := range compiled {
-			for _, pat := range c.res {
-				ok := ps.each(pat, i, func(start, end int) {
-					findings = append(findings, Finding{
-						Type:        "competitor",
-						Category:    c.name,
-						Severity:    c.severity,
-						Match:       maskContent(string(content[start:end])),
-						StartPos:    start,
-						EndPos:      end,
-						Confidence:  0.95, // competitor names are distinctive
-						ActionTaken: c.action,
+	seen := map[matchedAt]bool{}
+	// scanView runs the patterns over one reading of the text. Each reading
+	// has the limits of a scan of its own.
+	scanView := func(view normalize.View, via string) error {
+		text := []byte(view.Text)
+		ps := newPatternScan(ctx, s.Name(), text)
+		for i := range ps.chunks {
+			for _, c := range compiled {
+				for _, pat := range c.res {
+					ok := ps.each(pat, i, func(start, end int) {
+						f := Finding{
+							Type:        "competitor",
+							Category:    c.name,
+							Severity:    c.severity,
+							Match:       maskContent(string(text[start:end])),
+							StartPos:    start,
+							EndPos:      end,
+							Confidence:  0.95, // competitor names are distinctive
+							ActionTaken: c.action,
+						}
+						if via != "" {
+							locateInView(&f, view, via)
+						}
+						// The same place found again in another reading is one match.
+						at := matchedAt{f.Category, f.StartPos, f.EndPos, viewOnly(f)}
+						if seen[at] {
+							return
+						}
+						seen[at] = true
+						findings = append(findings, f)
 					})
-				})
-				if !ok {
-					return findings, ps.err
+					if !ok {
+						return ps.err
+					}
 				}
 			}
+		}
+		return nil
+	}
+	text := string(content)
+	if err := scanView(normalize.SourceView(text), ""); err != nil {
+		return findings, err
+	}
+	// The same patterns over the text read for what its characters show:
+	// a name in look-alike letters is the same name (see patternReadings).
+	for _, view := range patternReadings(text) {
+		if err := scanView(view, viaNormalized); err != nil {
+			return findings, err
 		}
 	}
 	return findings, nil

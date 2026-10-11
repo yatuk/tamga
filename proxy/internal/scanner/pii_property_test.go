@@ -2,6 +2,7 @@ package scanner
 
 import (
 	"strconv"
+	"strings"
 	"testing"
 
 	"pgregory.net/rapid"
@@ -113,7 +114,7 @@ func TestPropertyTCKN_ChecksumInvariant(t *testing.T) {
 }
 
 // TestPropertyMaskPAN_Invariant verifies maskPAN always preserves
-// the same length and the BIN prefix + last 4.
+// the number of digits and the last four, and shows no other digit.
 func TestPropertyMaskPAN_Invariant(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
 		panLen := rapid.IntRange(13, 19).Draw(t, "panLen")
@@ -125,23 +126,20 @@ func TestPropertyMaskPAN_Invariant(t *testing.T) {
 
 		masked := maskPAN(pan)
 
-		// Invariant 1: Masked length >= original
-		if len(masked) != len(digitsOnly(pan)) {
-			t.Logf("maskPAN(%q) = %q (len %d vs original numeric len %d)",
-				pan, masked, len(masked), len(digitsOnly(pan)))
-		}
-
-		// Invariant 2: First 6 digits preserved
+		// Invariant 1: one character per digit
 		origDigits := digitsOnly(pan)
-		if len(origDigits) >= 13 {
-			if masked[:6] != origDigits[:6] {
-				t.Errorf("maskPAN first 6 digits mismatch: %q vs %q", masked[:6], origDigits[:6])
-			}
-			// Invariant 3: Last 4 digits preserved
-			if masked[len(masked)-4:] != origDigits[len(origDigits)-4:] {
-				t.Errorf("maskPAN last 4 digits mismatch: %q vs %q",
-					masked[len(masked)-4:], origDigits[len(origDigits)-4:])
-			}
+		if len(masked) != len(origDigits) {
+			t.Fatalf("maskPAN(%q) = %q (len %d vs original numeric len %d)",
+				pan, masked, len(masked), len(origDigits))
+		}
+		// Invariant 2: nothing before the last four is a digit
+		if head := masked[:len(masked)-4]; head != strings.Repeat("*", len(head)) {
+			t.Errorf("maskPAN(%q) shows more than the last four: %q", pan, masked)
+		}
+		// Invariant 3: Last 4 digits preserved
+		if masked[len(masked)-4:] != origDigits[len(origDigits)-4:] {
+			t.Errorf("maskPAN last 4 digits mismatch: %q vs %q",
+				masked[len(masked)-4:], origDigits[len(origDigits)-4:])
 		}
 	})
 }

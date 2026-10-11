@@ -23,7 +23,9 @@ type ClassifierConfig struct {
 	Threshold float64 `yaml:"threshold" json:"threshold,omitempty"`
 	// SignalThreshold is the threshold for a text that carries a signal:
 	// an unreadable block or hidden characters in it (the low-severity
-	// injection findings unreadable_block and hidden_text), or a change of
+	// injection findings unreadable_block and hidden_text), a request that
+	// is an attack or not depending on where it stands (above_text_request,
+	// translation_abandoned), or a change of
 	// writing system against the conversation so far. Such a text is not
 	// an attack for that, and is judged more strictly. Default 0.90; a
 	// value above threshold is the same as threshold, which turns the

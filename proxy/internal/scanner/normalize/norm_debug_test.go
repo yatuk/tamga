@@ -93,8 +93,11 @@ func TestStripSeparatorsBetweenDigits_Edges(t *testing.T) {
 		{"hello.world", "hello.world"}, // dot between letters, not digits
 		// 11-digit TCKN with mixed separators → clean 11-digit string.
 		{"1.0-0 0.0 0 0 0-1.4 6", "10000000146"},
-		// Digits with separators then non-digit: dash is stripped (prevDigit=true).
-		{"v1.2.3-release", "v123release"},
+		// A separator that no digit follows stays: the number is not
+		// glued to the word after it.
+		{"v1.2.3-release", "v123-release"},
+		{"no 64100000001 and so on", "no 64100000001 and so on"},
+		{"1 - 2 . 3 x", "123 x"},
 	}
 	for _, tt := range tests {
 		got := stripSeparatorsBetweenDigits(tt.input)

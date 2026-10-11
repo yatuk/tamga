@@ -38,6 +38,7 @@ import (
 	"github.com/yatuk/tamga/internal/ratelimit"
 	"github.com/yatuk/tamga/internal/redisx"
 	"github.com/yatuk/tamga/internal/scanner"
+	"github.com/yatuk/tamga/internal/scanner/linkscan"
 	"github.com/yatuk/tamga/internal/scanner/operator_state"
 	"github.com/yatuk/tamga/internal/store"
 	"github.com/yatuk/tamga/internal/telemetry"
@@ -410,7 +411,11 @@ func main() {
 	if err != nil {
 		log.Warn().Err(err).Str("addr", cfg.AnalyzerAddr).Msg("analyzer gRPC client unavailable — running without deep NLP")
 	}
-	eventBus.Subscribe(events.AnalyzerHandler(analyzerClient))
+	// The one subscriber that is given a request's text (Event.Body, present
+	// only under TAMGA_ANALYZER_SEND_CONTENT). Every other one gets the
+	// event without it, so nothing that keeps events keeps the text. The
+	// text is copied onto an event only when this handler will send it.
+	events.SubscribeAnalyzer(eventBus, analyzerClient)
 
 	// Inline classifier: on the decision path, unlike the analyzer above.
 	var classifierGuard *classifier.Guard
@@ -615,6 +620,11 @@ func main() {
 	outputRegistry := scanner.NewRegistry()
 	outputRegistry.Register(scanner.NewCodeLeakScanner())
 	outputRegistry.SetSpeed("code_leak", scanner.SpeedFast)
+	// The link scanner judges the links of an answer by their form and by
+	// the policy's host lists, read from the policy in force at each scan.
+	// It makes no request and resolves no name.
+	outputRegistry.Register(scanner.NewLinkScanner(func() *linkscan.Lists { return getPolicy().LinkLists() }))
+	outputRegistry.SetSpeed(scanner.LinkFindingType, scanner.SpeedFast)
 	log.Info().Int("count", outputRegistry.Count()).Msg("output-only scanners registered")
 
 	// Load BIN database: try embedded CSV first (zero-config, works in Docker),

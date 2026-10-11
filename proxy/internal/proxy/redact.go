@@ -22,16 +22,24 @@ import (
 // with an identifier left in it.
 //
 // The outcome is one of two things, never a third: every such finding is
-// masked in the body that is forwarded, or the request is blocked. It is
-// blocked when a finding to mask has no position (found only in a normalised
-// view), is of a type without spans (scanner.MaskableType), or the rewritten
-// body cannot be confirmed.
+// masked in the body that is forwarded, or the request is blocked.
+//
+// Masking is by position, and a finding is one place in the text: a value
+// written twice is two findings, and both are masked. A value written so
+// that only a normalised reading shows it (fullwidth digits, a zero-width
+// space inside it, entities, number words, digits with dots between them)
+// has the position of the characters it was read from and is masked like
+// any other. The request is blocked when a finding to mask has no position
+// (it was found only in a text the request decodes to: base64, hex, hidden
+// characters), is of a type without spans (scanner.MaskableType), or the
+// rewritten body cannot be confirmed. The response then says so in
+// X-Tamga-Redact-Fallback.
 
 // Reasons a redaction cannot be carried out. They are the suffix of the
 // X-Tamga-Redact-Fallback header ("block:<reason>") and of the degraded
 // counter ("redact_<reason>").
 const (
-	redactUnplaced   = "unplaced"       // a value to mask has no position in the text as written
+	redactUnplaced   = "unplaced"       // a value to mask was found only in a decoded payload and has no position in the text
 	redactUnmaskable = "unmaskable"     // a finding to mask is a verdict on the text, not a span in it
 	redactNothing    = "nothing_masked" // REDACT was the verdict and nothing was there to mask
 	redactRewrite    = "rewrite_failed" // the rewritten body could not be confirmed

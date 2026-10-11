@@ -169,13 +169,13 @@ func TestSegmentScan_RedactionKeepsTheBodyValid(t *testing.T) {
 	}
 }
 
-// A value that only shows in a normalised view has no position to cut at.
+// A value that only shows in a decoded payload has no position to cut at.
 // REDACT must then block: forwarding it whole is the one thing it may not do.
 func TestSegmentScan_RedactFallsBackToBlock(t *testing.T) {
 	proxyURL, hits, _ := strictServer(t, segmentTestPolicy)
-	// The address is written with a fullwidth @, which only the normalised
-	// view turns into an e-mail address.
-	body := `{"model":"gpt-4o","messages":[{"role":"user","content":"write to ayse＠example.com please"}]}`
+	// The address is written in base64. What it decodes to is another
+	// text, and nothing in it has a place in this one.
+	body := `{"model":"gpt-4o","messages":[{"role":"user","content":"write to YXlzZUBleGFtcGxlLmNvbQ== please"}]}`
 	resp := post(t, proxyURL, "application/json", body)
 	if resp.StatusCode != http.StatusForbidden {
 		b, _ := io.ReadAll(resp.Body)

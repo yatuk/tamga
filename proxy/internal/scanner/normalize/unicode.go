@@ -70,6 +70,10 @@ type Result struct {
 	// ("i g n o r e   a l l" is "ignore all"), when Options.SpelledRuns asks
 	// for it. It is not part of Text().
 	Spelled []string
+	// SpelledLeet are the spelled-out runs in which a digit or a symbol
+	// stands for a letter ("1 g n 0 r 3"), with those characters as they
+	// are. Set with Spelled; not part of Text().
+	SpelledLeet []string
 }
 
 // Text returns all variants concatenated with newlines so the scanner can
@@ -165,6 +169,7 @@ func Apply(s string, opts Options) Result {
 	res := Result{Canonical: cur, Plain: plain, Decoded: decoded}
 	if opts.SpelledRuns {
 		res.Spelled = spelledRuns(plain)
+		res.SpelledLeet = spelledLeetRuns(plain)
 	}
 	return res
 }
@@ -239,6 +244,26 @@ func turkishLower(s string) string {
 		}
 	}
 	return b.String()
+}
+
+// turkishLowerRune is turkishLower for one character, for the pass that
+// keeps offsets (lowerView).
+func turkishLowerRune(r rune) rune {
+	switch r {
+	case 'İ', 'I', 'ı':
+		return 'i'
+	case 'Ş', 'ş':
+		return 's'
+	case 'Ğ', 'ğ':
+		return 'g'
+	case 'Ü', 'ü':
+		return 'u'
+	case 'Ö', 'ö':
+		return 'o'
+	case 'Ç', 'ç':
+		return 'c'
+	}
+	return unicode.ToLower(r)
 }
 
 // homoglyphMap covers the highest-frequency confusable characters seen in

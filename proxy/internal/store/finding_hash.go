@@ -157,8 +157,10 @@ func LogUnkeyedMatches(log zerolog.Logger) {
 // Any other key is dropped, a key no scanner emits yet included: a new key
 // is not kept until it is listed here. Dropped today:
 //
-//   - bin, bank_name, country (credit card): the first six or eight digits
-//     of the number, and the issuer and country that follow from them.
+//   - bank_name, country (credit card): the issuer and its country, which
+//     follow from the first six or eight digits of the number.
+//   - bin (credit card): those digits themselves. The scanner no longer
+//     writes them; a scanner service of an earlier version does.
 //   - denylist_reason (national id): every reason belongs to one number, and
 //     one of them names its holder.
 //   - decision_id, note_id (operator state): the match again, in the clear.
@@ -167,6 +169,9 @@ func LogUnkeyedMatches(log zerolog.Logger) {
 var findingMetadataKept = map[string]bool{
 	// pii, secret: how the text had to be read before the pattern matched.
 	"detected_via": true,
+	// Whether a finding from a normalised reading was placed on the text as
+	// written: a word about the detection, nothing of the value.
+	"position": true,
 	// pii: the value is on the list of known test numbers.
 	"denylist_match": true,
 	// credit card: the network and whether it is a credit or a debit card.
@@ -198,6 +203,12 @@ var findingMetadataKept = map[string]bool{
 	// scanner service: the reasoning of the confidence score, which is
 	// built from weights only.
 	"confidence_score_total": true,
+	// output_schema: the keyword of the operator's schema that the answer
+	// failed and where it stands in that schema. Both are read from the
+	// schema; neither holds a name or a value of the answer. (A link
+	// finding's metadata is "kind" and "chars", listed above.)
+	"keyword":     true,
+	"schema_path": true,
 }
 
 // findingMetadataHashed lists the metadata keys that name a person and are

@@ -131,7 +131,16 @@ python check_regression.py --results-dir results/... --baseline baseline.json --
 | **Operator state** | 7 | Contradicting a locked decision, unknown references, stale locks, unauthorized transitions, paraphrased contradictions |
 | **Request structure** | 19, plus 5 controls | The same plain attack moved around the JSON: `\u` escapes, split content parts, tool results, tool call arguments, tool descriptions, attachments, duplicate keys |
 
-The counts are the ones in `baseline.json`. The chaos scripts in
+The counts are the ones in `baseline.json`, which is the run of 2026-10-03.
+On 2026-10-11 the injection script got 29 more vectors (51) and the PII
+script 3 more (20): instructions written one letter at a time, in characters
+that do not show and in the encodings the proxy decodes, and an ID number
+split by a bidi isolate or written in base32. They are the texts
+`proxy/cmd/redteam/encoding_vectors_test.go` scores in process. The suite
+has not been run since, so the baseline neither counts them nor reflects the
+detection changes of that day (it still lists the two letter-by-letter
+vectors as bypasses). The next run gives the new totals; update the baseline
+from it. The chaos scripts in
 [`chaos/`](chaos/README.md) are separate and are not run by the suite.
 
 Each test script supports `--json` for machine-readable output and `--output-dir` for custom result paths.

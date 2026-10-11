@@ -148,6 +148,11 @@ type Hidden struct {
 	// appears. The tags of a flag emoji are left out.
 	TagText string
 	Tags    HiddenSpan
+	// TagRuns is TagText with a space where the tag characters are not next
+	// to each other, when they stand in more than one place: a value hidden
+	// twice is two values, and reads as neither when the two are run
+	// together. Empty when the tags are one run.
+	TagRuns string
 	// SelectorText is what the runs of two or more variation selectors
 	// spell when each is read as a byte, if that is text. One selector
 	// after a character is the ordinary use and is not counted.
@@ -211,7 +216,11 @@ func FindHidden(s string) Hidden {
 	var flagTags []byte
 	var flagSpan HiddenSpan
 	afterFlag := false
+	var tagCuts []int
 	addTag := func(c byte, start, end int) {
+		if h.Tags.Count > 0 && start != h.Tags.End {
+			tagCuts = append(tagCuts, len(tags))
+		}
 		tags = append(tags, c)
 		h.Tags.add(start, end)
 	}
@@ -301,6 +310,15 @@ func FindHidden(s string) Hidden {
 	endRun()
 
 	h.TagText = string(tags)
+	if len(tagCuts) > 0 {
+		runs := make([]string, 0, len(tagCuts)+1)
+		from := 0
+		for _, cut := range append(tagCuts, len(tags)) {
+			runs = append(runs, string(tags[from:cut]))
+			from = cut
+		}
+		h.TagRuns = strings.Join(runs, " ")
+	}
 	if looksLikeText(selectors) {
 		h.SelectorText = string(selectors)
 	}
@@ -314,6 +332,12 @@ func hiddenViews(s string) []string {
 	var out []string
 	if len(h.TagText) >= 4 {
 		out = append(out, h.TagText)
+		for _, run := range strings.Fields(h.TagRuns) {
+			if len(run) >= 4 {
+				out = append(out, h.TagRuns)
+				break
+			}
+		}
 	}
 	if len(h.SelectorText) >= 4 {
 		out = append(out, h.SelectorText)

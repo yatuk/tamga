@@ -150,9 +150,10 @@ func TestOutputRedact_BlocksWhenItCannotRedact(t *testing.T) {
 	tests := []struct {
 		name, response string
 	}{
-		// A fullwidth @: found in the normalised view only, so it has no
-		// position to mask at.
-		{"value only a normalised view shows", `{"choices":[{"message":{"role":"assistant","content":"write to ayse＠example.com please"}}]}`},
+		// The address in base64: found in the decoded payload only, which
+		// is another text, so it has no position to mask at. (An address
+		// with a fullwidth @ is read where it stands and is masked.)
+		{"value only a decoded payload shows", `{"choices":[{"message":{"role":"assistant","content":"write to YXlzZUBleGFtcGxlLmNvbQ== please"}}]}`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -160,7 +161,7 @@ func TestOutputRedact_BlocksWhenItCannotRedact(t *testing.T) {
 			if resp.StatusCode != http.StatusForbidden {
 				t.Fatalf("status = %d, want 403: %s", resp.StatusCode, body)
 			}
-			if strings.Contains(body, "example.com") {
+			if strings.Contains(body, "example.com") || strings.Contains(body, "YXlzZUBleGFtcGxlLmNvbQ") {
 				t.Fatalf("blocked response leaks content: %s", body)
 			}
 		})

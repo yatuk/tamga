@@ -8,6 +8,7 @@ Usage:
     TAMGA_BASE_URL=http://localhost:8443 TAMGA_API_KEY=test-key python pii_bypass.py
 """
 
+import base64
 import json
 import os
 import sys
@@ -169,6 +170,16 @@ def main():
                    "Call me at +90 532 555 1234"),
         TestVector("Credit card — Plain baseline",
                    "Card: 4532015112830366"),
+
+        # --- Added 2026-10-11: the same texts as the new vectors of
+        # proxy/cmd/redteam/encoding_vectors_test.go. baseline.json counts
+        # them only from the first run made after that date. ---
+        TestVector("TCKN — Split by a bidi isolate",
+                   "kimlik 1000\u20660000146"),
+        TestVector("Email — Split by a variation selector",
+                   "user\ufe0f@example.com"),
+        TestVector("TCKN — Base32",
+                   "id " + base64.b32encode(b"tc kimlik 10000000146").decode()),
     ]
 
     results = []

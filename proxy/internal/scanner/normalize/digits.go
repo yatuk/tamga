@@ -7,26 +7,15 @@ import (
 // stripSeparatorsBetweenDigits removes dots, spaces, and dashes that appear
 // between two digits. It preserves separators that are not digit-adjacent
 // (e.g. "hello-world" stays unchanged).
+//
+// A separator after a digit that no digit follows stays: removing it glued a
+// number to the word after it ("64100000001 and" became "64100000001and"),
+// and a pattern that ends on a word boundary no longer matched the number.
 func stripSeparatorsBetweenDigits(s string) string {
 	if !strings.ContainsAny(s, ". -") {
 		return s
 	}
-	var b strings.Builder
-	b.Grow(len(s))
-	prevDigit := false
-	for _, r := range s {
-		if r >= '0' && r <= '9' {
-			b.WriteRune(r)
-			prevDigit = true
-		} else if prevDigit && (r == '.' || r == ' ' || r == '-') {
-			// Skip separator between digits.
-			continue
-		} else {
-			b.WriteRune(r)
-			prevDigit = false
-		}
-	}
-	return b.String()
+	return StripDigitSeparators(View{Text: s}).Text
 }
 
 // reverseDigitSequences finds every 11-digit run (TCKN length) and reverses it

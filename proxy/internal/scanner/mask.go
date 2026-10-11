@@ -21,12 +21,17 @@ import (
 //     into a normalised or decoded view of the text;
 //   - content_moderation and operator_state: no position at all;
 //   - code_leak: the "span" is the whole text;
-//   - system_prompt_leak: the canary, which is acted on by canary.block_on_leak.
+//   - system_prompt_leak: the canary, which is acted on by canary.block_on_leak;
+//   - output_schema: a verdict on the answer as a document.
+//
+// A malicious_link finding is made on answers only, and its span is the
+// link's address.
 var maskableTypes = map[string]bool{
-	"pii":        true,
-	"secret":     true,
-	"custom":     true,
-	"competitor": true,
+	"pii":            true,
+	"secret":         true,
+	"custom":         true,
+	"competitor":     true,
+	"malicious_link": true,
 }
 
 // MaskableType reports whether findings of this type have a span that REDACT
@@ -54,10 +59,11 @@ func MaskMarker(f Finding) string {
 
 // ScanRaw scans a body that is not a request shape the extractor knows, as
 // one piece of text. The findings are settled the way ScanSegments settles
-// those of a segment: a match found only in a normalised view has no
-// position, and the same value is reported once however many views it was
-// found in. Without that a value was reported twice with the same span, and
-// a position in a normalised view was taken for one in the body.
+// those of a segment: a match found only in a text the body decodes to has
+// no position, and one place in the body is reported once however many
+// readings it was found in. Without that a value was reported twice with
+// the same span, and a position in a decoded text was taken for one in the
+// body.
 //
 // The findings carry no role and no path: nothing is known about who the
 // text speaks for.

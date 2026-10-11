@@ -187,6 +187,10 @@ func (s *InjectionScanner) Scan(ctx context.Context, content []byte) ([]Finding,
 	for _, v := range spelledViews(normResult.Spelled) {
 		normText += "\n" + v
 	}
+	// And so is what is written in leetspeak (injection_leet.go).
+	for _, v := range leetViews(normResult) {
+		normText += "\n" + v
+	}
 	normBytes := []byte(normText)
 
 	var rawMatches []struct {

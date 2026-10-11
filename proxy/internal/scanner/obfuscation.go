@@ -69,11 +69,21 @@ const (
 	unreadableLookBack = 512
 )
 
+// signalCategories are the injection categories that are a signal at
+// severity low: the two above, and the two shapes of request that are an
+// attack or an ordinary request depending on what the scanner cannot know
+// (injection_context.go).
+var signalCategories = map[string]bool{
+	categoryHiddenText:           true,
+	categoryUnreadableBlock:      true,
+	categoryAboveTextRequest:     true,
+	categoryTranslationAbandoned: true,
+}
+
 // Signal reports whether f marks its text as odd without being a verdict on
-// it: one of the two categories above, at severity low.
+// it: one of the signal categories, at severity low.
 func Signal(f Finding) bool {
-	return f.Type == "injection" && f.Severity == "low" &&
-		(f.Category == categoryHiddenText || f.Category == categoryUnreadableBlock)
+	return f.Type == "injection" && f.Severity == "low" && signalCategories[f.Category]
 }
 
 // obfuscationFindings returns the hidden-text and unreadable-block findings

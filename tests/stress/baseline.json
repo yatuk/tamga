@@ -3,6 +3,7 @@
   "updated_at": "2026-10-03",
   "source_commit": "884c900 + detection changes of 2026-10-03",
   "conditions": "run_stress_suite.sh: docker compose stack + docker-compose.stress.yml, mock upstream, in-process scanning, shipped default policy with the operator_state authorization allowlist added",
+  "adversarial_note": "Not re-run since 2026-10-03. The counts below predate the detection changes of 2026-10-11 (letter-by-letter spelling, hidden text, more encodings, translation shapes) and the vectors added to the suite on that day (injection 22 to 51, pii 17 to 20). They were not edited by hand: the two letter-by-letter vectors are still counted as injection bypasses here although the in-process Go tests (proxy/cmd/redteam/encoding_vectors_test.go) show them found. Regenerate from a run of run_stress_suite.sh.",
   "adversarial": {
     "pii": { "total": 17, "detected": 16, "bypassed": 1 },
     "injection": { "total": 22, "detected": 19, "bypassed": 3 },

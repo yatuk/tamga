@@ -77,8 +77,16 @@ func (c *GRPCScannerClient) Name() string {
 
 // Scan sends content to the remote scanner service and converts the proto
 // response back to internal Findings. Implements the Scanner interface.
+//
+// A client that has no connection (no service was configured) has nothing to
+// say. One that has a connection makes the call whatever state the
+// connection is in: gRPC waits while it is being set up and returns an error
+// when it is down. Answering "no findings" for a connection that was not
+// ready, as this did, read as a clean scan: of two calls made at once on a
+// fresh connection, the second found the connection "connecting" and came
+// back empty.
 func (c *GRPCScannerClient) Scan(ctx context.Context, content []byte) ([]Finding, error) {
-	if !c.Enabled() {
+	if c == nil || c.conn == nil {
 		return nil, nil
 	}
 

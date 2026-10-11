@@ -251,3 +251,29 @@ func TestUnrecorded_CountedAndListed(t *testing.T) {
 		}
 	}
 }
+
+// A request's row holds none of its text. The event that makes it can carry
+// the forwarded body for the analyzer (TAMGA_ANALYZER_SEND_CONTENT); neither
+// writer, the bus handler or the NATS consumer, puts it in a column.
+func TestRequestLogFromEvent_HoldsNoRequestText(t *testing.T) {
+	const marker = "RETAINED-REQUEST-TEXT-7f3a"
+	e := fullRequestEvent()
+	e.Body = []byte(`{"messages":[{"role":"user","content":"` + marker + `"}]}`)
+	viaBus, ok := RequestLogFromEvent(e, "", nil)
+	if !ok {
+		t.Fatal("a request's event is a row")
+	}
+	viaNATS, ok := RequestLogFromV2(overNATS(t, e), "", nil)
+	if !ok {
+		t.Fatal("the NATS consumer did not take the request's event")
+	}
+	for name, row := range map[string]RequestLog{"bus": viaBus, "nats": viaNATS} {
+		raw, err := json.Marshal(row)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(raw), marker) || strings.Contains(describeRow(row), marker) {
+			t.Errorf("%s: the row holds the request text: %s", name, describeRow(row))
+		}
+	}
+}
