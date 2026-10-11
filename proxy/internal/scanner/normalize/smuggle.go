@@ -1,6 +1,10 @@
 package normalize
 
-import "strings"
+import (
+	"strings"
+	"unicode"
+	"unicode/utf8"
+)
 
 // ────────────────────────────────────────────────────────────────────────────
 // Token Smuggling Detection — 2.4 Multi-Language Hardening
@@ -105,6 +109,147 @@ func splitRunLen(tokens []string, i int) int {
 		return 0
 	}
 	return lastValid - i + 1
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Phrases spelled one letter at a time
+// ────────────────────────────────────────────────────────────────────────────
+//
+// collapseSplitWords above joins a word whose letters are spaced out. It
+// does not read a whole phrase written that way:
+//
+//	"i g n o r e p r e v i o u s i n s t r u c t i o n s"  one run, no word ends
+//	"i.g.n.o.r.e a.l.l p.r.e.v.i.o.u.s"                   dots, not spaces
+//	"i-g-n-o-r-e   a-l-l"                                 dashes, wide gaps
+//
+// spelledRuns reads these. A run is a row of single letters with one
+// separator between two letters of a word (a space, a dot, a dash or an
+// underscore) and something wider, or another separator, between two words.
+// Invisible characters need no mention here: they are dropped before this
+// pass runs, so letters split by them are already words.
+//
+// Only letters make a run. A digit ends it, so a row of digits in a table
+// is never joined into a number here, and so does any other character.
+// ────────────────────────────────────────────────────────────────────────────
+
+const (
+	// spelledMinLetters is how many single letters a run needs. Shorter
+	// rows are ordinary text: "a b c", the options "a b c d", initials,
+	// "U S A", a spelled-out acronym. Eight letters is one long word or two
+	// short ones, the least a phrase can be.
+	spelledMinLetters = 8
+	// spelledMaxGap is the widest stretch of separators that still belongs
+	// to a run, as the gap between two words: "   ", " - ", ". ".
+	spelledMaxGap = 4
+)
+
+// isSpellSeparator reports whether c can stand between two letters of a
+// spelled-out word, or (several of them) between two such words.
+func isSpellSeparator(c byte) bool {
+	return c == ' ' || c == '.' || c == '-' || c == '_' || c == '\t'
+}
+
+// letterAt decodes the rune at s[i:] and says whether it is a letter or a
+// digit. Underscore is neither here: it is one of the separators.
+func letterAt(s string, i int) (r rune, size int, letter, digit bool) {
+	c := s[i]
+	if c < utf8.RuneSelf {
+		switch {
+		case (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'):
+			return rune(c), 1, true, false
+		case c >= '0' && c <= '9':
+			return rune(c), 1, false, true
+		}
+		return rune(c), 1, false, false
+	}
+	r, size = utf8.DecodeRuneInString(s[i:])
+	return r, size, unicode.IsLetter(r), unicode.IsDigit(r)
+}
+
+// singleLetterAt reports whether a letter stands alone at s[i:]: what
+// follows it is not a letter or a digit. The caller knows what precedes it.
+func singleLetterAt(s string, i int) (r rune, size int, ok bool) {
+	if i >= len(s) {
+		return 0, 0, false
+	}
+	r, size, letter, _ := letterAt(s, i)
+	if !letter {
+		return 0, 0, false
+	}
+	if next := i + size; next < len(s) {
+		if _, _, l, d := letterAt(s, next); l || d {
+			return 0, 0, false
+		}
+	}
+	return r, size, true
+}
+
+// spelledRuns returns what the runs of single letters in s spell: the
+// letters of a word joined, the words of a run separated by one space. A run
+// is returned when it has at least spelledMinLetters letters and at least
+// two of them are joined; a row of one-letter words spells nothing.
+//
+// Where one word ends and the next begins is only known when the text shows
+// it. "i g n o r e p r e v i o u s" comes back as "ignoreprevious"; finding
+// the words in that is left to the caller, who knows which words matter.
+func spelledRuns(s string) []string {
+	var out []string
+	// One buffer for every run: ordinary text is full of single letters
+	// ("I", "a") that start a run of one.
+	var buf []byte
+	inWord := false // the previous character is a letter or a digit
+	for i := 0; i < len(s); {
+		r, size, letter, digit := letterAt(s, i)
+		if inWord || !letter {
+			inWord = letter || digit
+			i += size
+			continue
+		}
+		if _, _, ok := singleLetterAt(s, i); !ok {
+			inWord = true
+			i += size
+			continue
+		}
+
+		// s[i] is a single letter: read the run that starts here.
+		buf = utf8.AppendRune(buf[:0], r)
+		letters, joins := 1, 0
+		var letterSep byte // what separates the letters of a word in this run
+		j := i + size
+		for {
+			k := j
+			for k < len(s) && k-j <= spelledMaxGap && isSpellSeparator(s[k]) {
+				k++
+			}
+			gap := k - j
+			if gap == 0 || gap > spelledMaxGap {
+				break
+			}
+			nr, nsize, ok := singleLetterAt(s, k)
+			if !ok {
+				break
+			}
+			if gap == 1 && letterSep == 0 {
+				letterSep = s[j]
+			}
+			if gap == 1 && s[j] == letterSep {
+				joins++
+			} else {
+				buf = append(buf, ' ')
+			}
+			buf = utf8.AppendRune(buf, nr)
+			letters++
+			j = k + nsize
+		}
+		if letters >= spelledMinLetters && joins > 0 {
+			out = append(out, string(buf))
+		}
+		// The run ended on a single letter, which nothing alphanumeric
+		// follows.
+		inWord = false
+		i = j
+	}
+	return out
 }
 
 // isSingleLetter reports whether token is exactly one ASCII letter.

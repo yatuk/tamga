@@ -224,6 +224,116 @@ func TestPIIScanner_Email(t *testing.T) {
 	}
 }
 
+// The user name and password of a URL are not an e-mail address, though
+// "password@example.com" has the shape of one. An address in a path, in a
+// query, after "mailto:" or in the prose around a URL still is.
+func TestPIIScanner_EmailNotInURLUserinfo(t *testing.T) {
+	s := NewPIIScanner()
+	tests := []struct {
+		name, text string
+		want       []string // the masked addresses found, in order
+	}{
+		{"user and password", "https://user:password@example.com", nil},
+		{"user and password, with a path", "clone https://deploy:not-a-real-pw@git.example.invalid/org/repo.git please", nil},
+		{"user only", "ssh://git@git.example.invalid/org/repo.git", nil},
+		{"user only, http", "open http://admin@intranet.example.invalid/ now", nil},
+		{"connection string", "postgres://app:not-a-real-pw@db.example.invalid:5432/app", nil},
+		{"upper-case scheme", "HTTPS://User:Password@Example.COM/x", nil},
+		{"in quotes", `url = "ftp://backup:not-a-real-pw@files.example.invalid"`, nil},
+		{"mailto link", "write to mailto:ayse@example.com today", []string{maskContent("ayse@example.com")}},
+		{"mailto in markdown", "[mail](mailto:ayse@example.com)", []string{maskContent("ayse@example.com")}},
+		{"in a path", "https://example.com/users/ayse@example.com/profile", []string{"*"}},
+		{"in a query", "https://example.com/reset?email=ayse@example.com", []string{"*"}},
+		{"in a fragment", "https://example.com/#ayse@example.com", []string{"*"}},
+		{"prose after a URL", "see https://example.com:8443/login and mail ayse@example.com", []string{maskContent("ayse@example.com")}},
+		{"prose before a URL", "ayse@example.com sent https://user:password@example.com", []string{maskContent("ayse@example.com")}},
+		{"address after the host", "https://user:password@example.com/?cc=ayse@example.com", []string{"*"}},
+		{"scp-style remote is not a URL", "git clone git@git.example.invalid:org/repo.git", []string{maskContent("git@git.example.invalid")}},
+		{"no scheme before the slashes", "//ayse@example.com", []string{"*"}},
+	}
+	for _, tt := range tests {
+		fs, err := s.Scan(context.Background(), []byte(tt.text))
+		if err != nil {
+			t.Fatalf("%s: %v", tt.name, err)
+		}
+		var got []string
+		seen := map[[2]int]bool{}
+		for _, f := range fs {
+			// The normalised view finds a plain address a second time.
+			if f.Category != "email" || f.Metadata["detected_via"] != "" || seen[[2]int{f.StartPos, f.EndPos}] {
+				continue
+			}
+			seen[[2]int{f.StartPos, f.EndPos}] = true
+			got = append(got, f.Match)
+		}
+		if len(got) != len(tt.want) {
+			t.Errorf("%s: e-mail findings %v, want %d", tt.name, got, len(tt.want))
+			continue
+		}
+		for i := range got {
+			// "*" stands for any match: the pattern takes the URL's path
+			// or query into the local part, and that is not at issue here.
+			if tt.want[i] != "*" && got[i] != tt.want[i] {
+				t.Errorf("%s: finding %d is %q, want %q", tt.name, i, got[i], tt.want[i])
+			}
+		}
+		// No view of a URL's userinfo is an address either.
+		if len(tt.want) == 0 && hasCategory(fs, "email") {
+			t.Errorf("%s: an e-mail finding from a normalised view: %+v", tt.name, fs)
+		}
+	}
+}
+
+// Dropping the e-mail finding must not leave the credentials of a URL
+// unmarked: they are one secret finding with a position, which REDACT masks.
+func TestURLCredentials_OneFindingAndMasked(t *testing.T) {
+	reg := NewRegistry()
+	reg.Register(NewPIIScanner())
+	reg.Register(NewSecretScanner())
+	text := "push to https://deploy:" + fill(mixed, 12) + "@registry.example.invalid/v2/ and tell ayse@example.com"
+	findings, err := reg.ScanRaw(context.Background(), []byte(text), PipelineConfig{Mode: ModeSync})
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]int{}
+	for _, f := range findings {
+		seen[f.Type+"/"+f.Category]++
+		if !f.Placed() {
+			t.Errorf("%s/%s has no position: %+v", f.Type, f.Category, f)
+		}
+	}
+	if seen["secret/url_credentials"] != 1 || seen["pii/email"] != 1 || len(findings) != 2 {
+		t.Fatalf("findings %v, want one url_credentials and one email", seen)
+	}
+	out := string(RedactContent([]byte(text), findings))
+	if out != "push to [url_credentials_REDACTED]/v2/ and tell [email_REDACTED]" {
+		t.Errorf("masked: %s", out)
+	}
+
+	// A policy that masks PII and only warns about secrets masks the
+	// address and leaves the URL as written. Before, the e-mail finding
+	// masked the password by accident and left the user name.
+	var piiOnly []Finding
+	for _, f := range findings {
+		if f.Type == "pii" {
+			piiOnly = append(piiOnly, f)
+		}
+	}
+	out = string(RedactContent([]byte(text), piiOnly))
+	if !strings.Contains(out, "https://deploy:"+fill(mixed, 12)+"@registry.example.invalid") || !strings.Contains(out, "[email_REDACTED]") {
+		t.Errorf("masked for PII only: %s", out)
+	}
+
+	// A user name without a password is not a secret, and not an address.
+	findings, err = reg.ScanRaw(context.Background(), []byte("ssh://git@git.example.invalid/org/repo.git"), PipelineConfig{Mode: ModeSync})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(findings) != 0 {
+		t.Errorf("a URL with a user name only: %+v", findings)
+	}
+}
+
 func TestPIIScanner_PhoneTR(t *testing.T) {
 	s := NewPIIScanner()
 	ctx := context.Background()

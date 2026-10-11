@@ -192,7 +192,12 @@ at threshold 0.98.
 On 2026-10-11 the tuning corpus grew by 22 prompts written together with new
 detectors (331, of which 121 benign). The deterministic scanners score
 1.000 / 0.905 on it: the 18 added attacks are caught and the 20 misses are
-the same 20. The classifier has not been run on the larger corpus.
+the same 20. A second change that day (translation requests no longer
+blocked, a URL's user and password no longer read as an e-mail address,
+instructions spelled one letter at a time read) added 30 more (361, of which
+138 benign; the held-out set got 6 benign translation requests, 169 of which
+91 benign): 1.000 / 0.910 and 1.000 / 1.000, with the same 20 misses. The
+classifier has not been run on the larger corpus.
 
 Source: [docs/benchmarks/README.md](docs/benchmarks/README.md#with-the-inline-classifier),
 from the reports
@@ -244,7 +249,11 @@ rather than its wording: text in JSON escapes, in tool results, tool call
 arguments, tool descriptions and attachments, and bodies that parsers read
 differently. The bypasses are published in
 [tests/stress/baseline.json](tests/stress/baseline.json) and include leetspeak
-and character-by-character smuggling. The vectors are known to the authors, so this is a regression
+and character-by-character smuggling. That is the run of 2026-10-03: since
+2026-10-11 the scanners read the two character-by-character vectors
+(measured in-process,
+[docs/benchmarks](docs/benchmarks/README.md#letter-by-letter-spelling)), and
+the suite has not been run again, so the baseline still lists them. The vectors are known to the authors, so this is a regression
 suite, not an independent evaluation. With the classifier on, the result was
 the same 78 and 6, and the load figures were within the run-to-run spread of
 the table above (the load test repeats its prompts, so it exercises the

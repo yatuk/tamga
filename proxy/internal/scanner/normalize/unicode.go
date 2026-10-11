@@ -31,6 +31,12 @@ type Options struct {
 	TryHex               bool
 	TryROT13             bool
 	StripPunct           bool
+	// SpelledRuns reads phrases written one letter at a time into
+	// Result.Spelled. Default() leaves it off: the view is for the scanners
+	// that look for instructions, and they ask for it. An identifier is
+	// not hidden by spacing out letters, and a finding from a view has no
+	// position, so a PII or secret finding from this one could only block.
+	SpelledRuns bool
 }
 
 // Default returns the recommended option set for scanner input.
@@ -60,6 +66,10 @@ type Result struct {
 	// digits still digits. Rules that read numbers use this view.
 	Plain string
 	Decoded   []string // any Base64/hex/rot13 decoded payloads that look "textual"
+	// Spelled is what the runs of single letters in Plain spell
+	// ("i g n o r e   a l l" is "ignore all"), when Options.SpelledRuns asks
+	// for it. It is not part of Text().
+	Spelled []string
 }
 
 // Text returns all variants concatenated with newlines so the scanner can
@@ -152,7 +162,11 @@ func Apply(s string, opts Options) Result {
 			}
 		}
 	}
-	return Result{Canonical: cur, Plain: plain, Decoded: decoded}
+	res := Result{Canonical: cur, Plain: plain, Decoded: decoded}
+	if opts.SpelledRuns {
+		res.Spelled = spelledRuns(plain)
+	}
+	return res
 }
 
 // foldDiacritics strips combining marks after NFD.

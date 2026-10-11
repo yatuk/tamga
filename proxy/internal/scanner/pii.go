@@ -29,11 +29,17 @@ type piiPattern struct {
 	needsContext []string
 	// forwardOnly keeps the pattern off the reversed-digits variant.
 	forwardOnly bool
+	// skip, when set, rejects a match for where it stands in the text: it
+	// is something else there than what the pattern is looking for.
+	skip func(text string, loc []int) bool
 }
 
 // accept decides whether the match at loc is a finding for p, and returns the
 // span to report. text is the string the pattern ran on.
 func (p piiPattern) accept(text string, loc []int) ([]int, bool) {
+	if p.skip != nil && p.skip(text, loc) {
+		return nil, false
+	}
 	matched := text[loc[0]:loc[1]]
 	if p.refine != nil {
 		n, ok := p.refine(matched)
@@ -119,6 +125,9 @@ func compilePIIPatterns() {
 			validate: func(m string) bool {
 				return validEmailRFC5322Pragmatic(m)
 			},
+			// "https://user:password@example.com" holds no address. Its
+			// credentials are the secret scanner's (url_credentials).
+			skip:       inURLUserinfo,
 			confidence: 0.82,
 		},
 		{
@@ -675,6 +684,42 @@ func validIBAN(raw string) bool {
 		rem = (rem*10 + int(ns[i]-'0')) % 97
 	}
 	return rem == 1
+}
+
+// userinfoLookBack bounds the walk back from an "@" to the "://" of its URL.
+// The url_credentials pattern takes a user name of up to 64 characters and a
+// password of up to 128.
+const userinfoLookBack = 256
+
+// inURLUserinfo reports whether the "@" of the e-mail shaped match at loc is
+// the one that ends the userinfo part of a URL (RFC 3986, section 3.2.1):
+// "scheme://user:password@host" or "scheme://user@host". What stands before
+// it is then a user name or a password, and what follows a host.
+//
+// Userinfo runs from the "://" to the "@" without a "/", "?" or "#", so an
+// address in a path or a query ("https://example.com/?email=a@b.com") is
+// not in it, and neither is one after "mailto:", which has no "//".
+func inURLUserinfo(text string, loc []int) bool {
+	at := strings.LastIndexByte(text[loc[0]:loc[1]], '@')
+	if at < 0 {
+		return false
+	}
+	at += loc[0]
+	for i := at - 1; i >= 2 && at-i <= userinfoLookBack; i-- {
+		switch c := text[i]; {
+		case c == '/':
+			// The first slash before the "@" is either the end of "://",
+			// with a scheme before it, or part of a path.
+			return text[i-1] == '/' && text[i-2] == ':' && i >= 3 && isSchemeChar(text[i-3])
+		case c == '?' || c == '#' || c == '@' || c <= ' ' || c == '"' || c == '\'' || c == '<' || c == '>':
+			return false
+		}
+	}
+	return false
+}
+
+func isSchemeChar(c byte) bool {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '+' || c == '-' || c == '.'
 }
 
 func validEmailRFC5322Pragmatic(s string) bool {

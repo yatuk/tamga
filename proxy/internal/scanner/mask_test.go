@@ -107,9 +107,9 @@ func TestScanRaw_OneFindingPerValue(t *testing.T) {
 			continue
 		}
 	}
-	// The password and host of the connection string read as an address
-	// too: two e-mail findings, at two places.
-	for cat, want := range map[string]int{"email": 2, "aws_access_key": 1, "connection_string": 1, "connection_string_password": 1} {
+	// The password and host of the connection string are not an address:
+	// one e-mail finding, the one that is written out.
+	for cat, want := range map[string]int{"email": 1, "aws_access_key": 1, "connection_string": 1, "connection_string_password": 1} {
 		if seen[cat] != want {
 			t.Errorf("%d findings of %s, want %d: %+v", seen[cat], cat, want, findings)
 		}

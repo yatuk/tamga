@@ -7,8 +7,6 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
-
-	"github.com/yatuk/tamga/internal/scanner/normalize"
 )
 
 // injectionPatternDef is a single phrase with category-specific base confidence.
@@ -182,8 +180,13 @@ func (s *InjectionScanner) Scan(ctx context.Context, content []byte) ([]Finding,
 	text := string(content)
 
 	// Normalize to catch Unicode-evaded injection patterns.
-	normResult := normalize.Apply(text, normalize.Default())
+	normResult := normalizeForInjection(text)
 	normText := normResult.Text()
+	// What is spelled one letter at a time is one more view of the text
+	// (injection_spelled.go).
+	for _, v := range spelledViews(normResult.Spelled) {
+		normText += "\n" + v
+	}
 	normBytes := []byte(normText)
 
 	var rawMatches []struct {

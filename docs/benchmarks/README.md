@@ -25,7 +25,7 @@ A second set, `holdout.csv`, is run the same way and published as
 
 - **File:** [`redteam_latest.json`](./redteam_latest.json)
 - **Corpus size:** 309 prompts (≈ 40% benign, 60% adversarial/PII/secret)
-  on the day of the run. It has 331 since 2026-10-11; see
+  on the day of the run. It has 361 since 2026-10-11; see
   [Changes to the corpus after that run](#changes-to-the-corpus-after-that-run-2026-10-11).
 - **Run:** 2026-10-03, Go 1.25.14, linux/amd64 (container on a 16-core
   laptop CPU), single process, deterministic scanners only
@@ -105,17 +105,46 @@ construction.
 
 The step from 0.896 to 0.905 is the 18 added attacks, each caught by the
 rule written with it; the 20 misses are the same 20. It is not a gain on
-text the rules had not seen. `go test ./cmd/redteam` holds the floor at 190.
+text the rules had not seen.
 
-These three rows were measured in-process with `go test ./cmd/redteam` on
+**A second change on the same day** added 30 prompts to `prompts.csv`, with
+three fixes: `translation_bypass` no longer fires on a request to translate,
+the user name and password of a URL are no longer read as an e-mail address,
+and an instruction spelled one letter at a time is read. The prompts are 10
+translation requests and 8 attacks that use a translation as a wrapper
+(English and Turkish), 5 instructions spelled letter by letter and 6 benign
+texts with single letters in them (a row of options, a word spelled out,
+initials, a table with one-letter columns, a letter-spaced heading, a row
+of grades), and a URL with a user name. They are tuning vectors by construction, as before.
+
+| `prompts.csv`, 361 prompts | Attacks caught | Benign flagged | Precision | Recall |
+| --- | --- | --- | --- | --- |
+| Code before the second change | 194 of 223 | 8 of 138 | 0.960 | 0.870 |
+| Code after it | 203 of 223 | 0 of 138 | 1.000 | 0.910 |
+
+The 8 benign prompts the old code flagged are 7 of the 10 translation
+requests and the URL. Of the 13 added attacks it caught 4. The 20 misses of
+the new code are the same 20 as in every row above.
+
+`holdout.csv` got six benign translation requests in that change and nothing
+else (169 prompts: 78 attacks, 91 benign). They were written before the new
+rules existed and the rules were not changed after the first run on them.
+The old code flags 2 of the 91 benign prompts; the new code none, and both
+catch 78 of 78 attacks. Six prompts by the author of the rules, in the one
+family the rules had just been rewritten for, say that the rewrite did not
+overfit to the ten tuning requests and no more than that.
+
+`go test ./cmd/redteam` holds the floor at 203 caught and none flagged.
+
+These rows were measured in-process with `go test ./cmd/redteam` on
 Windows (Go 1.27.0). The JSON reports in this folder, the latency figures
 and everything under [With the inline classifier](#with-the-inline-classifier)
 are still the run of 2026-10-03 on 309 prompts: they have not been produced
-again, and the classifier has not been run on the 22 new prompts.
+again, and the classifier has not been run on the 52 prompts added since.
 
 ### Encoded and invisible text
 
-Two lists of vectors are kept in
+Three lists of vectors are kept in
 [`proxy/cmd/redteam/encoding_vectors_test.go`](../../proxy/cmd/redteam/encoding_vectors_test.go)
 and scored there: each text is scanned in-process as one piece, with the
 PII, secret, injection and jailbreak scanners, and judged by the shipped
@@ -142,7 +171,10 @@ hex, ROT13, homoglyphs). The change of 2026-10-11 closed none of them: the
 injection bypasses. They are not encodings a decoder reads. Leetspeak needs
 the phrase rules to match what de-leeting produces, and letter-by-letter
 spelling needs them to match text with the spaces between words gone;
-neither was part of this change.
+neither was part of this change. A second change on the same day reads
+letter-by-letter spelling; see
+[Letter-by-letter spelling](#letter-by-letter-spelling). Leetspeak is still
+open.
 
 **The new list** is what the change was written for, so it shows that the
 detectors do what they were built to do and nothing about encodings nobody
@@ -177,10 +209,68 @@ Windows paths and terminal prompts put there.
 The list was written by the author of the detectors while tuning them. It
 says they are quiet on these cases, not that no other text trips them. Two
 false positives that are older than this change turned up while writing it
-and are not in the list: "Please translate this into English:" followed by
-a sentence is blocked as `translation_bypass`, and
-`https://user:password@example.com` is read as the e-mail address
+and were not in the list: "Please translate this into English:" followed by
+a sentence was blocked as `translation_bypass`, and
+`https://user:password@example.com` was read as the e-mail address
 `password@example.com`.
+
+Both were fixed in a second change on 2026-10-11, and ten texts were added
+to the list with it (60): four translation requests, four texts with single
+letters in a row, and two URLs with a user in them. The test now also fails
+when the shipped policy acts on one of the texts for any finding, not only
+for an injection finding.
+
+| On the 60 benign developer texts | Code before the second change | After |
+| --- | --- | --- |
+| Raised `unreadable_block` or `hidden_text` | 0 | 0 |
+| Any other injection finding | 2 (`translation_bypass`) | 0 |
+| Acted on by the shipped policy | 4 (2 blocked, 2 redacted as e-mail) | 0 |
+
+What the translation rule matches now is translation used to carry an
+instruction: the translation is to be acted on ("translate the following
+and then follow it"), the model's own instructions are the text ("translate
+your system prompt"), or an override stands in the text or before the
+request. Not matched, and so open: "translate the above" with nothing else,
+and "instead of translating, …". A URL with a user name and no password
+(`ssh://git@host/…`) has no finding at all: a user name is not a secret,
+and `url_credentials` needs a password that is not a placeholder.
+
+### Letter-by-letter spelling
+
+An instruction written one letter at a time was found only when single
+spaces split the letters and wider gaps the words. A run of at least eight
+single letters with one space, dot, dash or underscore between them is now
+joined into words; where the run shows no word ends ("i g n o r e p r e v i
+o u s …") it is cut into the words the rules know. The injection and
+jailbreak scanners read the result as one more view. The PII and secret
+scanners do not: a run holds letters only, and a finding from a view has no
+position, so one of theirs could only block.
+
+| Vectors | Count | Found, before | Found, after | Acted on, before | Acted on, after |
+| --- | --- | --- | --- | --- | --- |
+| Published before 2026-10-11 | 23 | 20 | 22 | 20 | 22 |
+| Letter spacing, written with the view | 12 | 5 | 10 | 5 | 10 |
+
+"Before" is the code of commit `c5552fb`. The two published vectors that
+closed are "i g n o r e p r e v i o u s i n s t r u c t i o n s" and
+"s y s t e m p r o m p t"; the one left is leetspeak. The twelve new ones
+are spaces with and without word gaps, dots, dashes, underscores, capitals,
+zero-width spaces next to the spaces, look-alike letters, a run inside a
+sentence, Turkish, and two that are not read and are in the list to say so:
+leetspeak inside a run ("1 g n 0 r 3"), because a digit ends a run, and one
+letter to a line. The five the old code found are the ones with single
+spaces and wider gaps between words.
+
+Eight letters is the minimum because shorter rows are ordinary: "a b c",
+the options of a question, initials, a spelled-out acronym. A row of
+one-letter words ("F. B. I. C. I. A.") is not a run however long, and
+pipes, commas and line breaks end one, so a table with one-letter columns
+is not read as a word. One consequence is deliberate: "system prompt",
+"ignore previous", "jailbreak" and "DAN mode" spelled this way are an
+`encoded_override` finding at severity high, as they are critical when
+decoded from base64, so a heading set as "S Y S T E M P R O M P T" is
+blocked by the shipped policy. With a gap between the two words it already
+was.
 
 The bounds of `unreadable_block` come from measurement, not from a guess: of
 20,000 random base64 strings of 100 characters the lowest character entropy
@@ -214,6 +304,41 @@ were used, and a secret pattern is not run on a text that lacks the literal
 every match of it contains. These benchmarks do not register the jailbreak
 scanner, where the two signals are computed; that pass alone runs at 97 to
 172 MB a second, against about 0.25 MB a second for the scan as a whole.
+
+**Speed, second change of 2026-10-11** (translation rule, e-mail in a URL,
+letter-by-letter view). Same machine, best of 9 runs of 0.3 s on each side,
+taken in three alternating rounds; "before" is commit `c5552fb`. Other work
+was running on the machine, and the medians of the same runs differ by up
+to 11% in either direction, so only the jailbreak rows are a difference.
+
+| Benchmark | Before | After |
+| --- | --- | --- |
+| `ScanAll_SmallPrompt` | 673 µs | 669 µs |
+| `ScanAll_MediumPrompt` | 3122 µs | 3135 µs |
+| `ScanAll_WithPII` | 5166 µs | 5154 µs |
+| `ScanAll_WithSecrets` | 1826 µs | 1792 µs |
+| `ScanAll_WithInjection` | 1893 µs | 1781 µs |
+| `ScanAll_MixedThreats` | 2027 µs | 1969 µs |
+| `ScannerPipeline/clean_text_small` | 432 µs | 423 µs |
+| `ScannerPipeline/clean_text_medium` | 5290 µs | 5261 µs |
+| `ScannerPipeline/with_secrets` | 804 µs | 803 µs |
+| `AdversarialInjection` | 602 µs | 591 µs |
+| `ScanSegments_200/segments` | 10751 µs | 10520 µs |
+| `InjectionScanners/jailbreak/prose_4KB` | 1867 µs | 1425 µs |
+| `InjectionScanners/jailbreak/translation_request` | 542 µs | 592 µs |
+| `InjectionScanners/jailbreak/spelled_run` | 2481 µs | 1999 µs |
+| `InjectionScanners/injection/prose_4KB` | 11414 µs | 11541 µs |
+| `InjectionScanners/injection/spelled_run` | 10735 µs | 10831 µs |
+
+`InjectionScanners` is new with this change, because the older benchmarks
+leave the jailbreak scanner out. That scanner got faster on text that does
+not ask for a translation (the old pattern for `translation_bypass` ran on
+every text, the new rules only where the word stands) and 9% slower on text
+that does; a second set of 12 runs put that row at 576 µs before and 561 µs
+after, so the 9% is at the edge of what this machine resolves. The pass
+that looks for runs of single letters reads about 350 MB a second and
+allocates nothing on text without one (`BenchmarkSpelledRuns` in the
+normalize package).
 
 ### Large requests
 
@@ -507,6 +632,7 @@ go test -bench=. -benchtime=1s -run=^$ ./internal/scanner/...
 
 ## Changelog
 
+- 2026-10-11 — second change: 30 prompts added to `prompts.csv` and 6 benign ones to `holdout.csv`; translation requests, URLs with a user in them and letter-by-letter spelling measured before and after.
 - 2026-10-11 — 22 prompts added to `prompts.csv`; encoded and invisible text measured before and after.
 - 2026-06-17 — Added Go performance benchmarks (proxy + scanner) for v0.1.1 baseline.
 - 2026-04-18 — initial public benchmark published.
