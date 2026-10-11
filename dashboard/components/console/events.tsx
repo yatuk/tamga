@@ -80,7 +80,9 @@ export function useFresh(events: SecurityEvent[], ready: boolean) {
     return ids;
   }, [events]);
   useEffect(() => {
-    if (ready) known.current = events.map((e) => e.request_id);
+    // A list that is being read for the first time (another filter, another
+    // window) replaces the one on screen: what it brings is not on top of it.
+    known.current = ready ? events.map((e) => e.request_id) : null;
   }, [events, ready]);
   return fresh;
 }

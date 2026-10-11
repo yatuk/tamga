@@ -42,9 +42,10 @@ function marked(sample: string, draft: Draft, regex: RegExp | "invalid" | null):
       found.push([m.index, m.index + m[0].length]);
     }
   } else if (draft.kind === "literal") {
-    const hay = sample.toLowerCase();
-    const needle = draft.pattern.toLowerCase();
-    for (let i = hay.indexOf(needle); i >= 0; i = hay.indexOf(needle, i + needle.length)) found.push([i, i + needle.length]);
+    // Matched on the sample as written: lowering it first can change its
+    // length ("İ" becomes two characters), and every mark after that would be off.
+    const literal = new RegExp(draft.pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+    for (const m of sample.matchAll(literal)) found.push([m.index, m.index + m[0].length]);
   }
   const parts: ReactNode[] = [];
   let at = 0;

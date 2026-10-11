@@ -16,6 +16,19 @@ const KIND_NAMES: Record<string, string> = {
   role_manipulation: "Role manipulation",
   delimiter_injection: "Delimiter injection",
   classifier: "Flagged by the classifier",
+  hidden_text: "Hidden text",
+  unreadable_block: "Unreadable encoded block",
+  azure_storage_key: "Azure storage key",
+  gitlab_token: "GitLab token",
+  npm_token: "npm token",
+  sendgrid_key: "SendGrid key",
+  mailchimp_key: "Mailchimp key",
+  square_token: "Square token",
+  discord_bot_token: "Discord bot token",
+  telegram_bot_token: "Telegram bot token",
+  pypi_token: "PyPI token",
+  artifactory_key: "Artifactory key",
+  url_credentials: "Credentials in a URL",
 };
 
 const TYPE_NAMES: Record<string, string> = { pii: "Personal data", secret: "Secret", injection: "Prompt injection", custom: "Custom pattern" };
@@ -43,7 +56,10 @@ const KIND_TYPES: Record<string, string> = {
   aws_access_key: "secret", private_key: "secret", connection_string: "secret", connection_string_password: "secret",
   github_token: "secret", slack_token: "secret", google_api_key: "secret", jwt: "secret", password: "secret", basic_auth: "secret",
   instruction_override: "injection", jailbreak: "injection", role_manipulation: "injection", delimiter_injection: "injection",
-  classifier: "injection",
+  classifier: "injection", hidden_text: "injection", unreadable_block: "injection",
+  azure_storage_key: "secret", gitlab_token: "secret", npm_token: "secret", sendgrid_key: "secret", mailchimp_key: "secret",
+  square_token: "secret", discord_bot_token: "secret", telegram_bot_token: "secret", pypi_token: "secret",
+  artifactory_key: "secret", url_credentials: "secret",
 };
 export const kindType = (category: string) => KIND_TYPES[category] ?? "custom";
 

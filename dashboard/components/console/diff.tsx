@@ -10,8 +10,9 @@ export type DiffLine = {
  */
 export function diffLines(a: string, b: string): DiffLine[] {
   if (a === b) return [];
-  const la = a.split(/\r?\n/);
-  const lb = b.split(/\r?\n/);
+  // An empty document has no lines; split would give it one empty line.
+  const la = a === "" ? [] : a.split(/\r?\n/);
+  const lb = b === "" ? [] : b.split(/\r?\n/);
   const n = la.length;
   const m = lb.length;
   const dp: number[][] = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));

@@ -78,8 +78,8 @@ describe("the build guard", () => {
     // `next lint` loads the configuration as a production build would, so
     // with a development key in .env.local it stopped at the guard.
     expect(scripts.lint).not.toMatch(/\bnext\b/);
-    // The directories `next lint` checked by default, of those that exist.
-    expect(scripts.lint).toBe("eslint app components lib");
+    // The directories `next lint` checked by default, of those that exist, and the hooks beside them.
+    expect(scripts.lint).toBe("eslint app components lib hooks");
     // The build is still `next build`, which does load it.
     expect(scripts.build).toBe("next build");
     const ci = readFileSync("../.github/workflows/dashboard-tests.yml", "utf8");

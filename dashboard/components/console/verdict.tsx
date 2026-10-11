@@ -21,6 +21,8 @@ function markedPrompt(text: string, findings: Finding[]): ReactNode[] {
       spans.push({ from: at, to: at + f.match.length, action: upper(f.action) });
     }
   }
+  // Nothing to mark: the caller shows no sample at all.
+  if (spans.length === 0) return [];
   spans.sort((a, b) => a.from - b.from);
   const parts: ReactNode[] = [];
   let cursor = 0;
@@ -74,7 +76,7 @@ export function Verdict({ result, prompt, running }: { result: PolicySimulateRes
           </div>
 
           {/* The proxy masks what it matched, so the text cannot always be found again in the prompt. */}
-          {marks.length > 1 ? (
+          {marks.length > 0 ? (
             <div className="t-sample" style={{ marginTop: "1.5rem", maxHeight: "14rem", overflow: "auto" }}>
               {marks}
             </div>
