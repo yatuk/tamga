@@ -457,9 +457,9 @@ log · `POST /api/v1/scan` · the endpoint a LiteLLM proxy calls as a
 guardrail ([LiteLLM](docs/litellm.md)) · Docker Compose.
 
 None of it has been run against a real provider or a real third-party service
-as part of the tests: the other side is always a stand-in. That includes
-LiteLLM: the test that runs a real LiteLLM container against the endpoint is
-written and has not been run yet.
+as part of the tests: the other side is always a stand-in. The one
+exception is LiteLLM: a CI job runs a real LiteLLM container (v1.104.2)
+against the endpoint, in front of a fake model.
 
 **In the repository, not tested end to end.** The code is there; nothing
 exercises the whole path, so treat these as experimental:
