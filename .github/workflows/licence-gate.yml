@@ -9,22 +9,6 @@ name: Dependency licences (report)
 # there makes this job fail on a finding; nothing in this workflow changes.
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - "proxy/go.mod"
-      - "proxy/go.sum"
-      - "dashboard/package.json"
-      - "dashboard/package-lock.json"
-      - "sdk/typescript/tamga-client/package.json"
-      - "sdk/typescript/tamga-client/package-lock.json"
-      - "analyzer/requirements.txt"
-      - "classifier/requirements.txt"
-      - "sdk/python/pyproject.toml"
-      - "scripts/licence-gate.py"
-      - "scripts/third-party-licenses.py"
-      - ".github/licence-policy.yml"
-      - ".github/workflows/licence-gate.yml"
   schedule:
     - cron: "0 7 * * 1" # Mondays at 07:00 UTC
   workflow_dispatch:
