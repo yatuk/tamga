@@ -23,6 +23,12 @@ REPLACEMENT = """  authorization:
       allowed_operators: ["mike", "yatuk"]"""
 
 
+# The suite measures what the scanners and the policy do with each vector, and
+# sends them one after another from one key. The shipped limit of 60 requests
+# a minute is fewer than the vectors there are, and a 429 is not a verdict.
+RATE_MARKER = "  max_requests_per_minute: 60"
+RATE_REPLACEMENT = "  max_requests_per_minute: 6000"
+
 SCAN_MARKER = "scan:"
 CLASSIFIER_BLOCK = """scan:
   classifier:
@@ -46,6 +52,15 @@ def main() -> int:
         )
         return 2
     lines[hits[0]] = REPLACEMENT
+    rate = [i for i, line in enumerate(lines) if line.rstrip() == RATE_MARKER]
+    if len(rate) != 1:
+        print(
+            f"ERROR: expected exactly one {RATE_MARKER.strip()!r} line in {src}, found {len(rate)}; "
+            "update make_stress_policy.py to match the default policy",
+            file=sys.stderr,
+        )
+        return 2
+    lines[rate[0]] = RATE_REPLACEMENT
     if with_classifier:
         scan = [i for i, line in enumerate(lines) if line.rstrip() == SCAN_MARKER]
         if len(scan) != 1:
