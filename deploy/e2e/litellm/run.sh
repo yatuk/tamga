@@ -41,6 +41,10 @@ if [ -n "${GITHUB_ACTIONS:-}" ]; then
 fi
 export TAMGA_KEY
 
-compose up -d litellm
+# --no-deps: starting LiteLLM must not touch Tamga. Compose recreated the
+# Tamga container here on the first CI run, and with no database in this
+# stack the key made above lived only in that container's memory, so every
+# guardrail call was answered 401.
+compose up -d --no-deps litellm
 compose exec -T upstream python /e2e/check.py wait litellm
 compose exec -T upstream python /e2e/check.py run
