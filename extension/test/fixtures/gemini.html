@@ -1,9 +1,16 @@
 <!doctype html>
 <!--
   The structure the gemini adapter assumes. It is NOT a copy of
-  gemini.google.com and was not checked against it: a Quill editor
-  (div.ql-editor, contenteditable) inside a rich-textarea element, and a send
-  button with the class send-button. Written 2026-10-11.
+  gemini.google.com: a Quill editor (div.ql-editor, contenteditable) inside a
+  rich-textarea element, in no form, and a send button whose only name is a
+  translated aria-label, inside a wrapper that carries the class send-button.
+  That much was read from the live page on 2026-10-11 (Turkish interface).
+
+  The upload, dictation and model-selector buttons are here as negatives: the
+  generic fallback must not take any of them for the send button. That the
+  upload and dictation buttons are type="submit" was seen on the live page;
+  where they sit in the tree, their labels and their wrappers' classes are
+  assumed. Written 2026-10-11.
 -->
 <html lang="en">
   <head>
@@ -17,6 +24,11 @@
         <rich-textarea>
           <div class="ql-editor textarea" contenteditable="true" role="textbox" aria-label="Gemini için bir istem girin" data-fixture="composer"><p>Hello</p><p>second line</p></div>
         </rich-textarea>
+        <div class="leading-actions-wrapper">
+          <div class="upload-button-container"><button type="submit" aria-label="Dosya yükle" data-fixture="upload"><span>+</span></button></div>
+          <div class="model-picker-container"><button type="button" aria-label="Mod seçici" data-fixture="model"><span>2.5 Flash</span></button></div>
+        </div>
+        <div class="mic-button-container"><button type="submit" aria-label="Mikrofonu kullan" data-fixture="dictation"><span>Mic</span></button></div>
         <div class="send-button-container"><gem-icon-button class="send-button submit"><button type="submit" aria-label="Mesaj gönder" data-fixture="send"><span data-fixture="send-icon">Send</span></button></gem-icon-button></div>
       </div>
     </main>

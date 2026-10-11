@@ -258,6 +258,9 @@ class Element extends Node {
   hasAttribute(name) {
     return this.attributes.has(name);
   }
+  removeAttribute(name) {
+    this.attributes.delete(name);
+  }
   get className() {
     return this.getAttribute('class') || '';
   }

@@ -84,7 +84,40 @@ test('decide: one outcome for each action', () => {
   assert.deepEqual(decide(v('STRIP'), CLOSED), { kind: 'block', found: 'email', why: 'strip' });
   assert.deepEqual(decide(v('REDACT', { redactedText: '[email_REDACTED]' }), CLOSED), { kind: 'redact', found: 'email', redactedText: '[email_REDACTED]', auto: false });
   assert.equal(decide(v('REDACT', { redactedText: 'x' }, OPEN), CLOSED).auto, true);
-  assert.deepEqual(decide(v('REDACT'), CLOSED), { kind: 'block', found: 'email', why: 'strip' }, 'a REDACT with nothing to offer is not sent');
+  assert.deepEqual(decide(v('REDACT'), CLOSED), { kind: 'block', found: 'email', why: 'no_text' }, 'a REDACT with nothing to offer is not sent');
+});
+
+test('decide: ROUTE is not sent, whatever the fail mode', () => {
+  const routed = (behaviour) => ({
+    ok: true,
+    behaviour,
+    verdict: {
+      action: 'ROUTE',
+      findings: [
+        { type: 'pii', category: 'tc_kimlik', severity: 'critical', action: 'ROUTE' },
+        { type: 'pii', category: 'email', severity: 'medium', action: 'REDACT' },
+      ],
+    },
+  });
+  // The proxy would send it to the organisation's own model. A chat site is
+  // the provider, so here it is a block that names what the rule routes for.
+  assert.deepEqual(decide(routed(CLOSED), CLOSED), { kind: 'block', found: 'tc_kimlik', why: 'route' });
+  assert.deepEqual(decide(routed(OPEN), OPEN), { kind: 'block', found: 'tc_kimlik', why: 'route' }, 'an open fail mode is for no verdict, and ROUTE is one');
+  // The verdict is read at all: an action the protocol does not list would
+  // be no verdict, and that follows the fail mode.
+  assert.equal(parseScanReply(routed(OPEN)).verdict.action, 'ROUTE');
+  // A ROUTE with no finding marked ROUTE still names what was found.
+  const bare = routed(CLOSED);
+  bare.verdict.findings = [{ type: 'pii', category: 'email', severity: 'medium', action: 'BLOCK' }];
+  assert.deepEqual(decide(bare, CLOSED), { kind: 'block', found: 'email', why: 'route' });
+});
+
+test('decide: an action this version does not know is not sent when the fail mode is closed', () => {
+  const unknown = { ok: true, behaviour: CLOSED, verdict: { action: 'QUARANTINE', findings: [] } };
+  // It does not parse as a verdict, so it is "no verdict" and the fail mode
+  // decides: closed stops it. (Open lets it through, which is why every
+  // action the server can answer with is listed in ACTIONS.)
+  assert.deepEqual(decide(unknown, CLOSED), { kind: 'unavailable', reason: 'bad_message', failOpen: false, retryAfterS: 0 });
 });
 
 test('decide: no verdict follows the fail mode in the reply, and the last one heard when the reply is unreadable', () => {

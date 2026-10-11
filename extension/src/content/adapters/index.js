@@ -42,12 +42,21 @@ export function resolveBox(site, doc, target) {
  * no message box could be found for it.
  */
 export function resolveSend(site, doc, target) {
-  const siteButton = site.matchSend(target);
-  const button = siteButton || generic.matchSend(target);
-  if (!button) return null;
   const own = site.findComposer(doc);
+  let button = site.matchSend(target) || generic.matchSend(target);
+  if (!button && target && typeof target.closest === 'function' && target.closest('button') && !site.findSendButton(doc)) {
+    // Nothing on the page is named as a send button by the site's selectors:
+    // the button may still be told by where it is and how it behaves.
+    button = generic.matchSendNear(doc, target, own || generic.findComposer(doc, null));
+  }
+  if (!button) return null;
   if (own) return { adapter: site, button, composer: own };
   return { adapter: generic, button, composer: generic.findComposer(doc, button) };
+}
+
+/** Lets the generic fallback look at the buttons beside the page's message box. */
+export function observePage(site, doc) {
+  generic.observeSend(doc, site.findComposer(doc) || generic.findComposer(doc, null));
 }
 
 /** 'site' | 'generic' | 'none': what the page offers to attach to right now. */

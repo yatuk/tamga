@@ -33,7 +33,7 @@ test('a path prefix in the Tamga URL is kept, and the origin does not change', a
   assert.equal(fetchImpl.calls[0].url, `${TAMGA}/tamga/api/v1/scan`);
 });
 
-for (const action of ['PASS', 'WARN', 'STRIP', 'BLOCK']) {
+for (const action of ['PASS', 'WARN', 'STRIP', 'ROUTE', 'BLOCK']) {
   test(`${action} comes back as ${action}, with the kinds of finding and no text`, async () => {
     const body = {
       ...PASS_BODY,

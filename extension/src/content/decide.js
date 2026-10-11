@@ -3,7 +3,7 @@
 //
 //   { kind: 'pass' }
 //   { kind: 'warn', found }
-//   { kind: 'block', found, why: 'policy' | 'strip' }
+//   { kind: 'block', found, why: 'policy' | 'strip' | 'route' | 'no_text' }
 //   { kind: 'redact', found, redactedText, auto }
 //   { kind: 'unavailable', reason, failOpen, retryAfterS }
 
@@ -54,13 +54,21 @@ export function decide(raw, lastBehaviour) {
       return { kind: 'warn', found };
     case 'REDACT':
       // A REDACT with no text to offer cannot be carried out here.
-      if (typeof redactedText !== 'string') return { kind: 'block', found, why: 'strip' };
+      if (typeof redactedText !== 'string') return { kind: 'block', found, why: 'no_text' };
       return { kind: 'redact', found, redactedText, auto: reply.behaviour.autoRedact };
     case 'STRIP':
       // The scan API returns no text for STRIP: on the proxy path the whole
-      // piece is replaced by a notice. Here that means it is not sent.
-      return { kind: 'block', found, why: 'strip' };
+      // piece is replaced by a notice. Here that means it is not sent, and
+      // the notice names the kinds a rule strips for, where the reply says.
+      return { kind: 'block', found: describeFindings(findings.filter((f) => f.action === 'STRIP')) || found, why: 'strip' };
+    case 'ROUTE':
+      // On the proxy path a ROUTE request is answered by a model the
+      // organisation runs itself, and never reaches the provider. A chat
+      // site is the provider, and the extension has no other place to send
+      // the text: it is not sent.
+      return { kind: 'block', found: describeFindings(findings.filter((f) => f.action === 'ROUTE')) || found, why: 'route' };
     default:
+      // BLOCK, and any action this version does not know: not sent.
       return { kind: 'block', found, why: 'policy' };
   }
 }

@@ -9,7 +9,7 @@
 
 import { MAX_TEXT_CHARS, MSG_CONFIG, MSG_OPEN_OPTIONS, MSG_SCAN, parseConfigReply, parseScanReply } from '../shared/protocol.js';
 import { first } from './adapters/base.js';
-import { attachState, generic, resolveBox, resolveSend } from './adapters/index.js';
+import { attachState, generic, observePage, resolveBox, resolveSend } from './adapters/index.js';
 import { decide, needsSetup, reasonText } from './decide.js';
 
 // A text that was checked may be sent for this long without a second check,
@@ -26,6 +26,10 @@ export const ATTACH_POLL_MS = 2000;
 export const ATTACH_GRACE_POLLS = 4;
 
 const CLOSED = Object.freeze({ failMode: 'closed', autoRedact: false });
+
+// Reasons that say Tamga itself did not answer, as opposed to something
+// about this one text or this one minute.
+const UNREACHED = Object.freeze(['timeout', 'network', 'unavailable']);
 
 function targetOf(event) {
   const path = typeof event.composedPath === 'function' ? event.composedPath() : null;
@@ -49,6 +53,7 @@ export function createController({ doc, site, ui, ask, timers = globalThis, now 
   let checking = null; // the text being checked
   let seq = 0;
   let missing = 0;
+  let told = null; // the reason for having no verdict the person was last told
 
   const failOpen = () => behaviour.failMode === 'open';
 
@@ -71,6 +76,49 @@ export function createController({ doc, site, ui, ask, timers = globalThis, now 
       ui.hide();
       if (onAction) onAction(id);
     });
+  }
+
+  function openSettings() {
+    ask({ type: MSG_OPEN_OPTIONS }).catch(() => {});
+  }
+
+  /**
+   * Says, without holding anything, that Tamga cannot be asked on this page
+   * and what follows from that. Once for a reason: a second paste that fails
+   * the same way says nothing, and a different reason is said again.
+   */
+  function tellUnchecked(reason, open) {
+    if (told === reason) return;
+    told = reason;
+    const setup = needsSetup(reason);
+    const title = setup
+      ? 'Tamga is not set up in this browser yet'
+      : UNREACHED.includes(reason)
+        ? 'Tamga cannot be reached'
+        : 'Tamga could not check this text';
+    const why = reason === 'not_configured' ? 'It has no Tamga address or key.' : reasonText(reason);
+    const then = open
+      ? 'Your administrator allows sending without a check, so what you send from this page goes to the site unchecked.'
+      : setup
+        ? 'Nothing can be sent from this page until it is set up.'
+        : 'A message is held when you send it, until it can be checked.';
+    show(
+      {
+        tone: 'note',
+        quiet: true,
+        title,
+        body: `${why} ${then}`,
+        actions: setup
+          ? [
+              { id: 'setup', label: 'Open settings' },
+              { id: 'ok', label: 'Close' },
+            ]
+          : [{ id: 'ok', label: 'OK' }],
+      },
+      (id) => {
+        if (id === 'setup') openSettings();
+      },
+    );
   }
 
   function resend(ctx, text) {
@@ -118,6 +166,22 @@ export function createController({ doc, site, ui, ask, timers = globalThis, now 
     });
   }
 
+  function blockBody(outcome) {
+    switch (outcome.why) {
+      case 'strip':
+        // STRIP takes the whole piece of text out, not the part that was
+        // found. For a message a person typed that leaves nothing to send.
+        return (
+          `Your organisation's policy removes a text entirely when it finds this in it: ${outcome.found || 'what a rule names'}. ` +
+          'There is no changed version to send in its place, so nothing is sent. Take that part out and send again.'
+        );
+      case 'no_text':
+        return `Your organisation's policy changes text like this before it is sent (${outcome.found || 'policy'}), and Tamga returned no changed text. Nothing is sent. Take that part out and send again.`;
+      default:
+        return `Your organisation's policy does not allow it: ${outcome.found || 'policy'}. Remove that part to send.`;
+    }
+  }
+
   function apply(outcome, text, ctx, intent) {
     const sending = intent === 'send';
     switch (outcome.kind) {
@@ -153,11 +217,13 @@ export function createController({ doc, site, ui, ask, timers = globalThis, now 
         remembered = { text, outcome, until: now() + REMEMBER_MS };
         show({
           tone: 'stop',
-          title: sending ? 'Tamga stopped this message' : 'Tamga will not let this text be sent',
-          body:
+          title:
             outcome.why === 'strip'
-              ? `Your organisation's policy removes text like this altogether (${outcome.found || 'policy'}). It is not sent.`
-              : `Your organisation's policy does not allow it: ${outcome.found || 'policy'}. Remove that part to send.`,
+              ? 'Tamga: the policy removes this whole text'
+              : sending
+                ? 'Tamga stopped this message'
+                : 'Tamga will not let this text be sent',
+          body: blockBody(outcome),
           actions: [{ id: 'ok', label: 'OK' }],
         });
         return;
@@ -187,10 +253,12 @@ export function createController({ doc, site, ui, ask, timers = globalThis, now 
 
       default: // unavailable
         if (!sending) {
-          // The send will be held or let through by the fail mode; a paste
-          // that could not be checked changes nothing yet.
+          // A paste is not held, and the send will be held or let through by
+          // the fail mode. The person is told now, once, not at the send.
+          tellUnchecked(outcome.reason, outcome.failOpen);
           return;
         }
+        told = outcome.reason; // both notices below say it
         if (outcome.failOpen) {
           approve(text);
           resend(ctx, text);
@@ -217,7 +285,7 @@ export function createController({ doc, site, ui, ask, timers = globalThis, now 
           },
           (id) => {
             if (id === 'setup') {
-              ask({ type: MSG_OPEN_OPTIONS }).catch(() => {});
+              openSettings();
             } else if (id === 'retry') {
               const current = ctx.adapter.readText(ctx.composer);
               if (current.trim() !== '') check(current, ctx, 'send');
@@ -350,6 +418,7 @@ export function createController({ doc, site, ui, ask, timers = globalThis, now 
 
   function pollAttach() {
     if (!enabled) return;
+    observePage(site, doc);
     const state = attachState(site, doc);
     missing = state === 'none' ? missing + 1 : 0;
     if (state === 'none' && missing >= ATTACH_GRACE_POLLS) {
@@ -373,6 +442,8 @@ export function createController({ doc, site, ui, ask, timers = globalThis, now 
       if (config) {
         behaviour = config.behaviour;
         enabled = config.enabled;
+        // Known before anything is typed: say it now, not at the first send.
+        if (enabled && !config.configured) tellUnchecked('not_configured', failOpen());
       }
     } catch {
       // No answer: stay enabled and closed.

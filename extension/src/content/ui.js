@@ -33,7 +33,7 @@ function el(doc, tag, className, text) {
 
 /**
  * Builds the notice area. Returns
- *   show(notice, onAction)  notice: { tone, title, body, detail?, actions: [{ id, label }] }
+ *   show(notice, onAction)  notice: { tone, title, body, detail?, quiet?, actions: [{ id, label }] }
  *   hide()
  *   badge(text | null, tone?)
  */
@@ -83,6 +83,9 @@ export function createUI(doc) {
       mount();
       clear(notice);
       notice.className = `notice ${spec.tone === 'stop' || spec.tone === 'change' ? spec.tone : 'note'}`;
+      // A quiet notice holds nothing and interrupts nobody: a screen reader
+      // reads it when it is next idle, not over what the person is doing.
+      notice.setAttribute('role', spec.quiet ? 'status' : 'alert');
       notice.appendChild(el(doc, 'p', 'title', spec.title));
       if (spec.body) notice.appendChild(el(doc, 'p', 'body', spec.body));
       if (typeof spec.detail === 'string') notice.appendChild(el(doc, 'div', 'detail', spec.detail));

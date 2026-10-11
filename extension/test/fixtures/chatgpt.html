@@ -1,9 +1,13 @@
 <!doctype html>
 <!--
-  The structure the chatgpt adapter assumes. It is NOT a copy of chatgpt.com
-  and was not checked against it: a form holding a contenteditable div with
-  the id prompt-textarea, and a submit button carrying
-  data-testid="send-button". Written 2026-10-11.
+  The structure the chatgpt adapter assumes. It is NOT a copy of chatgpt.com:
+  a form holding a ProseMirror contenteditable div with no id, and the form's
+  one submit button, named only by a translated aria-label. That much was
+  read from the live page on 2026-10-11 (Turkish interface).
+
+  The attach and voice buttons are here as negatives: neither the adapter nor
+  the generic fallback may take one for the send button. Their labels, types
+  and data-testid values are assumed. Written 2026-10-11.
 -->
 <html lang="en">
   <head>
@@ -14,7 +18,9 @@
     <main>
       <p data-fixture="log"></p>
       <form>
+        <button type="button" aria-label="Dosya ekle" data-testid="composer-plus-btn" data-fixture="attach"><span>+</span></button>
         <div class="ProseMirror" contenteditable="true" role="textbox" aria-label="ChatGPT'ye sor" data-fixture="composer"><p>Hello</p><p>second line</p></div>
+        <button type="button" aria-label="Sesli modu kullan" data-testid="composer-speech-button" data-fixture="voice"><span>Voice</span></button>
         <button type="submit" aria-label="Gönder" data-fixture="send"><span data-fixture="send-icon">Send</span></button>
       </form>
     </main>

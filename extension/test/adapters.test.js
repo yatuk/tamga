@@ -66,17 +66,126 @@ for (const id of Object.keys(ADAPTERS)) {
     const broken = makeAdapter({ id, composer: ['div.gone'], sendButton: ['button.gone'] });
     assert.equal(attachState(broken, doc), 'generic');
     assert.deepEqual(resolveBox(broken, doc, q(doc, 'composer')), { adapter: generic, composer: q(doc, 'composer') });
-    if (id === 'gemini') {
-      // As the live page was on 2026-10-11: no form around the box, and a send
-      // button named only by a translated label. The generic fallback finds
-      // the box and not the button, so on this site a send by button is held
-      // only while the site's own selectors match; Enter is held either way.
-      assert.equal(resolveSend(broken, doc, q(doc, 'send')), null);
-      return;
-    }
-    assert.deepEqual(resolveSend(broken, doc, q(doc, 'send')), { adapter: generic, button: q(doc, 'send'), composer: q(doc, 'composer') });
+    // On gemini there is no form around the box and the button's only name
+    // is a translated label: the fallback finds it by that label and by the
+    // class of its wrapper.
+    assert.deepEqual(resolveSend(broken, doc, q(doc, 'send-icon')), { adapter: generic, button: q(doc, 'send'), composer: q(doc, 'composer') });
+    assert.equal(generic.findSendButton(doc, q(doc, 'composer')), q(doc, 'send'));
   });
 }
+
+const NEGATIVES = { chatgpt: ['attach', 'voice'], gemini: ['upload', 'dictation', 'model'] };
+
+for (const [id, names] of Object.entries(NEGATIVES)) {
+  test(`${id}: the ${names.join(', ')} buttons are not taken for the send button, by the adapter or by the fallback`, () => {
+    const broken = makeAdapter({ id, composer: ['div.gone'], sendButton: ['button.gone'] });
+    for (const site of [ADAPTERS[id], broken]) {
+      const { doc } = loadFixture(id);
+      for (const name of names) {
+        assert.ok(q(doc, name), `the fixture has no ${name} button`);
+        assert.equal(resolveSend(site, doc, q(doc, name)), null, `${name} resolved as a send`);
+        assert.equal(resolveSend(site, doc, q(doc, name).childNodes[0]), null, `${name}, from inside it`);
+      }
+      // The same with the fallback having watched the page empty and then with text.
+      const box = q(doc, 'composer');
+      box.textContent = '';
+      generic.observeSend(doc, box);
+      box.textContent = 'hello';
+      for (const name of names) assert.equal(resolveSend(site, doc, q(doc, name)), null, `${name} resolved as a send after watching`);
+      assert.equal(resolveSend(site, doc, q(doc, 'send')).button, q(doc, 'send'));
+    }
+  });
+}
+
+// A page with no form, no names and no words: only how the buttons behave.
+const UNNAMED = '<html><body><main><div class="bar"><div id="box" contenteditable="true"></div>' +
+  '<button id="attach" type="submit" aria-label="Dosya">+</button><button id="mic" type="submit" aria-label="Ses">m</button>' +
+  '<span id="slot"></span></div><button id="far" aria-label="Paylas">s</button></main></body></html>';
+
+function addButton(doc, id) {
+  const button = doc.createElement('button');
+  button.setAttribute('id', id);
+  button.setAttribute('aria-label', 'Yolla');
+  doc.querySelector('#slot').appendChild(button);
+  return button;
+}
+
+test('generic: the one button that appears when the box has text is the send button', () => {
+  const { doc } = loadHTML(UNNAMED);
+  const site = makeAdapter({ id: 'claude', composer: ['div.gone'], sendButton: ['button.gone'] });
+  const box = doc.querySelector('#box');
+
+  generic.observeSend(doc, box); // the box is empty: attach and mic can be pressed
+  assert.equal(generic.findSendButton(doc, box), null, 'nothing to tell a send button by yet');
+  box.textContent = 'hello';
+  const send = addButton(doc, 'go');
+
+  assert.deepEqual(resolveSend(site, doc, send), { adapter: generic, button: send, composer: box });
+  assert.equal(generic.findSendButton(doc, box), send);
+  assert.equal(resolveSend(site, doc, doc.querySelector('#attach')), null);
+  assert.equal(resolveSend(site, doc, doc.querySelector('#mic')), null);
+
+  // Kept for the page: a button that turns up later does not unseat it.
+  const later = addButton(doc, 'later');
+  assert.equal(generic.findSendButton(doc, box), send);
+  assert.equal(resolveSend(site, doc, later), null);
+});
+
+test('generic: a button that was there with the box empty is not learned, and neither is one of two', () => {
+  const site = makeAdapter({ id: 'claude', composer: ['div.gone'], sendButton: ['button.gone'] });
+
+  // Never seen empty: nothing is concluded.
+  const unseen = loadHTML(UNNAMED).doc;
+  unseen.querySelector('#box').textContent = 'hello';
+  generic.observeSend(unseen, unseen.querySelector('#box'));
+  assert.equal(resolveSend(site, unseen, addButton(unseen, 'go')), null);
+
+  // Two buttons appear with the text: no guess between them.
+  const two = loadHTML(UNNAMED).doc;
+  generic.observeSend(two, two.querySelector('#box'));
+  two.querySelector('#box').textContent = 'hello';
+  const a = addButton(two, 'a');
+  const b = addButton(two, 'b');
+  assert.equal(resolveSend(site, two, a), null);
+  assert.equal(resolveSend(site, two, b), null);
+  assert.equal(generic.findSendButton(two, two.querySelector('#box')), null);
+
+  // A button that only became enabled counts as appearing; one before the box does not.
+  const enabled = loadHTML(UNNAMED.replace('<span id="slot">', '<button id="go" disabled aria-label="Yolla">g</button><span id="slot">')).doc;
+  const box = enabled.querySelector('#box');
+  generic.observeSend(enabled, box);
+  box.textContent = 'hello';
+  enabled.querySelector('#go').removeAttribute('disabled');
+  assert.equal(resolveSend(site, enabled, enabled.querySelector('#go')).button, enabled.querySelector('#go'));
+  // Seen enabled with the box empty afterwards: it is forgotten.
+  box.textContent = '';
+  generic.observeSend(enabled, box);
+  box.textContent = 'again';
+  assert.equal(resolveSend(site, enabled, enabled.querySelector('#go')), null);
+});
+
+test('generic: a send word in a short list of languages names the button, only beside the box and after it', () => {
+  const site = makeAdapter({ id: 'claude', composer: ['div.gone'], sendButton: ['button.gone'] });
+  for (const label of ['Mesaj gönder', 'Enviar mensaje', 'Envoyer', 'Nachricht senden', 'Invia', 'Отправить', '发送', '送信', 'GÖNDER']) {
+    const { doc } = loadHTML(UNNAMED.replace('<span id="slot">', `<button id="go" title="${label}">g</button><span id="slot">`));
+    const box = doc.querySelector('#box');
+    box.textContent = 'hello';
+    assert.equal(resolveSend(site, doc, doc.querySelector('#go'))?.button, doc.querySelector('#go'), label);
+  }
+  // The same word on a button before the box, or outside its part of the page, names nothing.
+  const { doc } = loadHTML('<html><body><button id="feedback" title="Geri bildirim gönder">f</button><main>' +
+    '<div><button id="before" title="Taslağı gönder">b</button><div id="box" contenteditable="true">hello</div></div></main></body></html>');
+  assert.equal(resolveSend(site, doc, doc.querySelector('#before')), null);
+  assert.equal(resolveSend(site, doc, doc.querySelector('#feedback')), null);
+});
+
+test('generic: the structural guess is not made while the site names a send button of its own', () => {
+  const { doc } = loadHTML(UNNAMED.replace('<span id="slot">', '<button id="own" class="real">o</button><button id="go" title="Gönder">g</button><span id="slot">'));
+  doc.querySelector('#box').textContent = 'hello';
+  const site = makeAdapter({ id: 'claude', composer: ['div.gone'], sendButton: ['button.real'] });
+  assert.equal(resolveSend(site, doc, doc.querySelector('#go')), null);
+  assert.equal(resolveSend(site, doc, doc.querySelector('#own')).button, doc.querySelector('#own'));
+});
 
 test('generic: a textarea in a form, its submit button, and nothing from the search form beside it', () => {
   const { doc } = loadFixture('generic');

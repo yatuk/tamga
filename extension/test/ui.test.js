@@ -48,6 +48,12 @@ test('show, hide and badge', { skip: REAL_DOM && 'the closed shadow root cannot 
   assert.equal(host().querySelector('.notice').className, 'notice note');
   assert.equal(host().querySelectorAll('button').length, 0, 'the earlier notice is gone');
 
+  assert.equal(host().querySelector('.notice').getAttribute('role'), 'alert');
+  ui.show({ tone: 'note', quiet: true, title: 'T3', body: 'B', actions: [] }, () => {});
+  assert.equal(host().querySelector('.notice').getAttribute('role'), 'status', 'a quiet notice does not interrupt');
+  ui.show({ tone: 'stop', title: 'T4', body: 'B', actions: [] }, () => {});
+  assert.equal(host().querySelector('.notice').getAttribute('role'), 'alert');
+
   ui.hide();
   assert.equal(host().querySelector('.notice').hidden, true);
   assert.equal(host().querySelector('.title'), null);

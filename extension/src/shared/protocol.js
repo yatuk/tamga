@@ -10,7 +10,9 @@ export const MSG_OPEN_OPTIONS = 'tamga/open-options';
 export const MSG_TEST = 'tamga/test';
 
 export const INTENTS = Object.freeze(['paste', 'send']);
-export const ACTIONS = Object.freeze(['PASS', 'WARN', 'REDACT', 'STRIP', 'BLOCK']);
+// ROUTE has to be here: an action that is not is read as no verdict at all,
+// and no verdict follows the fail mode, which can be open.
+export const ACTIONS = Object.freeze(['PASS', 'WARN', 'REDACT', 'STRIP', 'ROUTE', 'BLOCK']);
 export const FAIL_MODES = Object.freeze(['closed', 'open']);
 
 // The scan API reads a body of at most 262144 bytes; the worker checks that on
