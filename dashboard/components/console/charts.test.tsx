@@ -68,28 +68,32 @@ describe("keptLabels", () => {
 
   for (const axis of AXES) {
     it(`keeps the first and the last label of ${axis.name}, and no two that would touch, at every width and count`, () => {
+      // Some 200,000 checks: each is a plain comparison and only a failure is kept, because one `expect` per check
+      // took longer than the test's five seconds on a CI runner.
+      const wrong: string[] = [];
       for (const room of ROOMS) {
         for (const count of COUNTS) {
           const widths = Array.from({ length: count }, (_, i) => labelWidth(axis.text(i)) * EM);
           const span = axis.span(widths, room);
           const kept = axis.kept(widths, room);
-          const where = `${count} labels in ${room}px: ${kept.join(",")}`;
+          const fail = (what: string) => wrong.push(`${what}: ${count} labels in ${room}px: ${kept.join(",")}`);
 
-          expect(kept[0], where).toBe(0);
-          expect(kept[kept.length - 1], where).toBe(count - 1);
-          expect(kept.length, where).toBeLessThanOrEqual(Math.min(count, axis.most));
+          if (kept[0] !== 0) fail("the first label is not kept");
+          if (kept[kept.length - 1] !== count - 1) fail("the last label is not kept");
+          if (kept.length > Math.min(count, axis.most)) fail("more labels than there may be");
           for (let k = 1; k < kept.length; k++) {
-            expect(kept[k], where).toBeGreaterThan(kept[k - 1]);
+            if (!(kept[k] > kept[k - 1])) fail("labels out of order");
             // The next label starts no nearer than the gap after the one before it ends.
-            expect(span(kept[k])[0] - span(kept[k - 1])[1], where).toBeGreaterThanOrEqual(LABEL_GAP);
+            if (!(span(kept[k])[0] - span(kept[k - 1])[1] >= LABEL_GAP)) fail("two labels nearer than the gap");
           }
           // Nothing is written outside the axis.
           for (const i of kept) {
-            expect(span(i)[0], where).toBeGreaterThanOrEqual(0);
-            if (count > 1) expect(span(i)[1], where).toBeLessThanOrEqual(room);
+            if (!(span(i)[0] >= 0)) fail("a label starts before the axis");
+            if (count > 1 && !(span(i)[1] <= room)) fail("a label ends past the axis");
           }
         }
       }
+      expect(wrong.slice(0, 5)).toEqual([]);
     });
   }
 

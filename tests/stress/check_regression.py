@@ -62,8 +62,29 @@ def load_adversarial_results(results_dir: Path) -> dict[str, dict[str, int]]:
             "detected": data.get("detected", 0),
             "bypassed": data.get("bypassed", 0),
             "controls_failed": data.get("controls_failed", 0),
+            "unmeasured": count_unmeasured(data),
         }
     return merged
+
+
+def count_unmeasured(data: dict[str, Any]) -> int:
+    """Vectors the proxy never gave a verdict on: no answer at all, a rate
+    limit (429) or a server error (5xx).
+
+    The scripts count such an answer as a bypass, because it is not a block.
+    It is neither: the run did not measure that vector. The first CI run of
+    the suite after vectors were added sent more than the policy's 60
+    requests a minute, and 30 answers of 429 were reported as 30 new
+    bypasses.
+    """
+    n = 0
+    for v in data.get("vectors") or []:
+        status = v.get("status_code")
+        if not isinstance(status, int):
+            continue
+        if status == 0 or status == 429 or status >= 500:
+            n += 1
+    return n
 
 
 def load_load_results(results_dir: Path) -> dict[str, dict[str, float]]:
@@ -326,12 +347,15 @@ def main() -> int:
     adv_reg, adv_rows = check_adversarial(adv_current, baseline.get("adversarial", {}))
     load_reg, load_rows = check_load(load_current, baseline.get("load", {}), args.tolerance, gate_levels)
 
-    has_regression = adv_reg or load_reg
+    unmeasured = {cat: r["unmeasured"] for cat, r in adv_current.items() if r.get("unmeasured")}
+
+    has_regression = adv_reg or load_reg or bool(unmeasured)
 
     # ── output ───────────────────────────────────────────────────────────
     if args.json:
         output = {
             "has_regression": has_regression,
+            "unmeasured": unmeasured,
             "load_gate_levels": sorted(gate_levels) if gate_levels is not None else None,
             "exit_code": 1 if has_regression else 0,
             "adversarial": adv_rows,
@@ -343,7 +367,15 @@ def main() -> int:
         if os.environ.get("GITHUB_ACTIONS") == "true":
             annotate_github(adv_rows, load_rows)
 
-        if has_regression:
+        for cat, n in sorted(unmeasured.items()):
+            msg = f"{cat}: {n} vector(s) were not measured (no answer, 429 or 5xx); the run proves nothing about them"
+            print("NOT MEASURED  " + msg)
+            if os.environ.get("GITHUB_ACTIONS") == "true":
+                print(f"::error::{msg}")
+        if unmeasured:
+            print("RESULT: RUN INCOMPLETE: some vectors got no verdict; fix the run before reading the counts")
+            print()
+        elif has_regression:
             print("RESULT: REGRESSION DETECTED — see above for details\n")
         else:
             print("RESULT: STABLE or IMPROVED — no regression detected\n")
