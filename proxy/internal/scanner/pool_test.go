@@ -3,9 +3,13 @@ package scanner
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/yatuk/tamga/internal/errkind"
 )
 
 // delayedScanner is a stub that sleeps before returning findings, used to
@@ -565,5 +569,220 @@ func BenchmarkWorkerPool_Submit(b *testing.B) {
 		}
 		_ = p.Submit(job)
 		<-job.ResultCh
+	}
+}
+
+// ── Panic containment ────────────────────────────────────────────────────────
+
+// panickingScanner panics with a value that quotes what it was scanning, as
+// an index out of range on the text would.
+type panickingScanner struct{ name string }
+
+func (s *panickingScanner) Name() string { return s.name }
+func (s *panickingScanner) Scan(_ context.Context, content []byte) ([]Finding, error) {
+	panic("cannot handle: " + string(content))
+}
+
+// A worker is not a request's goroutine, so nothing recovers above it: a
+// scanner that panicked there took the whole process down. The job is now
+// answered with a failure of kind "panic", and the worker lives on.
+func TestWorkerPool_PanickingScannerIsAnswered(t *testing.T) {
+	p := NewWorkerPool(1, 4)
+	defer func() { _ = p.Shutdown(time.Second) }()
+	before := ScanDegradedStats()[DegradedPanic]
+
+	results := make(chan ScanResult, 2)
+	submit := func(s Scanner) {
+		t.Helper()
+		if err := p.Submit(Job{Scanner: s, Content: []byte("secret-text-10000000146"), Ctx: context.Background(), ResultCh: results}); err != nil {
+			t.Fatalf("Submit: %v", err)
+		}
+	}
+	receive := func() ScanResult {
+		t.Helper()
+		select {
+		case r := <-results:
+			return r
+		case <-time.After(5 * time.Second):
+			t.Fatal("the job was never answered: its request would wait for good")
+			return ScanResult{}
+		}
+	}
+
+	submit(&panickingScanner{name: "bad"})
+	r := receive()
+	if r.Scanner != "bad" || r.Error == nil || len(r.Findings) != 0 {
+		t.Fatalf("result of a panicking scanner: %+v", r)
+	}
+	if kind := errkind.Of(r.Error); kind != errkind.Panic {
+		t.Errorf("error kind = %q, want %q", kind, errkind.Panic)
+	}
+	// The recovered value can be the text; it is in no message.
+	if strings.Contains(r.Error.Error(), "secret-text") || strings.Contains(r.Error.Error(), "10000000146") {
+		t.Errorf("the error repeats the panic's value: %v", r.Error)
+	}
+
+	// The only worker is still there for the next job.
+	submit(&delayedScanner{name: "good", findings: []Finding{{Type: "pii"}}})
+	if r := receive(); r.Scanner != "good" || r.Error != nil || len(r.Findings) != 1 {
+		t.Fatalf("the job after the panic: %+v", r)
+	}
+
+	stats := p.Stats()
+	if stats.Failed != 1 || stats.Completed != 1 || stats.ActiveJobs != 0 {
+		t.Errorf("stats after one panic and one scan: %+v", stats)
+	}
+	if got := ScanDegradedStats()[DegradedPanic] - before; got != 1 {
+		t.Errorf("panics counted: %d, want 1", got)
+	}
+}
+
+// The same through the pipeline in workerpool mode: the scan comes back,
+// degraded by a panic, with what the other scanners found.
+func TestPipeline_WorkerPoolContainsAPanic(t *testing.T) {
+	pool := NewWorkerPool(2, 8)
+	defer func() { _ = pool.Shutdown(time.Second) }()
+	pl := NewPipelineWithConfig([]ScannerEntry{
+		{Scanner: &delayedScanner{name: "good", findings: []Finding{{Type: "pii", Category: "email"}}}, Speed: SpeedFast},
+		{Scanner: &panickingScanner{name: "bad"}, Speed: SpeedSlow},
+	}, PipelineConfig{Mode: ModeWorkerPool, Pool: pool})
+
+	type outcome struct {
+		findings []Finding
+		err      error
+	}
+	done := make(chan outcome, 1)
+	go func() {
+		findings, err := pl.Scan(context.Background(), []byte("secret-text-10000000146"))
+		done <- outcome{findings, err}
+	}()
+	var got outcome
+	select {
+	case got = <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the scan did not come back")
+	}
+	if !errors.Is(got.err, ErrScanDegraded) || errkind.Of(got.err) != errkind.Panic {
+		t.Fatalf("err = %v (kind %q), want a degraded scan of kind %q", got.err, errkind.Of(got.err), errkind.Panic)
+	}
+	if strings.Contains(got.err.Error(), "secret-text") {
+		t.Errorf("the error repeats the panic's value: %v", got.err)
+	}
+	if len(got.findings) != 1 || got.findings[0].Category != "email" {
+		t.Errorf("findings = %+v, want the other scanner's", got.findings)
+	}
+}
+
+// A job without a scanner is answered too, not left to panic in the worker.
+func TestWorkerPool_NilScannerIsAnswered(t *testing.T) {
+	p := NewWorkerPool(1, 1)
+	defer func() { _ = p.Shutdown(time.Second) }()
+	results := make(chan ScanResult, 1)
+	if err := p.Submit(Job{Ctx: context.Background(), ResultCh: results}); err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	select {
+	case r := <-results:
+		if r.Error == nil || errkind.Of(r.Error) != errkind.Panic {
+			t.Fatalf("result: %+v", r)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the job was never answered")
+	}
+}
+
+// A scan whose context is already over comes back with that error. Submit
+// used to refuse such a job at random, and the pipeline then waited for a
+// result nobody was going to send: the request hung.
+func TestPipeline_WorkerPoolAnswersACancelledScan(t *testing.T) {
+	for i := 0; i < 50; i++ {
+		pool := NewWorkerPool(2, 8)
+		ran := &ranScanner{}
+		pl := NewPipelineWithConfig([]ScannerEntry{
+			{Scanner: ran}, {Scanner: &countingScanner{name: "b"}}, {Scanner: &countingScanner{name: "c"}},
+		}, PipelineConfig{Mode: ModeWorkerPool, Pool: pool})
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		errc := make(chan error, 1)
+		go func() {
+			_, err := pl.Scan(ctx, []byte("text"))
+			errc <- err
+		}()
+		select {
+		case err := <-errc:
+			if !errors.Is(err, ErrScanDegraded) || !errors.Is(err, context.Canceled) {
+				t.Fatalf("round %d: err = %v, want a degraded scan that was cancelled", i, err)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("round %d: the scan did not come back", i)
+		}
+		if n := ran.count.Load(); n != 0 {
+			t.Fatalf("round %d: a scanner ran %d times on a cancelled scan", i, n)
+		}
+		_ = pool.Shutdown(time.Second)
+	}
+}
+
+// Submit answers for an accepted job only: with a full queue the job is
+// refused, whatever its context, and nothing is sent.
+func TestWorkerPool_SubmitRefusesOnlyWhenFull(t *testing.T) {
+	p := NewWorkerPool(1, 1)
+	defer func() { _ = p.Shutdown(time.Second) }()
+	release := make(chan struct{})
+	busy := make(chan ScanResult, 2)
+	// One job holds the worker, one fills the queue.
+	for i := 0; i < 2; i++ {
+		if err := p.Submit(Job{Scanner: &blockingScanner{release: release}, Ctx: context.Background(), ResultCh: busy}); err != nil {
+			t.Fatalf("Submit %d: %v", i, err)
+		}
+		if i == 0 {
+			waitFor(t, func() bool { return p.Stats().ActiveJobs == 1 })
+		}
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	results := make(chan ScanResult, 1)
+	for i := 0; i < 20; i++ {
+		if err := p.Submit(Job{Scanner: &countingScanner{name: "late"}, Ctx: ctx, ResultCh: results}); err != ErrQueueFull {
+			t.Fatalf("Submit to a full queue = %v, want ErrQueueFull", err)
+		}
+	}
+	close(release)
+	<-busy
+	<-busy
+	select {
+	case r := <-results:
+		t.Fatalf("a refused job was answered: %+v", r)
+	case <-time.After(50 * time.Millisecond):
+	}
+}
+
+// ranScanner counts how often it was run.
+type ranScanner struct{ count atomic.Int64 }
+
+func (s *ranScanner) Name() string { return "ran" }
+func (s *ranScanner) Scan(context.Context, []byte) ([]Finding, error) {
+	s.count.Add(1)
+	return nil, nil
+}
+
+// blockingScanner holds its worker until release is closed.
+type blockingScanner struct{ release chan struct{} }
+
+func (s *blockingScanner) Name() string { return "blocking" }
+func (s *blockingScanner) Scan(context.Context, []byte) ([]Finding, error) {
+	<-s.release
+	return nil, nil
+}
+
+func waitFor(t *testing.T, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for !cond() {
+		if time.Now().After(deadline) {
+			t.Fatal("condition not reached")
+		}
+		time.Sleep(time.Millisecond)
 	}
 }

@@ -6,6 +6,10 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/rs/zerolog/log"
+
+	"github.com/yatuk/tamga/internal/errkind"
 )
 
 // Job is a unit of scan work submitted to the worker pool.
@@ -81,16 +85,24 @@ func (p *WorkerPool) worker() {
 }
 
 // process executes a single scan job, respecting context cancellation.
+//
+// Every job is answered with exactly one result, a panicking scanner's
+// included. A worker is not a request's goroutine: nothing above it
+// recovers, so a panic here would end the process, and a job left
+// unanswered would leave its request waiting on the result channel for
+// good.
 func (p *WorkerPool) process(job Job) {
 	p.activeJobs.Add(1)
 	defer p.activeJobs.Add(-1)
+
+	name := jobScannerName(job)
 
 	// Check context before starting work.
 	select {
 	case <-job.Ctx.Done():
 		p.failed.Add(1)
 		job.ResultCh <- ScanResult{
-			Scanner: job.Scanner.Name(),
+			Scanner: name,
 			Error:   job.Ctx.Err(),
 		}
 		return
@@ -98,7 +110,7 @@ func (p *WorkerPool) process(job Job) {
 	}
 
 	start := time.Now()
-	findings, err := scanEntry(job.Ctx, job.Scanner, job.Content, job.ReqCtx)
+	findings, err := runJob(job, name)
 	elapsed := time.Since(start)
 
 	if err != nil {
@@ -108,7 +120,6 @@ func (p *WorkerPool) process(job Job) {
 	}
 
 	// Track per-scanner duration for Prometheus avg latency.
-	name := job.Scanner.Name()
 	p.durationMu.Lock()
 	p.durationNs[name] += int64(elapsed)
 	p.durationN[name]++
@@ -122,16 +133,47 @@ func (p *WorkerPool) process(job Job) {
 	}
 }
 
+// runJob runs the job's scanner. A panic comes back as a panicError, the
+// error the other pipeline modes report one as (kind "panic"), and is
+// counted and logged as theirs is: by the scanner's name and the kind, never
+// by the recovered value, which can be the text that was being scanned.
+func runJob(job Job, name string) (findings []Finding, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			findings, err = nil, &panicError{value: r}
+			RecordDegraded(DegradedPanic)
+			log.Error().Str("component", "scanner").Str("scanner", name).Str("reason", DegradedPanic).
+				Str("error_kind", errkind.Of(err)).Msg("scanner panicked in the worker pool; reported as a failed scan")
+		}
+	}()
+	return scanEntry(job.Ctx, job.Scanner, job.Content, job.ReqCtx)
+}
+
+// jobScannerName is the name a job's result is reported under. A scanner
+// that is nil, or whose Name panics, still gets a result.
+func jobScannerName(job Job) (name string) {
+	defer func() {
+		if recover() != nil {
+			name = "unknown"
+		}
+	}()
+	return job.Scanner.Name()
+}
+
 // Submit enqueues a job. Returns ErrQueueFull if the queue is at capacity
-// (backpressure). Returns context error if ctx is already cancelled.
+// (backpressure); the job is then not run and gets no result.
+//
+// A job that was accepted gets exactly one result. That holds for a job
+// whose context is already over: it is queued like any other and the worker
+// answers it with the context's error, without running the scanner. Submit
+// used to return the context's error for such a job, at random when the
+// queue also had room; the pipeline took every error but ErrQueueFull for an
+// accepted job and then waited for a result that was never sent.
 func (p *WorkerPool) Submit(job Job) error {
 	p.submitted.Add(1)
 	select {
 	case p.jobs <- job:
 		return nil
-	case <-job.Ctx.Done():
-		p.failed.Add(1)
-		return job.Ctx.Err()
 	default:
 		p.shed.Add(1)
 		p.failed.Add(1)
