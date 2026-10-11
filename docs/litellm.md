@@ -280,12 +280,17 @@ names the kinds of finding and carries no match.
   from a reply, was read in the same files and in the three route handlers
   named above, at the same tag.
 - The Go tests call the endpoint as a fake caller that speaks that contract.
-  **It has not yet been run against a real LiteLLM container.** The
-  end-to-end test that does this is written (`deploy/e2e/litellm/`, run by
-  the `litellm-e2e` CI job) and, until it has passed once, the statements on
-  this page about what LiteLLM does with a reply (the 400 its caller gets,
-  the texts it writes back, the `guardrails:` entry above) come from reading
-  LiteLLM's documentation and source, not from watching it.
+- **A real LiteLLM container (v1.104.2) has called it.** The end-to-end test
+  in `deploy/e2e/litellm/`, run by the `litellm-e2e` CI job, first passed on
+  2026-10-11 with the `guardrails:` entry above, in front of a fake model:
+  a clean request is answered 200 and reaches the model; a request with a
+  national id is refused by LiteLLM with a 4xx that names the finding and
+  not the number, and never reaches the model; a request with an e-mail
+  address reaches the model with the marker in its place; an answer with a
+  national id is refused; an answer with an address reaches the caller
+  masked. Not exercised by that test: tools and tool calls, streamed
+  answers, what LiteLLM does when Tamga answers 503, and any LiteLLM
+  version but that one.
 
 To run the end-to-end test yourself (Docker with the compose plugin):
 

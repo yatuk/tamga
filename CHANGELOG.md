@@ -496,10 +496,12 @@
   `output_rules`. A scan that did not finish is a 503
   (`tamga_scan_unavailable`), never a verdict. Nothing is put in the vault,
   so nothing masked over the bridge is restored.
-  Written against LiteLLM v1.104.2. **Tested against a fake caller that
-  speaks the contract; the end-to-end test with a real LiteLLM container
-  (`deploy/e2e/litellm/`, CI job `litellm-e2e`) is written and has not been
-  run yet.** See [docs/litellm.md](docs/litellm.md).
+  Written against LiteLLM v1.104.2 and tested against a fake caller that
+  speaks the contract. **A real LiteLLM container at that version calls it
+  in CI (`deploy/e2e/litellm/`, job `litellm-e2e`), in front of a fake
+  model: block, redact and the answer hook passed there on 2026-10-11.
+  Tools, tool calls and streamed answers are not in that test.** See
+  [docs/litellm.md](docs/litellm.md).
 - A Tamga key is also read from `x-api-key` on that route, because that is
   where LiteLLM sends it. Nowhere else: the header is no credential on any
   other route, and the admin key is not read from it.
