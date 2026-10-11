@@ -17,6 +17,16 @@
   before.
 
 ### Deployment and operations
+- **The proxy could panic while shutting down.** An event published from a
+  goroutine that outlives its request (the hint sent after an answer is
+  scanned) could reach the event bus as it was being stopped, and a send on
+  a closed channel ends the process. The race detector in CI reported it.
+  Publishing and stopping now take the same lock, and an event that arrives
+  after the stop is dropped.
+- A routed request whose body was cut short had its `model` rewritten on Go
+  1.26, because the JSON decoder there reports the end of input the way it
+  reports a closing brace. A body that does not close is forwarded as it
+  came, on every Go version.
 - **The proxy is built with Go 1.26.** `golang.org/x/net` v0.58.0 had five
   advisories reachable from the proxy (GO-2026-6603, 6610, 6611, 6612,
   6617), fixed in v0.60.0, which needs Go 1.26. `x/net`, `x/crypto` (to

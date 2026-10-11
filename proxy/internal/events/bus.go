@@ -252,6 +252,17 @@ func (b *Bus) PublishContext(ctx context.Context, e Event) {
 	// The queue holds an event, and its text, until it is dispatched and no
 	// longer: a receive clears the slot. An event dropped here was never
 	// queued, so nothing holds its text once this returns.
+	//
+	// The send is made under the read lock and Stop closes the queue under
+	// the write lock, so no send can meet a closed queue. Without it an event
+	// published from a goroutine that outlives its request (the output-scan
+	// hint) raced the close at shutdown, and a send on a closed channel
+	// panics.
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	if b.closed.Load() {
+		return
+	}
 	select {
 	case b.ch <- e:
 	default:
@@ -274,9 +285,12 @@ func (b *Bus) Stop() {
 	if b == nil {
 		return
 	}
+	b.mu.Lock()
 	if !b.closed.CompareAndSwap(false, true) {
+		b.mu.Unlock()
 		return
 	}
 	close(b.ch)
+	b.mu.Unlock()
 	b.wg.Wait()
 }

@@ -134,6 +134,11 @@ func rewriteModel(body []byte, model string) []byte {
 			spans = append(spans, span{end - len(val), end})
 		}
 	}
+	// A body cut short is not rewritten. More reports false at the end of the
+	// input as it does at the closing brace, so the brace itself is asked for.
+	if tok, err := dec.Token(); err != nil || tok != json.Delim('}') {
+		return body
+	}
 	if len(spans) == 0 {
 		return body
 	}
