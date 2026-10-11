@@ -68,6 +68,11 @@ func TestScanSegments_LargeSegmentScalesLinearly(t *testing.T) {
 // second; an agent's request is otherwise held up for longer than the model
 // takes to answer it.
 func TestScanSegments_LargeSegmentInParallel(t *testing.T) {
+	if raceDetector {
+		// A megabyte must scan within a minute. Instrumented, on a CI runner
+		// with few cores, it took 67 s: that measures the detector.
+		t.Skip("a wall-time bound; not meaningful under the race detector")
+	}
 	if err := InitDFA(); err != nil {
 		t.Fatal(err)
 	}
