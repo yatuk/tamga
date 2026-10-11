@@ -321,9 +321,10 @@ func (p *Pipeline) allEntries() []ScannerEntry {
 	return entries
 }
 
-// scanWorkerPool submits all scanners to the bounded WorkerPool. When the
-// pool is nil or the queue is full, the scanner is silently skipped
-// (fail-open per scanner). Results are collected from the result channel.
+// scanWorkerPool submits all scanners to the bounded WorkerPool and collects
+// one result for each job the pool accepted. A scanner the pool refused (the
+// queue is full, the pool is shut down) did not run: that is noted as a
+// degraded scan, and no result is waited for.
 func (p *Pipeline) scanWorkerPool(ctx context.Context, content []byte) ([]Finding, error) {
 	if p.pool == nil {
 		// No pool configured — fall back to adaptive.
@@ -355,10 +356,14 @@ func (p *Pipeline) scanWorkerPool(ctx context.Context, content []byte) ([]Findin
 			ReqCtx:   p.cfg.RequestCtx,
 			ResultCh: resultCh,
 		})
-		if err == ErrQueueFull {
-			// Queue full → this scanner is skipped (fail-open); the others
-			// still produce results.
-			deg.note(entry.Scanner.Name(), DegradedQueueFull, nil)
+		if err != nil {
+			// Any refusal means the job is not in the queue and no result
+			// will come for it. The other scanners still produce theirs.
+			if errors.Is(err, ErrQueueFull) {
+				deg.note(entry.Scanner.Name(), DegradedQueueFull, nil)
+			} else {
+				deg.note(entry.Scanner.Name(), DegradedError, err)
+			}
 			continue
 		}
 		submitted++
@@ -370,7 +375,7 @@ func (p *Pipeline) scanWorkerPool(ctx context.Context, content []byte) ([]Findin
 		if r.Error != nil {
 			// What the scanner found before it failed still counts, as in
 			// the other modes: a scan cut short is not a clean one.
-			deg.note(r.Scanner, DegradedError, r.Error)
+			deg.note(r.Scanner, degradedReason(r.Error), r.Error)
 		}
 		if len(r.Findings) > 0 {
 			incDetectionCount(r.Scanner, int64(len(r.Findings)))
@@ -380,6 +385,17 @@ func (p *Pipeline) scanWorkerPool(ctx context.Context, content []byte) ([]Findin
 
 	stampVersions(all)
 	return all, deg.result()
+}
+
+// degradedReason is the reason a pool result's error is counted under. The
+// pool recovers a scanner's panic and returns it as a panicError; that is a
+// panic here as it is in the modes that recover one themselves, and counted
+// once. Anything else is an error.
+func degradedReason(err error) string {
+	if errkind.Of(err) == errkind.Panic {
+		return DegradedPanic
+	}
+	return DegradedError
 }
 
 // degradation records scanners that did not report during one pipeline run.

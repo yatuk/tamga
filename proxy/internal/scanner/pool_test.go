@@ -336,18 +336,9 @@ func TestWorkerPool_Shutdown_DoubleCall(t *testing.T) {
 		t.Fatalf("first Shutdown: %v", err)
 	}
 
-	// Second Shutdown panics because quit is already closed. Recover.
-	panicked := false
-	func() {
-		defer func() {
-			if recover() != nil {
-				panicked = true
-			}
-		}()
-		_ = p.Shutdown(1 * time.Second)
-	}()
-	if !panicked {
-		t.Log("double Shutdown did not panic — may be safe on this runtime")
+	// A second Shutdown used to close the quit channel again and panic.
+	if err := p.Shutdown(1 * time.Second); err != nil {
+		t.Fatalf("second Shutdown: %v", err)
 	}
 }
 
@@ -632,8 +623,10 @@ func TestWorkerPool_PanickingScannerIsAnswered(t *testing.T) {
 	if stats.Failed != 1 || stats.Completed != 1 || stats.ActiveJobs != 0 {
 		t.Errorf("stats after one panic and one scan: %+v", stats)
 	}
-	if got := ScanDegradedStats()[DegradedPanic] - before; got != 1 {
-		t.Errorf("panics counted: %d, want 1", got)
+	// The pool hands the panic back as an error and leaves the counting to
+	// whoever reads the result; counting it here too counted it twice.
+	if got := ScanDegradedStats()[DegradedPanic] - before; got != 0 {
+		t.Errorf("the pool counted %d degraded scans itself, want 0", got)
 	}
 }
 
@@ -646,6 +639,8 @@ func TestPipeline_WorkerPoolContainsAPanic(t *testing.T) {
 		{Scanner: &delayedScanner{name: "good", findings: []Finding{{Type: "pii", Category: "email"}}}, Speed: SpeedFast},
 		{Scanner: &panickingScanner{name: "bad"}, Speed: SpeedSlow},
 	}, PipelineConfig{Mode: ModeWorkerPool, Pool: pool})
+	panicsBefore := ScanDegradedStats()[DegradedPanic]
+	errorsBefore := ScanDegradedStats()[DegradedError]
 
 	type outcome struct {
 		findings []Finding
@@ -670,6 +665,211 @@ func TestPipeline_WorkerPoolContainsAPanic(t *testing.T) {
 	}
 	if len(got.findings) != 1 || got.findings[0].Category != "email" {
 		t.Errorf("findings = %+v, want the other scanner's", got.findings)
+	}
+	// One panic is one degraded scan, under "panic". It used to be counted
+	// there by the pool and again under "error" by the pipeline.
+	if n := ScanDegradedStats()[DegradedPanic] - panicsBefore; n != 1 {
+		t.Errorf("counted under %q: %d, want 1", DegradedPanic, n)
+	}
+	if n := ScanDegradedStats()[DegradedError] - errorsBefore; n != 0 {
+		t.Errorf("counted under %q: %d, want 0", DegradedError, n)
+	}
+}
+
+// Shutdown answers what is still in the queue. A request whose jobs were
+// queued behind a busy worker used to wait on its result channel for good.
+func TestWorkerPool_ShutdownAnswersQueuedJobs(t *testing.T) {
+	p := NewWorkerPool(1, 4)
+	release := make(chan struct{})
+	busy := make(chan ScanResult, 1)
+	if err := p.Submit(Job{Scanner: &blockingScanner{release: release}, Ctx: context.Background(), ResultCh: busy}); err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	waitFor(t, func() bool { return p.Stats().ActiveJobs == 1 })
+
+	// Three jobs wait behind it: two share a buffered channel, as a
+	// pipeline's do, and one has a channel without room and a receiver that
+	// is already waiting.
+	queued := make(chan ScanResult, 2)
+	unbuffered := make(chan ScanResult)
+	ran := &ranScanner{}
+	for _, ch := range []chan ScanResult{queued, queued, unbuffered} {
+		if err := p.Submit(Job{Scanner: ran, Ctx: context.Background(), ResultCh: ch}); err != nil {
+			t.Fatalf("Submit: %v", err)
+		}
+	}
+	got := make(chan ScanResult, 3)
+	for _, ch := range []chan ScanResult{queued, queued, unbuffered} {
+		go func(ch chan ScanResult) { got <- <-ch }(ch)
+	}
+
+	shutdownErr := make(chan error, 1)
+	go func() { shutdownErr <- p.Shutdown(5 * time.Second) }()
+
+	for i := 0; i < 3; i++ {
+		select {
+		case r := <-got:
+			if !errors.Is(r.Error, ErrPoolClosed) || errkind.Of(r.Error) != "pool_closed" || r.Scanner != "ran" {
+				t.Fatalf("queued job answered with %+v, want ErrPoolClosed for scanner \"ran\"", r)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("%d of 3 queued jobs were answered; the rest would wait for good", i)
+		}
+	}
+	if n := ran.count.Load(); n != 0 {
+		t.Errorf("a queued scanner ran %d times after shutdown", n)
+	}
+
+	// The pool is closed to new work while the busy worker finishes.
+	late := make(chan ScanResult, 1)
+	if err := p.Submit(Job{Scanner: ran, Ctx: context.Background(), ResultCh: late}); !errors.Is(err, ErrPoolClosed) {
+		t.Fatalf("Submit after Shutdown = %v, want ErrPoolClosed", err)
+	}
+
+	close(release)
+	select {
+	case err := <-shutdownErr:
+		if err != nil {
+			t.Fatalf("Shutdown: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Shutdown did not return after the worker finished")
+	}
+	if r := <-busy; r.Error != nil {
+		t.Errorf("the job that was running when Shutdown was called: %+v", r)
+	}
+	select {
+	case r := <-late:
+		t.Fatalf("a refused job was answered: %+v", r)
+	default:
+	}
+	if stats := p.Stats(); stats.QueueDepth != 0 || stats.ActiveJobs != 0 {
+		t.Errorf("after shutdown: %+v", stats)
+	}
+}
+
+// A worker that is still scanning when the timeout ends does not keep the
+// queue from being answered: Shutdown reports the timeout, and the queued
+// jobs have their results.
+func TestWorkerPool_ShutdownTimeoutStillAnswersTheQueue(t *testing.T) {
+	p := NewWorkerPool(1, 2)
+	release := make(chan struct{})
+	defer close(release)
+	busy := make(chan ScanResult, 1)
+	if err := p.Submit(Job{Scanner: &blockingScanner{release: release}, Ctx: context.Background(), ResultCh: busy}); err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	waitFor(t, func() bool { return p.Stats().ActiveJobs == 1 })
+	queued := make(chan ScanResult, 1)
+	if err := p.Submit(Job{Scanner: &ranScanner{}, Ctx: context.Background(), ResultCh: queued}); err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+
+	if err := p.Shutdown(20 * time.Millisecond); !errors.Is(err, ErrShutdownTimeout) {
+		t.Fatalf("Shutdown = %v, want ErrShutdownTimeout", err)
+	}
+	select {
+	case r := <-queued:
+		if !errors.Is(r.Error, ErrPoolClosed) {
+			t.Fatalf("queued job answered with %+v", r)
+		}
+	default:
+		t.Fatal("the queued job had no result when Shutdown returned")
+	}
+}
+
+// Scans in workerpool mode that are under way when the pool shuts down, and
+// scans started after it, all come back: degraded, with nobody left waiting.
+func TestPipeline_WorkerPoolScansReturnAcrossShutdown(t *testing.T) {
+	pool := NewWorkerPool(1, 64)
+	release := make(chan struct{})
+	entries := []ScannerEntry{
+		{Scanner: &blockingScanner{release: release}},
+		{Scanner: &countingScanner{name: "b"}},
+		{Scanner: &countingScanner{name: "c"}},
+	}
+	pl := NewPipelineWithConfig(entries, PipelineConfig{Mode: ModeWorkerPool, Pool: pool})
+
+	const scans = 8
+	errc := make(chan error, scans+1)
+	for i := 0; i < scans; i++ {
+		go func() {
+			_, err := pl.Scan(context.Background(), []byte("text"))
+			errc <- err
+		}()
+	}
+	// The one worker is held by the first job; everything else is queued.
+	waitFor(t, func() bool {
+		s := pool.Stats()
+		return s.ActiveJobs == 1 && s.QueueDepth == scans*len(entries)-1
+	})
+
+	shutdownErr := make(chan error, 1)
+	go func() { shutdownErr <- pool.Shutdown(5 * time.Second) }()
+	waitFor(t, func() bool { return pool.Stats().QueueDepth == 0 })
+	close(release)
+
+	for i := 0; i < scans; i++ {
+		select {
+		case err := <-errc:
+			// Seven scans lost all three scanners. The one whose first job
+			// held the worker lost the other two.
+			if !errors.Is(err, ErrScanDegraded) || !errors.Is(err, ErrPoolClosed) {
+				t.Fatalf("scan %d: err = %v, want a degraded scan with ErrPoolClosed", i, err)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("%d of %d scans came back; the rest are waiting on their result channel", i, scans)
+		}
+	}
+	if err := <-shutdownErr; err != nil {
+		t.Fatalf("Shutdown: %v", err)
+	}
+
+	// A scan that starts after the shutdown is refused at Submit and must
+	// not wait for results either.
+	go func() {
+		_, err := pl.Scan(context.Background(), []byte("text"))
+		errc <- err
+	}()
+	select {
+	case err := <-errc:
+		if !errors.Is(err, ErrScanDegraded) || !errors.Is(err, ErrPoolClosed) {
+			t.Fatalf("scan after shutdown: err = %v", err)
+		}
+		if IncompleteReason(err) != IncompleteScannerFailed {
+			t.Errorf("IncompleteReason = %q, want %q", IncompleteReason(err), IncompleteScannerFailed)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("a scan started after shutdown did not come back")
+	}
+}
+
+// Any error from Submit means the job was not submitted. The pipeline used
+// to take every error but ErrQueueFull for an accepted job and wait for its
+// result.
+func TestPipeline_WorkerPoolSubmitErrorIsNotSubmitted(t *testing.T) {
+	pool := NewWorkerPool(2, 8)
+	_ = pool.Shutdown(time.Second)
+	before := ScanDegradedStats()[DegradedError]
+	pl := NewPipelineWithConfig([]ScannerEntry{
+		{Scanner: &countingScanner{name: "a"}}, {Scanner: &countingScanner{name: "b"}},
+	}, PipelineConfig{Mode: ModeWorkerPool, Pool: pool})
+
+	errc := make(chan error, 1)
+	go func() {
+		_, err := pl.Scan(context.Background(), []byte("text"))
+		errc <- err
+	}()
+	select {
+	case err := <-errc:
+		if !errors.Is(err, ErrScanDegraded) || errkind.Of(err) != "pool_closed" {
+			t.Fatalf("err = %v (kind %q), want a degraded scan of kind pool_closed", err, errkind.Of(err))
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the scan waited for a job that was never submitted")
+	}
+	if n := ScanDegradedStats()[DegradedError] - before; n != 2 {
+		t.Errorf("degraded scans counted: %d, want one per refused scanner (2)", n)
 	}
 }
 

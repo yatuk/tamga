@@ -7,8 +7,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/rs/zerolog/log"
-
 	"github.com/yatuk/tamga/internal/errkind"
 )
 
@@ -25,6 +23,9 @@ type Job struct {
 var (
 	ErrQueueFull       = errors.New("scanner pool queue full")
 	ErrShutdownTimeout = errors.New("scanner pool shutdown timeout")
+	// ErrPoolClosed is what Submit returns once Shutdown has been called,
+	// and the error a job gets that was still queued at that moment.
+	ErrPoolClosed = errkind.New("pool_closed", "scanner pool is shut down")
 )
 
 // WorkerPool is a bounded pool of goroutines that execute scan jobs.
@@ -35,6 +36,12 @@ type WorkerPool struct {
 	jobs      chan Job
 	wg        sync.WaitGroup
 	quit      chan struct{}
+
+	// closeMu orders Submit against Shutdown: a job is put on the queue
+	// with the read lock held, and Shutdown sets closed with the write
+	// lock, so no job can enter the queue after Shutdown has emptied it.
+	closeMu sync.RWMutex
+	closed  bool
 
 	// Hot-path metrics updated atomically (no mutex contention).
 	submitted  atomic.Int64
@@ -110,7 +117,7 @@ func (p *WorkerPool) process(job Job) {
 	}
 
 	start := time.Now()
-	findings, err := runJob(job, name)
+	findings, err := runJob(job)
 	elapsed := time.Since(start)
 
 	if err != nil {
@@ -134,16 +141,14 @@ func (p *WorkerPool) process(job Job) {
 }
 
 // runJob runs the job's scanner. A panic comes back as a panicError, the
-// error the other pipeline modes report one as (kind "panic"), and is
-// counted and logged as theirs is: by the scanner's name and the kind, never
-// by the recovered value, which can be the text that was being scanned.
-func runJob(job Job, name string) (findings []Finding, err error) {
+// error the other pipeline modes report one as (kind "panic"). It is not
+// counted or logged here: the pipeline that reads the result does both, once,
+// as it does for a panic in the other modes (degradedReason). The recovered
+// value is in neither place; it can be the text that was being scanned.
+func runJob(job Job) (findings []Finding, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			findings, err = nil, &panicError{value: r}
-			RecordDegraded(DegradedPanic)
-			log.Error().Str("component", "scanner").Str("scanner", name).Str("reason", DegradedPanic).
-				Str("error_kind", errkind.Of(err)).Msg("scanner panicked in the worker pool; reported as a failed scan")
 		}
 	}()
 	return scanEntry(job.Ctx, job.Scanner, job.Content, job.ReqCtx)
@@ -161,7 +166,8 @@ func jobScannerName(job Job) (name string) {
 }
 
 // Submit enqueues a job. Returns ErrQueueFull if the queue is at capacity
-// (backpressure); the job is then not run and gets no result.
+// (backpressure) and ErrPoolClosed after Shutdown; in both cases the job is
+// not run and gets no result.
 //
 // A job that was accepted gets exactly one result. That holds for a job
 // whose context is already over: it is queued like any other and the worker
@@ -171,6 +177,12 @@ func jobScannerName(job Job) (name string) {
 // accepted job and then waited for a result that was never sent.
 func (p *WorkerPool) Submit(job Job) error {
 	p.submitted.Add(1)
+	p.closeMu.RLock()
+	defer p.closeMu.RUnlock()
+	if p.closed {
+		p.failed.Add(1)
+		return ErrPoolClosed
+	}
 	select {
 	case p.jobs <- job:
 		return nil
@@ -181,21 +193,66 @@ func (p *WorkerPool) Submit(job Job) error {
 	}
 }
 
-// Shutdown closes the quit channel and waits up to timeout for all workers
-// to finish their current job and exit. Returns ErrShutdownTimeout if workers
-// do not drain within the deadline.
+// Shutdown stops the pool. From here on Submit refuses jobs, the workers
+// finish the job they are on and exit, and every job still in the queue is
+// answered with ErrPoolClosed: whoever submitted it is waiting on its result
+// channel and would otherwise wait for good. It waits up to timeout for the
+// workers and returns ErrShutdownTimeout if one is still scanning then; the
+// queue has been answered by that time either way.
+//
+// A second call does nothing and returns nil.
 func (p *WorkerPool) Shutdown(timeout time.Duration) error {
+	p.closeMu.Lock()
+	if p.closed {
+		p.closeMu.Unlock()
+		return nil
+	}
+	p.closed = true
 	close(p.quit)
+	p.closeMu.Unlock()
+
+	// A worker that sees quit and a job at once may still take the job; it
+	// is then scanned like any other. Whatever the workers leave is
+	// answered here.
+	p.answerQueued()
+
 	done := make(chan struct{})
 	go func() {
 		p.wg.Wait()
 		close(done)
 	}()
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
 	select {
 	case <-done:
 		return nil
-	case <-time.After(timeout):
+	case <-timer.C:
 		return ErrShutdownTimeout
+	}
+}
+
+// answerQueued empties the queue and gives each job the result of a scan
+// that did not happen. Nothing is added to the queue while it runs: closed
+// is set.
+func (p *WorkerPool) answerQueued() {
+	for {
+		select {
+		case job := <-p.jobs:
+			p.failed.Add(1)
+			if job.ResultCh == nil {
+				continue
+			}
+			res := ScanResult{Scanner: jobScannerName(job), Error: ErrPoolClosed}
+			select {
+			case job.ResultCh <- res:
+			default:
+				// Nobody is receiving yet and the channel has no room. A
+				// worker would block on this send; Shutdown must not.
+				go func() { job.ResultCh <- res }()
+			}
+		default:
+			return
+		}
 	}
 }
 
