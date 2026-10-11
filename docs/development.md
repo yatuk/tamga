@@ -78,7 +78,7 @@ Full docs: [tests/stress/README.md](../tests/stress/README.md).
 
 | Layer | Technology |
 |---|---|
-| Core Proxy | Go 1.25+ — Aho-Corasick DFA, regex hybrid scanning |
+| Core Proxy | Go 1.26+ — Aho-Corasick DFA, regex hybrid scanning |
 | Deep Analysis | Python 3.11+ — FastAPI, Presidio, spaCy |
 | Dashboard | Next.js 15, TypeScript 5, Carbon (`@carbon/react`) |
 | Storage | PostgreSQL 16, Redis 7 |

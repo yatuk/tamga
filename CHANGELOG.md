@@ -17,6 +17,12 @@
   before.
 
 ### Deployment and operations
+- **The proxy is built with Go 1.26.** `golang.org/x/net` v0.58.0 had five
+  advisories reachable from the proxy (GO-2026-6603, 6610, 6611, 6612,
+  6617), fixed in v0.60.0, which needs Go 1.26. `x/net`, `x/crypto` (to
+  v0.57.0) and `klauspost/compress` (to v1.18.7) are raised, `go.mod` says
+  1.26.0, and the Dockerfiles and CI build with 1.26. **Anyone building from
+  source needs Go 1.26 or later.**
 - **The analyzer no longer depends on `llm-guard`**, a package whose
   repository is archived and whose pins held back `torch`, `transformers`
   and `tokenizers`. Its one use was the analyzer's toxicity scanner (the
