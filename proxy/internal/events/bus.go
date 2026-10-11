@@ -65,6 +65,10 @@ type Event struct {
 	// (the LiteLLM route). Action and Findings are then the answer's. Empty
 	// everywhere else.
 	Direction string
+	// FindingsHashed says the findings on this event hold a digest in place
+	// of their match (data.hash_findings was on when it was published, see
+	// Bus.SetPrepare). Whoever stores or sends them takes them as they are.
+	FindingsHashed bool
 }
 
 const defaultChanCap = 1000
@@ -73,6 +77,7 @@ const defaultChanCap = 1000
 type Bus struct {
 	ch       chan Event
 	handlers []func(Event)
+	prepare  func(Event) Event
 	mu       sync.RWMutex
 	wg       sync.WaitGroup
 	closed   atomic.Bool
@@ -94,6 +99,20 @@ func (b *Bus) Subscribe(fn func(Event)) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.handlers = append(b.handlers, fn)
+}
+
+// SetPrepare sets a function every event goes through when it is published,
+// before it is queued: what it returns is what every subscriber gets. It is
+// where data.hash_findings is applied, so that the ring of recent events,
+// the live feed, the NATS envelope and the request log all hold the same
+// thing. Like Subscribe, call it before Start.
+func (b *Bus) SetPrepare(fn func(Event) Event) {
+	if b == nil {
+		return
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.prepare = fn
 }
 
 // Start begins the dispatcher goroutine. Call once after Subscribe.
@@ -139,6 +158,12 @@ func (b *Bus) PublishContext(ctx context.Context, e Event) {
 	}
 	if e.Timestamp.IsZero() {
 		e.Timestamp = time.Now().UTC()
+	}
+	b.mu.RLock()
+	prepare := b.prepare
+	b.mu.RUnlock()
+	if prepare != nil {
+		e = prepare(e)
 	}
 	select {
 	case b.ch <- e:

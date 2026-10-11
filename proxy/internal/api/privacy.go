@@ -275,9 +275,10 @@ func subjectSelectorError(selector, tcknHash, tckn string) string {
 // validTCKNHash reports whether s has the form of the selector the API
 // documents: the 64 lower-case hex characters of a stored digest (what
 // follows "hmac-sha256:", or "sha256:" in rows of earlier versions). The
-// store matches this selector as a substring of the stored findings, so
-// anything shorter, or a LIKE wildcard, would select other people's rows
-// and, on DELETE, erase them.
+// store looks for a finding, of the request or of the response, whose match
+// is exactly that digest under either scheme (store.StoredDigestForms), and
+// selects nothing for a value of any other form; it is refused here first,
+// so that a mistyped selector is an error and not an empty answer.
 func validTCKNHash(s string) bool {
 	if len(s) != 64 {
 		return false

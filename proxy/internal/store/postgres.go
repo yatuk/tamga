@@ -364,8 +364,9 @@ LIMIT $%d OFFSET $%d`, w, limPos, offPos)
 // EraseSubject deletes (or soft-redacts) every request_logs row that
 // references the given data subject. Use user_id for Clerk IDs, email for
 // legacy exports, and tckn_hash for a stored digest given as its 64 hex
-// characters (keyed or not). A national id itself goes through
-// EraseSubjectByMatch.
+// characters (keyed or not, see StoredDigestForms): the rows are those with
+// a finding, of the request or of the response, whose match is that digest.
+// A national id itself goes through EraseSubjectByMatch.
 func (s *PostgresStore) EraseSubject(ctx context.Context, orgID, userID, email, tcknHash string) (int, error) {
 	ctx2, cancel := context.WithTimeout(ctx, getStatsTimeout)
 	defer cancel()
@@ -379,10 +380,13 @@ func (s *PostgresStore) EraseSubject(ctx context.Context, orgID, userID, email, 
 		cmd, err = s.pool.Exec(ctx2,
 			`DELETE FROM request_logs WHERE org_id = $1 AND user_identifier = $2`, orgID, email)
 	case tcknHash != "":
-		// TCKN hashes are stored inside the findings JSON; match any occurrence.
-		cmd, err = s.pool.Exec(ctx2,
-			`DELETE FROM request_logs WHERE org_id = $1 AND findings::text LIKE '%' || $2 || '%'`,
-			orgID, tcknHash)
+		// A stored digest is a finding's whole match, of the request or of
+		// the response, under either scheme.
+		docs := matchContainmentDocs(StoredDigestForms(tcknHash))
+		if len(docs) == 0 {
+			return 0, errNotStoredDigest
+		}
+		cmd, err = s.pool.Exec(ctx2, `DELETE FROM request_logs WHERE `+subjectMatchWhere, orgID, docs)
 	default:
 		return 0, fmt.Errorf("no subject identifier provided")
 	}
@@ -414,10 +418,14 @@ func (s *PostgresStore) SubjectAccess(ctx context.Context, orgID, userID, email,
 			 FROM request_logs WHERE org_id = $1 AND user_identifier = $2
 			 ORDER BY created_at DESC LIMIT $3`, orgID, email, limit)
 	case tcknHash != "":
+		docs := matchContainmentDocs(StoredDigestForms(tcknHash))
+		if len(docs) == 0 {
+			return nil, errNotStoredDigest
+		}
 		rows, err = s.pool.Query(ctx2,
 			`SELECT request_id, org_id, provider, model, user_identifier, created_at, findings, input_tokens, output_tokens, COALESCE(cost_usd,0)
-			 FROM request_logs WHERE org_id = $1 AND findings::text LIKE '%' || $2 || '%'
-			 ORDER BY created_at DESC LIMIT $3`, orgID, tcknHash, limit)
+			 FROM request_logs WHERE `+subjectMatchWhere+`
+			 ORDER BY created_at DESC LIMIT $3`, orgID, docs, limit)
 	default:
 		return nil, fmt.Errorf("no subject identifier provided")
 	}

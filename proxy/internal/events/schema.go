@@ -90,6 +90,11 @@ func eventToV2(e Event) EventV2 {
 	if e.Direction != "" {
 		payload["direction"] = e.Direction
 	}
+	// The matches in findings and output_findings are digests already (see
+	// Event.FindingsHashed): a consumer must not hash them again.
+	if e.FindingsHashed {
+		payload["findings_hashed"] = true
+	}
 	if e.PolicyName != "" {
 		payload["policy_name"] = e.PolicyName
 	}

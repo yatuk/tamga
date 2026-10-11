@@ -32,7 +32,8 @@ func isRequestEvent(eventType string) bool {
 // When the active policy has data.hash_findings on, the match of every
 // finding, of the request and of the response, is replaced by its keyed
 // digest (KVKK/GDPR, see FindingHasher): the text cannot be recovered from
-// the row.
+// the row. An event whose findings the bus already hashed (FindingsHashed)
+// is stored as it is, whatever the policy says now.
 func RequestLogFromEvent(e events.Event, defaultOrgID string, getPolicy func() *policy.Policy) (RequestLog, bool) {
 	if !isRequestEvent(e.EventType) {
 		return RequestLog{}, false
@@ -59,7 +60,7 @@ func RequestLogFromEvent(e events.Event, defaultOrgID string, getPolicy func() *
 		}
 	}
 	hash := false
-	if getPolicy != nil {
+	if getPolicy != nil && !e.FindingsHashed {
 		if pol := getPolicy(); pol != nil && pol.Data != nil && pol.Data.HashFindings {
 			hash = true
 		}
@@ -161,6 +162,7 @@ func eventFromV2(ev events.EventV2) (events.Event, bool) {
 	// Older envelopes always said cost_usd: 0. Only one that says the cost
 	// is known is believed.
 	e.OrgVerified, _ = p["org_verified"].(bool)
+	e.FindingsHashed, _ = p["findings_hashed"].(bool)
 	if known, _ := p["cost_known"].(bool); known {
 		e.CostKnown = true
 		e.CostUSD = payloadFloat(p, "cost_usd")

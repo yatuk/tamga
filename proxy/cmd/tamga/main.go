@@ -11,7 +11,6 @@ import (
 	"os/signal"
 	"sort"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -211,15 +210,17 @@ func main() {
 		}
 	}
 
-	// The key the request log hashes finding matches under when the policy
-	// has data.hash_findings on. Without one no digest is stored at all.
+	// The key finding matches are hashed under when the policy has
+	// data.hash_findings on: on every event, so in the request log, the
+	// console's recent events, the live feed and the NATS stream alike.
+	// Without one no digest is kept at all.
 	if hasher, err := store.NewFindingHasher(cfg.FindingHashKey, cfg.VaultKey); err != nil {
-		log.Error().Err(err).Msg("request log: no usable finding hash key; with data.hash_findings on, matches are not stored")
+		log.Error().Err(err).Msg("findings: no usable finding hash key; with data.hash_findings on, matches are not kept")
 	} else if hasher == nil {
-		log.Warn().Msg("request log: neither TAMGA_FINDING_HASH_KEY nor TAMGA_VAULT_KEY is set; with data.hash_findings on, matches are not stored and cannot be looked up")
+		log.Warn().Msg("findings: neither TAMGA_FINDING_HASH_KEY nor TAMGA_VAULT_KEY is set; with data.hash_findings on, matches are not kept and cannot be looked up")
 	} else {
 		store.SetFindingHasher(hasher)
-		log.Info().Str("key_source", hasher.Source()).Msg("request log: finding matches are hashed with HMAC-SHA-256 when data.hash_findings is on")
+		log.Info().Str("key_source", hasher.Source()).Msg("findings: matches are hashed with HMAC-SHA-256 when data.hash_findings is on")
 	}
 
 	var requestStore store.Store
@@ -390,6 +391,9 @@ func main() {
 	}
 
 	// In-memory handlers (fast path — always active):
+	// data.hash_findings is applied to an event when it is published, before
+	// any subscriber below has it.
+	eventBus.SetPrepare(store.EventFindingHasher(log.Logger, getPolicy))
 	eventBus.Subscribe(events.LogHandler(log.Logger))
 	eventBus.Subscribe(events.MetricsHandler(metrics))
 
@@ -915,10 +919,6 @@ func main() {
 	log.Info().Msg("tamga proxy stopped")
 }
 
-// natsUnkeyedWarn makes the NATS consumer say once that matches are being
-// left out for want of a hash key, as the bus writer does.
-var natsUnkeyedWarn sync.Once
-
 // storeEventFromNATS persists a NATS EventV2 to PostgreSQL. This runs in the
 // NATS consumer goroutine, decoupled from the HTTP request path.
 //
@@ -931,8 +931,9 @@ func storeEventFromNATS(ctx context.Context, s store.Store, ev events.EventV2, d
 	if !ok {
 		return
 	}
+	// Only for an envelope the bus did not hash, and once per process.
 	if store.UnkeyedMatches() != before {
-		natsUnkeyedWarn.Do(func() { store.LogUnkeyedMatches(log) })
+		store.LogUnkeyedMatches(log)
 	}
 	if err := s.SaveRequestLog(ctx, rl); err != nil {
 		log.Warn().Err(err).Str("request_id", ev.RequestID).Msg("nats consumer: db write failed")
