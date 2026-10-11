@@ -3,7 +3,7 @@ import { render, renderHook, screen, waitFor } from "@testing-library/react";
 import { createElement, useMemo } from "react";
 import { keepPreviousData, QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import type { SecurityEvent } from "@/lib/api/types-core";
-import { EventTable, useFresh } from "./events";
+import { ActionMark, EventTable, useFresh } from "./events";
 
 /**
  * A row is marked as new only when it arrived on top of rows that were
@@ -341,5 +341,13 @@ describe("the request table", () => {
 
     view.rerender(tree(["d", "c", "b", "a"]));
     expect(flashed()).toEqual([]);
+  });
+});
+
+describe("the action of a request", () => {
+  it("names a routed request, with the mark the stylesheet draws in ochre", () => {
+    render(createElement(ActionMark, { action: "ROUTE" }));
+    const mark = screen.getByText("Routed");
+    expect(mark).toHaveAttribute("data-action", "ROUTE");
   });
 });

@@ -209,4 +209,28 @@ describe("the verdict", () => {
     show("mail ada@example.com about ACME", [finding("ada@example.com", "redact"), finding("ACME", "log")], "REDACT");
     expect(screen.getByText("2 findings, 1 of them acted on.")).toBeInTheDocument();
   });
+
+  it("names the internal pool for a ROUTE verdict, in the colour of a changed request", () => {
+    const text = "TC 10000000146, mail ada@example.com";
+    const result: PolicySimulateResult = {
+      policy_name: "default",
+      policy_version: "1",
+      action: "ROUTE",
+      route_to: "internal-llm",
+      findings: [{ ...finding("10*******46", "ROUTE"), category: "tc_kimlik", position: "exact", start_utf16: 3, end_utf16: 14 }, finding("ada@example.com", "redact")],
+    };
+    const { container } = render(<Verdict result={result} prompt={text} running={false} />);
+    // Ochre, not red: the request is answered, by another model.
+    const word = container.querySelector(".t-verdict");
+    expect(word).toHaveTextContent("Routed");
+    expect(word).toHaveAttribute("data-action", "ROUTE");
+    expect(screen.getByText(/would be sent as written to the internal pool/)).toHaveTextContent("internal-llm, and not to the provider");
+    expect(screen.getByText("2 findings, 2 of them acted on.")).toBeInTheDocument();
+    expect([...container.querySelectorAll("mark")].map((m) => m.getAttribute("data-action"))).toEqual(["ROUTE", "REDACT"]);
+  });
+
+  it("says nothing about a pool for any other verdict", () => {
+    show("mail ada@example.com", [finding("ada@example.com", "redact")], "REDACT");
+    expect(screen.queryByText(/internal pool/)).toBeNull();
+  });
 });

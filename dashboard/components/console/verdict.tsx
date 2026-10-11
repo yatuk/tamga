@@ -76,7 +76,7 @@ function markedPrompt(text: string, findings: Finding[]): { parts: ReactNode[]; 
  * swap shows that it is a new answer.
  */
 export function Verdict({ result, prompt, running }: { result: PolicySimulateResult | null; prompt: string; running: boolean }) {
-  const acted = result?.findings.filter((f) => ["BLOCK", "REDACT", "STRIP"].includes(upper(f.action))) ?? [];
+  const acted = result?.findings.filter((f) => ["BLOCK", "ROUTE", "REDACT", "STRIP"].includes(upper(f.action))) ?? [];
   // The text the verdict is about: what was sent, not what has been typed since.
   const { parts: marks, unplaced } = markedPrompt(result?.sample_text ?? prompt, acted);
 
@@ -104,6 +104,13 @@ export function Verdict({ result, prompt, running }: { result: PolicySimulateRes
                 : `${counted(result.findings.length, "finding")}, ${acted.length} of them acted on.`}
             </p>
           </div>
+          {/* A simulation sends nothing, so it names the pool and does not say whether the pool answers. */}
+          {upper(result.action) === "ROUTE" ? (
+            <p className="t-footnote">
+              The request would be sent as written to {result.route_to ? <>the internal pool <span className="t-data">{result.route_to}</span></> : "an internal pool"}, and
+              not to the provider. If that pool cannot take it, the request is stopped.
+            </p>
+          ) : null}
 
           {marks.length > 0 ? (
             <div className="t-sample" style={{ marginTop: "1.5rem", maxHeight: "14rem", overflow: "auto" }}>

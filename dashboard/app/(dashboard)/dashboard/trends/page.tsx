@@ -6,10 +6,10 @@ import { bucketName, RANGE_WORDS, typeName } from "@/components/console/names";
 import { DataNotice, NoData, PageHead, PageLoading, RangeSwitch, Section, Shares, Statement } from "@/components/console/page";
 import { useTrendsPage } from "./useTrendsPage";
 
-type Point = { total: number; blocked: number; redacted?: number; warned?: number };
+type Point = { total: number; blocked: number; redacted?: number; warned?: number; routed?: number };
 
 const percent = (n: number) => `${n.toFixed(n < 10 ? 1 : 0)}%`;
-const acted = (p: Point) => p.blocked + (p.redacted || 0) + (p.warned || 0);
+const acted = (p: Point) => p.blocked + (p.redacted || 0) + (p.routed || 0) + (p.warned || 0);
 
 /** The acted-on share of each half of the window, when both halves saw traffic. */
 function halves(points: Point[]) {

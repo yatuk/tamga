@@ -110,10 +110,10 @@ describe("colour", () => {
       '.t-split span[data-kind="altered"]',
       '.t-splitkey span[data-kind="altered"]::before',
       '.t-day span[data-kind="altered"]',
-      '.t-action[data-action="REDACT"], .t-action[data-action="STRIP"]',
+      '.t-action[data-action="REDACT"], .t-action[data-action="STRIP"], .t-action[data-action="ROUTE"]',
       '.t-chart .t-day span[data-kind="altered"]',
-      '.t-verdict[data-action="REDACT"], .t-verdict[data-action="STRIP"]',
-      '.t-sample mark[data-action="REDACT"], .t-sample mark[data-action="STRIP"]',
+      '.t-verdict[data-action="REDACT"], .t-verdict[data-action="STRIP"], .t-verdict[data-action="ROUTE"]',
+      '.t-sample mark[data-action="REDACT"], .t-sample mark[data-action="STRIP"], .t-sample mark[data-action="ROUTE"]',
       ".t-unsaved",
       ".t-changed li",
     ]);

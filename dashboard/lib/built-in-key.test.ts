@@ -95,6 +95,25 @@ describe("the build guard", () => {
   });
 });
 
+describe("where the key in use comes from", () => {
+  it("is the stored key whenever one is stored, the built-in one otherwise, and none in a build without one", async () => {
+    const { adminKeySource } = await load({ NODE_ENV: "production", NEXT_PUBLIC_ADMIN_KEY: "" });
+    expect(adminKeySource("typed-in", SECRET)).toBe("stored");
+    expect(adminKeySource("typed-in", "")).toBe("stored");
+    expect(adminKeySource("", SECRET)).toBe("built-in");
+    expect(adminKeySource("", "")).toBe("none");
+  });
+
+  it("reads the build's own key when it is given none: never built-in in production", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const production = await load({ NODE_ENV: "production", NEXT_PUBLIC_ADMIN_KEY: SECRET });
+    expect(production.adminKeySource("")).toBe("none");
+    const development = await load({ NODE_ENV: "development", NEXT_PUBLIC_ADMIN_KEY: SECRET });
+    expect(development.adminKeySource("")).toBe("built-in");
+    expect(development.adminKeySource("typed-in")).toBe("stored");
+  });
+});
+
 describe("the built-in key", () => {
   it("is empty in production, whatever the environment holds", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});

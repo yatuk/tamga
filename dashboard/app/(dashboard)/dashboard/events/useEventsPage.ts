@@ -9,7 +9,7 @@ import { useLiveEventsStream } from "./useLiveEventsStream";
 import { useAdminKey } from "@/hooks/useAdminKey";
 import { VALID_TIMERANGES, type TimeRange } from "@/lib/types";
 
-export type ActionFilter = "pass" | "block" | "redact" | "warn";
+export type ActionFilter = "pass" | "block" | "redact" | "route" | "warn";
 
 const PAGE_SIZE = 100;
 
@@ -28,7 +28,7 @@ export function useEventsPage() {
   // Read filters from URL
   const filters: Filters = useMemo(() => ({
     actions: (searchParams.getAll("action") as ActionFilter[]).filter((a) =>
-      ["pass", "block", "redact", "warn"].includes(a),
+      ["pass", "block", "redact", "route", "warn"].includes(a),
     ),
     provider: searchParams.get("provider") ?? "",
     range: ((raw) => (VALID_TIMERANGES as readonly string[]).includes(raw ?? "") ? (raw as TimeRange) : "24h")(searchParams.get("range")),
@@ -114,12 +114,13 @@ export function useEventsPage() {
   // loaded so far, so they stay correct however far the table is scrolled.
   const windowTotals = useMemo(() => {
     const pts = ts?.points ?? [];
-    const sum = (k: "total" | "blocked" | "redacted" | "warned") => pts.reduce((n, p) => n + (p[k] ?? 0), 0);
+    const sum = (k: "total" | "blocked" | "redacted" | "warned" | "routed") => pts.reduce((n, p) => n + (p[k] ?? 0), 0);
     const all = sum("total");
     const blocked = sum("blocked");
     const redacted = sum("redacted");
-    const passed = Math.max(0, all - blocked - redacted - sum("warned"));
-    return { all, blocked, redacted, passed, passRate: all > 0 ? (passed / all) * 100 : null };
+    const routed = sum("routed");
+    const passed = Math.max(0, all - blocked - redacted - routed - sum("warned"));
+    return { all, blocked, redacted, routed, passed, passRate: all > 0 ? (passed / all) * 100 : null };
   }, [ts]);
 
 

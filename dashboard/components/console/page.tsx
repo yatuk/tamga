@@ -7,6 +7,7 @@ import { useHealth } from "@/hooks/useHealth";
 import { permissionDenied, sessionRefused } from "@/lib/api/fetch-core";
 import type { TimeRange } from "@/lib/types";
 import { Bar } from "./motion";
+import { RefusedKeyNotice } from "./refused-key";
 
 /** The page title, one sentence on what the page answers, and its controls. */
 export function PageHead({ title, lede, children }: { title: string; lede: ReactNode; children?: ReactNode }) {
@@ -63,18 +64,18 @@ export function DataNotice({
   const denied = adminKey ? permissionDenied(error) : null;
   // A session the proxy no longer honours is not a wrong key, and says so itself.
   const session = adminKey ? sessionRefused(error) : null;
+  // Only while it is answering: a key refused before an outage says nothing of the proxy now.
+  // Which key was refused, and the way to drop a stored one, is the notice's own business.
+  if (adminKey && !denied && !session && health.reading.standing === "rejected") return <RefusedKeyNotice lead="It is up." />;
   const [title, subtitle] = !adminKey
     ? ["No admin key in this browser.", "Add one under Settings to read the proxy's data."]
     : denied
       ? [`This key's role cannot read ${what}.`, `${denied.needs} Use a key with a higher role under Settings.`]
       : session
         ? [session.title, session.detail]
-        : // Only while it is answering: a key refused before an outage says nothing of the proxy now.
-          health.reading.standing === "rejected"
-          ? ["The proxy did not accept the admin key.", "It is up. Check the key under Settings."]
-          : health.data && !health.isError
-            ? ["The proxy is up, but it did not return this page's data.", "Proxy status shows whether one of its parts is down."]
-            : ["The proxy did not answer.", "Check that it is running and that this console points at it."];
+        : health.data && !health.isError
+          ? ["The proxy is up, but it did not return this page's data.", "Proxy status shows whether one of its parts is down."]
+          : ["The proxy did not answer.", "Check that it is running and that this console points at it."];
   return (
     <InlineNotification
       kind={adminKey ? "error" : "info"}

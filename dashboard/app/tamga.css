@@ -759,7 +759,8 @@ html {
   color: var(--tamga-stamp);
 }
 .tamga .t-action[data-action="REDACT"],
-.tamga .t-action[data-action="STRIP"] {
+.tamga .t-action[data-action="STRIP"],
+.tamga .t-action[data-action="ROUTE"] {
   color: var(--tamga-altered);
 }
 /* Warned, and the two states of a part of the system: in ink. Failing is a
@@ -1412,11 +1413,13 @@ html {
   color: var(--tamga-stamp);
 }
 .tamga .t-verdict[data-action="REDACT"],
-.tamga .t-verdict[data-action="STRIP"] {
+.tamga .t-verdict[data-action="STRIP"],
+.tamga .t-verdict[data-action="ROUTE"] {
   color: var(--tamga-altered);
 }
 .tamga .t-sample mark[data-action="REDACT"],
-.tamga .t-sample mark[data-action="STRIP"] {
+.tamga .t-sample mark[data-action="STRIP"],
+.tamga .t-sample mark[data-action="ROUTE"] {
   background: var(--tamga-altered-tint);
   box-shadow: inset 0 -2px 0 var(--tamga-altered-fill);
 }

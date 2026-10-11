@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useSyncExternalStore } from "react";
-import { BUILT_IN_ADMIN_KEY } from "@/lib/built-in-key";
+import { adminKeySource, BUILT_IN_ADMIN_KEY, type AdminKeySource } from "@/lib/built-in-key";
 
 export const ADMIN_KEY_STORAGE = "tamga_admin_key";
 
@@ -49,4 +49,24 @@ export function useAdminKey(fallback?: string): [string, (key: string) => void] 
   }, []);
 
   return [adminKey, setAdminKey];
+}
+
+/**
+ * Where the key in use comes from, and the way to drop the stored one.
+ *
+ * `builtIn` says whether this build has a key of its own to fall back on
+ * (development only). `forget` removes the key stored in this browser; every
+ * component using the key sees the change at once. The key is not returned.
+ */
+export function useAdminKeySource(): { source: AdminKeySource; builtIn: boolean; forget: () => void } {
+  const stored = useSyncExternalStore(subscribe, readStored, () => "");
+  const forget = useCallback(() => {
+    try {
+      window.localStorage.removeItem(ADMIN_KEY_STORAGE);
+    } catch {
+      /* storage disabled: there was nothing stored */
+    }
+    window.dispatchEvent(new Event(CHANGE_EVENT));
+  }, []);
+  return { source: adminKeySource(stored, BUILT_IN_ADMIN_KEY), builtIn: BUILT_IN_ADMIN_KEY !== "", forget };
 }

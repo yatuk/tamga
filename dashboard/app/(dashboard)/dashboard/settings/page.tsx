@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import NextLink from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -29,8 +29,8 @@ import {
 import { AsOf, asOfWords, failureWords, HealthDetailNotice, held } from "@/components/console/health";
 import { uptimeText } from "@/components/console/names";
 import { PageHead, Refused, ScrollTable, Section } from "@/components/console/page";
-import { ADMIN_KEY_STORAGE } from "@/hooks/useAdminKey";
-import { BUILT_IN_ADMIN_KEY } from "@/lib/built-in-key";
+import { FORGET_STORED_KEY, forgottenWords, KEY_IN_USE, storedKeyNote } from "@/components/console/refused-key";
+import { useAdminKeySource } from "@/hooks/useAdminKey";
 import { HEALTH_KEY } from "@/hooks/useHealth";
 import { api } from "@/lib/api";
 import { permissionDenied } from "@/lib/api/fetch-core";
@@ -79,17 +79,10 @@ export default function SettingsPage() {
 
 function Access({ m }: { m: Page }) {
   // The key in use may come from the build, with nothing stored here.
-  const [inBrowser, setInBrowser] = useState(false);
-  useEffect(() => {
-    try {
-      setInBrowser(!!window.localStorage.getItem(ADMIN_KEY_STORAGE));
-    } catch {
-      setInBrowser(false);
-    }
-  }, [m.saved]);
-  const builtIn = !inBrowser && !!m.saved && m.saved === BUILT_IN_ADMIN_KEY;
+  const key = useAdminKeySource();
+  const builtIn = key.source === "built-in";
   return (
-    <Section id="admin-key" title="Admin key" note={inBrowser ? "One is stored in this browser" : builtIn ? "Using the one built into this page" : "None stored in this browser"} style={{ maxWidth: "44rem" }}>
+    <Section id="admin-key" title="Admin key" note={KEY_IN_USE[key.source]} style={{ maxWidth: "44rem" }}>
       {builtIn ? (
         <InlineNotification
           kind="info"
@@ -122,6 +115,23 @@ function Access({ m }: { m: Page }) {
           </Button>
         </div>
       </form>
+      {key.source === "stored" ? (
+        <>
+          <p className="t-footnote">{storedKeyNote(key.builtIn)}</p>
+          <div className="t-buttons" style={{ marginTop: "0.75rem", marginBottom: "1.5rem" }}>
+            <Button
+              kind="tertiary"
+              size="md"
+              onClick={() => {
+                key.forget();
+                toast.success("Stored key forgotten", forgottenWords(key.builtIn));
+              }}
+            >
+              {FORGET_STORED_KEY}
+            </Button>
+          </div>
+        </>
+      ) : null}
       <p className="t-footnote">
         Applications use their own keys, not this one: see{" "}
         <Link as={NextLink} href="/dashboard/keys">

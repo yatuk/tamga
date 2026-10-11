@@ -250,6 +250,10 @@ function EventDetail({ event, adminKey, onClose }: { event: SecurityEvent; admin
   // The proxy sends null, not an empty list, for a request with no findings.
   const findings = event.findings ?? [];
   const tokens = !!detail.data && (detail.data.input_tokens ?? 0) + (detail.data.output_tokens ?? 0) > 0;
+  // The internal pool a ROUTE verdict named. On a stopped request it is the
+  // pool that could not take it.
+  const routePool = event.route_pool ?? detail.data?.route_pool;
+  const routed = event.action === "ROUTE";
 
   return (
     // Keyed by request: choosing another row replaces the content with a short
@@ -316,6 +320,15 @@ function EventDetail({ event, adminKey, onClose }: { event: SecurityEvent; admin
             <dd>
               {detail.data ? `${detail.data.policy_name || "Unnamed"}, version ${detail.data.policy_version || "?"}` : "Reading"}
             </dd>
+            {routePool ? (
+              <>
+                <dt>{routed ? "Answered by" : "Was to be routed to"}</dt>
+                <dd>
+                  The internal pool <span className="t-data">{routePool}</span>
+                  {routed ? ", not the provider." : ". It could not take the request, which was stopped and not sent to the provider."}
+                </dd>
+              </>
+            ) : null}
             <dt>Scan time</dt>
             <dd>{scanTime(detail.data?.scan_latency_ms ?? event.scan_latency_ms)}</dd>
             {tokens ? (

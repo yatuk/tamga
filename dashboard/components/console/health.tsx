@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { InlineNotification } from "@carbon/react";
 import { NEEDS_KEY, type HealthReading, type HealthStanding } from "@/hooks/useHealth";
+import { RefusedKeyNotice } from "./refused-key";
 
 /**
  * Says that the proxy is up but kept the detail of its health back, and why.
@@ -11,18 +12,15 @@ import { NEEDS_KEY, type HealthReading, type HealthStanding } from "@/hooks/useH
  */
 export function HealthDetailNotice({ state }: { state: HealthStanding }) {
   if (state !== "no-key" && state !== "rejected") return null;
-  const rejected = state === "rejected";
+  // Which key was refused, and the way to drop one stored in this browser: see RefusedKeyNotice.
+  if (state === "rejected") return <RefusedKeyNotice lead="It is up, but it gives the detail of its state only to a valid admin key." />;
   return (
     <InlineNotification
-      kind={rejected ? "error" : "info"}
+      kind="info"
       lowContrast
       hideCloseButton
-      title={rejected ? "The proxy did not accept the admin key." : "No admin key in this browser."}
-      subtitle={
-        rejected
-          ? "It is up, but it gives the detail of its state only to a valid admin key. Check the one under Settings."
-          : "The proxy is up, but it gives the detail of its state only to an admin key. Add one under Settings."
-      }
+      title="No admin key in this browser."
+      subtitle="The proxy is up, but it gives the detail of its state only to an admin key. Add one under Settings."
       style={{ marginTop: "1.5rem", maxWidth: "none" }}
     />
   );

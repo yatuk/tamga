@@ -12,6 +12,7 @@ import type { SSEStatus } from "./useLiveEventsStream";
 const ACTIONS: [ActionFilter, string][] = [
   ["block", "Stopped"],
   ["redact", "Redacted"],
+  ["route", "Routed"],
   ["warn", "Warned"],
   ["pass", "Passed"],
 ];
@@ -71,7 +72,7 @@ export function EventsView() {
         lede={
           windowTotals.all === 0
             ? `Every request the proxy scanned in ${RANGE_WORDS[filters.range]}, newest first. There are none yet.`
-            : `Every request the proxy scanned in ${RANGE_WORDS[filters.range]}, newest first: ${windowTotals.all.toLocaleString("en")} in all, ${windowTotals.blocked.toLocaleString("en")} stopped, ${windowTotals.redacted.toLocaleString("en")} redacted, ${windowTotals.passed.toLocaleString("en")} passed untouched.`
+            : `Every request the proxy scanned in ${RANGE_WORDS[filters.range]}, newest first: ${windowTotals.all.toLocaleString("en")} in all, ${windowTotals.blocked.toLocaleString("en")} stopped, ${windowTotals.redacted.toLocaleString("en")} redacted, ${windowTotals.routed > 0 ? `${windowTotals.routed.toLocaleString("en")} routed to an internal model, ` : ""}${windowTotals.passed.toLocaleString("en")} passed untouched.`
         }
       >
         <LiveState status={p.sseStatus} />

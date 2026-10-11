@@ -119,11 +119,11 @@ export function ReportsBody({
             columns={points.map((p) => ({
               key: p.t,
               label: bucketLabel(p.t, hourly),
-              says: `${bucketName(p.t, hourly)}: ${n(p.total)} requests, ${n(p.blocked)} stopped, ${n(p.redacted)} redacted`,
+              says: `${bucketName(p.t, hourly)}: ${n(p.total)} requests, ${n(p.blocked)} stopped, ${n(p.redacted)} redacted${p.routed ? `, ${n(p.routed)} routed` : ""}`,
               parts: [
                 { kind: "blocked" as const, value: p.blocked },
-                { kind: "altered" as const, value: p.redacted },
-                { kind: "passed" as const, value: Math.max(0, p.total - p.blocked - p.redacted) },
+                { kind: "altered" as const, value: p.redacted + (p.routed ?? 0) },
+                { kind: "passed" as const, value: Math.max(0, p.total - p.blocked - p.redacted - (p.routed ?? 0)) },
               ],
             }))}
           />

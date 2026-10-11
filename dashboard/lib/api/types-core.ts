@@ -63,6 +63,8 @@ export interface DashboardStatsV2 {
   blocked_requests: number;
   redacted_requests: number;
   warned_requests: number;
+  /** Requests answered by an internal pool (action ROUTE). Absent from a proxy older than the action. */
+  routed_requests?: number;
   passed_requests: number;
   top_providers: Record<string, number>;
   top_finding_types: Record<string, number>;
@@ -128,6 +130,12 @@ export interface SecurityEvent {
   risk_level?: string;
   input_risk?: RiskScore | null;
   output_risk?: RiskScore | null;
+  /**
+   * The internal pool a ROUTE verdict named. With the action ROUTE the
+   * request was answered there; with BLOCK the pool could not take it and
+   * the request was stopped.
+   */
+  route_pool?: string;
 }
 
 /** Detail response from GET /api/v1/events/{request_id} */
@@ -161,6 +169,8 @@ export interface SecurityEventDetail {
   input_tokens?: number;
   output_tokens?: number;
   endpoint?: string;
+  /** See SecurityEvent.route_pool. */
+  route_pool?: string;
 }
 
 /** Active policy documents (currently single-item array). */
@@ -185,6 +195,8 @@ export interface TimeseriesPoint {
   blocked: number;
   redacted: number;
   warned: number;
+  /** Answered by an internal pool (action ROUTE). Absent from a proxy older than the action. */
+  routed?: number;
   scan_p95: number;
 }
 

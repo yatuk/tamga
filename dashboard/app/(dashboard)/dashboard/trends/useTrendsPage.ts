@@ -39,7 +39,7 @@ export function useTrendsPage() {
     let caught = 0;
     for (const p of points) {
       attempted += p.total;
-      caught += p.blocked + (p.redacted || 0) + (p.warned || 0);
+      caught += p.blocked + (p.redacted || 0) + (p.routed || 0) + (p.warned || 0);
     }
     return { attempted, caught, passed: Math.max(0, attempted - caught) };
   }, [points]);

@@ -65,7 +65,12 @@ export function Overview() {
   const s = stats.data;
   const total = s?.total_requests ?? 0;
   const blocked = s?.blocked_requests ?? 0;
-  const altered = s?.redacted_requests ?? 0;
+  // Ochre covers every request that went on changed: redacted, or answered
+  // by an internal model instead of the provider.
+  const routed = s?.routed_requests ?? 0;
+  const redacted = s?.redacted_requests ?? 0;
+  const altered = redacted + routed;
+  const alteredWord = routed > 0 ? "redacted or routed" : "redacted";
   const passed = s?.passed_requests ?? 0;
 
   const kinds = Object.entries(s?.top_categories ?? {}).sort((a, b) => b[1] - a[1]);
@@ -123,18 +128,24 @@ export function Overview() {
           }
           rest={
             <>
-              <b>{altered.toLocaleString("en")}</b> went on with something redacted. <b>{passed.toLocaleString("en")}</b> passed untouched.
+              <b>{redacted.toLocaleString("en")}</b> went on with something redacted.{" "}
+              {routed > 0 ? (
+                <>
+                  <b>{routed.toLocaleString("en")}</b> {routed === 1 ? "was" : "were"} answered by an internal model.{" "}
+                </>
+              ) : null}
+              <b>{passed.toLocaleString("en")}</b> passed untouched.
             </>
           }
           below={
             <>
-              <div className="t-split" role="img" aria-label={`${blocked} stopped, ${altered} redacted, ${passed} passed`}>
+              <div className="t-split" role="img" aria-label={`${blocked} stopped, ${altered} ${alteredWord}, ${passed} passed`}>
                 <Bar data-kind="blocked" share={blocked / total} />
                 <Bar data-kind="altered" share={altered / total} />
               </div>
               <div className="t-splitkey">
                 <span data-kind="blocked">Stopped, {Math.round((blocked / total) * 100)}%</span>
-                <span data-kind="altered">Redacted, {Math.round((altered / total) * 100)}%</span>
+                <span data-kind="altered">{routed > 0 ? "Redacted or routed" : "Redacted"}, {Math.round((altered / total) * 100)}%</span>
                 <span>Passed, {Math.round((passed / total) * 100)}%</span>
               </div>
             </>
@@ -209,7 +220,7 @@ export function Overview() {
       <Section
         id="days"
         title={`Requests by ${hourly ? "hour" : "day"}`}
-        note="Red is stopped, ochre is redacted, grey passed."
+        note={`Red is stopped, ochre is ${alteredWord}, grey passed.`}
         style={{ marginTop: "3rem" }}
       >
         {points.length === 0 ? (
@@ -221,11 +232,11 @@ export function Overview() {
             columns={points.map((p) => ({
               key: p.t,
               label: bucketLabel(p.t, hourly),
-              says: `${bucketName(p.t, hourly)}: ${counted(p.total, "request")}, ${p.blocked.toLocaleString("en")} stopped, ${p.redacted.toLocaleString("en")} redacted`,
+              says: `${bucketName(p.t, hourly)}: ${counted(p.total, "request")}, ${p.blocked.toLocaleString("en")} stopped, ${p.redacted.toLocaleString("en")} redacted${p.routed ? `, ${p.routed.toLocaleString("en")} routed` : ""}`,
               parts: [
                 { kind: "blocked" as const, value: p.blocked },
-                { kind: "altered" as const, value: p.redacted },
-                { kind: "passed" as const, value: Math.max(0, p.total - p.blocked - p.redacted) },
+                { kind: "altered" as const, value: p.redacted + (p.routed ?? 0) },
+                { kind: "passed" as const, value: Math.max(0, p.total - p.blocked - p.redacted - (p.routed ?? 0)) },
               ],
             }))}
           />

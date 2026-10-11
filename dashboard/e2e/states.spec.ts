@@ -79,6 +79,51 @@ test.describe("the key's role is too low", () => {
   });
 });
 
+test.describe("the proxy refuses the key stored in this browser", () => {
+  /** The key withAdminKey stores. Here the proxy turns it away, and accepts any other. */
+  const STORED = "e2e-mocked-key";
+  const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers": "*", "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS" };
+
+  test("the notice names the stored key, and its button forgets it", async ({ page }) => {
+    await mockProxy(page);
+    // Registered last, so asked first: the stored key is refused as a real proxy refuses one.
+    await page.route("**/api/v1/**", async (route) => {
+      const request = route.request();
+      if (request.method() === "OPTIONS" || request.headers()["x-tamga-admin-key"] !== STORED) return route.fallback();
+      if (new URL(request.url()).pathname.endsWith("/health/detailed")) {
+        // Up, and keeping the detail back: what the health check answers a key it does not accept.
+        return route.fulfill({ status: 200, headers: CORS, contentType: "application/json", body: JSON.stringify({ proxy: "up", status: "ok", authenticated: false }) });
+      }
+      await route.fulfill({ status: 401, headers: CORS, contentType: "application/json", body: JSON.stringify({ error: "Admin key is wrong or missing" }) });
+    });
+    await page.goto("/dashboard/keys");
+
+    await expect(title(page, "API keys")).toBeVisible();
+    await expect(page.getByText("The proxy did not accept the admin key.", { exact: true })).toBeVisible(SETTLED);
+    // Which key, and what forgetting it leads to: a development build has one of its own, a production build has none.
+    await expect(
+      page.getByText(
+        /^It is up\. The key it refused is the one stored in this browser\. (Forgetting it makes this console use the key built into this page for development\.|Forget it, then enter a valid one under Settings\.)$/,
+      ),
+    ).toBeVisible();
+    // The proxy is up: it is not blamed, and no part of the key is on the page.
+    await expect(shellState(page)).toHaveText("Proxy up");
+    await expect(outage(page)).toHaveCount(0);
+    await expect(page.getByText(STORED)).toHaveCount(0);
+    await expect(page.getByRole("table", { name: "API keys" })).toHaveCount(0);
+
+    const forget = page.getByRole("button", { name: "Forget the key stored in this browser", exact: true });
+    await expect(forget).not.toBeFocused();
+    await forget.click();
+
+    expect(await page.evaluate(() => localStorage.getItem("tamga_admin_key"))).toBeNull();
+    await expect(page.getByText("The proxy did not accept the admin key.", { exact: true })).toHaveCount(0, SETTLED);
+    await expect(forget).toHaveCount(0);
+    // What follows depends on the build: the built-in key reads the list, or there is no key to read it with.
+    await expect(page.getByText("No admin key in this browser.", { exact: true }).or(page.getByText(/^No keys yet\./))).toBeVisible(SETTLED);
+  });
+});
+
 test.describe("the proxy has scanned nothing yet", () => {
   test("the Overview says none in words, in every section", async ({ page }) => {
     await mockProxy(page, EMPTY);

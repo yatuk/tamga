@@ -12,6 +12,18 @@
 export const BUILT_IN_ADMIN_KEY: string =
   process.env.NODE_ENV !== "production" ? process.env.NEXT_PUBLIC_ADMIN_KEY || "" : "";
 
+/**
+ * Where the admin key this console sends comes from. A key a person saved
+ * under Settings is kept in this browser's storage and wins over the built-in
+ * one; "none" is the only other state in a production build. The console says
+ * which of the three applies and never shows any part of the key.
+ */
+export type AdminKeySource = "stored" | "built-in" | "none";
+
+export function adminKeySource(storedKey: string, builtInKey: string = BUILT_IN_ADMIN_KEY): AdminKeySource {
+  return storedKey ? "stored" : builtInKey ? "built-in" : "none";
+}
+
 if (BUILT_IN_ADMIN_KEY && typeof window !== "undefined") {
   console.warn(
     "Tamga console: NEXT_PUBLIC_ADMIN_KEY is built into this page. That is for local development only; a production build refuses it. Enter a key under Settings instead.",

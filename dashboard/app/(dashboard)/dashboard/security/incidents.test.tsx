@@ -66,7 +66,7 @@ describe("the incident queue", { timeout: 20_000 }, () => {
     await screen.findByRole("table");
     const query = new URLSearchParams(asked[0]);
     // Not a page of every request, with the incidents picked out of it afterwards.
-    expect(query.get("action")).toBe("BLOCK,REDACT,STRIP,WARN");
+    expect(query.get("action")).toBe("BLOCK,ROUTE,REDACT,STRIP,WARN");
     expect(query.get("range")).toBe("7d");
     expect(query.get("limit")).toBe("200");
   });
@@ -90,7 +90,7 @@ describe("the incident queue", { timeout: 20_000 }, () => {
     await screen.findByRole("table");
     await userEvent.click(screen.getByRole("tab", { name: "Stopped" }));
     expect(await screen.findByText("Latest 200 of 1,203")).toBeInTheDocument();
-    expect(asked.map((search) => new URLSearchParams(search).get("action")).sort()).toEqual(["BLOCK", "BLOCK,REDACT,STRIP,WARN"]);
+    expect(asked.map((search) => new URLSearchParams(search).get("action")).sort()).toEqual(["BLOCK", "BLOCK,ROUTE,REDACT,STRIP,WARN"]);
     // The sentence above still counts the whole queue.
     expect(screen.getByText(/^The proxy acted on/)).toHaveTextContent("5,752 requests");
     expect(screen.getByText(/^The proxy acted on/)).toHaveTextContent("The latest 200 of 1,203 are listed");

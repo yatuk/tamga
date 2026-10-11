@@ -7,6 +7,10 @@ const KIND_NAMES: Record<string, string> = {
   iban: "IBAN",
   email: "Email address",
   phone_tr: "Phone number",
+  mersis_no: "MERSİS number",
+  imei: "IMEI",
+  passport_tr: "Passport number",
+  license_plate_tr: "Vehicle plate",
   aws_access_key: "AWS access key",
   private_key: "Private key",
   connection_string: "Connection string",
@@ -69,6 +73,7 @@ const PROVIDER_NAMES: Record<string, string> = {
 /** Which scanner family a category belongs to. */
 const KIND_TYPES: Record<string, string> = {
   tc_kimlik: "pii", credit_card: "pii", iban: "pii", email: "pii", phone_tr: "pii", phone: "pii", vkn: "pii", ip_address: "pii",
+  mersis_no: "pii", imei: "pii", passport_tr: "pii", license_plate_tr: "pii",
   aws_access_key: "secret", private_key: "secret", connection_string: "secret", connection_string_password: "secret",
   github_token: "secret", slack_token: "secret", google_api_key: "secret", jwt: "secret", password: "secret", basic_auth: "secret",
   instruction_override: "injection", jailbreak: "injection", role_manipulation: "injection", delimiter_injection: "injection",
@@ -113,7 +118,7 @@ export function uptimeText(seconds?: number) {
 }
 
 /** What happened to a request, in the past tense an analyst would use. */
-export const ACTION_WORDS: Record<string, string> = { BLOCK: "Stopped", REDACT: "Redacted", STRIP: "Stripped", WARN: "Warned", LOG: "Logged", PASS: "Passed" };
+export const ACTION_WORDS: Record<string, string> = { BLOCK: "Stopped", ROUTE: "Routed", REDACT: "Redacted", STRIP: "Stripped", WARN: "Warned", LOG: "Logged", PASS: "Passed" };
 
 const hour = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" });
 

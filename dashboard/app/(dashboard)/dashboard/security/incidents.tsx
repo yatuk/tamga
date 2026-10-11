@@ -13,7 +13,7 @@ import { ACTION_WORDS, counted, kindName, leadFinding, providerName, RANGE_WORDS
 const ACTIONS = ["All", "BLOCK", "REDACT"] as const;
 
 /** What puts a request in the queue: the proxy did something about it. */
-const ACTED = ["BLOCK", "REDACT", "STRIP", "WARN"];
+const ACTED = ["BLOCK", "ROUTE", "REDACT", "STRIP", "WARN"];
 /** The queue covers this window, and lists at most this many requests of it. */
 const WINDOW = "7d";
 const LISTED = 200;

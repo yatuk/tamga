@@ -12,7 +12,7 @@ import { PAGE_SIZE } from "./_constants";
 import type { SavedHunt } from "./_types";
 import { useHuntingPage } from "./useHuntingPage";
 
-const ACTIONS = ["BLOCK", "STRIP", "REDACT", "WARN", "PASS"];
+const ACTIONS = ["BLOCK", "ROUTE", "STRIP", "REDACT", "WARN", "PASS"];
 const SEVERITIES = ["critical", "high", "medium", "low"];
 const TYPES = ["pii", "secret", "injection", "custom"];
 

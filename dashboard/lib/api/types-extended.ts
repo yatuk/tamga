@@ -189,6 +189,8 @@ export interface PolicySimulateResult {
   policy_name: string;
   policy_version: string;
   action: string;
+  /** The internal pool the request would be sent to. Set only when the action is ROUTE. */
+  route_to?: string;
   findings: Array<{
     type: string;
     category: string;

@@ -51,7 +51,7 @@ export function useTrafficPage() {
         }),
         total: p.total,
         blocked: p.blocked,
-        passed: p.total - p.blocked - (p.redacted || 0) - (p.warned || 0),
+        passed: p.total - p.blocked - (p.redacted || 0) - (p.routed || 0) - (p.warned || 0),
       })),
     [ts],
   );
