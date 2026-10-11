@@ -1,4 +1,4 @@
-import type { Answers } from "./fixtures";
+import { eventsPage, type Answers } from "./fixtures";
 
 /**
  * A proxy whose every list is full, and full of values a layout does not
@@ -190,12 +190,9 @@ export const HOSTILE: Answers = {
   "/stats/models": () => ({
     json: { range: "7d", by_model: { [LONG_MODEL]: 900_000_000, "gpt-4o": 300_000_000, "claude-sonnet-4-5": 34_567_890 }, by_family: { [LONG_MODEL]: 900_000_000, "gpt-4o": 300_000_000 } },
   }),
-  "/events": (url) => {
-    const page = Number(url.searchParams.get("page") ?? "1");
-    const limit = Number(url.searchParams.get("limit") ?? "50");
-    // More than one page everywhere, so that the paging controls are on screen.
-    return { json: { events: EVENTS.slice((page - 1) * limit, page * limit), total: 1_234_567 } };
-  },
+  // More than one page everywhere, so that the paging controls are on screen
+  // and every "latest N of M" is said with a long M.
+  "/events": (url) => ({ json: eventsPage(EVENTS, url, 1_234_567) }),
   "/timeseries": (url) => {
     const hour = 3_600_000;
     const now = Math.floor(Date.now() / hour) * hour;

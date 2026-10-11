@@ -23,6 +23,7 @@ export function ReportsBody({
   points,
   hourly,
   recentBlocked,
+  blockedTotal,
   topFindingEntries,
   owaspCoverageRows,
   exportBlockedCsv,
@@ -165,6 +166,12 @@ export function ReportsBody({
               </Arriving>
             </ul>
           )}
+          {blockedTotal > recentBlocked.length && recentBlocked.length > 0 ? (
+            <p className="t-footnote">
+              The latest {recentBlocked.length} of {blockedTotal.toLocaleString("en")} stopped in {RANGE_WORDS[range]}. This CSV holds the ones listed;
+              the export of every scanned request, below, holds them all.
+            </p>
+          ) : null}
         </section>
       </div>
 

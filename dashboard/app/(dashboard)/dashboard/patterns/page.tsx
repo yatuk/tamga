@@ -12,7 +12,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TableHeader,
   TableRow,
@@ -22,7 +21,7 @@ import {
 } from "@carbon/react";
 import { Edit } from "@carbon/icons-react";
 import { counted } from "@/components/console/names";
-import { DataNotice, PageHead, Remove, Section } from "@/components/console/page";
+import { DataNotice, PageHead, Remove, ScrollTable, Section } from "@/components/console/page";
 import { useAdminKey } from "@/hooks/useAdminKey";
 import type { PatternSeverity } from "@/lib/api";
 import { EMPTY_DRAFT, type Draft } from "./_constants";
@@ -87,7 +86,7 @@ export default function PatternsPage() {
           ) : m.items.length === 0 ? (
             <p className="t-empty">None yet. Add one with the form to catch a value the built-in scanners do not know, such as a project codename.</p>
           ) : (
-            <TableContainer className="t-table">
+            <ScrollTable className="t-table">
               <Table size="md" aria-label="Your patterns">
                 <TableHead>
                   <TableRow>
@@ -139,7 +138,7 @@ export default function PatternsPage() {
                   ))}
                 </TableBody>
               </Table>
-            </TableContainer>
+            </ScrollTable>
           )}
           <p className="t-footnote">
             A pattern here only detects. To give a match its own action, define it as a custom entity in the policy:{" "}

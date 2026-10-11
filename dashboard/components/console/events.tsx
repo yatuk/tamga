@@ -10,11 +10,11 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TableHeader,
   TableRow,
 } from "@carbon/react";
+import { ScrollTable } from "./page";
 import { Close } from "@carbon/icons-react";
 import { api } from "@/lib/api";
 import type { IncidentStatus, SecurityEvent, SecurityEventDetail } from "@/lib/api/types-core";
@@ -149,7 +149,7 @@ export function EventTable({
 
   return (
     <div className="t-work" data-open={shown}>
-      <TableContainer>
+      <ScrollTable>
         <Table size="sm" aria-label={`${label}. Arrow keys move between requests, Enter opens one.`}>
           <TableHead>
             <TableRow>
@@ -202,7 +202,7 @@ export function EventTable({
         </Table>
         {events.length === 0 ? <p className="t-empty">{empty}</p> : null}
         {after}
-      </TableContainer>
+      </ScrollTable>
 
       <AnimatePresence initial={false}>
         {shown ? (
@@ -343,18 +343,31 @@ function EventDetail({ event, adminKey, onClose }: { event: SecurityEvent; admin
 function Triage({ requestId, adminKey }: { requestId: string; adminKey: string }) {
   const queryClient = useQueryClient();
   const stateKey = ["tamga-incident-state", adminKey, requestId];
-  // An incident nobody has touched has no record yet; that reads as open.
+  // An incident nobody has touched has no record yet, and the proxy answers
+  // that it is open. A read that fails is not that answer: nothing is said
+  // about the state then, and no button is offered on a guess.
   const state = useQuery({
     queryKey: stateKey,
-    queryFn: () => api.getIncident(adminKey, requestId).catch(() => null),
+    queryFn: () => api.getIncident(adminKey, requestId),
     enabled: !!adminKey,
+    retry: 1,
   });
+  const unread = state.isError && !state.data;
   const status: IncidentStatus = state.data?.status ?? "Open";
   const triage = useMutation({
     mutationFn: (next: IncidentStatus) => api.patchIncident(adminKey, requestId, { status: next }),
     onSuccess: (saved) => queryClient.setQueryData(stateKey, saved),
   });
   const isOpen = status === "Open" || status === "In Progress";
+
+  if (state.isLoading || unread) {
+    return (
+      <section>
+        <h3>Triage</h3>
+        <p className="t-status">{unread ? "The triage state could not be read from the proxy." : "Reading the triage state."}</p>
+      </section>
+    );
+  }
 
   return (
     <section>

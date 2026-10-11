@@ -11,7 +11,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TableHeader,
   TableRow,
@@ -22,7 +21,7 @@ import { Play } from "@carbon/icons-react";
 import { compare, Diff, diffWords, sameBut } from "@/components/console/diff";
 import { ActionMark } from "@/components/console/events";
 import { clockTime, dayLabel } from "@/components/console/names";
-import { Remove, Section } from "@/components/console/page";
+import { Remove, ScrollTable, Section } from "@/components/console/page";
 import { Verdict } from "@/components/console/verdict";
 import { api, type PolicyRevision, type PolicySimulateResult } from "@/lib/api";
 import { API_BASE, authHeaders } from "@/lib/api/fetch-core";
@@ -288,7 +287,7 @@ export function Entities({
         ) : items.length === 0 ? (
           <p className="t-empty">None yet. Add one to catch a value that only your organisation has, and say what to do with it.</p>
         ) : (
-          <TableContainer className="t-table">
+          <ScrollTable className="t-table">
             <Table size="md" aria-label="Custom entities">
               <TableHead>
                 <TableRow>
@@ -332,7 +331,7 @@ export function Entities({
                 ))}
               </TableBody>
             </Table>
-          </TableContainer>
+          </ScrollTable>
         )}
       </Section>
 
@@ -473,7 +472,7 @@ export function Competitors({ adminKey }: { adminKey: string }) {
           The policy names no competitors. Add a <code>competitors</code> list to the document under Editor to have their mentions caught.
         </p>
       ) : (
-        <TableContainer className="t-table">
+        <ScrollTable className="t-table">
           <Table size="md" aria-label="Competitors">
             <TableHead>
               <TableRow>
@@ -503,7 +502,7 @@ export function Competitors({ adminKey }: { adminKey: string }) {
               ))}
             </TableBody>
           </Table>
-        </TableContainer>
+        </ScrollTable>
       )}
     </Section>
   );

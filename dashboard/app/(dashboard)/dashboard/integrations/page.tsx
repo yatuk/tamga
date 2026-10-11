@@ -11,7 +11,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TableHeader,
   TableRow,
@@ -21,7 +20,7 @@ import {
 } from "@carbon/react";
 import { EXPRESSIVE } from "@/components/console/motion";
 import { counted } from "@/components/console/names";
-import { DataNotice, PageHead, Remove, Section } from "@/components/console/page";
+import { DataNotice, PageHead, Remove, ScrollTable, Section } from "@/components/console/page";
 import { formatSince } from "@/lib/utils/format";
 import { type IntegrationDraft, openIntegrationDraft } from "./integrationDraft";
 import { webhookHost } from "./integrationWebhookHelpers";
@@ -93,7 +92,7 @@ export default function IntegrationsPage() {
 
       {hooks.length > 0 ? (
         <Section id="connected" title="Connected" style={{ marginTop: "2rem" }}>
-          <TableContainer className="t-table">
+          <ScrollTable className="t-table">
             <Table size="md" aria-label="Connected destinations">
               <TableHead>
                 <TableRow>
@@ -137,7 +136,7 @@ export default function IntegrationsPage() {
                 ))}
               </TableBody>
             </Table>
-          </TableContainer>
+          </ScrollTable>
           <p className="t-footnote">
             Only the host of each destination is shown. The rest of the address and any token in it are kept by the proxy and are not sent to
             this console.

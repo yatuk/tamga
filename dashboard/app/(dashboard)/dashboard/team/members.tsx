@@ -8,13 +8,12 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TableHeader,
   TableRow,
   TextInput,
 } from "@carbon/react";
-import { Remove } from "@/components/console/page";
+import { Remove, ScrollTable } from "@/components/console/page";
 import type { TeamMember, TeamRole } from "@/lib/api";
 import { assignedRole, ROLES, roleSetLabel, sessionsEndedLabel, unassignedWord, type DefaultRole } from "./access";
 
@@ -115,7 +114,7 @@ export function Members({
   onSignOut: (member: TeamMember) => void;
 }) {
   return (
-    <TableContainer className="t-table">
+    <ScrollTable className="t-table">
       <Table size="md" aria-label="Members">
         <TableHead>
           <TableRow>
@@ -184,7 +183,7 @@ export function Members({
           })}
         </TableBody>
       </Table>
-    </TableContainer>
+    </ScrollTable>
   );
 }
 

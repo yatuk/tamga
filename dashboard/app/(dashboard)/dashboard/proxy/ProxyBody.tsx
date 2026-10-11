@@ -1,9 +1,9 @@
 "use client";
 
-import { Link, Table, TableBody, TableCell, TableContainer, TableHead, TableHeader, TableRow } from "@carbon/react";
+import { Link, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@carbon/react";
 import { counted, uptimeText } from "@/components/console/names";
 import { AsOf, asOfWords, HealthDetailNotice, held } from "@/components/console/health";
-import { DataNotice, PageHead, Section, Statement } from "@/components/console/page";
+import { DataNotice, PageHead, ScrollTable, Section, Statement } from "@/components/console/page";
 import type { useProxyPage } from "./useProxyPage";
 
 type Props = ReturnType<typeof useProxyPage>;
@@ -107,7 +107,7 @@ export function ProxyBody({ adminKey, isLoading, hasError, isOnline, reading, de
                 : "The state of each part is shown once the proxy accepts an admin key from this browser."}
           </p>
         ) : (
-          <TableContainer className="t-table">
+          <ScrollTable className="t-table">
             <Table size="md" aria-label="Parts of the proxy">
               <TableHead>
                 <TableRow>
@@ -144,7 +144,7 @@ export function ProxyBody({ adminKey, isLoading, hasError, isOnline, reading, de
                 })}
               </TableBody>
             </Table>
-          </TableContainer>
+          </ScrollTable>
         )}
         {detail?.trace_ui_url ? (
           <p className="t-footnote">

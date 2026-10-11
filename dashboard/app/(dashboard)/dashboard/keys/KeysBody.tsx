@@ -11,7 +11,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TableHeader,
   TableRow,
@@ -19,7 +18,7 @@ import {
 } from "@carbon/react";
 import { Add } from "@carbon/icons-react";
 import { counted, dayLabel } from "@/components/console/names";
-import { DataNotice, PageHead, Remove } from "@/components/console/page";
+import { DataNotice, PageHead, Remove, ScrollTable } from "@/components/console/page";
 import { formatSince } from "@/lib/utils/format";
 import type { KeyScope } from "./_constants";
 import type { useKeysPage } from "./useKeysPage";
@@ -112,7 +111,7 @@ export function KeysBody({
       ) : apiKeys.length === 0 ? (
         <p className="t-empty">No keys yet. Create one for each application that sends requests through the proxy.</p>
       ) : (
-        <TableContainer className="t-table" style={{ marginTop: "1.5rem" }}>
+        <ScrollTable className="t-table" style={{ marginTop: "1.5rem" }}>
           <Table size="md" aria-label="API keys">
             <TableHead>
               <TableRow>
@@ -158,7 +157,7 @@ export function KeysBody({
               ))}
             </TableBody>
           </Table>
-        </TableContainer>
+        </ScrollTable>
       )}
 
       <Modal

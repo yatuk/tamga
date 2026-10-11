@@ -1,11 +1,11 @@
 "use client";
 
-import { Button, Table, TableBody, TableCell, TableContainer, TableHead, TableHeader, TableRow } from "@carbon/react";
+import { Button, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@carbon/react";
 import { Scale, Trace } from "@/components/console/charts";
 import { AsOf, asOfWords, failureWords, HealthDetailNotice, held } from "@/components/console/health";
 import { Count } from "@/components/console/motion";
-import { bucketName, RANGE_WORDS, uptimeText } from "@/components/console/names";
-import { DataNotice, PageHead, RangeSwitch, Refused, Section, Statement } from "@/components/console/page";
+import { bucketName, RANGE_WORDS } from "@/components/console/names";
+import { DataNotice, PageHead, RangeSwitch, Refused, ScrollTable, Section, Statement } from "@/components/console/page";
 import { formatMs, formatRate, formatSince } from "@/lib/utils/format";
 import type { useLatencyPage } from "./useLatencyPage";
 
@@ -21,6 +21,24 @@ const CIRCUIT: Record<string, { word: string; action?: "FAILING" | "STRUGGLING" 
 };
 
 type Props = ReturnType<typeof useLatencyPage>;
+
+const startedOn = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+
+/**
+ * When the proxy started, as an age of one unit: "35 d ago". The proxy
+ * reports how long it has been up; the date is worked out from when it said
+ * so, and is the element's title.
+ */
+function Started({ seconds, answeredAt }: { seconds: number; answeredAt: number }) {
+  const age = seconds >= 86_400 ? `${Math.floor(seconds / 86_400)} d` : seconds >= 3_600 ? `${Math.floor(seconds / 3_600)} h` : `${Math.max(1, Math.floor(seconds / 60))} min`;
+  if (!answeredAt) return <>{age} ago</>;
+  const at = new Date(answeredAt - seconds * 1000);
+  return (
+    <time dateTime={at.toISOString()} title={`The proxy started on ${startedOn.format(at)}`}>
+      {age} ago
+    </time>
+  );
+}
 
 export function LatencyBody({
   adminKey,
@@ -106,8 +124,9 @@ export function LatencyBody({
         facts={[
           ["Scanners on every request", held(reading, hasDetail ? scannerCount || "None" : undefined)],
           [
-            "Measured since",
-            held(reading, !hasDetail ? undefined : uptimeSeconds > 0 ? `the proxy started, ${uptimeText(uptimeSeconds)} ago` : "Not known"),
+            // The figures are counted from when the proxy started. A short age, which does not break; the date is its title.
+            "Measuring since",
+            held(reading, !hasDetail ? undefined : uptimeSeconds > 0 ? <Started seconds={uptimeSeconds} answeredAt={reading.answeredAt} /> : "Not known"),
           ],
           ["Target, 95th percentile", formatMs(TARGET_MS)],
           ["Upstream endpoints", held(reading, hasDetail ? providerPools.length || "None defined" : undefined)],
@@ -178,7 +197,7 @@ export function LatencyBody({
             No provider pool is defined. Add <code>providers.pools</code> to the policy to see each upstream here.
           </p>
         ) : (
-          <TableContainer className="t-table">
+          <ScrollTable className="t-table">
             <Table size="sm" aria-label="Upstream endpoints">
               <TableHead>
                 <TableRow>
@@ -199,8 +218,9 @@ export function LatencyBody({
                   const state = CIRCUIT[(p.state || "").toLowerCase()] ?? { word: p.state || "Not known" };
                   return (
                     <TableRow key={`${p.pool}-${p.name}`} data-stale={reading.stale ? "true" : undefined}>
-                      <TableCell className="t-data">{p.name}</TableCell>
-                      <TableCell>{p.pool}</TableCell>
+                      {/* The two names are an operator's own and can be long: they wrap, so the columns after them stay in reach. */}
+                      <TableCell className="t-data t-name">{p.name}</TableCell>
+                      <TableCell className="t-name">{p.pool}</TableCell>
                       <TableCell>
                         {reading.stale ? (
                           // No mark: a mark says what the endpoint is doing now.
@@ -238,7 +258,7 @@ export function LatencyBody({
                 })}
               </TableBody>
             </Table>
-          </TableContainer>
+          </ScrollTable>
         )}
       </Section>
     </>

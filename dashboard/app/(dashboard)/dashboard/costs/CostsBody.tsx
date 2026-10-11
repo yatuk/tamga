@@ -1,12 +1,12 @@
 "use client";
 
 import { useMemo } from "react";
-import { Button, Table, TableBody, TableCell, TableContainer, TableHead, TableHeader, TableRow } from "@carbon/react";
+import { Button, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@carbon/react";
 import { Download } from "@carbon/icons-react";
 import { Columns } from "@/components/console/charts";
 import { Bar, Count } from "@/components/console/motion";
 import { dayLabel, providerName, RANGE_WORDS, weekdayLabel } from "@/components/console/names";
-import { DataNotice, NoData, PageHead, PageLoading, RangeSwitch, Section, Shares, Statement } from "@/components/console/page";
+import { DataNotice, NoData, PageHead, PageLoading, RangeSwitch, ScrollTable, Section, Shares, Statement } from "@/components/console/page";
 import { formatInt } from "@/lib/utils/format";
 import type { useCostsPage } from "./useCostsPage";
 
@@ -147,7 +147,7 @@ export function CostsBody({
         {modelCostRows.length === 0 ? (
           <p className="t-empty">No usage in this window.</p>
         ) : (
-          <TableContainer className="t-table">
+          <ScrollTable className="t-table">
             <Table size="sm" aria-label="Cost by model">
               <TableHead>
                 <TableRow>
@@ -170,7 +170,7 @@ export function CostsBody({
                 ))}
               </TableBody>
             </Table>
-          </TableContainer>
+          </ScrollTable>
         )}
         <p className="t-footnote">
           These are estimates from the proxy&apos;s own price table. Check them against the provider&apos;s invoice.
@@ -189,7 +189,7 @@ export function CostsBody({
 
       {dailyRows.length > 0 ? (
         <Section id="usage" title="Usage by day and model" note={`${dailyRows.length} rows`} style={{ marginTop: "3rem" }}>
-          <TableContainer className="t-table">
+          <ScrollTable className="t-table">
             <Table size="sm" aria-label="Usage by day and model">
               <TableHead>
                 <TableRow>
@@ -214,7 +214,7 @@ export function CostsBody({
                 ))}
               </TableBody>
             </Table>
-          </TableContainer>
+          </ScrollTable>
         </Section>
       ) : null}
       </>

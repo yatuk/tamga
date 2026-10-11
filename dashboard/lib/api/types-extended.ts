@@ -196,7 +196,21 @@ export interface PolicySimulateResult {
     match: string;
     confidence: number;
     action: string;
+    /**
+     * Whether the finding has a place in the text that was sent: "exact",
+     * "normalised_view" (seen only in a normalised view of it) or "none".
+     * Absent from a proxy older than the field.
+     */
+    position?: "exact" | "normalised_view" | "none";
+    /** The place in UTF-16 code units, which is how a string is indexed here. Set when `position` is "exact". */
+    start_utf16?: number;
+    end_utf16?: number;
+    /** The same place in bytes of the text as UTF-8. Not used by the console. */
+    start?: number;
+    end?: number;
   }>;
+  /** The text this result is for. The console sets it when it runs a simulation; the proxy does not send it. */
+  sample_text?: string;
 }
 
 /** Query params for GET /api/v1/events (threat hunting + incidents). */

@@ -9,7 +9,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TableHeader,
   TableRow,
@@ -17,7 +16,7 @@ import {
 } from "@carbon/react";
 import { Copy, Play, Upload } from "@carbon/icons-react";
 import { ACTION_WORDS, counted } from "@/components/console/names";
-import { PageHead, Section } from "@/components/console/page";
+import { PageHead, ScrollTable, Section } from "@/components/console/page";
 import { Verdict } from "@/components/console/verdict";
 import type { PolicySource } from "./_constants";
 import { PLAYGROUND_SNIPPETS, type RedTeamRow } from "./playgroundData";
@@ -184,7 +183,7 @@ export default function PlaygroundPage() {
         ) : null}
 
         {p.batchRows.length > 0 ? (
-          <TableContainer className="t-table" style={{ marginTop: "1.5rem" }}>
+          <ScrollTable className="t-table" style={{ marginTop: "1.5rem" }}>
             <Table size="sm" aria-label="Batch test results">
               <TableHead>
                 <TableRow>
@@ -224,7 +223,7 @@ export default function PlaygroundPage() {
                 })}
               </TableBody>
             </Table>
-          </TableContainer>
+          </ScrollTable>
         ) : (
           <p className="t-empty">
             {p.batchSamples.length === 0

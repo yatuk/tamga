@@ -27,6 +27,9 @@ import {
   uptimeText,
 } from "@/components/console/names";
 
+/** How many stopped requests the overview lists. */
+const WAITING = 7;
+
 export function Overview() {
   const [adminKey] = useAdminKey();
   const [range, setRange] = useRangeParam("7d");
@@ -49,9 +52,11 @@ export function Overview() {
     refetchInterval: 30_000,
     retry: 1,
   });
+  // The latest stopped requests of the window, asked for as such: picked out
+  // of a page of all requests they go missing once enough others have passed.
   const events = useQuery({
-    queryKey: ["tamga-events-v2", adminKey],
-    queryFn: () => api.getEvents(adminKey, 1, 200),
+    queryKey: ["tamga-stopped-latest", adminKey, range],
+    queryFn: () => api.getEvents(adminKey, { action: "BLOCK", limit: WAITING, range }),
     enabled: !!adminKey,
     refetchInterval: 30_000,
     retry: 1,
@@ -64,7 +69,8 @@ export function Overview() {
   const passed = s?.passed_requests ?? 0;
 
   const kinds = Object.entries(s?.top_categories ?? {}).sort((a, b) => b[1] - a[1]);
-  const waiting = (events.data?.events ?? []).filter((e) => e.action === "BLOCK").slice(0, 7);
+  const waiting = (events.data?.events ?? []).slice(0, WAITING);
+  const stoppedTotal = events.data?.total ?? 0;
   const points = series.data?.points ?? [];
   const hourly = series.data?.bucket === "hour";
 
@@ -162,7 +168,13 @@ export function Overview() {
           }
         >
           {waiting.length === 0 ? (
-            <p className="t-empty">No request has been stopped yet.</p>
+            <p className="t-empty">
+              {events.isLoading
+                ? "Reading the stopped requests."
+                : events.isError
+                  ? "The stopped requests could not be read."
+                  : `No request was stopped in ${RANGE_WORDS[range]}.`}
+            </p>
           ) : (
             <ul className="t-queue">
               <Arriving>
@@ -185,6 +197,12 @@ export function Overview() {
               </Arriving>
             </ul>
           )}
+          {/* The list is the newest few; the proxy counted them all. */}
+          {stoppedTotal > waiting.length && waiting.length > 0 ? (
+            <p className="t-footnote">
+              The latest {waiting.length} of {stoppedTotal.toLocaleString("en")} stopped in {RANGE_WORDS[range]}.
+            </p>
+          ) : null}
         </Section>
       </div>
 

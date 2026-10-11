@@ -14,7 +14,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TableHeader,
   TableRow,
@@ -23,7 +22,7 @@ import { Close, Renew } from "@carbon/icons-react";
 import { EXPRESSIVE, PRODUCTIVE } from "@/components/console/motion";
 import { clockTime, counted, dayLabel } from "@/components/console/names";
 import { Pager } from "@/components/console/events";
-import { DataNotice, NoData, PageHead, Section, Shares } from "@/components/console/page";
+import { DataNotice, NoData, PageHead, ScrollTable, Section, Shares } from "@/components/console/page";
 import { useEscape, usePanelFocus, useRows, useSwap } from "@/components/console/rows";
 import { useAdminKey } from "@/hooks/useAdminKey";
 import { useStringParam } from "@/hooks/useUrlState";
@@ -125,7 +124,10 @@ export default function AuditPage() {
         lede={
           total === 0
             ? "Who changed what in this console. Nothing has been recorded yet: changes to policies, keys and integrations will appear here."
-            : `Who changed what in this console: ${counted(total, "entry", "entries")}${actors.length > 0 ? ` by ${counted(actors.length, "actor")}` : ""}${
+            : `Who changed what in this console: ${counted(total, "entry", "entries")}${
+                // The actors are counted from the entries that were read: said only when those are all of them.
+                actors.length > 0 && items.length >= total ? ` by ${counted(actors.length, "actor")}` : ""
+              }${
                 items.length < total ? `, the latest ${items.length} shown` : ""
               }. Each entry carries the hash of the one before it, so a change to the record shows.`
         }
@@ -204,7 +206,7 @@ export default function AuditPage() {
         {log.isLoading ? (
           <DataTableSkeleton columnCount={4} rowCount={10} showHeader={false} showToolbar={false} />
         ) : (
-          <TableContainer>
+          <ScrollTable>
             <Table size="sm" aria-label="Audit entries. Arrow keys move between entries, Enter opens one.">
               <TableHead>
                 <TableRow>
@@ -233,7 +235,7 @@ export default function AuditPage() {
             </Table>
             {rows.length === 0 ? <p className="t-empty">{filtering ? "No entry matches these filters." : "The log is empty."}</p> : null}
             <Pager page={page} pages={pages} onPage={(next) => setPaged({ of: filters, page: next })} />
-          </TableContainer>
+          </ScrollTable>
         )}
 
         <AnimatePresence initial={false}>

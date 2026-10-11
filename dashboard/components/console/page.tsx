@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { Button, ContentSwitcher, IconButton, InlineNotification, SkeletonText, Switch } from "@carbon/react";
+import { useEffect, useLayoutEffect, useRef, useState, type ComponentProps, type CSSProperties, type ReactNode } from "react";
+import { Button, ContentSwitcher, IconButton, InlineNotification, SkeletonText, Switch, TableContainer } from "@carbon/react";
 import { TrashCan } from "@carbon/icons-react";
 import { useHealth } from "@/hooks/useHealth";
 import { permissionDenied, sessionRefused } from "@/lib/api/fetch-core";
@@ -381,5 +381,83 @@ export function Remove({
         {keep}
       </Button>
     </span>
+  );
+}
+
+/** Which side of a table holds columns that are out of view. Empty when it fits. */
+type Sideways = "" | "left" | "right" | "both";
+
+/**
+ * A Carbon table in the box it scrolls in. Use it wherever a table would be
+ * wrapped in `TableContainer`: it is that, and it takes the same props.
+ *
+ * A table that is wider than its place on the page scrolls sideways, and a
+ * table that is cut at the edge with nothing said looks like a table that
+ * ends there. So while columns are out of view a line above the table says
+ * that it scrolls, an ink rule stands on the side they are on, and the box
+ * that scrolls is a tab stop with a name, so that the arrow keys move it and
+ * a screen reader says what it is. A table that fits gets none of the three.
+ */
+export function ScrollTable({ children, ...rest }: ComponentProps<typeof TableContainer>) {
+  const note = useRef<HTMLParagraphElement>(null);
+  const [box, setBox] = useState<HTMLElement | null>(null);
+  const [more, setMore] = useState<Sideways>("");
+
+  // Carbon draws the box that scrolls and gives no handle on it. It is looked
+  // for again whenever the container's content changes, since the table may
+  // come later than its container (after a skeleton) or be replaced.
+  useLayoutEffect(() => {
+    const container = note.current?.parentElement;
+    if (!container) return;
+    const find = () => setBox(container.querySelector<HTMLElement>(".cds--data-table-content"));
+    find();
+    const seen = new MutationObserver(find);
+    seen.observe(container, { childList: true, subtree: true });
+    return () => seen.disconnect();
+  }, []);
+
+  // Before paint, so that a table that scrolls is never drawn first without its note.
+  useLayoutEffect(() => {
+    if (!box) return;
+    const read = () => {
+      const hidden = box.scrollWidth - box.clientWidth;
+      const left = box.scrollLeft > 1;
+      const right = box.scrollLeft < hidden - 1;
+      setMore(hidden <= 1 ? "" : left && right ? "both" : left ? "left" : "right");
+    };
+    read();
+    box.addEventListener("scroll", read, { passive: true });
+    // The window, the panel beside the table, or the rows themselves can change what fits.
+    const observer = new ResizeObserver(read);
+    observer.observe(box);
+    const table = box.querySelector("table");
+    if (table) observer.observe(table);
+    return () => {
+      box.removeEventListener("scroll", read);
+      observer.disconnect();
+    };
+  }, [box]);
+
+  const scrolls = more !== "";
+  useLayoutEffect(() => {
+    if (!box) return;
+    if (!scrolls) {
+      for (const name of ["tabindex", "role", "aria-label"]) box.removeAttribute(name);
+      return;
+    }
+    // The table's own name, without the instructions some carry after it.
+    const name = box.querySelector("table")?.getAttribute("aria-label")?.split(".")[0];
+    box.tabIndex = 0;
+    box.setAttribute("role", "region");
+    box.setAttribute("aria-label", `${name || "Table"}, scrolls sideways`);
+  }, [box, scrolls]);
+
+  return (
+    <TableContainer {...rest} data-more={more || undefined}>
+      <p ref={note} className="t-scrollnote" hidden={!scrolls}>
+        This table is wider than the page. Scroll it sideways to read the other columns.
+      </p>
+      {children}
+    </TableContainer>
   );
 }

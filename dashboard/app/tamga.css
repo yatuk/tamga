@@ -561,6 +561,11 @@ html {
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
+/* An age or a date is one piece ("35 d ago"): it is never broken, so no word
+   of it is left alone on a line. On a narrow page the label wraps instead. */
+.tamga .t-facts time {
+  white-space: nowrap;
+}
 
 .tamga .t-columns {
   display: grid;
@@ -1033,6 +1038,11 @@ html {
   white-space: nowrap;
   overflow: visible;
 }
+/* The last label, under a column narrower than it is, ends with the axis
+   instead of running past it. */
+.tamga .t-chart .t-daylabels span[data-end="true"] {
+  justify-self: end;
+}
 
 .tamga .t-trace {
   position: relative;
@@ -1088,13 +1098,29 @@ html {
   color: var(--cds-text-primary);
 }
 .tamga .t-tracelabels {
-  display: flex;
-  justify-content: space-between;
+  position: relative;
+  height: 1rem;
   margin-top: 0.5rem;
   font-size: 0.75rem;
   line-height: 1rem; /* row: axis labels, the label step */
   color: var(--cds-text-secondary);
   font-variant-numeric: tabular-nums;
+}
+/* A label stands under its point: centred on it, except the first and the
+   last, which are set against the ends of the axis. */
+.tamga .t-tracelabels span {
+  position: absolute;
+  top: 0;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+.tamga .t-tracelabels span:first-child {
+  left: 0;
+  transform: none;
+}
+.tamga .t-tracelabels span:last-child {
+  right: 0;
+  transform: none;
 }
 
 /* A few values of one measure, as marks on one line. */
@@ -1537,6 +1563,39 @@ html {
 .tamga .t-table .cds--data-table-content {
   overflow-x: auto;
 }
+/* A table that is wider than its place on the page (ScrollTable). While
+   columns are out of view, a line above the table says that it scrolls and an
+   ink rule stands on the side they are on; the box that scrolls is a tab
+   stop then, with the ring every other control has. A table that fits has
+   none of this. */
+.tamga .t-scrollnote {
+  margin: 0 0 0.5rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--cds-text-secondary);
+}
+.tamga [data-more="right"] > .cds--data-table-content,
+.tamga [data-more="both"] > .cds--data-table-content {
+  border-right: 1px solid var(--tamga-ink);
+}
+.tamga [data-more="left"] > .cds--data-table-content,
+.tamga [data-more="both"] > .cds--data-table-content {
+  border-left: 1px solid var(--tamga-ink);
+}
+.tamga .cds--data-table-content[role="region"]:focus-visible {
+  outline: 2px solid var(--cds-focus);
+  outline-offset: -2px;
+}
+/* A name the operator chose (an endpoint, a pool) in a table whose cells do
+   not wrap: it does, anywhere, in a column that keeps the width of a few
+   words and takes no more than a fifth of a wide table. The columns after it
+   stay in reach, and the whole name is on the page. */
+.tamga .t-table td.t-name {
+  min-width: 9rem;
+  max-width: 16rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 .tamga .t-table .t-under {
   display: block;
   white-space: normal;
@@ -1733,6 +1792,16 @@ html {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
     padding: 0.5rem 0;
+  }
+  /* In a ranked table the name gives way first, and on a narrow page it gave
+     way to nothing: "Email address" broke inside its words beside a bar with
+     room to spare. The name keeps the width of a word, and the bar gives up
+     half of its own. */
+  .tamga .t-kinds td:first-child {
+    min-width: 6rem;
+  }
+  .tamga .t-kinds .t-bar {
+    width: 20%;
   }
   .tamga .t-main {
     margin-left: 0;

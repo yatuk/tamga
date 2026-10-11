@@ -13,7 +13,7 @@ const API = "**/api/v1/**";
 
 /** What a mocked call answers: 200 unless it says otherwise, and JSON unless it carries `text` (the metrics are plain text). */
 export type Answer = { status?: number; json?: unknown; text?: string };
-/** One answer per path under /api/v1, for example "/stats". */
+/** One answer per path under /api/v1, for example "/stats". A path that ends in "/*" answers whatever is one segment below it. */
 export type Answers = Record<string, (url: URL) => Answer | Promise<Answer>>;
 
 function isoMinutesAgo(minutes: number) {
@@ -44,6 +44,30 @@ const EVENTS = Array.from({ length: 24 }, (_, i) => {
   };
 });
 
+/**
+ * GET /events as the proxy answers it: the rows of the asked actions, one
+ * page of them, with the total and the counts by action over all of them.
+ * `total` stands in for a count larger than the rows the fixture holds.
+ */
+export function eventsPage<E extends { action: string }>(events: E[], url: URL, total?: number) {
+  const wanted = url.searchParams
+    .getAll("action")
+    .flatMap((a) => a.split(","))
+    .map((a) => a.trim().toUpperCase())
+    .filter(Boolean);
+  const matching = wanted.length > 0 ? events.filter((e) => wanted.includes(e.action)) : events;
+  const page = Number(url.searchParams.get("page") ?? "1");
+  const limit = Math.min(Number(url.searchParams.get("limit") ?? "50"), 200);
+  const scale = total === undefined || matching.length === 0 ? 1 : Math.floor(total / events.length);
+  const action_counts: Record<string, number> = {};
+  for (const e of matching) action_counts[e.action] = (action_counts[e.action] ?? 0) + scale;
+  return {
+    events: matching.slice((page - 1) * limit, page * limit),
+    total: Object.values(action_counts).reduce((sum, n) => sum + n, 0),
+    action_counts,
+  };
+}
+
 const BLOCKED = EVENTS.filter((e) => e.action === "BLOCK").length;
 const REDACTED = EVENTS.filter((e) => e.action === "REDACT").length;
 
@@ -67,7 +91,7 @@ export const EMPTY: Answers = {
   "/stats": () => ({
     json: { total_requests: 0, blocked_requests: 0, redacted_requests: 0, warned_requests: 0, passed_requests: 0, top_providers: {}, top_finding_types: {}, top_categories: {} },
   }),
-  "/events": () => ({ json: { events: [], total: 0 } }),
+  "/events": () => ({ json: { events: [], total: 0, action_counts: {} } }),
   "/timeseries": (url) => ({ json: { range: url.searchParams.get("range") ?? "7d", bucket: "day", points: [] } }),
 };
 
@@ -86,11 +110,9 @@ const DEFAULTS: Answers = {
       top_categories: { instruction_override: BLOCKED, email: REDACTED },
     },
   }),
-  "/events": (url) => {
-    const page = Number(url.searchParams.get("page") ?? "1");
-    const limit = Number(url.searchParams.get("limit") ?? "50");
-    return { json: { events: EVENTS.slice((page - 1) * limit, page * limit), total: EVENTS.length } };
-  },
+  "/events": (url) => ({ json: eventsPage(EVENTS, url) }),
+  // The triage state of a request nobody has touched: open, and not a 404.
+  "/incidents/*": (url) => ({ json: { request_id: decodeURIComponent(url.pathname.split("/").pop() ?? ""), status: "Open", untouched: true } }),
   "/timeseries": (url) => {
     // One bucket, the current day, holding everything.
     const day = 86_400_000;
@@ -136,7 +158,9 @@ export async function mockProxy(page: Page, answers: Answers = {}) {
     const path = url.pathname.replace(/^.*\/api\/v1/, "");
     // The live feed is a connection that stays open; no test here reads it.
     if (path.startsWith("/live/")) return route.abort();
-    const { status = 200, json = {}, text } = (await table[path]?.(url)) ?? {};
+    // "/incidents/*" answers every path one segment under /incidents.
+    const answer = table[path] ?? table[path.replace(/\/[^/]+$/, "/*")];
+    const { status = 200, json = {}, text } = (await answer?.(url)) ?? {};
     if (text !== undefined) return route.fulfill({ status, headers: CORS, contentType: "text/plain", body: text });
     await route.fulfill({ status, headers: CORS, contentType: "application/json", body: JSON.stringify(json) });
   });

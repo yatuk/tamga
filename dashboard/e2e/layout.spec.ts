@@ -7,7 +7,8 @@ import { HOSTILE, SHOWN } from "./hostile";
 /**
  * No page scrolls sideways, and nothing on it reaches past the right edge of
  * the screen, at a desktop width and on a phone, with every list full of the
- * long values of e2e/hostile.ts.
+ * long values of e2e/hostile.ts. No two labels of a chart run into each
+ * other either.
  *
  * The routes are read from the page tree, app/(dashboard)/dashboard, so a new
  * page is swept without a change here. On each route every tab is opened in
@@ -134,6 +135,56 @@ async function overflowing(page: Page): Promise<string[]> {
   }, MAY_SCROLL);
 }
 
+/**
+ * The labels of a chart that run into each other, as one sentence per pair
+ * that names the chart and the two labels.
+ *
+ * A chart is whatever carries `data-chart`, and a label whatever carries
+ * `data-label` inside it: the kit in components/console/charts.tsx sets both,
+ * so a new chart built from it is looked at without a change here. A chart is
+ * named by its kind and by the accessible name of its `role="img"`. What is
+ * compared is the box of a label's text, not of its element: a label under a
+ * narrow column is wider than the cell it stands in.
+ */
+async function colliding(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const problems: string[] = [];
+    for (const chart of document.querySelectorAll("[data-chart]")) {
+      const img = chart.matches("[role='img']") ? chart : chart.querySelector("[role='img']");
+      const name = `the ${chart.getAttribute("data-chart")} chart "${img?.getAttribute("aria-label") ?? "with no name"}"`;
+      const labels: { text: string; box: DOMRect }[] = [];
+      for (const el of chart.querySelectorAll("[data-label]")) {
+        const text = (el.textContent ?? "").trim().replace(/\s+/g, " ");
+        const style = getComputedStyle(el);
+        if (!text || style.visibility === "hidden" || style.display === "none") continue;
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        const box = range.getBoundingClientRect();
+        if (box.width > 0 && box.height > 0) labels.push({ text, box });
+      }
+      // Half a pixel is rounding, not a collision.
+      const meet = (a: DOMRect, b: DOMRect) => a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5;
+      for (let i = 0; i < labels.length; i++) {
+        for (let j = i + 1; j < labels.length; j++) {
+          const [a, b] = [labels[i], labels[j]];
+          if (!meet(a.box, b.box)) continue;
+          const across = Math.round(Math.min(a.box.right, b.box.right) - Math.max(a.box.left, b.box.left));
+          problems.push(`in ${name}, the label "${a.text}" runs into the label "${b.text}" by ${across}px`);
+        }
+      }
+    }
+    return problems;
+  });
+}
+
+/**
+ * Routes whose first view draws a chart from the hostile data. It keeps the
+ * check above honest, as SHOWN does for the rows: a page that stopped drawing
+ * its chart would have no labels to collide. A chart on a route that is not
+ * listed here is checked all the same.
+ */
+const CHARTED = ["/dashboard", "/dashboard/costs", "/dashboard/latency", "/dashboard/reports", "/dashboard/traffic", "/dashboard/trends"];
+
 /** The page has what it was going to read: no placeholder is left on it. */
 async function settled(page: Page) {
   await expect(page.locator("main h1, main h2").first()).toBeVisible({ timeout: 60_000 });
@@ -164,6 +215,8 @@ for (const route of routes()) {
         await settled(page);
         if (SHOWN[route]) await expect(page.getByText(SHOWN[route]).first()).toBeAttached({ timeout: 15_000 });
         held(await overflowing(page), `${route} at ${width}px`);
+        if (CHARTED.includes(route)) await expect(page.locator("[data-chart] [data-label]").first(), `${route} draws a chart with labels`).toBeAttached({ timeout: 15_000 });
+        held(await colliding(page), `${route} at ${width}px, chart labels`);
 
         // A page's own tabs. The shell has none.
         const tabs = page.locator("main").getByRole("tab");
@@ -173,6 +226,7 @@ for (const route of routes()) {
           await tab.click();
           await settled(page);
           held(await overflowing(page), `${route} at ${width}px, tab "${label}"`);
+          held(await colliding(page), `${route} at ${width}px, tab "${label}", chart labels`);
         }
       });
     }

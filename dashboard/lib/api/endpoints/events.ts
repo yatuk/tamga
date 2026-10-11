@@ -16,6 +16,15 @@ import type { AuditEntry, GetEventsQuery } from "@/lib/api/types-extended";
 import type { TimeRange } from "@/lib/types";
 
 type EventsOverload = GetEventsQuery & { page?: number; limit?: number };
+
+/** One page of the requests a search matches, with what the proxy counted over all of them. */
+export interface EventsPage {
+  events: SecurityEvent[];
+  /** How many requests match, in the whole window: not the length of `events`. */
+  total: number;
+  /** The matching requests by action, in the whole window. Absent from a proxy that does not count them. */
+  action_counts?: Record<string, number>;
+}
 export const events = {
   getStats: (adminKey: string, range?: string) => {
     const qs = range ? `?range=${encodeURIComponent(range)}` : "";
@@ -32,7 +41,7 @@ export const events = {
       extra = rest;
     }
     const qs = buildEventsQueryString(page, limit, extra);
-    return fetchAPI<{ events: SecurityEvent[]; total: number }>(`/api/v1/events?${qs}`, {
+    return fetchAPI<EventsPage>(`/api/v1/events?${qs}`, {
       headers: authHeaders(adminKey),
     });
   },
@@ -80,9 +89,15 @@ export const events = {
       { headers: authHeaders(adminKey) },
     ),
 
+  /**
+   * The triage state of a request. One nobody has touched is answered as
+   * open, with `untouched`. A proxy older than that answer says 404, whose
+   * body carries no status: it reads as open as well, and is not an error.
+   */
   getIncident: (adminKey: string, requestId: string) =>
-    fetchAPI<IncidentState>(`/api/v1/incidents/${encodeURIComponent(requestId)}`, {
+    fetchAPI<Partial<IncidentState>>(`/api/v1/incidents/${encodeURIComponent(requestId)}`, {
       headers: authHeaders(adminKey),
+      accept: (status) => status === 404,
     }),
 
   patchIncident: (adminKey: string, requestId: string, patch: IncidentPatch) =>

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { Columns, Trace, type Column, type TracePoint } from "./charts";
+import { Columns, keptLabels, LABEL_GAP, labelWidth, lineLabels, Trace, underColumns, underPoints, type Column, type TracePoint } from "./charts";
 
 /**
  * What the two charts say to someone who cannot see them or cannot point at
@@ -26,6 +26,143 @@ const trace = (values: (number | null)[]): TracePoint[] => values.map((value, i)
 
 /** The line above a chart that reads a bucket out. */
 const readout = (text: string) => screen.getByText(text);
+
+/** A chart `width` pixels wide. Nothing is laid out here, so without this a chart has no width: no line, and only the two end labels. */
+function measured(width: number) {
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      constructor(private report: (entries: { contentRect: { width: number } }[]) => void) {}
+      observe() {
+        this.report([{ contentRect: { width } }]);
+      }
+      unobserve() {}
+      disconnect() {}
+    },
+  );
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+/** The labels written under a chart, in order. */
+const written = (container: HTMLElement) => [...container.querySelectorAll("[aria-hidden='true'] [data-label]")].map((el) => el.textContent);
+
+describe("keptLabels", () => {
+  const EM = 12;
+  // What the console writes under a chart: an hour, a day, and a bucket's full name.
+  const hourly = (i: number) => `${String(i % 24).padStart(2, "0")}:00`;
+  const daily = (i: number) => `${i + 1} Oct`;
+  const named = (i: number) => `Wed ${i + 1} Oct, ${hourly(i)}`;
+  const underColumnsKept = (widths: number[], room: number) => keptLabels(widths.length, underColumns(widths, room), 13);
+  const AXES = [
+    { name: "columns of hours", text: hourly, span: underColumns, kept: underColumnsKept, most: 13 },
+    { name: "columns of days", text: daily, span: underColumns, kept: underColumnsKept, most: 13 },
+    { name: "a line of hours", text: named, span: underPoints, kept: lineLabels, most: 3 },
+    { name: "a line of days", text: daily, span: underPoints, kept: lineLabels, most: 3 },
+  ];
+  // The width of the chart, not of the window: 288px is what a 320px phone leaves it.
+  const ROOMS = Array.from({ length: (1440 - 280) / 8 + 1 }, (_, i) => 280 + i * 8);
+  const COUNTS = Array.from({ length: 48 }, (_, i) => i + 1);
+
+  for (const axis of AXES) {
+    it(`keeps the first and the last label of ${axis.name}, and no two that would touch, at every width and count`, () => {
+      for (const room of ROOMS) {
+        for (const count of COUNTS) {
+          const widths = Array.from({ length: count }, (_, i) => labelWidth(axis.text(i)) * EM);
+          const span = axis.span(widths, room);
+          const kept = axis.kept(widths, room);
+          const where = `${count} labels in ${room}px: ${kept.join(",")}`;
+
+          expect(kept[0], where).toBe(0);
+          expect(kept[kept.length - 1], where).toBe(count - 1);
+          expect(kept.length, where).toBeLessThanOrEqual(Math.min(count, axis.most));
+          for (let k = 1; k < kept.length; k++) {
+            expect(kept[k], where).toBeGreaterThan(kept[k - 1]);
+            // The next label starts no nearer than the gap after the one before it ends.
+            expect(span(kept[k])[0] - span(kept[k - 1])[1], where).toBeGreaterThanOrEqual(LABEL_GAP);
+          }
+          // Nothing is written outside the axis.
+          for (const i of kept) {
+            expect(span(i)[0], where).toBeGreaterThanOrEqual(0);
+            if (count > 1) expect(span(i)[1], where).toBeLessThanOrEqual(room);
+          }
+        }
+      }
+    });
+  }
+
+  it("steps evenly from the first label, and a stepped label nearer to the last than a step gives way to it", () => {
+    const widths = (count: number) => Array.from({ length: count }, (_, i) => labelWidth(hourly(i)) * EM);
+    // 48 hours across a phone: every sixth, and the 43rd hour gives way to the 48th.
+    expect(underColumnsKept(widths(48), 343)).toEqual([0, 6, 12, 18, 24, 30, 36, 47]);
+    // The same across a desk: every fourth, which is as many as a dozen and the last allow.
+    expect(underColumnsKept(widths(48), 960)).toEqual([0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 47]);
+    // 24 hours across a desk: every second, and 23:00 instead of 22:00.
+    expect(underColumnsKept(widths(24), 960)).toEqual([0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 23]);
+    // A week has room for every day on a desk and on a 375px phone, and for every second day on a 320px one.
+    const week = Array.from({ length: 7 }, (_, i) => labelWidth(daily(i + 4)) * EM);
+    expect(underColumnsKept(week, 960)).toEqual([0, 1, 2, 3, 4, 5, 6]);
+    expect(underColumnsKept(week, 343)).toEqual([0, 1, 2, 3, 4, 5, 6]);
+    expect(underColumnsKept(week, 288)).toEqual([0, 2, 4, 6]);
+  });
+
+  it("leaves the same number of columns between every two labels, and at least as many before the last", () => {
+    for (const room of ROOMS) {
+      for (const count of COUNTS) {
+        const kept = underColumnsKept(Array.from({ length: count }, (_, i) => labelWidth(hourly(i)) * EM), room);
+        if (kept.length < 3) continue;
+        const where = `${count} labels in ${room}px: ${kept.join(",")}`;
+        const step = kept[1] - kept[0];
+        for (let k = 2; k < kept.length - 1; k++) expect(kept[k] - kept[k - 1], where).toBe(step);
+        const end = kept[kept.length - 1] - kept[kept.length - 2];
+        expect(end, where).toBeGreaterThanOrEqual(step);
+        expect(end, where).toBeLessThan(2 * step);
+      }
+    }
+  });
+
+  it("writes more labels as the axis widens, never fewer", () => {
+    for (const count of [7, 24, 30, 48]) {
+      const widths = Array.from({ length: count }, (_, i) => labelWidth(hourly(i)) * EM);
+      let before = 0;
+      for (const room of ROOMS) {
+        const kept = underColumnsKept(widths, room).length;
+        expect(kept, `${count} labels in ${room}px`).toBeGreaterThanOrEqual(before);
+        before = kept;
+      }
+    }
+  });
+
+  it("under a line writes the middle only where three labels fit", () => {
+    const widths = Array.from({ length: 48 }, (_, i) => labelWidth(named(i)) * EM);
+    expect(lineLabels(widths, 288)).toEqual([0, 47]);
+    expect(lineLabels(widths, 343)).toEqual([0, 23, 47]);
+    expect(lineLabels(widths, 504)).toEqual([0, 23, 47]);
+    // Two points have no middle, and four have theirs at the second.
+    expect(lineLabels(widths.slice(0, 2), 504)).toEqual([0, 1]);
+    expect(lineLabels(widths.slice(0, 4), 504)).toEqual([0, 1, 3]);
+  });
+
+  it("with no width keeps the two ends, and with one label or none has nothing to thin", () => {
+    const widths = Array.from({ length: 30 }, (_, i) => labelWidth(daily(i)) * EM);
+    expect(keptLabels(30, underColumns(widths, 0), 13)).toEqual([0, 29]);
+    expect(lineLabels(widths, 0)).toEqual([0, 29]);
+    expect(lineLabels(widths.slice(0, 1), 300)).toEqual([0]);
+    expect(lineLabels([], 300)).toEqual([]);
+    expect(keptLabels(2, underColumns(widths.slice(0, 2), 0), 13)).toEqual([0, 1]);
+    expect(keptLabels(1, underColumns(widths.slice(0, 1), 300), 13)).toEqual([0]);
+    expect(keptLabels(0, underColumns([], 300), 13)).toEqual([]);
+  });
+
+  it("takes a label to be at least as wide as it is drawn in the text face", () => {
+    // Measured in the console at 12px: Atkinson Hyperlegible Next, tabular figures.
+    for (const [text, drawn] of [["13:00", 32.9], ["10 Oct", 37.1], ["Mon 5 Oct", 55.9], ["Sun 11 Oct, 12:00", 99.4]] as const) {
+      expect(labelWidth(text) * 12, text).toBeGreaterThanOrEqual(drawn);
+    }
+  });
+});
 
 describe("Columns", () => {
   it("names itself with the first and the last column, and says how to read it", () => {
@@ -114,15 +251,37 @@ describe("Columns", () => {
   });
 
   it("drops labels evenly when there are too many to fit, and still reads every column", async () => {
+    measured(960);
     const user = userEvent.setup();
-    render(<Columns columns={days(24)} idle={IDLE} label="Requests by day" />);
-    // Every second label of 24 is written; the readout is not thinned.
-    expect(screen.getByText("1 Oct")).toBeInTheDocument();
-    expect(screen.queryByText("2 Oct")).toBeNull();
-    expect(screen.getByText("3 Oct")).toBeInTheDocument();
+    const { container } = render(<Columns columns={days(24)} idle={IDLE} label="Requests by day" />);
+    // Every second label of 24 is written, and the last; the readout is not thinned.
+    expect(written(container)).toEqual(["1 Oct", "3 Oct", "5 Oct", "7 Oct", "9 Oct", "11 Oct", "13 Oct", "15 Oct", "17 Oct", "19 Oct", "21 Oct", "24 Oct"]);
     await user.tab();
     await user.keyboard("{ArrowRight}{ArrowRight}");
     expect(readout("2 Oct: 10 requests")).toBeInTheDocument();
+  });
+
+  it("writes fewer labels on a narrow chart, the first and the last among them, and names itself the same", () => {
+    measured(288);
+    const { container } = render(<Columns columns={days(24)} idle={IDLE} label="Requests by day" />);
+    expect(written(container)).toEqual(["1 Oct", "6 Oct", "11 Oct", "16 Oct", "24 Oct"]);
+    // The last label ends with the axis: its column is narrower than it is.
+    expect(container.querySelector("[data-end='true']")).toHaveTextContent("24 Oct");
+    expect(screen.getByRole("img")).toHaveAccessibleName("Requests by day, 1 Oct to 24 Oct. The arrow keys read each one.");
+  });
+
+  it("before its width is known writes the first and the last label only", () => {
+    const { container } = render(<Columns columns={days(24)} idle={IDLE} label="Requests by day" />);
+    expect(written(container)).toEqual(["1 Oct", "24 Oct"]);
+  });
+
+  it("keeps one cell under every column, so a label stands under its own", () => {
+    measured(288);
+    const { container } = render(<Columns columns={days(24)} idle={IDLE} label="Requests by day" />);
+    const cells = [...container.querySelectorAll(".t-daylabels > span")];
+    expect(cells).toHaveLength(24);
+    expect(cells[5]).toHaveTextContent("6 Oct");
+    expect(cells[6]).toBeEmptyDOMElement();
   });
 
   it("draws columns that are all zero without dividing by nothing", () => {
@@ -136,25 +295,6 @@ describe("Columns", () => {
 
 describe("Trace", () => {
   const TRACE_IDLE = "Point at the line, or use the arrow keys, to read an hour.";
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  /** A chart 300 pixels wide: without a width the line is not drawn at all. */
-  function measured() {
-    vi.stubGlobal(
-      "ResizeObserver",
-      class {
-        constructor(private report: (entries: { contentRect: { width: number } }[]) => void) {}
-        observe() {
-          this.report([{ contentRect: { width: 300 } }]);
-        }
-        unobserve() {}
-        disconnect() {}
-      },
-    );
-  }
 
   it("names itself with its window and its highest value", () => {
     render(<Trace points={trace([20, 80, 40])} format={ms} idle={TRACE_IDLE} label="Scan time, 95th percentile" />);
@@ -237,8 +377,34 @@ describe("Trace", () => {
     expect(screen.queryByText("Target, 100 ms")).toBeNull();
   });
 
+  it("writes the two ends of its window under it, and the middle where there is room, each under its point", () => {
+    const hours = trace(Array.from({ length: 9 }, (_, i) => i));
+    measured(300);
+    const wide = render(<Trace points={hours} format={ms} idle={TRACE_IDLE} label="Scan time" />);
+    expect(written(wide.container)).toEqual(["10:00", "14:00", "18:00"]);
+    const [first, middle, last] = wide.container.querySelectorAll<HTMLElement>(".t-tracelabels span");
+    expect(middle.style.left).toBe("50%");
+    // The ends are set against the axis by the stylesheet.
+    expect(first.style.left).toBe("");
+    expect(last.style.left).toBe("");
+    wide.unmount();
+
+    measured(100);
+    const narrow = render(<Trace points={hours} format={ms} idle={TRACE_IDLE} label="Scan time" />);
+    expect(written(narrow.container)).toEqual(["10:00", "18:00"]);
+    expect(screen.getByRole("img")).toHaveAccessibleName("Scan time, 10:00 to 18:00, highest 8 ms. The arrow keys read each one.");
+  });
+
+  it("measures itself when its line appears after a single measurement", () => {
+    measured(300);
+    const { rerender } = render(<Trace points={trace([42])} format={ms} idle={TRACE_IDLE} label="Scan time" />);
+    expect(screen.queryByRole("img")).toBeNull();
+    rerender(<Trace points={trace([42, 84])} format={ms} idle={TRACE_IDLE} label="Scan time" />);
+    expect(screen.getByRole("img").querySelector("path")).not.toBeNull();
+  });
+
   it("reads out the point nearest the pointer", () => {
-    measured();
+    measured(300);
     render(<Trace points={trace([20, 80, 40])} format={ms} idle={TRACE_IDLE} label="Scan time" />);
     const chart = screen.getByRole("img");
     fireEvent.pointerMove(chart, { clientX: 140 });
@@ -253,7 +419,7 @@ describe("Trace", () => {
   });
 
   it("draws the line where it is on the first paint, with nothing to play", () => {
-    measured();
+    measured(300);
     render(<Trace points={trace([0, 100, 50])} format={ms} idle={TRACE_IDLE} label="Scan time" />);
     const line = screen.getByRole("img").querySelector("path");
     // 300 wide, 176 high, 6 kept clear above: 0 is the floor, 100 the top of the scale.

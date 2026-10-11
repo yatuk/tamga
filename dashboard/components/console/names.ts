@@ -18,6 +18,19 @@ const KIND_NAMES: Record<string, string> = {
   classifier: "Flagged by the classifier",
   hidden_text: "Hidden text",
   unreadable_block: "Unreadable encoded block",
+  above_text_request: "Request for the text above",
+  translation_abandoned: "Translation dropped in the text",
+  translation_bypass: "Translation used to carry an instruction",
+  link_exfiltration: "Link carrying data out",
+  link_userinfo: "Host hidden behind user info",
+  link_homoglyph: "Look-alike host name",
+  link_scheme: "Unsafe link scheme",
+  link_text_mismatch: "Link text shows another host",
+  link_ip_host: "Link to an IP address",
+  link_port: "Link to an unusual port",
+  link_denied_host: "Link to a denied host",
+  schema_mismatch: "Answer does not match the schema",
+  not_json: "Answer is not JSON",
   azure_storage_key: "Azure storage key",
   gitlab_token: "GitLab token",
   npm_token: "npm token",
@@ -31,7 +44,10 @@ const KIND_NAMES: Record<string, string> = {
   url_credentials: "Credentials in a URL",
 };
 
-const TYPE_NAMES: Record<string, string> = { pii: "Personal data", secret: "Secret", injection: "Prompt injection", custom: "Custom pattern" };
+const TYPE_NAMES: Record<string, string> = {
+  pii: "Personal data", secret: "Secret", injection: "Prompt injection", custom: "Custom pattern",
+  malicious_link: "Malicious link", output_schema: "Answer schema",
+};
 
 const ROLE_NAMES: Record<string, string> = {
   user: "User message",
@@ -57,6 +73,10 @@ const KIND_TYPES: Record<string, string> = {
   github_token: "secret", slack_token: "secret", google_api_key: "secret", jwt: "secret", password: "secret", basic_auth: "secret",
   instruction_override: "injection", jailbreak: "injection", role_manipulation: "injection", delimiter_injection: "injection",
   classifier: "injection", hidden_text: "injection", unreadable_block: "injection",
+  above_text_request: "injection", translation_abandoned: "injection", translation_bypass: "injection",
+  link_exfiltration: "malicious_link", link_userinfo: "malicious_link", link_homoglyph: "malicious_link", link_scheme: "malicious_link",
+  link_text_mismatch: "malicious_link", link_ip_host: "malicious_link", link_port: "malicious_link", link_denied_host: "malicious_link",
+  schema_mismatch: "output_schema", not_json: "output_schema",
   azure_storage_key: "secret", gitlab_token: "secret", npm_token: "secret", sendgrid_key: "secret", mailchimp_key: "secret",
   square_token: "secret", discord_bot_token: "secret", telegram_bot_token: "secret", pypi_token: "secret",
   artifactory_key: "secret", url_credentials: "secret",

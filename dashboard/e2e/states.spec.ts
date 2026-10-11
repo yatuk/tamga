@@ -90,7 +90,8 @@ test.describe("the proxy has scanned nothing yet", () => {
     await expect(stoppedOf(page)).toHaveCount(0);
 
     await expect(page.getByText("Nothing was found in this window.")).toBeVisible();
-    await expect(page.getByText("No request has been stopped yet.")).toBeVisible();
+    // The window is named: nothing is said about before it.
+    await expect(page.getByText("No request was stopped in the last 7 days.")).toBeVisible();
     await expect(page.getByText("No traffic in this window.")).toBeVisible();
     await expect(shellState(page)).toHaveText("Proxy up");
   });

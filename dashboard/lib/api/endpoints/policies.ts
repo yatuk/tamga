@@ -43,7 +43,9 @@ export const policies = {
       method: "POST",
       headers: authHeaders(adminKey),
       body: JSON.stringify({ yaml, sample_text }),
-    }),
+      // The result goes with the text it is about: the positions in it are
+      // offsets into that text, not into whatever is typed afterwards.
+    }).then((result): PolicySimulateResult => ({ ...result, sample_text })),
 
   listPolicyRevisions: (adminKey: string) =>
     fetchAPI<PolicyRevision[]>("/api/v1/policies/history", {

@@ -1,10 +1,11 @@
-import { beforeEach, describe, expect, it } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { act, render, screen, waitFor } from "@testing-library/react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@carbon/react";
 import { createElement, type ReactElement } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ADMIN_KEY_STORAGE } from "@/hooks/useAdminKey";
 import { ApiError } from "@/lib/api/fetch-core";
-import { DataNotice, NoData, Refused } from "./page";
+import { DataNotice, NoData, Refused, ScrollTable } from "./page";
 
 function show(node: ReactElement) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -115,5 +116,77 @@ describe("Refused", () => {
   it("renders nothing for an error that is not about the role", () => {
     const { container } = show(<Refused error={new Error("network")} />);
     expect(container).toBeEmptyDOMElement();
+  });
+});
+
+describe("ScrollTable", () => {
+  /** jsdom lays nothing out: the box that scrolls is given the widths a browser would measure. */
+  function widths(content: number, box: number) {
+    const scrolling = (el: Element) => el.classList.contains("cds--data-table-content");
+    vi.spyOn(Element.prototype, "scrollWidth", "get").mockImplementation(function (this: Element) {
+      return scrolling(this) ? content : 0;
+    });
+    vi.spyOn(Element.prototype, "clientWidth", "get").mockImplementation(function (this: Element) {
+      return scrolling(this) ? box : 0;
+    });
+  }
+  afterEach(() => vi.restoreAllMocks());
+
+  const table = (label: string) => (
+    <ScrollTable className="t-table">
+      <Table size="sm" aria-label={label}>
+        <TableHead>
+          <TableRow>
+            <TableHeader>Endpoint</TableHeader>
+            <TableHeader>Pool</TableHeader>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          <TableRow>
+            <TableCell>openai</TableCell>
+            <TableCell>primary</TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
+    </ScrollTable>
+  );
+  const NOTE = "This table is wider than the page. Scroll it sideways to read the other columns.";
+
+  it("says nothing of a table that fits, and adds no tab stop", () => {
+    widths(600, 600);
+    const { container } = render(table("Upstream endpoints"));
+    const box = container.querySelector(".cds--data-table-content")!;
+    expect(screen.getByText(NOTE)).not.toBeVisible();
+    expect(box).not.toHaveAttribute("tabindex");
+    expect(box).not.toHaveAttribute("role");
+    expect(container.querySelector("[data-more]")).toBeNull();
+  });
+
+  it("says that a table wider than its box scrolls, on which side, and makes the box a named tab stop", () => {
+    widths(900, 300);
+    const { container } = render(table("Upstream endpoints"));
+    const box = container.querySelector<HTMLElement>(".cds--data-table-content")!;
+    expect(screen.getByText(NOTE)).toBeVisible();
+    expect(screen.getByRole("region", { name: "Upstream endpoints, scrolls sideways" })).toBe(box);
+    expect(box).toHaveAttribute("tabindex", "0");
+    expect(container.querySelector(".cds--data-table-container")).toHaveAttribute("data-more", "right");
+
+    // Scrolled part of the way, columns are out of view on both sides; at the end, on the left alone.
+    act(() => {
+      box.scrollLeft = 200;
+      box.dispatchEvent(new Event("scroll"));
+    });
+    expect(container.querySelector(".cds--data-table-container")).toHaveAttribute("data-more", "both");
+    act(() => {
+      box.scrollLeft = 600;
+      box.dispatchEvent(new Event("scroll"));
+    });
+    expect(container.querySelector(".cds--data-table-container")).toHaveAttribute("data-more", "left");
+  });
+
+  it("names the region by the table, without the instructions a table's name can carry", () => {
+    widths(900, 300);
+    render(table("Incidents. Arrow keys move between requests, Enter opens one."));
+    expect(screen.getByRole("region", { name: "Incidents, scrolls sideways" })).toBeInTheDocument();
   });
 });

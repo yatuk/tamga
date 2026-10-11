@@ -230,8 +230,11 @@ export interface IncidentState {
   reason?: string;
   tags?: string[];
   comments?: IncidentComment[];
-  updated_at: string;
-  created_at: string;
+  /** Absent, with `created_at`, while nobody has touched the incident. */
+  updated_at?: string;
+  created_at?: string;
+  /** Nobody has triaged this request: there is no record, and it is open. */
+  untouched?: boolean;
 }
 
 export interface IncidentPatch {

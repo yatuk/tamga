@@ -16,7 +16,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TableHeader,
   TableRow,
@@ -29,7 +28,7 @@ import {
 } from "@carbon/react";
 import { AsOf, asOfWords, failureWords, HealthDetailNotice, held } from "@/components/console/health";
 import { uptimeText } from "@/components/console/names";
-import { PageHead, Refused, Section } from "@/components/console/page";
+import { PageHead, Refused, ScrollTable, Section } from "@/components/console/page";
 import { ADMIN_KEY_STORAGE } from "@/hooks/useAdminKey";
 import { BUILT_IN_ADMIN_KEY } from "@/lib/built-in-key";
 import { HEALTH_KEY } from "@/hooks/useHealth";
@@ -239,7 +238,7 @@ function Providers({ m }: { m: Page }) {
           note={reading.stale ? asOfWords(reading.answeredAt, true) : `${pl.healthy_count} of ${pl.total_count} taking traffic`}
           style={i > 0 ? { marginTop: "2.5rem" } : undefined}
         >
-          <TableContainer className="t-table">
+          <ScrollTable className="t-table">
             <Table size="md" aria-label={`${pl.pool} pool`}>
               <TableHead>
                 <TableRow>
@@ -291,7 +290,7 @@ function Providers({ m }: { m: Page }) {
                 })}
               </TableBody>
             </Table>
-          </TableContainer>
+          </ScrollTable>
         </Section>
       ))}
       <p className="t-footnote">An endpoint that is cut off receives no traffic. Reset it once the upstream is healthy again.</p>

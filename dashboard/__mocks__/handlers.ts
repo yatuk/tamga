@@ -69,14 +69,21 @@ function pdfReport(request: Request) {
   return new HttpResponse(`%PDF-1.4 report for ${range}`, { headers: { "Content-Type": "application/pdf" } });
 }
 
+/**
+ * GET /events as the proxy answers it: `action` is one value, several
+ * separated by commas, or the parameter repeated, in either case; the total
+ * and the counts by action are of every matching request, not of the page.
+ */
 function eventsResponse(actionFilter: string[], page = 1, limit = 50) {
-  const all = MOCK_EVENTS.filter(
-    (e) => actionFilter.length === 0 || actionFilter.includes(e.action),
-  );
+  const wanted = actionFilter.flatMap((a) => a.split(",")).map((a) => a.trim().toUpperCase()).filter(Boolean);
+  const all = MOCK_EVENTS.filter((e) => wanted.length === 0 || wanted.includes(e.action.toUpperCase()));
   const start = (page - 1) * limit;
+  const action_counts: Record<string, number> = {};
+  for (const e of all) action_counts[e.action.toUpperCase()] = (action_counts[e.action.toUpperCase()] ?? 0) + 1;
   return {
     events: all.slice(start, start + limit),
     total: all.length,
+    action_counts,
   };
 }
 

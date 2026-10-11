@@ -34,7 +34,9 @@ export function useReportsPage() {
 
   const { data: eventsData } = useQuery({
     queryKey: ["tamga-reports-events", adminKey, range],
-    queryFn: () => api.getEvents(adminKey, { page: 1, limit: 50, range }),
+    // The stopped requests of the window, asked for as such: the window is
+    // the proxy's, and none is lost behind requests that passed.
+    queryFn: () => api.getEvents(adminKey, { page: 1, limit: 10, range, action: "BLOCK" }),
     enabled: !!adminKey,
     retry: 1,
     staleTime: 60 * 1000,
@@ -89,20 +91,7 @@ export function useReportsPage() {
   }, [breakdown]);
 
 
-  const recentBlocked = useMemo(
-    () =>
-      (eventsData?.events || [])
-        .filter((e) => toUpperEn(e.action || "") === "BLOCK")
-        .filter((e) => {
-          const now = Date.now();
-          const tms = new Date(e.timestamp).getTime();
-          const windowMs =
-            range === "24h" ? 24 * 60 * 60 * 1000 : range === "30d" ? 30 * 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
-          return tms >= now - windowMs;
-        })
-        .slice(0, 10),
-    [eventsData, range],
-  );
+  const recentBlocked = useMemo(() => (eventsData?.events || []).slice(0, 10), [eventsData]);
 
   const topFindingEntries = useMemo(() => {
     const m = stats?.top_finding_types || {};
@@ -223,6 +212,8 @@ export function useReportsPage() {
     points: ts?.points ?? [],
     hourly: ts?.bucket === "hour",
     recentBlocked,
+    /** How many requests were stopped in the window, as the proxy counted them: the list is its newest few. */
+    blockedTotal: eventsData?.total ?? 0,
     topFindingEntries,
     owaspCoverageRows,
     exportBlockedCsv,
