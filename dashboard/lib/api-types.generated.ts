@@ -603,7 +603,7 @@ export interface paths {
                 query?: {
                     page?: number;
                     limit?: number;
-                    /** @description BLOCK, STRIP, REDACT, WARN, LOG or PASS */
+                    /** @description BLOCK, ROUTE, STRIP, REDACT, WARN, LOG or PASS */
                     action?: string;
                     /** @description Küçük harf provider adı veya `shadow` */
                     provider?: string;
@@ -644,7 +644,7 @@ export interface paths {
                             total?: number;
                             /**
                              * @description The matching requests by action (upper case: `BLOCK`,
-                             *     `REDACT`, `STRIP`, `WARN`, `LOG`, `PASS`), counted over
+                             *     `ROUTE`, `REDACT`, `STRIP`, `WARN`, `LOG`, `PASS`), counted over
                              *     every match in the window and not over the page. The
                              *     values add up to `total`. An action with no match is
                              *     absent. Left out when the database could not be asked
@@ -701,6 +701,10 @@ export interface paths {
          *     - `policy_name` and `policy_version` are those of the policy the
          *       request was decided with. Absent on requests stored before they
          *       were recorded: the policy loaded now is not shown in their place.
+         *     - `route_pool` is the internal pool a ROUTE verdict named. With the
+         *       action `ROUTE` the request was answered there; with `BLOCK` the
+         *       pool could not take it and the request was stopped. Absent on
+         *       every other request.
          *     - `output_action`, `output_findings` and `output_risk` describe the
          *       scan of the response, and are absent when it was not scanned.
          *       `output_findings` is `[]` for a response that was scanned and
@@ -2031,8 +2035,14 @@ export interface paths {
          *     did not finish, the answer is 503, whatever `scan.on_error` says.
          *     A text longer than `scan.classifier.max_chars` is such a case when
          *     the classifier is on, for a verdict of PASS or WARN. A verdict that
-         *     already stops or rewrites the text (BLOCK, STRIP, REDACT) is given,
-         *     with the header `X-Tamga-Classifier: incomplete`.
+         *     already stops or rewrites the text (BLOCK, ROUTE, STRIP, REDACT) is
+         *     given, with the header `X-Tamga-Classifier: incomplete`.
+         *
+         *     `ROUTE` is reported and not carried out: a scan sends nothing. The
+         *     answer names the internal pool the proxy would send the request to
+         *     in `route_to`, and does not say whether that pool can be reached. A
+         *     caller that forwards the text itself, to a provider, must treat
+         *     `ROUTE` as a block.
          *
          *     For a custom entity or a competitor, a `proxy` key gets `custom` or
          *     `competitor` as the category, not the name the operator chose.
@@ -2166,6 +2176,11 @@ export interface paths {
          *     - BLOCK, or a REDACT or STRIP that cannot be carried out:
          *       `BLOCKED`, with a `blocked_reason` that names the kinds of finding
          *       (`pii/tc_kimlik`) and the Tamga request id, never what was matched.
+         *     - ROUTE: `BLOCKED`. The contract has no action that sends a request
+         *       somewhere else, and LiteLLM would send a request Tamga lets
+         *       through to its own provider. The reason says that routing is not
+         *       possible over the bridge, `X-Tamga-Action` is `BLOCK` and
+         *       `X-Tamga-Route-Fallback` is `block:bridge`.
          *     - REDACT and STRIP: `GUARDRAIL_INTERVENED`, with `texts` holding
          *       one text for each one received, in the same order, masked with
          *       the proxy's `[category_REDACTED]` markers or replaced by its
@@ -4748,6 +4763,12 @@ export interface paths {
          * OpenAI-compatible chat completions (proxied + scanned)
          * @description Standart OpenAI formatı. Tamga istek gövdesini tarar; policy
          *     sonucu `action=block` ise 403 döner, `redact` ise gövde maskelenir.
+         *
+         *     With the action ROUTE the request is sent as written to an internal
+         *     pool of the policy and not to the provider; the answer then carries
+         *     `X-Tamga-Routed-To`. If the pool cannot take the request it is
+         *     blocked with a 503 and the code `tamga_route_unavailable`. It is
+         *     never sent to the provider instead.
          */
         post: {
             parameters: {
@@ -4762,6 +4783,8 @@ export interface paths {
                 200: {
                     headers: {
                         "X-Tamga-Request-Id"?: string;
+                        /** @description The internal pool that answered. Present only for a routed request. */
+                        "X-Tamga-Routed-To"?: string;
                         "X-Tamga-Scan-Ms"?: number;
                         "X-Tamga-Tokens-In"?: number;
                         "X-Tamga-Tokens-Out"?: number;
@@ -4780,6 +4803,19 @@ export interface paths {
                 };
                 /** @description Blocked by policy */
                 403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /**
+                 * @description The request could not be served and was not forwarded. Among
+                 *     the codes: `tamga_route_unavailable`, for a request the policy
+                 *     routes to an internal pool that could not take it. `reason` is
+                 *     `upstream` (no endpoint of the pool answered; `Retry-After` is
+                 *     set), `dialect` (the route's API is not the pool's) or `no_pool`.
+                 */
+                503: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -5007,6 +5043,8 @@ export interface components {
             blocked_requests?: number;
             redacted_requests?: number;
             warned_requests?: number;
+            /** @description Requests answered by an internal pool (action ROUTE). Not counted in `passed_requests`. */
+            routed_requests?: number;
             passed_requests?: number;
             top_providers?: {
                 [key: string]: number;
@@ -5084,6 +5122,12 @@ export interface components {
             output_action?: string;
             policy_name?: string;
             policy_version?: string;
+            /**
+             * @description The internal pool a ROUTE verdict named. With the action `ROUTE`
+             *     the request was answered there; with `BLOCK` the pool could not
+             *     take it and the request was stopped. Absent otherwise.
+             */
+            route_pool?: string;
         };
         SecurityEventDetail: {
             request_id?: string;
@@ -5101,6 +5145,8 @@ export interface components {
             /** @description The policy the request was decided with. */
             policy_name?: string;
             policy_version?: string;
+            /** @description The internal pool a ROUTE verdict named; see SecurityEvent. */
+            route_pool?: string;
             /** @description Absent when not known; never a zero standing in for an unknown count. */
             input_tokens?: number;
             /** @description Absent when not known. */
@@ -5124,6 +5170,8 @@ export interface components {
             blocked?: number;
             redacted?: number;
             warned?: number;
+            /** @description Answered by an internal pool (action ROUTE). */
+            routed?: number;
             scan_p95?: number;
         };
         TimeseriesResponse: {
@@ -5358,7 +5406,14 @@ export interface components {
         PolicySimulateResult: {
             policy_name?: string;
             policy_version?: string;
-            action?: string;
+            /** @enum {string} */
+            action?: "PASS" | "LOG" | "WARN" | "REDACT" | "STRIP" | "ROUTE" | "BLOCK";
+            /**
+             * @description The internal pool the proxy would send the request to. Present
+             *     only when action is ROUTE. A simulation sends nothing, so this
+             *     does not say whether the pool can be reached.
+             */
+            route_to?: string;
             findings?: components["schemas"]["PolicySimulateFinding"][];
         };
         ScanRequest: {
@@ -5398,18 +5453,22 @@ export interface components {
              * @description What the policy does about this finding on its own
              * @enum {string}
              */
-            action: "PASS" | "WARN" | "REDACT" | "STRIP" | "BLOCK";
+            action: "PASS" | "WARN" | "REDACT" | "STRIP" | "ROUTE" | "BLOCK";
         };
         ScanResult: {
             /**
              * @description The strictest action among the findings. LOG is reported as PASS.
+             *     ROUTE means the proxy would send the request to an internal pool
+             *     and not to the provider; see `route_to`.
              * @enum {string}
              */
-            action: "PASS" | "WARN" | "REDACT" | "STRIP" | "BLOCK";
+            action: "PASS" | "WARN" | "REDACT" | "STRIP" | "ROUTE" | "BLOCK";
             /** @description Always an array. The matched text is never included. */
             findings: components["schemas"]["ScanFinding"][];
             /** @description The text as the proxy would forward it. Present only when action is REDACT. */
             redacted_text?: string;
+            /** @description The internal pool the proxy would send the request to. Present only when action is ROUTE. */
+            route_to?: string;
             policy: {
                 name: string;
                 version: string;

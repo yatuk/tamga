@@ -434,6 +434,11 @@ default. Prompt and response bodies are not written to the database.
 | [Writing a scanner](docs/scanner-development.md) | Stateful scanners with request context |
 | [Migrating from LLM Guard](docs/migrating-from-llm-guard.md) | Scanner by scanner: what Tamga replaces, in part or not at all |
 | [LiteLLM guardrail](docs/litellm.md) | Adding Tamga to a LiteLLM proxy as a guardrail, without its proxy in the path |
+| [Browser extension](docs/browser-extension.md) | Checking what is pasted or sent on three chat sites against your own Tamga |
+| [Policy templates](docs/policy-templates.md) | Starting-point policies for KVKK, banks, public bodies and software teams. Not legal advice |
+| [Threat model](docs/threat-model.md) | Trust boundaries, adversaries, the control for each with its code and test, and what remains |
+| [Verifying a release](docs/verifying-a-release.md) | Checking signatures, provenance and SBOMs. No release has been made yet |
+| [Kurulum ve işletim (Türkçe)](docs/tr/kurulum-ve-isletim.md) | Installation and operations guide in Turkish, for the Compose stack |
 | [jugeni integration](docs/integrations/jugeni.md) | Operator-state decision governance |
 | [Use cases](docs/use-cases.md) · [FAQ](docs/faq.md) | Where it fits, common questions |
 

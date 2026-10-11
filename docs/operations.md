@@ -193,11 +193,13 @@ An entry under `custom_entities` or `competitors` may set an `action` of its
 own, and every match of that entry gets it. A rule keyed `custom` or
 `competitor` (or `custom_detection`, `competitor_detection`) applies to those
 findings like any other rule, with `types` naming entries. When an entry's
-action and a rule both apply, the stronger one wins (BLOCK, STRIP, REDACT,
-WARN, LOG, PASS, strongest first), as between the two rule keys of a type.
+action and a rule both apply, the stronger one wins (BLOCK, ROUTE, STRIP,
+REDACT, WARN, LOG, PASS, strongest first), as between the two rule keys of a
+type. ROUTE is described under
+[Routing to an internal model](#routing-to-an-internal-model).
 `scan.default_action` covers a competitor match that neither an action nor a
 rule decided about; it does not cover custom findings. An exception waives a
-rule, not an entry's own action. The action is one of those six names in
+rule, not an entry's own action. The action is one of those seven names in
 either case of letters; any other value does not load.
 
 ### What REDACT and STRIP can act on
@@ -421,16 +423,84 @@ is masked in place; a `block_on` finding ends the stream with an error
 event. The client sees the text about 64 characters later than it would
 have, and a long unbroken run all at once when it ends.
 
-What is read is the model's prose, in OpenAI (chat, completions, Responses),
-Anthropic and Gemini streams. Only the OpenAI chat completions stream has a
-test of the whole path (`proxy/internal/proxy/stream_e2e_test.go`); the
-other formats are tested where their events are parsed
-(`stream_guard_test.go`). Tool-call arguments and thinking are forwarded
-unread. A stream in a shape Tamga does not know is forwarded unread too and
-counted in `tamga_scan_degraded_total{reason="stream_unrecognised"}`. If the
-scanner fails the stream ends, unless `output_rules.fail_open` is set. With
+What is read is the model's text, its reasoning and its tool calls, in
+OpenAI (chat, completions, Responses), Anthropic and Gemini streams. Only
+the OpenAI chat completions stream has a test of the whole path, for text
+and for a tool call (`proxy/internal/proxy/stream_e2e_test.go`,
+`stream_tool_calls_test.go`); the other formats are tested at the guard,
+with the events each provider documents (`stream_guard_test.go`,
+`stream_tool_calls_test.go`). A stream in a shape Tamga does not know is
+forwarded unread and counted in
+`tamga_scan_degraded_total{reason="stream_unrecognised"}`. If the scanner
+fails the stream ends, unless `output_rules.fail_open` is set. With
 `fail_open` set the stream still ends when a value was to be masked and the
 scan behind the masking did not finish.
+
+#### Tool calls and reasoning in a stream
+
+**A tool call's arguments** are a JSON document that arrives in pieces
+(`tool_calls[].function.arguments` in an OpenAI chunk, `input_json_delta`
+from Anthropic, `response.function_call_arguments.delta` in the Responses
+API) and that the client acts on only when it is complete. So the pieces are
+kept back until the tool call ends, the whole document is scanned the way a
+buffered answer's arguments are (the strings inside it, by the request's
+scanners and by the ones that read answers only, such as the link scanner),
+and then:
+
+- with nothing found, the arguments go out as they came, in one piece;
+- a `block_on` finding ends the stream with the error event, and none of the
+  arguments were sent;
+- a `redact_on` finding is masked inside the string it is in, and that
+  string is encoded again where it stood. The document the client puts
+  together is JSON and equals the original but for the mask. Where that
+  cannot be done the stream ends with `redact_tool_call`: arguments that
+  were to be masked are never sent as they are.
+
+The events that carried the pieces are forwarded as they come, each with an
+empty piece, so the client sees the tool call start (its id and name are in
+the first one) and anything else in those events is on time. Text is on a
+channel of its own and is not kept back because a tool call is. When the
+tool call ends, one event of the provider's own shape carries the whole
+arguments: a client library that adds the pieces up ends with exactly them.
+The tool call ends with the block (`content_block_stop`), with the item
+(`response.function_call_arguments.done`), or with the choice
+(`finish_reason`); if the provider's stream breaks first, what was kept
+back is scanned as it stands and then sent or not. In the Responses API such
+a synthesised event repeats the `sequence_number` of the last delta.
+
+One tool call's arguments are kept back up to `output_rules.buffer_bytes`
+(1 MiB when unset), the limit a buffered answer has. Longer ones cannot be
+scanned as a document: the stream ends with `tool_call_unscanned_too_large`,
+or with `fail_open` set they go out unread. Either way it is counted in
+`tamga_scan_degraded_total{reason="stream_tool_call_too_large"}`.
+
+Gemini sends a function call whole in one event, and the Responses API
+repeats every text and every tool call in its closing events
+(`response.….done`, `response.completed`), which is where a client library takes its
+final result from. Values that arrive whole like these are scanned when they
+come and masked where they stand, so the closing events agree with what the
+deltas carried.
+
+**Reasoning** (`thinking_delta`, `reasoning_content`, a reasoning summary, a
+Gemini thought) is shown to people by many clients. It is scanned like the
+answer's text, on its own channel, with the same 64 characters of delay.
+Signatures and encrypted reasoning (`signature_delta`, `redacted_thinking`,
+`encrypted_content`, `thoughtSignature`) are opaque: they are not read and
+never changed.
+
+Anthropic signs a thinking block, and the client has to send the block back
+unchanged in the next request. A mask in it would make that request fail,
+and leaving the value in it is what the policy forbids. So a `redact_on`
+finding in signed reasoning ends the stream with `redact_signed_thinking`
+(counted as `redact_stream_signed_thinking`); a `block_on` finding ends it
+as anywhere else. The same holds for a Gemini thought that carries a
+signature. Reasoning nobody signs is masked like text. The vault leaves a
+placeholder in signed reasoning as it is.
+
+What is not read in a stream: a value written as a JSON number or as a key
+in a tool call's arguments (a buffered answer's are not read either);
+Gemini's partial function-call arguments; Anthropic citation deltas; and
+`content` sent as a list of parts in an OpenAI-style chunk.
 
 ### Links in an answer
 
@@ -443,7 +513,7 @@ known-bad sites. What it reports, as findings of type `malicious_link`:
 |---|---|
 | `link_exfiltration` | A link whose address carries data: a long value, a sentence, or a long path segment. A markdown image (`![](https://host/?q=…)`) is fetched by the client without a click, so it is held to much less than a link the reader has to follow |
 | `link_userinfo` | A host hidden behind user information: `https://bank.example@evil.example` goes to `evil.example` |
-| `link_homoglyph` | A host name that mixes Latin letters with Cyrillic or Greek ones, or is made only of Cyrillic or Greek letters that look Latin, written out or in punycode (`xn--…`) |
+| `link_homoglyph` | A host name that mixes Latin letters with Cyrillic or Greek ones, or is made only of Cyrillic or Greek letters that look Latin, written out or in punycode (`xn--…`). Also a host that reads as a [protected name](#protected-names) and is not it: `gıthub.com` with a dotless ı |
 | `link_scheme` | A markdown link or image whose address is `javascript:`, `vbscript:`, `file:` or `data:` (a `data:` raster image is let be) |
 | `link_text_mismatch` | A markdown link whose text is an address or a host name, and which goes to another host |
 | `link_ip_host` | A markdown link or image to a public IP address, in any of the forms a browser accepts (`http://3405803826/`) |
@@ -461,6 +531,7 @@ output_rules:
   links:
     deny_hosts: [files.example.net, "*.tracker.example"]
     allow_hosts: [charts.example.com]
+    protected_hosts: [bank.example.com.tr]   # your own domains: their look-alikes are reported
 ```
 
 A finding's position is the link's address, so `redact_on` replaces the
@@ -469,7 +540,7 @@ address with `[<category>_REDACTED]` and leaves the sentence around it;
 a buffered answer and changes nothing. The finding's match is the host and
 never the rest of the address.
 
-`deny_hosts` and `allow_hosts` hold host names, not URLs. An entry covers the
+`deny_hosts`, `allow_hosts` and `protected_hosts` hold host names, not URLs. An entry covers the
 host and every host under it; `*.example.com` covers only what is under
 `example.com`. A denied host is reported wherever it stands. An allowed host
 is not judged by form: put your own domains there, and a chart or diagram
@@ -481,18 +552,57 @@ What it deliberately lets be: a link inside a code block or code span, which
 is not rendered as a link (only the deny list applies there); a URL written
 out in the text to a local or private address or an unusual port; searches,
 signed downloads (S3, GCS, Azure SAS, CloudFront) and other long addresses in
-links the reader has to follow. On the 51 ordinary answers in
+links the reader has to follow. On the 58 ordinary answers in
 `proxy/internal/scanner/linkscan/testdata/benign_answers.json` (documentation,
-GitHub, npm, Turkish sites, searches, signed links) it reports nothing,
-buffered or streamed; the 25 links of `malicious_answers.json` are all
-reported. Those are sets written for the tests, not a sample of real traffic.
+GitHub, npm, Turkish sites, searches, signed links, and host names in
+Turkish, German, French, Polish and Danish written with their own letters or
+in punycode) it reports nothing, buffered or streamed; the 32
+links of `malicious_answers.json` are all reported. Those are sets written
+for the tests, not a sample of real traffic.
 
-Limits to know: a host that is only Latin letters is not compared with
-well-known names (`gıthub.example` with a dotless ı passes); data in the
-labels of a host name is not looked for; in a streamed answer a code block
-longer than the 256 characters the scanner is shown again is read as text
-from there on; and a link in a streamed tool call's arguments is not read,
-like everything else there.
+#### Protected names
+
+A host can be written in Latin letters only and still read as a name it is
+not: `gıthub.com` with a dotless ı, `paypał.com` with a barred ł,
+`akbánk.com` with an accent, or the punycode of any of them
+(`xn--gthub-n4a.com`). Reporting every host with such a letter would report
+honest sites: ı is an ordinary Turkish letter, and `ışık.com.tr`,
+`münchen.de` and `café.fr` are real kinds of names. So the check is narrower.
+A host is reported, as `link_homoglyph` with the name it imitates in the
+finding's `imitates` field, when both hold:
+
+- with its accents taken off and its look-alike letters (ı, ł, đ, ø and a
+  few more) read as the plain letter, it is a protected name or a host under
+  one;
+- as written it is neither.
+
+The comparison is by host: `gıthub.com` reads as `github.com`;
+`gıthub.example` reads as no protected host and is not reported. It works
+both ways: with `şekerbank.example.com.tr` protected, the plain
+`sekerbank.example.com.tr` is the look-alike. A host you vouch for in
+`allow_hosts` is not reported, and neither is anything inside code.
+
+The built-in names are few, and were chosen by hand, not taken from a list:
+`github.com`, `gitlab.com`, `npmjs.com`, `pypi.org` (source hosts and package
+registries, whose users have been phished through look-alike domains),
+`google.com`, `microsoft.com`, `apple.com`, `amazon.com`, `paypal.com` (the
+brands at the top of the published brand-phishing rankings, two of them the
+textbook homograph cases), and `akbank.com`, `garantibbva.com.tr`,
+`ziraatbank.com.tr`. A name is built in only when its own spelling is plain
+ASCII. That is why `isbank.com.tr`, `yapikredi.com.tr`, `vakifbank.com.tr`
+and `turkiye.gov.tr` are not: İş, Yapı, Vakıf and Türkiye are how those
+names are written, so a host spelled that way is as likely the
+organisation's own as an imitation. Add them, and your own domains, in
+`protected_hosts` (up to 200 names; a domain name each, no wildcard) if you
+want their look-alikes reported. One honest collision is known among the
+built-in names: `äpple` is Swedish for apple, so `äpple.com` is reported.
+
+Limits to know: a look-alike of a name that is not protected passes, and so
+does one under another ending (`gıthub.net`) unless that host is protected
+too; data in the labels of a host name is not looked for; and in a streamed
+answer a code block longer than the 256 characters the scanner is shown
+again is read as text from there on. A link in a streamed tool call's
+arguments is read like one in a buffered answer's.
 
 ### Answers held to a JSON schema
 
@@ -604,7 +714,7 @@ means when nothing was found: unset, the response is replaced by a 503
 response has, and the scanners now keep to it.
 
 Also refused at load: a rule `action` or `override_action` that is not
-exactly `BLOCK`, `STRIP`, `REDACT`, `WARN`, `LOG` or `PASS` (a lower-case
+exactly `BLOCK`, `ROUTE`, `STRIP`, `REDACT`, `WARN`, `LOG` or `PASS` (a lower-case
 `block` used to load and let everything through); an `action` of a custom
 entity or a competitor that is not one of those names (in either case); a
 REDACT where nothing can be masked (see
@@ -744,8 +854,11 @@ curl -s -X POST "https://tamga.internal/api/v1/scan" \
 `role` is `system`, `user`, `assistant` or `tool`, and `user` when left out.
 It matters when a rule has `applies_to`: the same instruction can be a BLOCK
 in a tool result and a PASS from the user. `action` is `PASS`, `WARN`,
-`REDACT`, `STRIP` or `BLOCK`. A BLOCK is a 200 like the others: the caller
-asked for a verdict and got one. `redacted_text` is there only for REDACT.
+`REDACT`, `STRIP`, `ROUTE` or `BLOCK`. A BLOCK is a 200 like the others: the
+caller asked for a verdict and got one. `redacted_text` is there only for
+REDACT. For ROUTE the answer has `route_to`, the internal pool the proxy
+would send the request to; a scan sends nothing, so a caller that forwards
+the text to a provider itself must treat ROUTE as a block.
 `start` and `end` are byte offsets into the text as UTF-8, and are left out
 for injection, jailbreak, content moderation and classifier findings. The
 matched text is never returned.
@@ -762,7 +875,7 @@ a check that passes because half the scan was missing is worse than one that
 fails. A text longer than `scan.classifier.max_chars` is such a case while
 the classifier is on: the part it did not read cannot be called clean, so a
 verdict of PASS or WARN is not given. A verdict that already stops or
-rewrites the text (BLOCK, STRIP, REDACT) is, since the unread part could only
+rewrites the text (BLOCK, ROUTE, STRIP, REDACT) is, since the unread part could only
 have made it stricter; the response then carries
 `X-Tamga-Classifier: incomplete`.
 
@@ -1152,6 +1265,11 @@ concurrent and holds back inserts while it runs, so on a large table do it in
 a quiet hour or by hand per partition, as the comment in the file shows.
 Without the index a request's detail still opens, slowly.
 
+Migration `020_route_pool` adds the `route_pool` column to `request_logs`:
+the internal pool a ROUTE verdict named. It changes the catalog only. The
+proxy adds the column itself at startup; until it is there, routed requests
+are stored without the pool's name.
+
 Migration `018_drop_tenant_rls` removes the row-level security policy on
 `request_logs` and `daily_stats`. It never had an effect: nothing set the
 tenant it compared against, and the proxy connects as the owner of the
@@ -1224,7 +1342,9 @@ starting with `TAMGA_` is never read. Other names can be allowed with
 `TAMGA_UPSTREAM_KEY_ENVS=NAME1,NAME2`. Names are matched exactly as written.
 
 The pool key must be a route name (`openai`, `anthropic`, `gemini`, `azure`,
-`bedrock`, `mistral`, `local`). An endpoint's `timeout` is how long the proxy
+`bedrock`, `mistral`, `local`); only a pool marked `internal: true`, the
+target of the ROUTE action, has a name of its own (see
+[Routing to an internal model](#routing-to-an-internal-model)). An endpoint's `timeout` is how long the proxy
 waits for the answer to begin, not for a streamed answer to end. If every
 endpoint of a pool is refused the route answers 502; it does not fall back to
 the default upstream.
@@ -1232,6 +1352,159 @@ the default upstream.
 Two things these rules do not stop, for whoever can edit the policy: sending
 a route to any host on your list, whatever route you listed it for, and
 naming one vendor's key on another vendor's pool.
+
+## Routing to an internal model
+
+`ROUTE` is the action for a request that holds something you will not send to
+an outside provider and still want answered. The request is not refused and
+not masked: it is sent, as written, to a pool of model servers you run
+yourself, and nothing of it reaches the provider the caller addressed. The
+caller gets an answer from your model, with `X-Tamga-Routed-To: <pool>` on
+it.
+
+A worked example with an OpenAI-compatible server (vLLM, Ollama or TGI in
+OpenAI mode) at `10.0.4.12:8000`. First the operator lists the address, in
+the proxy's environment. A policy cannot name where routed requests go by
+itself:
+
+```bash
+TAMGA_UPSTREAM_ALLOW=10.0.4.12:8000
+INTERNAL_LLM_API_KEY=...        # the server's own key, if it asks for one
+```
+
+Then the policy:
+
+```yaml
+rules:
+  pii:                           # TCKN and card numbers stay inside
+    action: ROUTE
+    route_to: internal-llm
+    sensitivity: low
+    types: [tc_kimlik, credit_card]
+  pii_detection:                 # everything else is masked and sent on
+    action: REDACT
+    sensitivity: medium
+    types: [email, phone_tr, iban]
+
+providers:
+  pools:
+    internal-llm:
+      internal: true                   # model servers of your own
+      dialect: openai                  # the API they speak: openai or anthropic
+      model: llama-3.1-70b             # replaces the model the caller named
+      allow_private_addresses: true    # 10.0.4.12 is a private address
+      strategy: fallback_chain
+      providers:
+        - name: vllm-1
+          base_url: "http://10.0.4.12:8000"
+          api_key_env: "INTERNAL_LLM_API_KEY"
+          priority: 1
+          timeout: 60s
+```
+
+A request to `/openai/v1/chat/completions` with a TCKN in it now goes to
+`http://10.0.4.12:8000/v1/chat/completions` with `"model": "llama-3.1-70b"`
+and the server's own key, and never to `api.openai.com`.
+
+**Order.** BLOCK > ROUTE > STRIP > REDACT > WARN > LOG > PASS; the strongest
+action among a request's findings wins. A request another rule blocks is
+blocked. One that would otherwise be masked or stripped is routed instead.
+
+**What is sent.** The body as the caller wrote it. Nothing is masked: a
+finding whose own rule says REDACT is left as it is, since the point is that
+your model may read what an outside provider may not. A finding whose own
+rule says STRIP is still stripped (an injection in a tool result is an
+attack on whichever model reads it), and if that cannot be done the request
+is blocked, as it is without ROUTE. The only other change is the model name:
+a top-level `"model"` string is replaced by the pool's `model` when one is
+set, and every other byte is kept.
+
+**Credentials.** The caller's provider credential is not sent to the pool:
+`Authorization`, `x-api-key`, `api-key`, `x-goog-api-key`, `Cookie`,
+`OpenAI-Organization` and `OpenAI-Project` are removed. Each endpoint uses
+its own `api_key_env`, sent as `Authorization: Bearer` (and as `x-api-key`
+too for the `anthropic` dialect), or no key when none is named.
+
+**When the pool cannot take the request, it is blocked.** It is never sent
+to the provider instead, and never retried there. The answer is a 503 with
+the code `tamga_route_unavailable` and a `reason`:
+
+| `reason` | What happened | `Retry-After` |
+|---|---|---|
+| `upstream` | No endpoint of the pool gave an answer before the answer began: refused connections, timeouts, 5xx, open circuit breakers | 5 |
+| `dialect` | The route the caller used speaks another API than the pool, or one that cannot be routed | none |
+| `no_pool` | The pool is not there to use | none |
+
+Such a request is recorded with the action `BLOCK` and the pool it was meant
+for, and counted in `tamga_route_unavailable_total{pool,reason}`. A stream
+that breaks after it began ends there, like any other stream.
+
+**Dialects.** A request is routed only when the route it came in on speaks
+the pool's `dialect`. Nothing is translated between APIs.
+
+| Pool `dialect` | Routes whose requests it takes |
+|---|---|
+| `openai` | `/v1/`, `/openai/`, `/mistral/`, `/local/` |
+| `anthropic` | `/anthropic/` |
+
+`/azure/`, `/gemini/` and `/bedrock/` requests name the deployment or model
+in the path, or are signed for one host, so they cannot be handed to another
+server: under a ROUTE verdict they are blocked with `reason: dialect`. If
+callers on those routes can send what a ROUTE rule matches, expect blocks,
+or move them to a route that can be routed.
+
+**What does not load.** A policy is refused, at startup, on reload and
+through the API, when:
+
+- a rule or entry says `ROUTE` without `route_to`, or `route_to` names a pool
+  that is not defined or not marked `internal: true` (ROUTE does not send a
+  request to another outside provider);
+- two ROUTE rules name different pools. Every ROUTE of a policy sends to the
+  same pool: rules have no order to break a tie with, and which model reads a
+  request should not depend on which finding is looked at first. Use one
+  pool with several endpoints for redundancy;
+- `route_to` is set on a rule whose action is not ROUTE;
+- an internal pool is named after a route (`openai`, `local`, …), has no
+  `dialect` or an unknown one, or has a name that is not lower-case letters,
+  digits, `-` and `_`;
+- an endpoint of an internal pool is not in `TAMGA_UPSTREAM_ALLOW`. Unlike a
+  route's pool it has no vendor host or `TAMGA_<PROVIDER>_URL` to fall back on;
+- an endpoint is written as a private, loopback or link-local address and the
+  pool does not say `allow_private_addresses: true`. With a host name the
+  same is checked when the connection is made: a listed name that resolves to
+  a private address is refused for a pool without the flag. So a private
+  address needs both the operator's list and the pool's own flag; there is no
+  setting that opens private addresses for every pool;
+- `dialect`, `model` or `allow_private_addresses` is set on a pool that is
+  not internal, or `scan.default_action` is ROUTE.
+
+`ROUTE` can also be the `action` of a custom entity or a competitor, with
+its own `route_to`, and the `override_action` of a `confidence_based` rule.
+
+**What else to know.**
+
+- The answer is scanned by `output_rules` like any other, streams included.
+- The response cache keys on the pool, so an answer from the internal model
+  is never served for a request that goes to the provider, or the reverse.
+- The request is recorded with the action `ROUTE`, the pool (`route_pool`),
+  its findings, the model that answered and the tokens it reported. No cost
+  is recorded: the provider's price list does not apply to your servers. The
+  provider column still names the route the caller used.
+- `tamga_routed_total` counts routed requests; `/stats` and `/timeseries`
+  report them as `routed_requests` and `routed`, apart from passed requests.
+- The pool's endpoints and circuit breakers are in
+  `GET /api/v1/health/detailed`, marked `internal: true`.
+- Alerts treat ROUTE like REDACT: a saved destination is told only when it
+  has a threshold above 1 or a cooldown. A rule's own `notify:` is told as
+  for any action.
+- With `TAMGA_MOCK_UPSTREAM` nothing is called; the mock answer carries
+  `X-Tamga-Routed-To`.
+- `POST /api/v1/scan` and `POST /api/v1/policies/simulate` report `ROUTE`
+  and the pool in `route_to`. They send nothing and do not say whether the
+  pool can be reached. The LiteLLM bridge and the browser extension cannot
+  route, and block such a request: see [litellm.md](litellm.md).
+- The console's entity form does not offer ROUTE, since it has no field for
+  the pool; write `action: ROUTE` and `route_to` in the policy document.
 
 ## Alerts
 
@@ -1245,9 +1518,9 @@ What is sent:
 
 - **BLOCK, STRIP and WARN** go to every enabled destination, for requests and
   for responses when `output_rules` are on.
-- **REDACT** goes only to a destination with a cooldown, or a threshold above
-  1. An address redacted in every request would otherwise be a message for
-  every request.
+- **REDACT and ROUTE** go only to a destination with a cooldown, or a
+  threshold above 1. An address redacted in every request would otherwise be
+  a message for every request.
 - A destination's threshold, window and cooldown are honoured, as are
   `rule.severity_at_least` and `rule.blocks_per_minute`.
 - A rule's `notify:` URL in the policy is told about every decision of that
@@ -1389,7 +1662,9 @@ have made. So:
   with neither a provider credential nor a valid `X-Tamga-Key` is never
   served from the cache and never fills it;
 - the organisation, provider, model, path, query and forwarded body are all
-  part of the key;
+  part of the key, and so is the internal pool of a request a ROUTE verdict
+  sent there: an answer from your own model and one from the provider are
+  never served for each other;
 - so are the rules the answer was scanned under: the content of the policy,
   the patterns the scanners have compiled (stored patterns included) and the
   scanner version. After any change to the policy or to a stored pattern,

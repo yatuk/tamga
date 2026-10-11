@@ -8,16 +8,16 @@ those three sites, it asks your own Tamga what the policy says about the text
 ([`POST /api/v1/scan`](operations.md#checking-a-text-without-sending-it)) and
 acts on the answer before the site receives anything.
 
-> **Status: an MVP, not verified on the live sites.** It was written without
-> opening claude.ai, chatgpt.com or gemini.google.com: the selectors that
-> find the message box and the send button on each site come from what is
-> commonly reported about their markup, and each is listed as unverified,
-> dated 2026-10-11, in [`extension/README.md`](../extension/README.md#site-adapters).
-> What has been run: the Node tests, and the unpacked extension in Edge 155
-> against local pages that reproduce the structure the adapters assume, with
-> a local stand-in for the scan API. Check it on each site yourself before
-> you depend on it. Those sites change their pages without notice, and when
-> they do, an adapter stops matching until someone updates it.
+> **Status: an MVP, run once on the live sites.** On 2026-10-11 it was loaded
+> unpacked in one browser and a blocked send and a redacted text were seen
+> to work on claude.ai, chatgpt.com and gemini.google.com.
+> [`extension/README.md`](../extension/README.md) is the record of that run:
+> what was seen, what was not tried (a paste, Tamga being down, a clean text
+> sent on, any other browser or interface language), which selector matched
+> the live page, and which parts were written afterwards and have only been
+> run by the Node tests. Check it on each site yourself before you depend on
+> it. Those sites change their pages without notice, and when they do, an
+> adapter stops matching until someone updates it.
 
 The project publishes nothing to the Chrome Web Store or to Edge Add-ons.
 There is no listing to install from. You load the directory unpacked, or you
@@ -30,7 +30,7 @@ pack and sign it yourself and install it by policy.
 | `PASS` | Nothing. The message is sent |
 | `WARN` | The warning, with the kinds of finding. "Send anyway" sends it |
 | `REDACT` | The text Tamga returned with placeholders in it. "Use this text" puts it in the box in place of the original, or it is put there at once when `autoRedact` is on. The person then reads it and sends it; that send is checked like any other |
-| `STRIP` | The message is not sent. The scan API returns no replacement text for `STRIP` |
+| `STRIP` | The message is not sent. The notice says the policy removes the whole text and names the kinds of finding it does that for. The scan API returns no replacement text for `STRIP`: on the proxy path the whole piece of text is replaced by a notice, and for one typed message that leaves nothing to send |
 | `BLOCK` | The message is not sent. The notice names the kinds of finding |
 | No verdict | `failMode: closed`, the default: the message is held, with the reason and "Try again". `failMode: open`: it is sent and a notice says it was not checked |
 
@@ -41,6 +41,15 @@ A paste is not held: the text lands in the box and the whole box is checked
 straight away, so that a problem is shown before the person goes on writing.
 A send is always held until the text that is in the box at that moment has a
 verdict.
+
+When Tamga cannot be asked, the person is told before they try to send. If
+the extension has no address or key, a notice says "Tamga is not set up in
+this browser yet", with a button to its settings, as soon as the page loads.
+If a paste cannot be checked, a notice says why ("Tamga cannot be reached",
+or what else went wrong) and what will happen at the send. These notices
+hold nothing. Each reason is said once for a page load, not once for a
+paste. Under `failMode: open` the notice says that what is sent from the
+page goes to the site unchecked.
 
 ## What it does not cover
 
@@ -69,6 +78,12 @@ verdict.
   like a send button. It cannot hold a key press in an element it cannot
   see as a text box, or a send the page makes from an event the extension
   does not listen for. A content script cannot do better than that.
+- **A send button the fallback cannot tell.** When a site's own selectors
+  stop matching, the fallback finds a send button that is in a form, or
+  named in English, or named "send" in one of eight other languages, or seen
+  to appear only when the box holds text
+  ([the list and the limits](../extension/README.md#site-adapters)). A
+  button that is none of those is not held; a send by Enter still is.
 - **A site that reads the box as you type.** The check happens at paste and
   at send. If a site transmits a draft before the person sends it, that
   draft is not stopped.
