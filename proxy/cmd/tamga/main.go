@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -210,7 +211,6 @@ func main() {
 		}
 	}
 
-	var requestStore store.Store
 	// The key the request log hashes finding matches under when the policy
 	// has data.hash_findings on. Without one no digest is stored at all.
 	if hasher, err := store.NewFindingHasher(cfg.FindingHashKey, cfg.VaultKey); err != nil {
@@ -222,6 +222,7 @@ func main() {
 		log.Info().Str("key_source", hasher.Source()).Msg("request log: finding matches are hashed with HMAC-SHA-256 when data.hash_findings is on")
 	}
 
+	var requestStore store.Store
 	var pgStore *store.PostgresStore
 	if cfg.DatabaseURL != "" {
 		ps, err := store.NewPostgresStore(context.Background(), cfg.DatabaseURL, log.Logger)
@@ -505,13 +506,9 @@ func main() {
 			if !up.Enabled {
 				continue
 			}
-			if up.Kind != patterns.KindRegex {
-				// Literal kind is compiled into regex by anchoring escape.
-				continue
-			}
 			out = append(out, scanner.CustomEntitySpec{
 				Name:        up.Name,
-				Pattern:     up.Pattern,
+				Pattern:     up.Expression(),
 				Description: "user-defined",
 				Severity:    up.Severity,
 				Confidence:  0.8,
@@ -918,6 +915,10 @@ func main() {
 	log.Info().Msg("tamga proxy stopped")
 }
 
+// natsUnkeyedWarn makes the NATS consumer say once that matches are being
+// left out for want of a hash key, as the bus writer does.
+var natsUnkeyedWarn sync.Once
+
 // storeEventFromNATS persists a NATS EventV2 to PostgreSQL. This runs in the
 // NATS consumer goroutine, decoupled from the HTTP request path.
 //
@@ -925,9 +926,13 @@ func main() {
 // with store.RequestLogFromEvent. Events that are not a request's own share
 // its subject (output hints, provider state changes) and are not rows.
 func storeEventFromNATS(ctx context.Context, s store.Store, ev events.EventV2, defaultOrgID string, getPolicy func() *policy.Policy, log zerolog.Logger) {
+	before := store.UnkeyedMatches()
 	rl, ok := store.RequestLogFromV2(ev, defaultOrgID, getPolicy)
 	if !ok {
 		return
+	}
+	if store.UnkeyedMatches() != before {
+		natsUnkeyedWarn.Do(func() { store.LogUnkeyedMatches(log) })
 	}
 	if err := s.SaveRequestLog(ctx, rl); err != nil {
 		log.Warn().Err(err).Str("request_id", ev.RequestID).Msg("nats consumer: db write failed")

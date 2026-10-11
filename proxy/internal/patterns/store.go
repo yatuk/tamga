@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -44,6 +45,17 @@ type Pattern struct {
 	Enabled   bool      `json:"enabled"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// Expression returns the pattern as the regular expression the scanners
+// compile. A regex is its own expression. A literal is its text with every
+// metacharacter escaped, matched without regard to case, which is how the
+// console tries a literal on a sample.
+func (p Pattern) Expression() string {
+	if p.Kind == KindLiteral {
+		return "(?i)" + regexp.QuoteMeta(p.Pattern)
+	}
+	return p.Pattern
 }
 
 // ErrNotFound is returned when the pattern id is unknown.
