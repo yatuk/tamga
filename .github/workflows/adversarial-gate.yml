@@ -81,7 +81,7 @@ jobs:
       - name: Build images
         run: |
           cd "$GITHUB_WORKSPACE"
-          docker compose -f deploy/docker-compose.yml build --quiet
+          docker compose -f deploy/docker-compose.yml --profile full build --quiet
 
       - name: Run stress suite
         id: stress

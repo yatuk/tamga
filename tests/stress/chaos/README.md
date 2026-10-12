@@ -38,7 +38,8 @@ sections below.
   the JSON.
 - A shell with `bash`. On Windows use WSL2 or Git Bash.
 - `kill_nats.sh` and `kill_scanner_service.sh` call
-  `docker compose -f deploy/docker-compose.yml` without `--env-file`. Export
+  `docker compose -f deploy/docker-compose.yml --profile full` without
+  `--env-file`. Export
   the variables of your `.env` first (for example `set -a; . ./.env; set +a`),
   otherwise Compose substitutes empty values when it brings the service back.
 

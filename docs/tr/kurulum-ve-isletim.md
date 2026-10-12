@@ -54,11 +54,48 @@ destek sözleşmesi ya da yönetilen bir hizmeti yoktur. Sınırların tamamı
   (`8222`) sunucuda yayımlar; ikisi de kimlik doğrulamasızdır, üretimde
   güvenlik duvarıyla kapatın ya da Compose dosyasından kaldırın.
 
-Compose kurulumu şu servisleri başlatır: `proxy`, `dashboard` (console),
-`analyzer` (PDF raporları ve isteğe bağlı derin analiz), `scanner-service`
-(isteğe bağlı; varsayılan olarak boşta bekler), `postgres`, `redis`, `nats`
-ve `jaeger`. İsteğe bağlı `classifier` servisi ayrı bir profille başlar ve bir
-model dosyası ister ([Inline classifier](../operations.md#inline-classifier)).
+Compose dosyasındaki her servis bir profile bağlıdır. `full` profili şu
+servisleri başlatır: `proxy`, `dashboard` (console), `analyzer` (PDF
+raporları ve isteğe bağlı derin analiz), `scanner-service` (isteğe bağlı;
+varsayılan olarak boşta bekler), `postgres`, `redis`, `nats` ve `jaeger`.
+İsteğe bağlı `classifier` servisi ayrı bir profille başlar ve bir model
+dosyası ister ([Inline classifier](../operations.md#inline-classifier)).
+`minimal` profili yalnızca proxy'yi başlatır (aşağıda).
+
+## Yalnızca proxy ile deneme
+
+Veritabanı ve diğer servisler olmadan, tek container ile:
+
+```bash
+git clone https://github.com/yatuk/tamga.git
+cd tamga
+cp .env.example .env    # sağlayıcı anahtarı olmadan denemek için TAMGA_MOCK_UPSTREAM=true
+docker compose --env-file .env -f deploy/docker-compose.yml --profile minimal up -d
+```
+
+Bu, 8443 portunda `proxy-minimal` adlı tek bir container başlatır. Tarama,
+policy ve engelleme tam kurulumdaki gibi çalışır;
+[ilk çalıştırmadaki](#ilk-çalıştırma-ve-sağlık-kontrolü) T.C. kimlik
+numaralı istek 403 alır. Şunlar yoktur:
+
+- İstek kaydı (request log) yoktur; hiçbir istek bir yere yazılmaz. Yönetim
+  API'si (`TAMGA_ADMIN_KEY` ile) yalnızca bu sürecin gördüğü son 1000 isteği
+  gösterir; yeniden başlatınca silinir.
+- Console yoktur.
+- API anahtarları, özel desenler, roller, SSO ayarları, uyarı hedefleri,
+  olaylar ve denetim kaydı bellekte tutulur ve yeniden başlatınca kaybolur.
+- Analyzer yoktur: PDF raporları 503 `analyzer_unavailable` döner.
+- Rate limit, bütçe ve önbellek tek sürecin belleğindedir.
+
+KVKK ve BDDK açısından iz gereken bir kurulum için bu yeterli değildir; tam
+kurulumu kullanın. Tam kuruluma geçmeden önce bu container'ı durdurun, iki
+proxy de 8443 portunu kullanır:
+
+```bash
+docker compose --env-file .env -f deploy/docker-compose.yml --profile minimal down
+```
+
+Ayrıntı: [operations.md, Proxy only](../operations.md#proxy-only).
 
 ## Docker Compose ile kurulum
 
@@ -139,9 +176,15 @@ TAMGA_POLICY_MOUNT=rw
 docker compose --env-file .env -f deploy/docker-compose.yml up -d
 ```
 
+`.env.example` dosyası `COMPOSE_PROFILES=full` içerir; bu yüzden profil
+verilmeyen her komut tam kurulumu kullanır. `--profile full` aynı işi görür.
+0.9.0'dan önce hazırlanmış bir `.env` dosyasında bu satır yoktur ve komut
+`no service selected` hatasıyla durur; satırı ekleyin.
+
 `--env-file .env` şarttır. Compose, `.env` dosyasını kendiliğinden yalnızca
 Compose dosyasının bulunduğu dizinde (`deploy/`) arar; bu parametre olmadan
-veritabanı parolası boş kalır ve PostgreSQL başlamaz.
+veritabanı parolası boş kalır, PostgreSQL başlamaz ve `COMPOSE_PROFILES`
+okunmaz.
 
 İlk çalıştırma imajları derlediği için uzun sürer. Veritabanı şeması,
 `deploy/migrations/` altındaki dosyalarla, boş veri biriminde ilk açılışta

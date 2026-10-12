@@ -17,6 +17,25 @@
   before.
 
 ### Deployment and operations
+- **The proxy can run on its own with Docker Compose.**
+  `docker compose --env-file .env -f deploy/docker-compose.yml --profile minimal up -d`
+  starts one container, `proxy-minimal`, with no database, Redis, NATS,
+  analyzer, scanner service, Jaeger or console, and needs neither
+  `POSTGRES_PASSWORD` nor `REDIS_PASSWORD`. Scanning, the policy and
+  blocking work as in the full stack. There is no request log and no
+  console; keys, settings, incidents and the audit log are kept in memory
+  and lost on restart; PDF reports answer 503. The README quick start now
+  begins with it. The proxy needed no change: every one of these services
+  was already optional to it. **The other services are now in a `full`
+  profile, and a command that names no profile starts nothing.**
+  `.env.example` sets `COMPOSE_PROFILES=full`, so the documented commands
+  start the full stack as before; an `.env` copied from an older
+  `.env.example` needs that line added, or `--profile full` on the command
+  line. A `--profile` flag replaces `COMPOSE_PROFILES`: the classifier with
+  the full stack is now `--profile full --profile classifier`. The smoke
+  test, the stress suite, the chaos scripts and the adversarial gate's
+  image build pass `--profile full`. See
+  [docs/operations.md](docs/operations.md#docker-compose-profiles).
 - **The proxy could panic while shutting down.** An event published from a
   goroutine that outlives its request (the hint sent after an answer is
   scanned) could reach the event bus as it was being stopped, and a send on

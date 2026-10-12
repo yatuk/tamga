@@ -70,6 +70,9 @@ if [ -f "$PROJECT_ROOT/.env" ]; then
     COMPOSE+=(--env-file "$PROJECT_ROOT/.env")
 fi
 COMPOSE+=(-f "$DOCKER_COMPOSE_FILE" -f "$SCRIPT_DIR/docker-compose.stress.yml")
+# Every service sits behind a profile. A --profile flag replaces any
+# COMPOSE_PROFILES from .env, so the suite gets the same stack either way.
+COMPOSE+=(--profile full)
 
 # native_path turns an MSYS path (/c/...) into one that non-MSYS programs
 # understand (C:/...). A no-op everywhere except Git Bash on Windows.
@@ -153,7 +156,7 @@ if $WITH_CLASSIFIER; then
     POLICY_ARGS+=(--classifier)
     # The classifier service sits behind a compose profile, and the proxy only
     # dials it when it has an address.
-    export COMPOSE_PROFILES="classifier"
+    COMPOSE+=(--profile classifier)
     export TAMGA_CLASSIFIER_ADDR="classifier:50052"
     log "  Classifier: on"
 fi
