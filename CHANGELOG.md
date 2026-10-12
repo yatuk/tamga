@@ -665,6 +665,9 @@
   for each with the file and test behind it, and what remains.
   `docs/tr/kurulum-ve-isletim.md`: an installation and operations guide in
   Turkish for the Compose stack.
+- `docs/research/rebuff-and-ps-fuzz.md`: Rebuff (Apache-2.0, archived) and
+  ps-fuzz (MIT) reviewed against what Tamga has; neither is taken as a
+  dependency, ps-fuzz may be run by hand against a test deployment.
 
 ### Console
 - **Incidents counted the rows of one page and called it the queue.** The
