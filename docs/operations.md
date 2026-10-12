@@ -4,6 +4,89 @@ Deployment, configuration, cost control, and the management REST API. The
 proxy README is the full reference for env vars and endpoints; this page is
 the operator-facing summary.
 
+## Docker Compose profiles
+
+Every service in `deploy/docker-compose.yml` belongs to a profile, and
+Compose starts only the services of the profiles it is given:
+
+| Profile | Starts |
+|---|---|
+| `minimal` | `proxy-minimal`: the proxy alone, see [Proxy only](#proxy-only) |
+| `full` | `proxy`, `analyzer`, `scanner-service`, `dashboard`, `postgres`, `redis`, `nats`, `jaeger` |
+| `classifier` | `classifier`, the [inline classifier](#inline-classifier); use it with `full` |
+
+`.env.example` sets `COMPOSE_PROFILES=full`, so the full stack is what
+starts when no profile is named:
+
+```bash
+docker compose --env-file .env -f deploy/docker-compose.yml up -d
+```
+
+A `--profile` flag replaces `COMPOSE_PROFILES`; it does not add to it.
+`--profile minimal` starts the proxy alone even with `COMPOSE_PROFILES=full`
+in `.env`, and the full stack with the classifier is
+`--profile full --profile classifier` (or `COMPOSE_PROFILES=full,classifier`
+in `.env`).
+
+Do not run `minimal` and `full` together: both publish port 8443. To move
+from one to the other, stop the first, for example:
+
+```bash
+docker compose --env-file .env -f deploy/docker-compose.yml --profile minimal down
+```
+
+**An `.env` from before 0.9.0.** The services had no profile before, and an
+`.env` copied from an older `.env.example` has no `COMPOSE_PROFILES`. With
+it, `up -d` stops with `no service selected`. Add `COMPOSE_PROFILES=full` to
+`.env`, or pass `--profile full`.
+
+### Proxy only
+
+```bash
+cp .env.example .env    # TAMGA_MOCK_UPSTREAM=true to try it without provider keys
+docker compose --env-file .env -f deploy/docker-compose.yml --profile minimal up -d
+```
+
+This builds and starts one container, `proxy-minimal`, on port 8443. It is
+given four settings: the port, the policy file (`proxy/tamga-policy.yaml`,
+mounted as in the full stack, `TAMGA_POLICY_MOUNT` included),
+`TAMGA_ADMIN_KEY` and `TAMGA_MOCK_UPSTREAM`. It has no database, Redis, NATS,
+analyzer, classifier, scanner service, Jaeger or console. `POSTGRES_PASSWORD`
+and `REDIS_PASSWORD` are not used; when they are unset, Compose still warns
+about them, because it reads the whole file, and starts the proxy.
+
+What works as in the full stack:
+
+- Scanning, the policy and its actions (block, redact, warn), forwarding to
+  the providers, and scanning of responses when `output_rules` are on.
+- Reloading the policy when the file changes.
+- Rate limits, budgets, the response cache and the vault. They are kept in
+  the process's memory, as on a full stack without Redis, and are lost on
+  restart. The vault uses a key made at start, so its mappings do not
+  survive a restart.
+- The management API, with `TAMGA_ADMIN_KEY` set. `/api/v1/stats` and
+  `/api/v1/events` answer from the last 1000 requests this process saw.
+  Without an admin key every management call gets 401; the provider routes
+  (`/v1`, `/anthropic`, ...) do not need it.
+
+What is not there:
+
+- **No request log.** No request is written anywhere. What the management
+  API shows is gone after a restart.
+- **No console.** The dashboard is not started.
+- **Nothing you configure through the API is kept.** API keys, custom
+  patterns, team roles, SSO settings, alert destinations, incidents and the
+  audit log are held in memory and lost on restart. Policy history is
+  written to files inside the container (`/app/data/policy-history`) and
+  lost when the container is recreated.
+- **No analyzer.** No PDF reports (they answer 503 `analyzer_unavailable`),
+  and no deep analysis of names and places.
+- **No traces and no NATS stream.**
+- **No retention job**, as there is nothing stored for it to delete.
+
+The minimal profile suits a trial, a CI job, or a host where only the
+scanning and blocking are needed. For an audit trail, use the full stack.
+
 ## Production deployment (Kubernetes)
 
 ```bash
@@ -934,7 +1017,7 @@ sequence-classification model exported to ONNX with its `tokenizer.json` and
 
 ```bash
 echo 'TAMGA_CLASSIFIER_ADDR=classifier:50052' >> .env
-docker compose --env-file .env -f deploy/docker-compose.yml --profile classifier up -d
+docker compose --env-file .env -f deploy/docker-compose.yml --profile full --profile classifier up -d
 ```
 
 and turn it on in the policy:

@@ -82,6 +82,9 @@ New-Item -ItemType Directory -Force -Path $ResultsDir | Out-Null
 $ComposeArgs = @()
 if (Test-Path "$ProjectRoot\.env") { $ComposeArgs += @("--env-file", "$ProjectRoot\.env") }
 $ComposeArgs += @("-f", $ComposeFile, "-f", "$ScriptDir\docker-compose.stress.yml")
+# Every service sits behind a profile; the flag replaces any COMPOSE_PROFILES
+# from .env.
+$ComposeArgs += @("--profile", "full")
 
 # docker-compose.stress.yml mounts this directory as the proxy's policy dir.
 # The policy is derived from the shipped default (adds the operator_state

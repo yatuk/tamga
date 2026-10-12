@@ -5,7 +5,7 @@ set -euo pipefail
 WAIT="${1:-30}"
 
 echo "[$(date -Iseconds)] Killing NATS container"
-docker compose -f deploy/docker-compose.yml kill nats || true
+docker compose -f deploy/docker-compose.yml --profile full kill nats || true
 echo "Waiting ${WAIT}s for proxy to detect and fall back..."
 sleep "$WAIT"
 
@@ -15,5 +15,5 @@ else
     echo "[$(date -Iseconds)] WARN: proxy health check failed"
 fi
 
-docker compose -f deploy/docker-compose.yml up -d nats
+docker compose -f deploy/docker-compose.yml --profile full up -d nats
 echo "[$(date -Iseconds)] NATS restarted"

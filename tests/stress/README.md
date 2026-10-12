@@ -215,7 +215,7 @@ Or skip load tests: `./run_stress_suite.sh --skip-load`
 ### "Health check timed out"
 The proxy didn't become healthy within 60 seconds. Check Docker logs:
 ```bash
-docker compose -f deploy/docker-compose.yml logs proxy
+docker compose -f deploy/docker-compose.yml --profile full logs proxy
 ```
 
 Increase timeout:

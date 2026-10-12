@@ -90,13 +90,13 @@ cleanup() {
     if [ "${SMOKE_KEEP_STACK:-}" != "1" ]; then
         echo ""
         echo "--- Tearing down Docker stack ---"
-        docker compose -f "$COMPOSE_FILE" down --volumes --remove-orphans 2>/dev/null || true
+        docker compose -f "$COMPOSE_FILE" --profile full down --volumes --remove-orphans 2>/dev/null || true
     else
         echo ""
         echo -e "${YELLOW}Stack kept running (SMOKE_KEEP_STACK=1).${NC}"
         echo "  Proxy:  $PROXY_URL"
         echo "  Admin:  $ADMIN_KEY"
-        echo "  Tear down: docker compose -f $COMPOSE_FILE down --volumes"
+        echo "  Tear down: docker compose -f $COMPOSE_FILE --profile full down --volumes"
     fi
 }
 trap cleanup EXIT
@@ -108,7 +108,7 @@ echo ""
 
 # ---- 1. Start stack ----
 echo "--- [1/6] Starting Docker Compose stack ---"
-docker compose -f "$COMPOSE_FILE" up -d --build 2>&1 | tail -5
+docker compose -f "$COMPOSE_FILE" --profile full up -d --build 2>&1 | tail -5
 
 echo "Waiting for proxy to be healthy..."
 HEALTHY=0
@@ -123,7 +123,7 @@ done
 if [ "$HEALTHY" -ne 1 ]; then
     echo -e "${RED}Proxy failed to start within 120s${NC}"
     echo "--- Proxy logs ---"
-    docker compose -f "$COMPOSE_FILE" logs proxy 2>/dev/null | tail -30 || true
+    docker compose -f "$COMPOSE_FILE" --profile full logs proxy 2>/dev/null | tail -30 || true
     exit 1
 fi
 

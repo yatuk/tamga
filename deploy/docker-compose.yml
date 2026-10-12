@@ -6,6 +6,17 @@
 # - Postgres and Redis credentials are read from env vars — never hardcoded.
 # - Redis requires AUTH (requirepass).
 # - OTLP sample rate is set to 5% for production.
+#
+# PROFILES: every service belongs to a profile, so a command must name one.
+# - full: proxy, analyzer, scanner service, console, PostgreSQL, Redis, NATS
+#   and Jaeger. .env.example sets COMPOSE_PROFILES=full, so with
+#   `--env-file .env` and no --profile flag this is what starts.
+# - minimal: the proxy alone (service proxy-minimal), with no database. A
+#   --profile flag replaces COMPOSE_PROFILES, so `--profile minimal` starts
+#   only this one container. What it does without the other services is in
+#   docs/operations.md, "Proxy only".
+# - classifier: the optional inline classifier, added to full.
+# Do not start minimal and full together: both publish port 8443.
 
 services:
   # Standalone scanner service — optional. By default the proxy scans in-process
@@ -15,6 +26,7 @@ services:
   # the request (custom entities, competitors, operator_state) always run in the
   # proxy, and a gRPC failure falls back to in-process scanning.
   scanner-service:
+    profiles: ["full"]
     build:
       context: ../proxy
       dockerfile: cmd/scanner-service/Dockerfile
@@ -28,6 +40,7 @@ services:
     restart: unless-stopped
 
   proxy:
+    profiles: ["full"]
     build:
       context: ../proxy
       dockerfile: Dockerfile
@@ -94,7 +107,32 @@ services:
       - internal
     restart: unless-stopped
 
+  # The proxy on its own: no database, Redis, NATS, analyzer, Jaeger or
+  # console, and none of their passwords are needed. Start it with
+  #   docker compose --env-file .env -f deploy/docker-compose.yml --profile minimal up -d
+  # Scanning, policy and blocking work as in the full stack. The request log,
+  # the console, keys kept across restarts and the PDF reports do not; see
+  # docs/operations.md, "Proxy only".
+  proxy-minimal:
+    profiles: ["minimal"]
+    build:
+      context: ../proxy
+      dockerfile: Dockerfile
+    ports:
+      - "8443:8443"
+    environment:
+      - TAMGA_PROXY_PORT=8443
+      - TAMGA_POLICY_PATH=/app/tamga-policy.yaml
+      # Empty means every management API call is refused with 401. The
+      # proxy routes (/v1, /anthropic, ...) do not need it.
+      - TAMGA_ADMIN_KEY=${TAMGA_ADMIN_KEY:-}
+      - TAMGA_MOCK_UPSTREAM=${TAMGA_MOCK_UPSTREAM:-false}
+    volumes:
+      - ../proxy/tamga-policy.yaml:/app/tamga-policy.yaml:${TAMGA_POLICY_MOUNT:-ro}
+    restart: unless-stopped
+
   analyzer:
+    profiles: ["full"]
     build:
       context: ../analyzer
       dockerfile: Dockerfile
@@ -118,8 +156,10 @@ services:
       - internal
     restart: unless-stopped
 
-  # Optional: the inline prompt-injection classifier. Start it with
-  #   docker compose --profile classifier up -d
+  # Optional: the inline prompt-injection classifier. Start it with the full
+  # stack:
+  #   docker compose --profile full --profile classifier up -d
+  # or set COMPOSE_PROFILES=full,classifier in .env
   # after downloading a model (docs/operations.md). No model is shipped; with
   # an empty directory the service runs and reports itself unavailable.
   classifier:
@@ -142,6 +182,7 @@ services:
     restart: unless-stopped
 
   dashboard:
+    profiles: ["full"]
     build:
       context: ../dashboard
       dockerfile: Dockerfile
@@ -159,6 +200,7 @@ services:
     restart: unless-stopped
 
   postgres:
+    profiles: ["full"]
     image: postgres:16-alpine
     expose:
       - "5432"
@@ -198,6 +240,7 @@ services:
     restart: unless-stopped
 
   redis:
+    profiles: ["full"]
     image: redis:7-alpine
     command: redis-server --requirepass ${REDIS_PASSWORD} --save 60 1 --loglevel warning
     expose:
@@ -209,6 +252,7 @@ services:
     restart: unless-stopped
 
   jaeger:
+    profiles: ["full"]
     image: jaegertracing/all-in-one:1.54
     expose:
       - "4318"
@@ -221,6 +265,7 @@ services:
     restart: unless-stopped
 
   nats:
+    profiles: ["full"]
     image: nats:2.10-alpine
     command: ["-js", "-m", "8222"]
     expose:

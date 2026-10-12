@@ -2,7 +2,7 @@
 
 | Path | What it is |
 |---|---|
-| `docker-compose.yml` | The full stack on one host: proxy, analyzer, scanner service, console, PostgreSQL, Redis, NATS, Jaeger. See the [root README](../README.md#quick-start). |
+| `docker-compose.yml` | Profile `full`: the full stack on one host: proxy, analyzer, scanner service, console, PostgreSQL, Redis, NATS, Jaeger. Profile `minimal`: the proxy alone, with no database. See the [root README](../README.md#quick-start) and [Docker Compose profiles](../docs/operations.md#docker-compose-profiles). |
 | `helm/tamga-proxy/` | A Helm chart for the proxy alone. |
 | `terraform/aws/` | An EKS cluster on AWS with that chart installed in it. |
 | `migrations/` | The PostgreSQL schema. |

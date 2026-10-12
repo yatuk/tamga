@@ -79,24 +79,19 @@ More limits are listed under [Project status](#project-status).
 
 ## Quick start
 
+Start with the proxy alone. It needs Docker and nothing else: no database,
+no keys.
+
 ```bash
 git clone https://github.com/yatuk/tamga.git
 cd tamga
 cp .env.example .env    # set TAMGA_MOCK_UPSTREAM=true to try it without provider keys
 
-docker compose --env-file .env -f deploy/docker-compose.yml up -d
+docker compose --env-file .env -f deploy/docker-compose.yml --profile minimal up -d
 ```
 
-Proxy on `http://localhost:8443`, dashboard on `http://localhost:3000`. The dashboard
-holds no key: on first use it asks for the admin key (`TAMGA_ADMIN_KEY` from
-`.env`) under Settings and keeps it in that browser.
-
-> `--env-file .env` is required. Compose only auto-loads a `.env` next to the
-> compose file, so without it the database password is empty and Postgres will
-> not start.
-
-Send a prompt carrying a Turkish national ID. It is blocked before it reaches
-any provider:
+The proxy is on `http://localhost:8443`. Send a prompt carrying a Turkish
+national ID. It is blocked before it reaches any provider:
 
 ```bash
 curl -s -o /dev/null -w "%{http_code}\n" \
@@ -105,6 +100,31 @@ curl -s -o /dev/null -w "%{http_code}\n" \
   -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"Müşteri TC 10000000146"}]}'
 # 403
 ```
+
+The proxy alone scans, applies the policy and forwards, but keeps no record:
+there is no request log, no dashboard, and API keys and settings made
+through the API are lost on restart. What it does and does not do is listed
+in [docs/operations.md](docs/operations.md#proxy-only).
+
+**The full stack** adds the request log in Postgres, the dashboard, the
+analyzer (PDF reports), Redis, NATS and Jaeger. Stop the proxy-only
+container first, as both use port 8443:
+
+```bash
+docker compose --env-file .env -f deploy/docker-compose.yml --profile minimal down
+docker compose --env-file .env -f deploy/docker-compose.yml up -d
+```
+
+`.env.example` sets `COMPOSE_PROFILES=full`, so this starts the full stack;
+`--profile full` does the same. Proxy on `http://localhost:8443`, dashboard on
+`http://localhost:3000`. The dashboard holds no key: on first use it asks for
+the admin key (`TAMGA_ADMIN_KEY` from `.env`) under Settings and keeps it in
+that browser.
+
+> `--env-file .env` is required. Compose only auto-loads a `.env` next to the
+> compose file, so without it the database password is empty, Postgres will
+> not start, and `COMPOSE_PROFILES` is not read. An `.env` made before 0.9.0
+> has no `COMPOSE_PROFILES` line: add `COMPOSE_PROFILES=full` to it.
 
 Point an existing SDK at the proxy:
 
@@ -150,7 +170,8 @@ flowchart LR
    scanned on the way back when the policy's `output_rules` are on; they are
    off in the shipped policy.
 4. **Record.** Every decision becomes an event in the Postgres request log
-   and the dashboard. A blocked, stripped or warned request is also posted to
+   and the dashboard (full stack only; the proxy alone keeps the last 1000
+   in memory). A blocked, stripped or warned request is also posted to
    the [alert destinations](docs/operations.md#alerts) you have connected,
    and to the `notify:` URL of the rule that matched.
 
