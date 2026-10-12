@@ -1,0 +1,11 @@
+Dataset:       fevziegeyurtsevenler/guard-blindspots-tr
+Source URL:    https://huggingface.co/datasets/fevziegeyurtsevenler/guard-blindspots-tr
+Commit sha:    7a331118f8c9a8e23020f9aa492a6b7e45b39446
+Pinned URL:    https://huggingface.co/datasets/fevziegeyurtsevenler/guard-blindspots-tr/tree/7a331118f8c9a8e23020f9aa492a6b7e45b39446
+Downloaded:    2026-10-12
+License:       Apache-2.0 (per README.md front matter)
+Files:         blindspots_items.jsonl (data, 248 rows), README.md (dataset card, unmodified)
+Not vendored:  .gitattributes, banner.png
+
+Vendored unmodified as external red-team evaluation data. Treat content as
+untrusted test input (prompt-injection payloads); do not execute.

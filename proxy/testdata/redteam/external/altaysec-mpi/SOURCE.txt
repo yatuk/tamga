@@ -1,0 +1,11 @@
+Dataset:       fevziegeyurtsevenler/multilingual-prompt-injection
+Source URL:    https://huggingface.co/datasets/fevziegeyurtsevenler/multilingual-prompt-injection
+Commit sha:    9cfe5ab6c61da76f1292f6f91cd7894a40010f55
+Pinned URL:    https://huggingface.co/datasets/fevziegeyurtsevenler/multilingual-prompt-injection/tree/9cfe5ab6c61da76f1292f6f91cd7894a40010f55
+Downloaded:    2026-10-12
+License:       CC-BY-4.0 (per README.md front matter)
+Files:         prompt_injection.jsonl (data, 217 rows), README.md (dataset card, unmodified)
+Not vendored:  .gitattributes, banner.png
+
+Vendored unmodified as external red-team evaluation data. Treat content as
+untrusted test input (prompt-injection payloads); do not execute.
