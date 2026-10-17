@@ -668,33 +668,55 @@
   A tag `vX.Y.Z` on `main` builds the `tamga` and `scanner-service` binaries
   for five platforms (`-trimpath`, version and commit linked in), the five
   images (pushed to GHCR by digest, `linux/amd64`), the chart, the extension
-  archive and the SDK packages; signs the images and the checksum file with
-  Sigstore cosign keyless (GitHub OIDC, no key in the repository); attaches
-  SLSA build provenance (`actions/attest-build-provenance`) and an SPDX SBOM
-  (syft) to each image and each binary archive; and creates a draft release.
-  Started by hand it is a dry run that publishes and signs nothing. The jobs
-  that run the builds hold no signing identity, and an image gets its
+  archive and the SDK packages; signs the images, `SHA256SUMS` and every
+  file it lists (`<file>.sigstore.json`) with Sigstore cosign keyless
+  (GitHub OIDC, no key in the repository); attaches SLSA build provenance
+  (`actions/attest-build-provenance`) and an SPDX SBOM (syft) to each image
+  and each binary archive; and creates a draft release. Started by hand it
+  is a dry run that publishes nothing: no image is pushed, and its signing
+  job, which holds no `id-token` permission, signs every file with a key it
+  throws away, with the transparency log off, and verifies the bundles. The
+  jobs that run the builds hold no signing identity, and an image gets its
   version tag only after its signature has been verified. It also runs the
   Go tests again and refuses a tag that is not on `main` or whose changelog
   section still says unreleased. **No release exists: nothing has been
   built, pushed or signed by it, and it has not been run even as a dry
   run.** `docs/verifying-a-release.md` has the `cosign` and
   `gh attestation` commands and the certificate identity to require.
-- **A licence gate and a vulnerability report in CI, both in report mode.**
-  `scripts/licence-gate.py` judges every shipped dependency (the inventory of
-  `scripts/third-party-licenses.py`) against `.github/licence-policy.yml`:
-  allow, review and deny sets with a reason for each, and one entry per
-  package in review. The sets are a proposal and every entry is `pending`:
-  25 packages are in review today (LGPL-3.0 libvips builds under `sharp`,
-  the OFL-1.1 IBM Plex fonts, CC-BY-4.0 `caniuse-lite`, CNRI-Python in
-  `regex`). `mode: report` prints what would be refused and exits 0;
-  `mode: enforce` fails. `vulnerability-report.yml` runs
+- **The licence gate is enforced, and the release depends on it.**
+  `scripts/licence-gate.py` judges every shipped dependency (the inventory
+  of `scripts/third-party-licenses.py`) against `.github/licence-policy.yml`:
+  allow, review and deny sets with a reason for each, and one decision per
+  package in review. It fails on a licence that is unreadable, in no set,
+  denied, or in review without an `allow` decision. The release calls it
+  (`licence-gate.yml` as a reusable workflow) and signs and publishes
+  nothing unless it passes; it also writes a CycloneDX 1.6 dependency SBOM
+  for the proxy, the analyzer and the classifier from the inventory it
+  judged, and the release attaches those three. It runs weekly and by hand
+  as before, not on pull requests. **The five review decisions (libvips
+  under `sharp`, the IBM Plex fonts, `caniuse-lite`, `regex`) are still
+  `pending`, so the weekly licence job and the release fail until the
+  maintainer records them.** Go modules that are not compiled into a
+  binary are no longer judged even when they are direct requirements (the
+  policy already said so; today that is only `pgregory.net/rapid`, used by
+  tests).
+- `THIRD_PARTY_LICENSES.md`: the classifier's `onnxruntime` (MIT) and
+  `tokenizers` (Apache-2.0), and the 16 distributions they pull in, are no
+  longer NOT-INSPECTED. They were missing because the generator reads the
+  interpreter that runs it, where they are not installed; their metadata,
+  read from a venv where `classifier/requirements.txt` was installed, is now
+  recorded in `scripts/third-party-licence-data.json` and used for
+  packages that interpreter lacks (never with `--pip`). `asyncpg` of the
+  analyzer is still not inspected: no copy of its metadata was on the
+  machine. The generator no longer adds lines to `proxy/go.sum`: `go list`
+  runs on a temporary copy of `go.mod` and `go.sum`.
+- A vulnerability report in report mode. `vulnerability-report.yml` runs
   `npm audit --omit=dev --audit-level=high` (console, TypeScript SDK) and
   `pip-audit` (analyzer, classifier, Python SDK), as warnings;
-  `GATE_MODE: enforce` makes them fail. Both workflows run weekly and by
-  hand, not on pull requests: a job that cannot fail tells a reviewer
-  nothing. The `govulncheck` job in `proxy-ci.yml` runs on every pull
-  request and fails on a finding.
+  `GATE_MODE: enforce` makes them fail. It runs weekly and by hand, not on
+  pull requests: a job that cannot fail tells a reviewer nothing. The
+  `govulncheck` job in `proxy-ci.yml` runs on every pull request and fails
+  on a finding.
 - `docs/threat-model.md`: boundaries, assets, seven adversaries, the control
   for each with the file and test behind it, and what remains.
   `docs/tr/kurulum-ve-isletim.md`: an installation and operations guide in

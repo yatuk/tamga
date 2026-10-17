@@ -42,6 +42,38 @@ provenance and SBOMs is in
 | `main` | ✅ |
 | v0.8.0-rc1 and earlier (changelog entries; no tag or branch exists) | ❌ Update to `main` |
 
+## Verifying a Release
+
+Require the release workflow's exact keyless signing identity and GitHub's
+OIDC issuer. For a release file, verify its direct cosign bundle and then the
+signed checksum list:
+
+```bash
+VERSION=v0.9.0
+IDENTITY="https://github.com/yatuk/tamga/.github/workflows/release.yml@refs/tags/${VERSION}"
+ISSUER="https://token.actions.githubusercontent.com"
+FILE="tamga_${VERSION}_linux_amd64.tar.gz"
+
+cosign verify-blob "$FILE" --bundle "${FILE}.sigstore.json" \
+  --certificate-identity "$IDENTITY" --certificate-oidc-issuer "$ISSUER"
+cosign verify-blob SHA256SUMS --bundle SHA256SUMS.sigstore.json \
+  --certificate-identity "$IDENTITY" --certificate-oidc-issuer "$ISSUER"
+sha256sum --check --strict SHA256SUMS
+```
+
+For an image, use the digest in the signed `image-digests_<version>.txt`, not
+the movable tag:
+
+```bash
+cosign verify "ghcr.io/yatuk/tamga@sha256:<digest>" \
+  --certificate-identity "$IDENTITY" --certificate-oidc-issuer "$ISSUER"
+```
+
+No release exists yet, so these commands have not been run against one.
+[Verifying a release](docs/verifying-a-release.md) has the full steps,
+including `sha256sum --check --ignore-missing` for a partial download, the
+SBOM attestations and the build provenance (`gh attestation verify`).
+
 ## Management API
 
 `/api/v1/*` is opened by `TAMGA_ADMIN_KEY` (role admin), by an API key of
