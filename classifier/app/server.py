@@ -15,6 +15,9 @@ from classifier.v1.classifier_pb2 import (  # type: ignore[import-untyped]
     ClassifyResponse,
     HealthRequest,
     HealthResponse,
+    TopicScores,
+    TopicsRequest,
+    TopicsResponse,
 )
 from classifier.v1.classifier_pb2_grpc import (  # type: ignore[import-untyped]
     ClassifierServiceServicer,
@@ -22,6 +25,7 @@ from classifier.v1.classifier_pb2_grpc import (  # type: ignore[import-untyped]
 )
 
 from app.classifier import Classifier, ClassifierUnavailable
+from app.topics import TopicModel, TopicsUnavailable
 
 logger = structlog.get_logger()
 
@@ -30,10 +34,19 @@ logger = structlog.get_logger()
 MAX_TEXTS = 64
 MAX_CHARS = 200_000
 
+# A topic call is one model run per window of each text, with every topic
+# in it, and a run grows with the number of topics. These bound it well
+# above what the policy lets the proxy send (topics.banned, max_chars).
+MAX_TOPIC_TEXTS = 32
+MAX_TOPICS = 32
+MAX_TOPIC_CHARS = 500
+MAX_TOPIC_TEXT_CHARS = 50_000
+
 
 class ClassifierServicer(ClassifierServiceServicer):
-    def __init__(self, classifier: Classifier) -> None:
+    def __init__(self, classifier: Classifier, topics: TopicModel | None = None) -> None:
         self._classifier = classifier
+        self._topics = topics if topics is not None else TopicModel(model_dir="")
 
     async def Classify(  # type: ignore[override]
         self,
@@ -63,16 +76,57 @@ class ClassifierServicer(ClassifierServiceServicer):
             duration_ms=round((time.monotonic() - start) * 1000, 2),
         )
 
+    async def ClassifyTopics(  # type: ignore[override]
+        self,
+        request: TopicsRequest,
+        context: grpc.aio.ServicerContext,
+    ) -> TopicsResponse:
+        start = time.monotonic()
+        model = self._topics
+        if not model.available:
+            await context.abort(grpc.StatusCode.UNAVAILABLE, model.reason)
+        texts = list(request.texts)
+        topics = list(request.topics)
+        if not topics or any(not t.strip() for t in topics):
+            await context.abort(grpc.StatusCode.INVALID_ARGUMENT, "every topic needs a description")
+        if (
+            len(texts) > MAX_TOPIC_TEXTS
+            or len(topics) > MAX_TOPICS
+            or any(len(t) > MAX_TOPIC_CHARS for t in topics)
+            or sum(len(t) for t in texts) > MAX_TOPIC_TEXT_CHARS
+        ):
+            await context.abort(grpc.StatusCode.RESOURCE_EXHAUSTED, "too much text or too many topics in one call")
+        try:
+            results = await asyncio.to_thread(model.score, texts, topics)
+        except TopicsUnavailable as exc:
+            await context.abort(grpc.StatusCode.UNAVAILABLE, str(exc))
+        except Exception as exc:
+            # The text is not logged, and neither are the topics.
+            logger.warning("topics_failed", request_id=request.request_id, error_type=type(exc).__name__)
+            await context.abort(grpc.StatusCode.INTERNAL, "topic classification failed")
+        return TopicsResponse(
+            results=[TopicScores(scores=r.scores, truncated=r.truncated) for r in results],
+            model=model.model_name,
+            duration_ms=round((time.monotonic() - start) * 1000, 2),
+        )
+
     async def Health(  # type: ignore[override]
         self,
         request: HealthRequest,
         context: grpc.aio.ServicerContext,
     ) -> HealthResponse:
-        clf = self._classifier
-        return HealthResponse(available=clf.available, model=clf.model_name, reason=clf.reason)
+        clf, topics = self._classifier, self._topics
+        return HealthResponse(
+            available=clf.available,
+            model=clf.model_name,
+            reason=clf.reason,
+            topics_available=topics.available,
+            topics_model=topics.model_name,
+            topics_reason=topics.reason,
+        )
 
 
-async def serve(classifier: Classifier, port: int) -> grpc.aio.Server:
+async def serve(classifier: Classifier, port: int, topics: TopicModel | None = None) -> grpc.aio.Server:
     server = grpc.aio.server(
         options=[
             ("grpc.keepalive_time_ms", 30000),
@@ -81,16 +135,24 @@ async def serve(classifier: Classifier, port: int) -> grpc.aio.Server:
             ("grpc.http2.max_pings_without_data", 0),
         ],
     )
-    add_ClassifierServiceServicer_to_server(ClassifierServicer(classifier), server)
+    servicer = ClassifierServicer(classifier, topics)
+    add_ClassifierServiceServicer_to_server(servicer, server)
     server.add_insecure_port(f"[::]:{port}")
     await server.start()
-    logger.info("classifier_listening", port=port, available=classifier.available, model=classifier.model_name)
+    logger.info(
+        "classifier_listening",
+        port=port,
+        available=classifier.available,
+        model=classifier.model_name,
+        topics_available=servicer._topics.available,
+        topics_model=servicer._topics.model_name,
+    )
     return server
 
 
 async def main() -> None:
     port = int(os.environ.get("TAMGA_CLASSIFIER_PORT", "50052"))
-    server = await serve(Classifier(), port)
+    server = await serve(Classifier(), port, TopicModel())
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):

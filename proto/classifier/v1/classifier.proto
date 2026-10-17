@@ -3,6 +3,10 @@
 // Unlike the analyzer, this service is on the decision path: the proxy calls
 // it inline, under a short deadline, when its own rules found nothing
 // conclusive. It runs a local ONNX model on CPU and holds no other state.
+//
+// A second, optional model matches text against topics the operator wrote
+// down (ClassifyTopics). Each model is loaded or not on its own; a missing
+// topic model does not affect Classify.
 
 syntax = "proto3";
 
@@ -13,6 +17,11 @@ option go_package = "github.com/yatuk/tamga/proto/classifier/v1;classifierv1";
 service ClassifierService {
   // Classify scores texts. UNAVAILABLE means no model is loaded.
   rpc Classify(ClassifyRequest) returns (ClassifyResponse);
+
+  // ClassifyTopics scores texts against topics given in free text, with a
+  // zero-shot natural-language-inference model. UNAVAILABLE means no topic
+  // model is loaded.
+  rpc ClassifyTopics(TopicsRequest) returns (TopicsResponse);
 
   // Health reports whether a model is loaded and which one.
   rpc Health(HealthRequest) returns (HealthResponse);
@@ -39,6 +48,37 @@ message ClassifyResponse {
   double duration_ms = 4;
 }
 
+message TopicsRequest {
+  string request_id = 1;
+
+  // Texts to score, one per segment of the request.
+  repeated string texts = 2;
+
+  // Topics, each a description in Turkish or English, such as "a request
+  // to change a customer's credit score". The service puts each into its
+  // hypothesis template.
+  repeated string topics = 3;
+}
+
+message TopicScores {
+  // Probability that the text is about each topic, in request order.
+  repeated float scores = 1;
+
+  // True for a text too long to read whole: only its first windows were
+  // read, so a low score does not mean it is not about the topic.
+  bool truncated = 2;
+}
+
+message TopicsResponse {
+  // One per text, in request order.
+  repeated TopicScores results = 1;
+
+  // Name of the loaded topic model (its directory name).
+  string model = 2;
+
+  double duration_ms = 3;
+}
+
 message HealthRequest {}
 
 message HealthResponse {
@@ -47,4 +87,9 @@ message HealthResponse {
 
   // Why no model is loaded, when available is false.
   string reason = 3;
+
+  // The same for the topic model, which is optional.
+  bool topics_available = 4;
+  string topics_model = 5;
+  string topics_reason = 6;
 }
