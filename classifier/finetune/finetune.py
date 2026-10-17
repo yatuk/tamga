@@ -1,26 +1,26 @@
 """Fine-tune the inline classifier on Turkish and measure it before and after.
 
-NOT RUN. This script was written on 2026-10-11 without a model download and
-without torch installed; it has been parsed and its data and metric functions
-are tested (classifier/tests/test_finetune.py), and nothing else in it has
-been executed. Read README.md in this directory before running it.
+Written on 2026-10-11 and run once on 2026-10-17; the result is in
+README.md in this directory, which says how to run it.
 
 What it does, in order (``run``):
 
 1. builds the training rows from ``tr_tuning.csv`` (Turkish, written for
    this repository) and the injection and benign rows of ``prompts.csv``
    (the English and Turkish tuning corpus of the rules);
-2. scores ``tr_locked.csv`` and ``holdout.csv`` with the base model: the
-   "before";
+2. scores ``tr_locked.csv``, ``trd_locked.csv`` and ``holdout.csv`` with
+   the base model: the "before";
 3. fine-tunes the base model on the training rows, holding a tenth of them
    back to pick the checkpoint;
-4. scores the same two sets with the result: the "after";
+4. scores the same three sets with the result: the "after";
 5. writes ``report.md``: Turkish locked-set recall before and after at the
    same false-positive rate, and the same for the English holdout, which
    the fine-tune must not make worse.
 
-``tr_locked.csv`` is read in steps 2 and 4 only. No row of it, and nothing
-derived from a score on it, reaches step 3.
+The two locked sets are read in steps 2 and 4 only. No row of them, and
+nothing derived from a score on them, reaches step 3. ``trd_tuning.csv`` (the
+tuning part of the translated deepset set) is not read at all yet: the base
+model was trained on the English originals of its rows.
 
 Only the standard library is imported at module level. torch and
 transformers are imported inside the functions that need them, so the
@@ -98,8 +98,10 @@ def read_corpus(path: Path) -> list[dict]:
 def label_for(category: str, expected_action: str) -> int | None:
     """1 for an instruction aimed at the model, 0 for benign text, None for
     a row that is neither (PII, secrets, bulk-data requests)."""
-    if category.startswith("tr.benign."):
+    if category.startswith(("tr.benign.", "trd.benign")):
         return 0
+    if category.startswith("trd."):
+        return 1 if expected_action != "PASS" else None
     if category.startswith("tr."):
         # Requests for data with no instruction to the model in them are a
         # policy question, not an injection; the classifier is not taught
@@ -115,7 +117,7 @@ def label_for(category: str, expected_action: str) -> int | None:
 def language_of(category: str, text: str) -> str:
     """"tr" or "en". The Turkish set is Turkish by construction; in the older
     corpora a category ending in .tr or a Turkish letter in the text says so."""
-    if category.startswith("tr.") or category.endswith(".tr"):
+    if category.startswith(("tr.", "trd.")) or category.endswith(".tr"):
         return "tr"
     return "tr" if any(ch in text for ch in "çğıöşüÇĞİÖŞÜ") else "en"
 
@@ -164,12 +166,15 @@ def read_jsonl(path: Path) -> list[Row]:
 
 def threshold_at_fpr(benign_scores: list[float], fpr: float) -> float:
     """The lowest threshold at which at most ``fpr`` of the benign scores are
-    at or above it. ``math.inf`` when even the highest score alone is too
-    many (several rows share it)."""
+    at or above it. When even the highest score is too many (a small set, or
+    several rows share it), that is the next number above the highest score,
+    so no benign row is flagged. ``math.inf`` only when there are no scores."""
     allowed = math.floor(fpr * len(benign_scores) + 1e-9)
     best = math.inf
     for value in sorted(set(benign_scores), reverse=True):
         if sum(1 for s in benign_scores if s >= value) > allowed:
+            if math.isinf(best):
+                best = math.nextafter(value, math.inf)
             break
         best = value
     return best
@@ -231,7 +236,8 @@ def report_markdown(before: dict[str, dict], after: dict[str, dict], meta: dict)
     lines += [
         "",
         "`tr_locked.csv` and `holdout.csv` were written by the author of Tamga's rules. They are weaker evidence",
-        "than a set from someone else; see docs/benchmarks/README.md.",
+        "than a set from someone else; see docs/benchmarks/README.md. `trd_locked.csv` is deepset's test split",
+        "translated into Turkish by someone else and corrected for Tamga.",
         "",
     ]
     return "\n".join(lines)
@@ -332,6 +338,7 @@ def training_rows() -> list[Row]:
 def evaluation_sets() -> dict[str, list[Row]]:
     return {
         "tr_locked.csv": build_rows(read_corpus(REDTEAM / "tr_locked.csv"), "tr_locked"),
+        "trd_locked.csv": build_rows(read_corpus(REDTEAM / "trd_locked.csv"), "trd_locked"),
         "holdout.csv": build_rows(read_corpus(REDTEAM / "holdout.csv"), "holdout"),
     }
 

@@ -77,18 +77,23 @@ The copy an operator placed in `models/prompt-injection-guard-small/` holds
 it cannot be trained, so the weights have to be fetched again in their
 PyTorch form.
 
-**No external dataset is proposed.** The training rows are the two files
-above, both written for this repository. The Turkish sets found in the
-research (`docs/research/turkish-prompt-injection.md`) are small and three
-of the four come from one group; if one is added later, three things have to
-be settled first and written into this file:
+**The training rows are the two files above**, both written for this
+repository. One external set is now in the repository, for evaluation only:
+`trd_tuning.csv` and `trd_locked.csv` in `proxy/testdata/redteam/`, the
+Turkish translation of `deepset/prompt-injections` published as
+`beratcmn/turkish-prompt-injections` (Apache-2.0), corrected row by row on
+2026-10-17 (see the header of each file and `NOTICE`). The three things that
+had to be settled before adding it:
 
-1. its licence on the day of download, from the dataset card;
-2. where its rows come from: `beratcmn/turkish-prompt-injections` is a
-   translation of `deepset/prompt-injections`, which the current model's
-   card lists both as training data (train split) and as an evaluation set
-   (test split);
-3. that none of its rows, or a near copy, is in `tr_locked.csv`.
+1. its licence on the day of download: Apache-2.0, per the dataset card at
+   commit `c40c38f`;
+2. where its rows come from: deepset's train split, whose English originals
+   the base model was trained on, is `trd_tuning.csv`; deepset's test split,
+   which the model's card lists as an evaluation set and not as training
+   data, is `trd_locked.csv`. `run` scores `trd_locked.csv` before and after
+   and does not read `trd_tuning.csv`;
+3. that no row of either is in `tr_locked.csv`: none is, and no text is in
+   both of its parts (`TestDeepsetTurkishSplit`).
 
 ## Commands
 
