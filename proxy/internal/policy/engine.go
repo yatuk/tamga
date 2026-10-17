@@ -406,6 +406,10 @@ type Policy struct {
 	Vault          *VaultConfig         `yaml:"vault" json:"vault"`
 	Canary         *CanaryConfig        `yaml:"canary" json:"canary"`
 	Scan           *ScanConfig          `yaml:"scan" json:"scan"`
+	// Language is the languages a request may be written in (language.go).
+	// It is left out of the JSON form when absent, so that a policy without
+	// it keeps its digest.
+	Language *LanguageConfig `yaml:"language" json:"language,omitempty"`
 }
 
 // Values of scan.on_malformed.

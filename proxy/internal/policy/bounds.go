@@ -94,6 +94,7 @@ func boundsIssues(p *Policy) []ValidationIssue {
 	issues = append(issues, outputContentIssues(p)...)
 	issues = append(issues, poolTimeoutIssues(p)...)
 	issues = append(issues, classifierBoundIssues(p)...)
+	issues = append(issues, languageIssues(p)...)
 	issues = append(issues, noEffectIssues(p)...)
 	return issues
 }

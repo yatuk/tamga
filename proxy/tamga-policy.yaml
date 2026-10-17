@@ -315,6 +315,28 @@ scan:
   default_action: WARN
 
 # ---------------------------------------------------------------------------
+# Languages a request may be written in (off here)
+# ---------------------------------------------------------------------------
+# A message whose prose is, for more than max_foreign_share of its letters,
+# in a language outside allow gets a finding of type language (category
+# language_not_allowed) that names the languages and their shares, never the
+# text. Code, stack traces, log lines, URLs, addresses, paths, identifiers
+# and numbers are not prose and are not counted; a message with fewer than
+# min_letters letters of prose is not judged. Answers are not checked.
+#
+#   language:
+#     enabled: true
+#     allow: [tr, en]         # ISO 639-1; a code the detector does not know fails the load
+#     action: WARN            # BLOCK, STRIP, WARN, LOG or PASS (WARN when left out)
+#     min_letters: 40
+#     max_foreign_share: 0.3  # 0 lets no foreign piece through
+#     scope: [user, tool]     # system, user, tool
+#
+# The detector's models take about 50 MiB of memory, loaded only when a
+# policy turns this on. See docs/operations.md, "Languages a request may be
+# written in".
+
+# ---------------------------------------------------------------------------
 # RBAC exception framework (opt-in)
 # ---------------------------------------------------------------------------
 # Exceptions allow specific admin/security roles to bypass policy rules with

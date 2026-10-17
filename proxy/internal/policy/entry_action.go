@@ -74,6 +74,11 @@ func (p *Policy) entryAction(f scanner.Finding) (Action, bool) {
 				take(p.Competitors[i].Action)
 			}
 		}
+	case scanner.LanguageFindingType:
+		// The language section's action, decided like an entry's (language.go).
+		if a, ok := p.languageAction(); ok {
+			best, found = a, true
+		}
 	}
 	return best, found
 }
@@ -108,6 +113,7 @@ var unmaskableKinds = map[string]string{
 	"injection":          "an injection finding is a verdict on a piece of text, not a value with a place in it",
 	"content_moderation": "a content moderation finding is a verdict on a piece of text, not a value with a place in it",
 	"operator_state":     "an operator-state finding is a verdict on the request, not a value with a place in it",
+	"language":           "a language finding is a verdict on a whole message, not a value with a place in it",
 }
 
 // unmaskableOutputKeys are the names output_rules.redact_on cannot hold:
