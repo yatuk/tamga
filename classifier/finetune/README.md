@@ -161,8 +161,10 @@ runs an int8 ONNX export:
 
 1. Export `out/model/` with `export.py` and check its parity (next
    section).
-2. Point the service at the export and measure it through the proxy's
-   own path: `go run ./cmd/redteam -classifier localhost:50052 -sweep` on
+2. Sweep the export for a threshold with `sweep.py` (below), then run it
+   in shadow next to the model in service (`docs/operations.md`, "Shadow
+   mode"). To measure it through the proxy's own path instead, point the
+   service at it: `go run ./cmd/redteam -classifier localhost:50052 -sweep` on
    `prompts.csv` and `holdout.csv`, as `make redteam-classifier-report`
    does. The proxy strips long hashes and keys before asking the
    classifier; this script scores the text as it is.
@@ -270,8 +272,64 @@ so its threshold is just above the highest benign score, which is very low;
 at 0.98 the fine-tuned model catches 11 of its 59 attacks. That is a
 property of the model, not of the export: PyTorch and int8 agree on it.
 
-Not measured: latency of the export in the service, and the proxy's own
-sweep (`cmd/redteam -sweep`) against it.
+Not measured: the proxy's own sweep (`cmd/redteam -sweep`) against it.
+Its latency next to the shipped model, in shadow, is in
+`docs/operations.md` ("Shadow mode").
+
+## The threshold sweep (2026-10-17)
+
+`sweep.py` chooses a threshold for a model directory the service loads. It
+scores, through `app.classifier`, every attack and benign row of the tuning
+sets (`prompts.csv`, `holdout.csv`, `tr_tuning.csv`, `trd_tuning.csv`,
+`discourse_tuning.csv`), the benign developer texts of `cmd/redteam`, and
+with `--external DIR` the `attack` and `benign` rows of the CSV files in
+DIR. It prints recall per attack set and the false-positive rate per benign
+set across thresholds, and proposes the lowest threshold at which at most
+`--fpr` (1%) of the pooled benign rows score at or above it. The locked
+parts are scored afterwards, at the proposal and at 0.98, and never
+reach the choice. Texts go through a port of the proxy's `Prepare` first.
+
+```bash
+python classifier/finetune/sweep.py /path/to/export --external /path/to/local/csv \
+    --threads 8 --cache scores.json --json sweep.json
+```
+
+`--cache` keeps the scores by a hash of the text, so a second run (other
+`--fpr`, other pool) does not score again; it holds no text.
+
+It was run on the export above (the default seed's model, the only
+candidate) and on the shipped model, with `--external` pointed at a local
+copy of the Yıldız Technical University set (CC BY-NC-SA 4.0): **a local
+measurement; no row of that set is in the repository**, and only counts
+and rates are reported. Its 12,082 benign rows are most of the 13,052 in
+the pool. The full tables are in `docs/benchmarks/README.md` ("Choosing the
+classifier's threshold"). In short:
+
+| | Shipped model | Candidate |
+|---|---|---|
+| Proposed threshold, FPR ≤ 1% on the 13,052 pooled benign rows | 0.912 | 0.983 |
+| Proposed threshold on the 970 repository benign rows alone | 0.996 | 0.999 |
+| Pooled FPR at 0.98 | 0.0039 | 0.0103 |
+| `holdout.csv` recall / FPR at the proposal | 0.947 / 0.022 | 0.974 / 0.000 |
+| `trd_tuning.csv` recall at the proposal | 0.286 | 0.315 |
+| `discourse_tuning.csv` benign FPR at the proposal | 0.250 | 0.154 |
+| Local safe-guard files recall at the proposal | 0.414, 0.412 | 0.518, 0.485 |
+| Local `rogue` benign FPR at the proposal | 0.014 | 0.020 |
+| `tr_locked.csv` recall / FPR at the proposal | 0.662 / 0.048 | 0.815 / 0.032 |
+| `tr_locked.csv` recall / FPR at 0.98 | 0.515 / 0.032 | 0.838 / 0.032 |
+| `trd_locked.csv` recall at the proposal (FPR 0) | 0.169 | 0.186 |
+| `discourse_locked.csv` benign FPR at the proposal (recall 1.0) | 0.230 | 0.162 |
+
+The candidate was trained on the rows of `prompts.csv` and `tr_tuning.csv`,
+so its numbers on those two are training numbers (left out of the table);
+without their 349 benign rows in the pool its proposal is 0.985.
+
+**Recommendation: no default changes.** The shipped model stays at 0.98
+(its pooled proposal, 0.912, comes from the local rows and flags a quarter
+of the repository's text about attacks). The candidate is better on every
+attack set at the same pooled rate, and errs more on long role-play
+prompts. Run it in shadow at `shadow_threshold: 0.983`
+(`docs/operations.md`, "Shadow mode") and decide on real traffic.
 
 ## What a good result would and would not show
 

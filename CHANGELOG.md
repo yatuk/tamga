@@ -1277,6 +1277,36 @@
 - Stress suite: `--classifier` runs it with the classifier on.
 - Architecture diagrams corrected: the analyzer was drawn on the request
   path; it runs after the response.
+- **Shadow mode: a candidate injection model scored next to the one in
+  service, recorded and never acted on.** Off by default. The classifier
+  service loads a second model from `TAMGA_CLASSIFIER_SHADOW_MODEL_DIR`
+  (Compose mounts `TAMGA_CLASSIFIER_SHADOW_MODEL_PATH`, default
+  `../models/shadow`, at `/models/shadow`; empty means no shadow), runs it
+  beside the primary on every Classify call, waits at most
+  `TAMGA_CLASSIFIER_SHADOW_WAIT_MS` (20) for it after the primary is done,
+  and skips it rather than queue when it is still busy. A missing or broken
+  shadow is reported in the Health RPC (`shadow_available`, `shadow_model`,
+  `shadow_reason`) and changes nothing else. `ClassifyResponse.duration_ms`
+  stays the primary model's time; the shadow's has a field of its own. The
+  proxy sorts each text into `both`, `neither`, `shadow_only`,
+  `primary_only` or `missing` at the new `scan.classifier.shadow_threshold`
+  (default: `threshold`), counted as
+  `tamga_classifier_shadow_texts_total{shadow_model,outcome}`, and stores
+  both scores per text, without the text, in a new `request_logs`
+  column. **Migration `021_classifier_scores` adds the column
+  `classifier_scores` (JSONB, NULL unless a shadow ran); the proxy also adds
+  it at startup.** **For such a request the event detail
+  (`GET /api/v1/events/{request_id}`) carries `classifier_scores` and the
+  NATS payload `classifier`.** The proxy path and the LiteLLM route store
+  the record; the scan API stores none. See docs/operations.md, "Shadow
+  mode".
+- `classifier/finetune/sweep.py MODEL_DIR` scores the tuning sets and a
+  benign pool through the service's code and proposes the lowest threshold
+  with at most 1% false positives on the pooled benign rows; the locked
+  parts are scored only at the result. Run on the shipped model (proposes
+  0.912) and on the fine-tuned candidate (0.983); see
+  docs/benchmarks/README.md, "Choosing the classifier's threshold". No
+  default changed: the shipped model and 0.98 stay.
 
 ### Banned topics (optional)
 - A new policy section, `topics`, lists subjects in free text, in Turkish
