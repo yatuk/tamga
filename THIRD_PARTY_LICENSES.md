@@ -404,4 +404,5 @@ No model is in the image. The operator mounts one at
 |---|---|---|
 | BIN/IIN list from `iannuttall/binlist-data` | `proxy/internal/scanner/bindata/binlist.csv` | CC BY 4.0, per the upstream README and the directory's `LICENSE.md`. Attribution is in `NOTICE` |
 | Prompt-injection phrases | `proxy/internal/scanner/injection.go` | Sources and what could be verified are in the table at the head of that file and in `NOTICE` |
+| `beratcmn/turkish-prompt-injections`, a Turkish translation of `deepset/prompt-injections`, commit `c40c38f`, corrected for Tamga | `proxy/testdata/redteam/trd_tuning.csv`, `proxy/testdata/redteam/trd_locked.csv` | Apache-2.0, per both dataset cards; the text is in `proxy/testdata/redteam/LICENSE-Apache-2.0.txt`. Test data, in no binary or image. Attribution and changes are in `NOTICE` |
 <!-- END MANUAL -->

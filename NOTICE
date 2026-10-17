@@ -89,3 +89,28 @@ them when this file was written (2026-10-10), so no licence is claimed here:
 
 Phrases marked "Tamga red-team" were written for Tamga and are under the
 licence of the repository.
+
+================================================================================
+5. Red-team test data: Turkish translation of deepset/prompt-injections
+================================================================================
+
+Files:     proxy/testdata/redteam/trd_tuning.csv
+           proxy/testdata/redteam/trd_locked.csv
+           (test data only; not compiled into any binary or image)
+Source:    beratcmn/turkish-prompt-injections, commit
+           c40c38f8ca632052fbfec19e90fab31fce33eda1
+           https://huggingface.co/datasets/beratcmn/turkish-prompt-injections
+           a Turkish translation of deepset/prompt-injections
+           https://huggingface.co/datasets/deepset/prompt-injections
+Credit:    beratcmn (the translation); deepset (the original texts and
+           labels)
+Licence:   Apache License, Version 2.0, as stated in both dataset cards. A
+           copy is in proxy/testdata/redteam/LICENSE-Apache-2.0.txt.
+           Neither dataset publishes a NOTICE file of its own.
+Changes:   Made for Tamga on 2026-10-17. Converted from JSON Lines to the
+           red-team CSV format, with an id, a category and a note per row.
+           Every row was read against its English or German source; 154 of
+           661 translations were corrected (the note column of each says
+           what was wrong) and 13 rows were left out as duplicates or as
+           unintelligible. No label was changed. deepset's train split is
+           trd_tuning.csv and its test split trd_locked.csv.
