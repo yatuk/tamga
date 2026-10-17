@@ -124,6 +124,7 @@ func main() {
 	// assigned later when getCustomSpecs + patternStore are ready.
 	var customScanner *scanner.CustomScanner
 	var competitorScanner *scanner.CompetitorScanner
+	var languageScanner *scanner.LanguageScanner
 	var opScanner *operator_state.OperatorStateScanner
 
 	// Set once the audit log and the policy history exist, further down. A
@@ -138,6 +139,9 @@ func main() {
 		}
 		if competitorScanner != nil {
 			competitorScanner.Refresh()
+		}
+		if languageScanner != nil {
+			languageScanner.Refresh()
 		}
 		if opScanner != nil {
 			if p := policyStore.GetPolicy(); p != nil {
@@ -558,6 +562,15 @@ func main() {
 	registry.SetSpeed("competitor", scanner.SpeedFast)
 	proxyBoundRegistry.Register(competitorScanner)
 	proxyBoundRegistry.SetSpeed("competitor", scanner.SpeedFast)
+
+	// The language check reads the policy's language section at each
+	// request. Its models are loaded only once a policy turns it on.
+	languageScanner = scanner.NewLanguageScanner(func() scanner.LanguageSpec { return policyStore.GetPolicy().LanguageSpec() })
+	languageScanner.Refresh()
+	registry.Register(languageScanner)
+	registry.SetSpeed(scanner.LanguageFindingType, scanner.SpeedFast)
+	proxyBoundRegistry.Register(languageScanner)
+	proxyBoundRegistry.SetSpeed(scanner.LanguageFindingType, scanner.SpeedFast)
 
 	// Operator-state scanner (jugeni-contracts v1). Enabled when at least one
 	// audit-log path is configured via TAMGA_OPERATOR_STATE_* env vars.
