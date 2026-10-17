@@ -44,7 +44,7 @@ the others are in the module graph for tests or tools only.
 | go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp | v1.45.0 | Apache-2.0 AND BSD-3-Clause | yes | LICENSE |
 | go.opentelemetry.io/otel/sdk | v1.45.0 | Apache-2.0 AND BSD-3-Clause | yes | LICENSE |
 | go.opentelemetry.io/otel/trace | v1.45.0 | Apache-2.0 AND BSD-3-Clause | yes | LICENSE |
-| golang.org/x/text | v0.41.0 | BSD-3-Clause | yes | LICENSE |
+| golang.org/x/text | v0.42.0 | BSD-3-Clause | yes | LICENSE |
 | golang.org/x/time | v0.15.0 | BSD-3-Clause | yes | LICENSE |
 | google.golang.org/grpc | v1.83.2 | Apache-2.0 | yes | LICENSE |
 | google.golang.org/protobuf | v1.36.11 | BSD-3-Clause | yes | LICENSE |
@@ -78,7 +78,7 @@ None outside the permissive set.
 | github.com/jackc/pgpassfile | v1.0.0 | MIT |
 | github.com/jackc/pgservicefile | v0.0.0-20240606120523-5a60cdf6a761 | MIT |
 | github.com/jackc/puddle/v2 | v2.2.2 | MIT |
-| github.com/klauspost/compress | v1.18.5 | Apache-2.0 AND MIT AND BSD-3-Clause |
+| github.com/klauspost/compress | v1.18.7 | Apache-2.0 AND MIT AND BSD-3-Clause |
 | github.com/mattn/go-colorable | v0.1.13 | MIT |
 | github.com/mattn/go-isatty | v0.0.19 | MIT |
 | github.com/munnerz/goautoneg | v0.0.0-20191010083416-a7dc8b61c822 | BSD-3-Clause |
@@ -92,10 +92,10 @@ None outside the permissive set.
 | go.opentelemetry.io/proto/otlp | v1.11.0 | Apache-2.0 |
 | go.uber.org/atomic | v1.11.0 | MIT |
 | go.yaml.in/yaml/v2 | v2.4.2 | Apache-2.0 AND MIT |
-| golang.org/x/crypto | v0.55.0 | BSD-3-Clause |
-| golang.org/x/net | v0.58.0 | BSD-3-Clause |
-| golang.org/x/sync | v0.22.0 | BSD-3-Clause |
-| golang.org/x/sys | v0.47.0 | BSD-3-Clause |
+| golang.org/x/crypto | v0.57.0 | BSD-3-Clause |
+| golang.org/x/net | v0.60.0 | BSD-3-Clause |
+| golang.org/x/sync | v0.23.0 | BSD-3-Clause |
+| golang.org/x/sys | v0.48.0 | BSD-3-Clause |
 | google.golang.org/genproto/googleapis/api | v0.0.0-20260803160001-6ac0973c030d | Apache-2.0 |
 | google.golang.org/genproto/googleapis/rpc | v0.0.0-20260803160001-6ac0973c030d | Apache-2.0 |
 

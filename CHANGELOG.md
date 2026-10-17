@@ -1423,8 +1423,12 @@
   tuning part and that pass is incomplete. What is known in public about
   Turkish injection is collected in
   `docs/research/turkish-prompt-injection.md`, and `classifier/finetune/`
-  holds a script, not yet run, for fine-tuning the classifier once a model
-  download is approved. The scanner version is 1.10.0.
+  holds a script for fine-tuning the classifier. **It was run once on
+  2026-10-17:** on the locked Turkish set, recall at a 2% false-positive
+  rate went from 0.40 to 0.71, and on the mostly English holdout from 0.84
+  to 0.97. All three sets were written by the same author as the rules,
+  the fine-tuned model has not been exported to the ONNX form the service
+  runs, and no default has changed. The scanner version is 1.10.0.
 - **Look-alike host names written in Latin letters only are reported.**
   `gıthub.com` with a dotless ı, `paypał.com`, `akbánk.com` and their
   punycode passed the link scanner, which looked for mixed scripts. A host

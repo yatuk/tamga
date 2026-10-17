@@ -1,13 +1,23 @@
 # Fine-tuning the inline classifier on Turkish
 
-**None of this has been run.** It was written on 2026-10-11 for sprint item
-S6-2, on a machine without torch and without the model's trainable weights,
-because downloading a model or a dataset needs the repository owner's
-approval and that had not been given. What has been checked: the script
-parses, loading it imports nothing but the standard library, and its data
-and metric functions pass `classifier/tests/test_finetune.py`. The training
-loop and the scoring have never executed; expect to fix something on the
-first run.
+**It was run once, on 2026-10-17**, after the owner approved the downloads:
+on a laptop CPU (16 threads), Python 3.14, torch 2.14.1 (CPU build),
+transformers 5.20.1, with the command below and the default seed. The whole
+run, model download included, took five minutes. Nothing in it needed a
+change. The report it wrote:
+
+| Set | Model | Attacks | Benign | Threshold at FPR ≤ 2% | FPR | Recall | Recall at 0.98 | FPR at 0.98 |
+|---|---|---|---|---|---|---|---|---|
+| `tr_locked.csv` | before | 130 | 125 | 0.9965 | 0.016 | 0.400 | 0.508 | 0.032 |
+| `tr_locked.csv` | after | 130 | 125 | 0.9988 | 0.016 | 0.708 | 0.838 | 0.032 |
+| `holdout.csv` | before | 38 | 91 | 0.9931 | 0.011 | 0.842 | 0.921 | 0.011 |
+| `holdout.csv` | after | 38 | 91 | 0.9826 | 0.011 | 0.974 | 0.974 | 0.011 |
+
+"before" is the base model, "after" the fine-tuned one, both in 32-bit
+PyTorch, not the int8 ONNX the service runs. Both sets were written by the
+author of the rules (see "What a good result would and would not show"
+below). The fine-tuned model is not in the service: it has not been
+exported to ONNX, and no default has changed.
 
 Nothing in this directory is part of the classifier service. It is left out
 of the image (`classifier/.dockerignore`) and adds nothing to

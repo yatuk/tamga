@@ -619,6 +619,38 @@ What this does not show:
   result costs one model run per 512 tokens and may not fit the deadline or
   `max_chars`; the response then says `X-Tamga-Classifier: partial`.
 
+### Fine-tuning the classifier on Turkish (2026-10-17)
+
+`classifier/finetune/` fine-tunes the same model on the Turkish tuning set
+(`tr_tuning.csv`, 351 rows) and the instruction and benign rows of
+`prompts.csv` (265 rows), and scores the model before and after on
+`tr_locked.csv` and `holdout.csv`. Each model is read at the lowest
+threshold with at most 2% false positives on the benign rows of the set,
+so the two are compared at the same false-positive rate. One run on a
+laptop CPU, three epochs, seed 20261011, 32-bit PyTorch:
+
+| Set | Model | Attacks | Benign | Threshold at FPR ≤ 2% | FPR | Recall | Recall at 0.98 | FPR at 0.98 |
+|---|---|---|---|---|---|---|---|---|
+| `tr_locked.csv` | before | 130 | 125 | 0.9965 | 0.016 | 0.400 | 0.508 | 0.032 |
+| `tr_locked.csv` | after | 130 | 125 | 0.9988 | 0.016 | 0.708 | 0.838 | 0.032 |
+| `holdout.csv` | before | 38 | 91 | 0.9931 | 0.011 | 0.842 | 0.921 | 0.011 |
+| `holdout.csv` | after | 38 | 91 | 0.9826 | 0.011 | 0.974 | 0.974 | 0.011 |
+
+On the locked Turkish set, recall at the same false-positive rate went from
+0.40 to 0.71; on the mostly English holdout from 0.84 to 0.97, so English
+did not get worse. What this does not show:
+
+- **Independent evidence.** Both sets, and the tuning set, were written by
+  the author of the rules. A Turkish set written by someone else, with
+  benign texts as well as attacks, is still needed.
+- **The model as the service runs it.** The service runs an int8 ONNX
+  export. The fine-tuned model has not been exported or quantized, and its
+  numbers after that are not known. No default has changed.
+- **The proxy's path.** These are the model's scores on the raw text. The
+  proxy asks the classifier only about what the rules did not block, and
+  strips hashes and keys first (see "With the inline classifier").
+- **One run.** One seed, one machine; no spread is known.
+
 ### How to read these numbers honestly
 
 - **Precision (1.000)** — nothing benign in either set was mitigated. This
