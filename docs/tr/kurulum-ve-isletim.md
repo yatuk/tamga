@@ -50,9 +50,9 @@ destek sözleşmesi ya da yönetilen bir hizmeti yoktur. Sınırların tamamı
   yoktur.
 - Sunucudan model sağlayıcılarına (ör. `api.openai.com`) çıkış izni.
 - Açılan portlar: `8443` (proxy ve yönetim API'si) ve `3000` (console).
-  Compose dosyası ayrıca Jaeger arayüzünü (`16686`) ve NATS izleme portunu
-  (`8222`) sunucuda yayımlar; ikisi de kimlik doğrulamasızdır, üretimde
-  güvenlik duvarıyla kapatın ya da Compose dosyasından kaldırın.
+  Jaeger arayüzü (`16686`) ve NATS izleme portu (`8222`) yalnızca
+  `127.0.0.1` adresine bağlanır. PostgreSQL, Redis, NATS istemci portu,
+  analyzer, classifier ve scanner-service sunucuya port açmaz.
 
 Compose dosyasındaki her servis bir profile bağlıdır. `full` profili şu
 servisleri başlatır: `proxy`, `dashboard` (console), `analyzer` (PDF
@@ -117,8 +117,8 @@ cp .env.example .env
 chmod 600 .env
 ```
 
-Üç değer zorunludur ve örnek dosyada `changeme-in-production` olarak durur.
-Her biri için ayrı bir değer üretin:
+Üç değer zorunludur ve örnek dosyada boştur. Tam kurulumu başlatmadan önce
+her biri için ayrı bir değer üretin:
 
 ```bash
 openssl rand -hex 32   # TAMGA_ADMIN_KEY için
@@ -143,17 +143,20 @@ bozar.
 | `TAMGA_JWT_SECRET` ve `TAMGA_GITHUB_*` | Oturum açma (yalnızca GitHub OAuth). İsteğe bağlı | Kullanmayacaksanız boş bırakın; o zaman erişim yalnızca anahtarlarla olur |
 | `TAMGA_ANALYZER_SEND_CONTENT` | İletilen isteklerin metnini karar sonrası analyzer'a kopyalar | `false` bırakın; ne yaptığını [işletim belgesinden](../operations.md#analyzer) okumadan açmayın |
 | `TAMGA_LLM_JUDGE`, `ANTHROPIC_API_KEY` | Analyzer'ın metni Anthropic'e gönderen "LLM judge" özelliği | Boş bırakın. İkisi birlikte verilmedikçe kapalıdır |
-| `OPENAI_API_KEY` | Compose bunu yalnızca analyzer'a geçirir; proxy kullanmaz | Örnekteki yer tutucu kalabilir |
+| `OPENAI_API_KEY` | Analyzer bunu okur ama kullanmaz; proxy'nin sağlayıcı havuzları da aynı env dosyasından okuyabilir | Kullanılmıyorsa boş bırakın |
 
-Sağlayıcı anahtarlarınızı (OpenAI, Anthropic) Tamga'ya vermezsiniz:
-uygulama kendi anahtarını her istekte gönderir, Tamga onu sağlayıcıya
-iletir.
+Normal geçişte sağlayıcı anahtarlarını (OpenAI, Anthropic) Tamga'ya
+vermezsiniz: uygulama kendi anahtarını her istekte gönderir, Tamga onu
+sağlayıcıya iletir. Policy'deki bir sağlayıcı havuzu `api_key_env` kullanırsa
+adı verilen anahtarın proxy ortamında bulunması bunun istisnasıdır.
 
-**Dikkat:** Compose dosyası proxy'ye yalnızca kendi içinde adı geçen
-değişkenleri geçirir. `TAMGA_REQUIRE_KEY`, `TAMGA_TLS_CERT`,
-`TAMGA_TRUSTED_PROXIES` ya da `TAMGA_RETENTION_REQUEST_LOGS_DAYS` gibi bir
-ayarı `.env` dosyasına yazmak tek başına işe yaramaz. Bunlar için ikinci bir
-Compose dosyası kullanın (bkz. [Ek ayarlar](#ek-ayarlar)).
+Compose, `.env` dosyasını proxy container'ının ortamı olarak da yükler; bu
+yüzden `TAMGA_REQUIRE_KEY`, `TAMGA_TRUSTED_PROXIES` ve
+`TAMGA_RETENTION_REQUEST_LOGS_DAYS` gibi proxy ayarları doğrudan ulaşır.
+Başka bir `--env-file` kullanırsanız, o dosyada `TAMGA_PROXY_ENV_FILE`
+değerini de aynı dosyanın `deploy/` dizinine göre yolu olarak verin. Dosya
+yolları (`TAMGA_TLS_CERT`, operator-state dosyaları gibi) container içindeki
+bir yolu göstermeli ve ilgili dosya ayrı bir volume ile bağlanmalıdır.
 
 ### 3. Policy dosyasının bağlanması
 
@@ -200,16 +203,15 @@ docker compose --env-file .env -f deploy/docker-compose.yml up -d dashboard
 
 ### Ek ayarlar
 
-Compose dosyasının proxy'ye geçirmediği bir ayar için depodaki dosyayı
-değiştirmek yerine yanına ikinci bir dosya koyun, ör.
+Ek bir volume, container içi dosya yolu ya da başka bir Compose özelliği
+için depodaki dosyayı değiştirmek yerine yanına ikinci bir dosya koyun, ör.
 `deploy/docker-compose.local.yml`:
 
 ```yaml
 services:
   proxy:
-    environment:
-      - TAMGA_REQUIRE_KEY=true
-      - TAMGA_RETENTION_REQUEST_LOGS_DAYS=90
+    volumes:
+      - ../secrets/tls:/run/tamga/tls:ro
 ```
 
 ve her `docker compose` komutuna ikisini birlikte verin:
@@ -609,6 +611,10 @@ curl -s -H "X-Tamga-Admin-Key: $TAMGA_ADMIN_KEY" http://localhost:8443/api/v1/me
 | `tamga_alerts_total` | Gönderilen, engellenen ve atlanan uyarılar |
 
 İzler (trace) Jaeger'a gider (`http://localhost:16686`, isteklerin %5'i).
+Bu adres yalnızca sunucunun kendisinden açılır. Ağdan erişimi geri getirmek
+için `.env` içinde `TAMGA_OBSERVABILITY_BIND=0.0.0.0` yazılabilir; Jaeger ve
+NATS izleme uçlarında kimlik doğrulama olmadığı için bunu yalnızca ayrı bir
+ağ kontrolü varsa yapın.
 Yönetim işlemleri (policy, anahtar, rol değişiklikleri ve reddedilen
 kimlik bilgileri) console'daki **Audit** sayfasındadır. Uyarıları Slack,
 Teams ya da bir SIEM'e göndermek için: **Integrations** sayfası ve

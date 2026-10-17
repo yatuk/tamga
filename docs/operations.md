@@ -35,6 +35,14 @@ from one to the other, stop the first, for example:
 docker compose --env-file .env -f deploy/docker-compose.yml --profile minimal down
 ```
 
+Only the proxy and console bind to all host interfaces by default. PostgreSQL,
+Redis, NATS client traffic, the analyzer, classifier and scanner service stay
+on the Compose network. The Jaeger UI (`16686`) and NATS monitoring endpoint
+(`8222`) are development conveniences bound to `127.0.0.1`; use a tunnel or
+a local browser to reach them. Set `TAMGA_OBSERVABILITY_BIND=0.0.0.0` only
+when network-wide, unauthenticated access is intentional and filtered by the
+host firewall.
+
 **An `.env` from before 0.9.0.** The services had no profile before, and an
 `.env` copied from an older `.env.example` has no `COMPOSE_PROFILES`. With
 it, `up -d` stops with `no service selected`. Add `COMPOSE_PROFILES=full` to
@@ -47,13 +55,14 @@ cp .env.example .env    # TAMGA_MOCK_UPSTREAM=true to try it without provider ke
 docker compose --env-file .env -f deploy/docker-compose.yml --profile minimal up -d
 ```
 
-This builds and starts one container, `proxy-minimal`, on port 8443. It is
-given four settings: the port, the policy file (`proxy/tamga-policy.yaml`,
-mounted as in the full stack, `TAMGA_POLICY_MOUNT` included),
-`TAMGA_ADMIN_KEY` and `TAMGA_MOCK_UPSTREAM`. It has no database, Redis, NATS,
-analyzer, classifier, scanner service, Jaeger or console. `POSTGRES_PASSWORD`
-and `REDIS_PASSWORD` are not used; when they are unset, Compose still warns
-about them, because it reads the whole file, and starts the proxy.
+This builds and starts one container, `proxy-minimal`, on port 8443. Compose
+passes the proxy settings from the operator env file and mounts
+`proxy/tamga-policy.yaml` as in the full stack (`TAMGA_POLICY_MOUNT` included),
+but explicitly clears the database, Redis, NATS, analyzer, classifier,
+scanner-service, tracing and retention settings. It has none of those
+services, Jaeger or the console. `POSTGRES_PASSWORD` and `REDIS_PASSWORD` are
+not used; when they are unset, Compose may still warn about them while it
+interpolates the whole file, and starts the proxy.
 
 What works as in the full stack:
 
@@ -108,6 +117,18 @@ installs the chart. The values are described in
 
 ## Configuration
 
+Compose uses the file at `TAMGA_PROXY_ENV_FILE` as the proxy container's
+environment file. It defaults to the repository-root `.env` (`../.env`
+relative to `deploy/docker-compose.yml`) and is optional: without it (CI,
+or a first look with `--env-file .env.example`) the proxy runs on the
+values Compose sets itself. This is separate from
+Compose's `--env-file`: when that option names a different file, set
+`TAMGA_PROXY_ENV_FILE` in it to the same file's path relative to `deploy/`.
+Explicit Compose wiring wins over the service env file: the full profile
+supplies its own policy and internal service addresses unless an external
+address is set, and the minimal profile clears every absent service as
+described above.
+
 Essential environment variables:
 
 | Variable | Default | Description |
@@ -122,6 +143,9 @@ Essential environment variables:
 | `TAMGA_ANALYZER_SEND_CONTENT` | `false` | Copy the text of forwarded requests to the analyzer. Off, the analyzer reads no request text. See [Analyzer](#analyzer) |
 | `TAMGA_MAX_BODY_BYTES` | `1048576` | Max request body size (1 MB) |
 | `TAMGA_MOCK_UPSTREAM` | `false` | Demo mode without real providers |
+| `TAMGA_VAULT_KEY` | empty | Standard-base64 32-byte key for reversible PII tokenization. Empty uses an ephemeral key |
+| `TAMGA_VAULT_TTL_SECONDS` | `300` | Lifetime of a vault mapping in seconds |
+| `TAMGA_FINDING_HASH_KEY` | empty | Standard-base64 key of at least 32 bytes for keyed finding hashes. Empty derives it from `TAMGA_VAULT_KEY`; with neither, matches are not stored when `data.hash_findings` is on |
 | `TAMGA_STRICT_MODE` | `false` | Ignore all policy exceptions |
 | `TAMGA_SSO_DEFAULT_ROLE` | empty | The role of a signed-in account nobody gave one. Empty refuses it. `viewer` is the only other value |
 | `TAMGA_TRUST_ROLE_HEADER` | `false` | Honour `X-Tamga-Role` for policy exceptions. Enable only behind an authenticating gateway that sets the header itself |
@@ -129,9 +153,12 @@ Essential environment variables:
 | `TAMGA_UPSTREAM_ALLOW` | — | Hosts, addresses and CIDR ranges a policy's provider pool may point at beyond the vendors' own. See [Provider pools](#provider-pools) |
 | `TAMGA_UPSTREAM_KEY_ENVS` | — | Further environment variable names a pool's `api_key_env` may name |
 | `TAMGA_NOTIFY_URL_ENVS` | — | Further environment variable names a rule's `notify:` may refer to |
+| `*_API_KEY` | empty | A provider pool may read a name ending in `_API_KEY` (or an allowed suffixed form) when its `api_key_env` names it. Compose passes names present in the proxy env file |
+| `*_WEBHOOK_URL` | empty | A rule's `notify:` may read a name ending in `_WEBHOOK_URL`. Compose passes names present in the proxy env file |
 | `TAMGA_ALERT_ALLOW_PRIVATE` | — | Internal receivers alerts may be sent to: comma-separated CIDR ranges, addresses and exact host names. Empty: internal addresses are refused. See [Alerts](#where-alerts-may-go) |
 | `TAMGA_TRUSTED_PROXIES` | — | Comma-separated IPs and CIDR ranges of the load balancers or reverse proxies in front of Tamga. Only a connection from one of them may supply the client address through `X-Forwarded-For`; the address used is the first one from the right that is not itself a trusted proxy. Empty: the header is ignored and the connecting address is used, so behind a load balancer every caller without a key shares one rate-limit bucket and `TAMGA_IP_ALLOWLIST` sees the load balancer. An invalid entry stops startup |
 | `TAMGA_OTEL_ENDPOINT` | — | OpenTelemetry (OTLP over HTTP) collector endpoint. Setting it turns tracing on. `TAMGA_OTLP_ENDPOINT` is read when this one is empty |
+| `TAMGA_OTLP_ENDPOINT` | empty | Backward-compatible collector endpoint used when `TAMGA_OTEL_ENDPOINT` is empty. Compose defaults it to `http://jaeger:4318` |
 | `ANTHROPIC_API_KEY` | — | Anthropic provider key |
 | `OPENAI_API_KEY` | — | OpenAI provider key |
 
@@ -213,6 +240,59 @@ Tracing:
 | `TAMGA_OTEL_HEADERS` | empty | Headers added to each export request |
 | `TAMGA_OTEL_URL_PATH` | `/v1/traces` | Path of the collector's trace endpoint |
 | `TAMGA_TRACE_UI_URL` | empty | Address of a trace viewer, reported in the runtime health detail for the console to link to |
+
+Other service inputs and Compose-only settings:
+
+| Service | Input | Code default | Compose wiring |
+|---|---|---|---|
+| Analyzer | `PORT` | `8444` | Direct `python app/main.py` only. Compose uses `TAMGA_ANALYZER_PORT` (default `8444`) as the `uvicorn` port and for its healthcheck |
+| Analyzer | `TAMGA_GRPC_PORT` | `50051` | Passed, exposed internally and used in the proxy's default analyzer address |
+| Analyzer | `TAMGA_ANALYZER_WORKERS` | min(CPU count, 4), clamped to 1–8 | Passed; Compose uses `2` to leave CPU for the other services on the shared host |
+| Analyzer | `DATABASE_URL` | empty | Built from `POSTGRES_*` for the Compose database |
+| Analyzer | `TAMGA_LLM_JUDGE` | empty | Passed; empty keeps provider egress off |
+| Analyzer | `ANTHROPIC_API_KEY` | empty | Passed for the optional judge |
+| Analyzer | `OPENAI_API_KEY` | empty | Passed, but the analyzer reads and does not use it |
+| Analyzer | `TAMGA_CUSTOM_SCANNERS_DIR` | `/custom_scanners` in the image | Passed; a host directory also needs an explicit read-only volume mount |
+| Analyzer | `TAMGA_BAN_TOPICS` | empty | Read only to log that this removed setting no longer works; Compose does not pass it |
+| Scanner service | `SCANNER_SERVICE_PORT` | `50052` | Passed and exposed only on the Compose network |
+| Scanner service | `SCANNER_PIPELINE_MODE` | `adaptive` | Passed |
+| Scanner service | `SCANNER_WORKER_POOL_SIZE` | empty (no pool) | Passed; Compose uses `4` to bound scanner work on the shared host |
+| Scanner service | `SCANNER_WORKER_QUEUE_SIZE` | twice the worker count | Passed; `0` selects that computed default |
+| Classifier | `TAMGA_CLASSIFIER_PORT` | `50052` | Passed and exposed only on the Compose network |
+| Classifier | `TAMGA_CLASSIFIER_MODEL_DIR` | empty | Fixed to `/models/classifier`; `TAMGA_CLASSIFIER_MODEL_PATH` selects the host directory mounted there |
+| Classifier | `TAMGA_CLASSIFIER_MODEL_NAME` | mounted directory name | Passed |
+| Classifier | `TAMGA_CLASSIFIER_THREADS` | `0` (runtime default) | Passed |
+| Classifier | `TAMGA_CLASSIFIER_WINDOW` | `512` | Passed |
+| Classifier | `TAMGA_CLASSIFIER_OVERLAP` | `64` | Passed |
+| Classifier | `TAMGA_CLASSIFIER_MAX_WINDOWS` | `16` | Passed |
+| Console | `NEXT_PUBLIC_API_URL` | `http://localhost:8443` | Build argument; rebuild the console after changing it |
+| Console | `NEXT_PUBLIC_SITE_URL` | `https://tamgaproxy.com` | Build argument for metadata; rebuild after changing it |
+| Console | `NEXT_PUBLIC_MARKETING_URL` | `https://tamgaproxy.com` | Build argument for public-site links; rebuild after changing it |
+| Console | `NEXT_PUBLIC_ADMIN_KEY` | empty | Development-only convenience. A production build refuses it; Compose never passes it |
+| Console | `PORT`, `HOSTNAME` | framework defaults | The image fixes them to `3000` and `0.0.0.0`; `TAMGA_DASHBOARD_PORT` and `TAMGA_DASHBOARD_BIND` control host publication |
+| Compose | `TAMGA_PROXY_BIND`, `TAMGA_PROXY_PORT` | `0.0.0.0`, `8443` | Host bind and host/container proxy port |
+| Compose | `TAMGA_DASHBOARD_BIND`, `TAMGA_DASHBOARD_PORT` | `0.0.0.0`, `3000` | Host bind and host console port |
+| Compose | `TAMGA_OBSERVABILITY_BIND` | `127.0.0.1` | Host bind for Jaeger UI 16686 and NATS monitoring 8222. Set `0.0.0.0` only to restore network-wide access |
+| Compose | `TAMGA_POLICY_MOUNT` | `ro` | Policy bind-mount mode (`ro` or `rw`) |
+| Compose | `TAMGA_PROXY_ENV_FILE` | `../.env`; skipped when the file does not exist | Proxy service env file, relative to the Compose file |
+
+Non-environment configuration inputs:
+
+| Service | Input | Compose behavior |
+|---|---|---|
+| Proxy | Policy YAML at `TAMGA_POLICY_PATH` | Mounts `proxy/tamga-policy.yaml`; all accepted sections and keys are documented from [Sample policy](#sample-policy-yaml) through [Limits on patterns and settings](#limits-on-patterns-and-settings) |
+| Proxy | Command-line flags | None |
+| Analyzer | Pydantic `.env` keys (`PORT`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `DATABASE_URL`, `TAMGA_LLM_JUDGE`) | No analyzer env file is mounted; Compose passes the same settings as environment variables and starts `uvicorn` with its host and port flags |
+| Analyzer | `uvicorn` flags | Compose fixes the host to `0.0.0.0` and derives the port from `TAMGA_ANALYZER_PORT` |
+| Scanner service, classifier | Command-line flags or config files | None |
+| Console | Build arguments | The three `NEXT_PUBLIC_*` rows above are accepted by the Dockerfile and compiled into the bundle |
+
+The proxy tables above are the complete set read by the proxy process. Both
+proxy Compose services receive them through `TAMGA_PROXY_ENV_FILE`; explicit
+entries in `environment` provide profile-specific networking and defaults.
+File settings such as TLS certificates, the mTLS CA, BIN data and
+operator-state JSONL paths must name paths inside the container, so add
+read-only volume mounts for those files in a Compose override.
 
 Secrets come from the environment only. The proxy does not read settings from
 HashiCorp Vault or another secrets manager: have your platform put them into
