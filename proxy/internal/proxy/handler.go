@@ -551,7 +551,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 		logger.Error().Str("reason", scanIncomplete).Str("error_kind", errkind.Of(err)).Msg("scanner error")
 		w.Header().Set("X-Tamga-Scan-Degraded", "true")
 		span.SetAttributes(attribute.Bool("tamga.scan_degraded", true))
-		if pol.BlockOnScanError() {
+		if pol.BlockOnScanError(carriesToolContent(segs)) {
 			// scan.on_error: block — a verdict reached with scanners missing
 			// is not one this policy accepts.
 			logger.Warn().Msg("scan incomplete and scan.on_error is block: request refused")
@@ -625,7 +625,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 			logger.Warn().Str("error_kind", errkind.Of(res.err)).Msg("classifier unavailable")
 			w.Header().Set("X-Tamga-Scan-Degraded", "classifier")
 			span.SetAttributes(attribute.Bool("tamga.scan_degraded", true))
-			if pol.BlockOnScanError() {
+			if pol.BlockOnScanError(carriesToolContent(segs)) {
 				logger.Warn().Msg("classifier unavailable and scan.on_error is block: request refused")
 				polSpan.End()
 				writeScanUnavailable(w, requestID)

@@ -426,8 +426,9 @@ type ScanConfig struct {
 	// errors or panics, the scan times out, or a scanner is shed under load.
 	// "block" answers 503; "pass" forwards the request on the findings of the
 	// scanners that did run, except when those findings call for masking or
-	// stripping: text is not sent masked in part. Empty means pass, the
-	// behaviour before this setting existed.
+	// stripping: text is not sent masked in part. Empty means pass for a
+	// plain chat request and block for one that carries tool results or tool
+	// definitions (BlockOnScanError).
 	OnError string `yaml:"on_error" json:"on_error"`
 	// DefaultAction is the action for a finding whose type no rule is
 	// written for (BLOCK, WARN, LOG or PASS). Empty means PASS. It does not
@@ -445,8 +446,19 @@ const (
 )
 
 // BlockOnScanError reports whether a failed scan must stop the request.
-func (p *Policy) BlockOnScanError() bool {
-	return p != nil && p.Scan != nil && strings.EqualFold(strings.TrimSpace(p.Scan.OnError), ScanErrorBlock)
+// carriesTools says the request holds tool results or tool definitions
+// (agent traffic). Where on_error is not set, such a request fails closed and
+// a plain chat request fails open, as before the setting existed: a crashed
+// check must not let an injected tool result through. Setting on_error to
+// pass or block applies to both.
+func (p *Policy) BlockOnScanError(carriesTools bool) bool {
+	if p == nil {
+		return false
+	}
+	if p.Scan == nil || strings.TrimSpace(p.Scan.OnError) == "" {
+		return carriesTools
+	}
+	return strings.EqualFold(strings.TrimSpace(p.Scan.OnError), ScanErrorBlock)
 }
 
 // unruledAction returns scan.default_action for a finding whose type has no

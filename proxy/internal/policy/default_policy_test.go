@@ -162,3 +162,15 @@ rules:
 		t.Errorf("want gaps for secret (LOG only), injection (missing) and the unset scan.on_error, got:\n%s", joined)
 	}
 }
+
+// The shipped policy fails closed for every request, chat and agent traffic
+// alike, so that a crashed check never forwards what it should have read.
+func TestDefaultPolicy_FailsClosedOnScanError(t *testing.T) {
+	pol, err := LoadFromFile(defaultPolicyPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !pol.BlockOnScanError(false) || !pol.BlockOnScanError(true) {
+		t.Error("the shipped policy must set scan.on_error: block")
+	}
+}
