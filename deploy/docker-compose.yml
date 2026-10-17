@@ -31,13 +31,21 @@ services:
       context: ../proxy
       dockerfile: cmd/scanner-service/Dockerfile
     expose:
-      - "50052"
+      - "${SCANNER_SERVICE_PORT:-50052}"
     environment:
-      - SCANNER_PIPELINE_MODE=adaptive
-      - SCANNER_WORKER_POOL_SIZE=4
+      - SCANNER_SERVICE_PORT=${SCANNER_SERVICE_PORT:-50052}
+      - SCANNER_PIPELINE_MODE=${SCANNER_PIPELINE_MODE:-adaptive}
+      - SCANNER_WORKER_POOL_SIZE=${SCANNER_WORKER_POOL_SIZE:-4}
+      - SCANNER_WORKER_QUEUE_SIZE=${SCANNER_WORKER_QUEUE_SIZE:-0}
     networks:
       - internal
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "grpc_health_probe", "-addr=localhost:${SCANNER_SERVICE_PORT:-50052}"]
+      interval: 15s
+      timeout: 5s
+      start_period: 5s
+      retries: 3
 
   proxy:
     profiles: ["full"]
@@ -45,13 +53,21 @@ services:
       context: ../proxy
       dockerfile: Dockerfile
     ports:
-      - "8443:8443"
+      - "${TAMGA_PROXY_BIND:-0.0.0.0}:${TAMGA_PROXY_PORT:-8443}:${TAMGA_PROXY_PORT:-8443}"
+    # Load the operator's proxy settings as service environment, not only as
+    # Compose interpolation inputs. Paths are relative to this Compose file.
+    # Set TAMGA_PROXY_ENV_FILE when --env-file names another file. Without
+    # the file (CI, a first look with --env-file .env.example) the proxy
+    # runs on the values Compose sets below.
+    env_file:
+      - path: ${TAMGA_PROXY_ENV_FILE:-../.env}
+        required: false
     environment:
-      - TAMGA_PROXY_PORT=8443
+      - TAMGA_PROXY_PORT=${TAMGA_PROXY_PORT:-8443}
       - TAMGA_POLICY_PATH=/app/tamga-policy.yaml
-      - TAMGA_ANALYZER_ADDR=analyzer:50051
+      - TAMGA_ANALYZER_ADDR=${TAMGA_ANALYZER_ADDR:-analyzer:${TAMGA_GRPC_PORT:-50051}}
       # The analyzer's HTTP API, where the PDF reports are generated.
-      - TAMGA_ANALYZER_HTTP_URL=http://analyzer:8444
+      - TAMGA_ANALYZER_HTTP_URL=${TAMGA_ANALYZER_HTTP_URL:-http://analyzer:${TAMGA_ANALYZER_PORT:-8444}}
       # Off unless set to true: copy the text of forwarded requests to the
       # analyzer for analysis after the decision. A blocked request's text
       # is never copied.
@@ -59,9 +75,9 @@ services:
       # Inline prompt-injection classifier. Empty unless the classifier
       # profile is in use: set TAMGA_CLASSIFIER_ADDR=classifier:50052 in .env.
       - TAMGA_CLASSIFIER_ADDR=${TAMGA_CLASSIFIER_ADDR:-}
-      - TAMGA_DB_URL=postgresql://${POSTGRES_USER:-tamga}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-tamga}
-      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
-      - TAMGA_NATS_URL=nats://nats:4222
+      - TAMGA_DB_URL=${TAMGA_DB_URL:-postgresql://${POSTGRES_USER:-tamga}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-tamga}}
+      - REDIS_URL=${REDIS_URL:-redis://:${REDIS_PASSWORD}@redis:6379}
+      - TAMGA_NATS_URL=${TAMGA_NATS_URL:-nats://nats:4222}
       - TAMGA_SCANNER_SERVICE_ADDR=${TAMGA_SCANNER_SERVICE_ADDR:-}
       - TAMGA_ADMIN_KEY=${TAMGA_ADMIN_KEY}
       # Demo / test mode: answer with a canned response instead of calling the
@@ -89,15 +105,15 @@ services:
       # Exact-match allowlist. Browsers treat localhost and 127.0.0.1 as
       # different origins, so the dashboard default covers both.
       - TAMGA_CORS_ORIGINS=${TAMGA_CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
-      - TAMGA_OTLP_ENDPOINT=http://jaeger:4318
+      - TAMGA_OTLP_ENDPOINT=${TAMGA_OTLP_ENDPOINT:-http://jaeger:4318}
       - TAMGA_OTEL_SAMPLE_RATE=${TAMGA_OTEL_SAMPLE_RATE:-0.05}
-      - TAMGA_TRACE_UI_URL=http://localhost:16686
-      - TAMGA_RETENTION_ENABLED=true
+      - TAMGA_TRACE_UI_URL=${TAMGA_TRACE_UI_URL:-http://localhost:16686}
+      - TAMGA_RETENTION_ENABLED=${TAMGA_RETENTION_ENABLED:-true}
     depends_on:
       postgres:
         condition: service_healthy
       analyzer:
-        condition: service_started
+        condition: service_healthy
     volumes:
       # Read-only by default: the console then shows the policy and cannot
       # change it. TAMGA_POLICY_MOUNT=rw lets "Save and apply" rewrite this
@@ -106,6 +122,12 @@ services:
     networks:
       - internal
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:${TAMGA_PROXY_PORT:-8443}/health || exit 1"]
+      interval: 15s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
 
   # The proxy on its own: no database, Redis, NATS, analyzer, Jaeger or
   # console, and none of their passwords are needed. Start it with
@@ -119,10 +141,28 @@ services:
       context: ../proxy
       dockerfile: Dockerfile
     ports:
-      - "8443:8443"
+      - "${TAMGA_PROXY_BIND:-0.0.0.0}:${TAMGA_PROXY_PORT:-8443}:${TAMGA_PROXY_PORT:-8443}"
+    env_file:
+      - path: ${TAMGA_PROXY_ENV_FILE:-../.env}
+        required: false
     environment:
-      - TAMGA_PROXY_PORT=8443
+      - TAMGA_PROXY_PORT=${TAMGA_PROXY_PORT:-8443}
       - TAMGA_POLICY_PATH=/app/tamga-policy.yaml
+      # Keep the standalone profile standalone even when the shared env file
+      # contains the full stack's host-style connection examples.
+      - TAMGA_ANALYZER_ADDR=
+      - TAMGA_ANALYZER_HTTP_URL=
+      - TAMGA_ANALYZER_SEND_CONTENT=false
+      - TAMGA_CLASSIFIER_ADDR=
+      - TAMGA_DB_URL=
+      - REDIS_URL=
+      - TAMGA_NATS_URL=
+      - TAMGA_SCANNER_SERVICE_ADDR=
+      - TAMGA_OTEL_ENABLED=false
+      - TAMGA_OTEL_ENDPOINT=
+      - TAMGA_OTLP_ENDPOINT=
+      - TAMGA_TRACE_UI_URL=
+      - TAMGA_RETENTION_ENABLED=false
       # Empty means every management API call is refused with 401. The
       # proxy routes (/v1, /anthropic, ...) do not need it.
       - TAMGA_ADMIN_KEY=${TAMGA_ADMIN_KEY:-}
@@ -130,6 +170,12 @@ services:
     volumes:
       - ../proxy/tamga-policy.yaml:/app/tamga-policy.yaml:${TAMGA_POLICY_MOUNT:-ro}
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:${TAMGA_PROXY_PORT:-8443}/health || exit 1"]
+      interval: 15s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
 
   analyzer:
     profiles: ["full"]
@@ -137,11 +183,13 @@ services:
       context: ../analyzer
       dockerfile: Dockerfile
     expose:
-      - "8444"   # HTTP health + reports (FastAPI)
-      - "50051"  # gRPC deep analysis (protobuf)
+      - "${TAMGA_ANALYZER_PORT:-8444}"   # HTTP health + reports (FastAPI)
+      - "${TAMGA_GRPC_PORT:-50051}"      # gRPC deep analysis (protobuf)
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "${TAMGA_ANALYZER_PORT:-8444}"]
     environment:
-      - TAMGA_ANALYZER_PORT=8444
-      - TAMGA_GRPC_PORT=50051
+      - TAMGA_GRPC_PORT=${TAMGA_GRPC_PORT:-50051}
+      # Keep two analyzer workers so the proxy and support services retain
+      # CPU on the shared Compose host. Direct-process default: up to four.
       - TAMGA_ANALYZER_WORKERS=${TAMGA_ANALYZER_WORKERS:-2}
       # The LLM judge sends request text to Anthropic. It is off unless
       # TAMGA_LLM_JUDGE=anthropic is set; the key alone does not turn it on.
@@ -149,12 +197,19 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - DATABASE_URL=postgresql://${POSTGRES_USER:-tamga}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-tamga}
+      - TAMGA_CUSTOM_SCANNERS_DIR=${TAMGA_CUSTOM_SCANNERS_DIR:-/custom_scanners}
     depends_on:
       postgres:
         condition: service_healthy
     networks:
       - internal
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:${TAMGA_ANALYZER_PORT:-8444}/health')\" || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
 
   # Optional: the inline prompt-injection classifier. Start it with the full
   # stack:
@@ -168,13 +223,15 @@ services:
       context: ../classifier
       dockerfile: Dockerfile
     expose:
-      - "50052"  # gRPC
+      - "${TAMGA_CLASSIFIER_PORT:-50052}"  # gRPC
     environment:
-      - TAMGA_CLASSIFIER_PORT=50052
+      - TAMGA_CLASSIFIER_PORT=${TAMGA_CLASSIFIER_PORT:-50052}
       - TAMGA_CLASSIFIER_MODEL_DIR=/models/classifier
       - TAMGA_CLASSIFIER_MODEL_NAME=${TAMGA_CLASSIFIER_MODEL_NAME:-prompt-injection-guard-small}
       - TAMGA_CLASSIFIER_THREADS=${TAMGA_CLASSIFIER_THREADS:-0}
       - TAMGA_CLASSIFIER_WINDOW=${TAMGA_CLASSIFIER_WINDOW:-512}
+      - TAMGA_CLASSIFIER_OVERLAP=${TAMGA_CLASSIFIER_OVERLAP:-64}
+      - TAMGA_CLASSIFIER_MAX_WINDOWS=${TAMGA_CLASSIFIER_MAX_WINDOWS:-16}
     volumes:
       - ${TAMGA_CLASSIFIER_MODEL_PATH:-../models/prompt-injection-guard-small}:/models/classifier:ro
     networks:
@@ -191,8 +248,10 @@ services:
       # needs a rebuild (docker compose build dashboard).
       args:
         - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8443}
+        - NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL:-https://tamgaproxy.com}
+        - NEXT_PUBLIC_MARKETING_URL=${NEXT_PUBLIC_MARKETING_URL:-https://tamgaproxy.com}
     ports:
-      - "3000:3000"
+      - "${TAMGA_DASHBOARD_BIND:-0.0.0.0}:${TAMGA_DASHBOARD_PORT:-3000}:3000"
     depends_on:
       - proxy
     networks:
@@ -250,6 +309,11 @@ services:
     networks:
       - internal
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a '${REDIS_PASSWORD}' ping | grep -q PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   jaeger:
     profiles: ["full"]
@@ -257,7 +321,7 @@ services:
     expose:
       - "4318"
     ports:
-      - "16686:16686"  # UI only — keep for local dev; remove in production
+      - "${TAMGA_OBSERVABILITY_BIND:-127.0.0.1}:16686:16686"
     environment:
       COLLECTOR_OTLP_ENABLED: "true"
     networks:
@@ -272,7 +336,7 @@ services:
       - "4222"
       - "8222"
     ports:
-      - "8222:8222"  # monitoring UI — keep for local dev
+      - "${TAMGA_OBSERVABILITY_BIND:-127.0.0.1}:8222:8222"
     networks:
       - internal
     restart: unless-stopped

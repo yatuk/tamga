@@ -9,7 +9,11 @@ COPY . .
 # it on the running container changes nothing. So the address the browser
 # calls the proxy at is a build argument.
 ARG NEXT_PUBLIC_API_URL=http://localhost:8443
+ARG NEXT_PUBLIC_SITE_URL=https://tamgaproxy.com
+ARG NEXT_PUBLIC_MARKETING_URL=https://tamgaproxy.com
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
+ENV NEXT_PUBLIC_MARKETING_URL=$NEXT_PUBLIC_MARKETING_URL
 RUN npm run build
 
 FROM node:22-alpine
