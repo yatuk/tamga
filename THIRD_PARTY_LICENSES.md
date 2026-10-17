@@ -33,6 +33,7 @@ the others are in the module graph for tests or tools only.
 | github.com/google/uuid | v1.6.0 | BSD-3-Clause | yes | LICENSE |
 | github.com/jackc/pgx/v5 | v5.9.2 | MIT | yes | LICENSE |
 | github.com/nats-io/nats.go | v1.52.0 | Apache-2.0 | yes | LICENSE |
+| github.com/pemistahl/lingua-go | v1.4.0 | Apache-2.0 | yes | LICENSE |
 | github.com/prometheus/client_golang | v1.23.2 | Apache-2.0 | yes | LICENSE |
 | github.com/prometheus/client_model | v0.6.2 | Apache-2.0 | yes | LICENSE |
 | github.com/redis/go-redis/v9 | v9.18.0 | BSD-2-Clause | yes | LICENSE |
@@ -53,13 +54,13 @@ the others are in the module graph for tests or tools only.
 
 ### Transitive, compiled into the binaries
 
-Modules: 30.
+Modules: 32.
 
 | Licence | Count |
 |---|---|
+| MIT | 11 |
 | Apache-2.0 | 10 |
-| MIT | 10 |
-| BSD-3-Clause | 6 |
+| BSD-3-Clause | 7 |
 | Apache-2.0 AND BSD-3-Clause | 2 |
 | Apache-2.0 AND MIT | 1 |
 | Apache-2.0 AND MIT AND BSD-3-Clause | 1 |
@@ -86,6 +87,7 @@ None outside the permissive set.
 | github.com/nats-io/nuid | v1.0.1 | Apache-2.0 |
 | github.com/prometheus/common | v0.66.1 | Apache-2.0 |
 | github.com/prometheus/procfs | v0.16.1 | Apache-2.0 |
+| github.com/shopspring/decimal | v1.4.0 | MIT |
 | go.opentelemetry.io/auto/sdk | v1.2.1 | Apache-2.0 |
 | go.opentelemetry.io/otel/exporters/otlp/otlptrace | v1.45.0 | Apache-2.0 AND BSD-3-Clause |
 | go.opentelemetry.io/otel/metric | v1.45.0 | Apache-2.0 AND BSD-3-Clause |
@@ -93,6 +95,7 @@ None outside the permissive set.
 | go.uber.org/atomic | v1.11.0 | MIT |
 | go.yaml.in/yaml/v2 | v2.4.2 | Apache-2.0 AND MIT |
 | golang.org/x/crypto | v0.57.0 | BSD-3-Clause |
+| golang.org/x/exp | v0.0.0-20250218142911-aa4b98e5adaa | BSD-3-Clause |
 | golang.org/x/net | v0.60.0 | BSD-3-Clause |
 | golang.org/x/sync | v0.23.0 | BSD-3-Clause |
 | golang.org/x/sys | v0.48.0 | BSD-3-Clause |
