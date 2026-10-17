@@ -29,6 +29,7 @@ const KIND_NAMES: Record<string, string> = {
   link_exfiltration: "Link carrying data out",
   link_userinfo: "Host hidden behind user info",
   link_homoglyph: "Look-alike host name",
+  destination_not_allowed: "Destination not on the tool's allow-list",
   link_scheme: "Unsafe link scheme",
   link_text_mismatch: "Link text shows another host",
   link_ip_host: "Link to an IP address",
@@ -52,7 +53,7 @@ const KIND_NAMES: Record<string, string> = {
 
 const TYPE_NAMES: Record<string, string> = {
   pii: "Personal data", secret: "Secret", injection: "Prompt injection", custom: "Custom pattern",
-  malicious_link: "Malicious link", output_schema: "Answer schema", language: "Language",
+  malicious_link: "Malicious link", output_schema: "Answer schema", language: "Language", tool_destination: "Tool destination",
 };
 
 const ROLE_NAMES: Record<string, string> = {
@@ -82,6 +83,7 @@ const KIND_TYPES: Record<string, string> = {
   classifier: "injection", hidden_text: "injection", unreadable_block: "injection", quoted_injection: "injection",
   above_text_request: "injection", translation_abandoned: "injection", translation_bypass: "injection",
   link_exfiltration: "malicious_link", link_userinfo: "malicious_link", link_homoglyph: "malicious_link", link_scheme: "malicious_link",
+  destination_not_allowed: "tool_destination",
   link_text_mismatch: "malicious_link", link_ip_host: "malicious_link", link_port: "malicious_link", link_denied_host: "malicious_link",
   schema_mismatch: "output_schema", not_json: "output_schema",
   azure_storage_key: "secret", gitlab_token: "secret", npm_token: "secret", sendgrid_key: "secret", mailchimp_key: "secret",
