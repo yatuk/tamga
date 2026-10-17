@@ -11,6 +11,7 @@ import (
 
 	"github.com/yatuk/tamga/internal/policy"
 	"github.com/yatuk/tamga/internal/scanner"
+	"github.com/yatuk/tamga/internal/scanner/langid"
 	"gopkg.in/yaml.v3"
 )
 
@@ -290,6 +291,14 @@ func (cfg Config) handlePolicySimulate(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
+	}
+	// The language check judges a whole message with its role; the sample
+	// is judged as a user message. The detector is loaded only for a policy
+	// that turns the check on.
+	if spec := pol.LanguageSpec(); spec.Enabled {
+		if f := scanner.JudgeLanguage(langid.Default(), spec, body.SampleText, "user"); f != nil {
+			findings = append(findings, *f)
+		}
 	}
 
 	// Map each finding to the resulting action per policy.
