@@ -600,6 +600,9 @@ func (cfg Config) handleEventDetail(w http.ResponseWriter, r *http.Request) {
 	if ev.RoutePool != "" {
 		detail["route_pool"] = ev.RoutePool
 	}
+	if ev.Classifier != nil {
+		detail["classifier_scores"] = ev.Classifier
+	}
 	writeSourced(w, sourceMemory, detail)
 }
 

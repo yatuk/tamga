@@ -350,6 +350,9 @@ func storedEventDetail(rec store.RequestRecord) map[string]interface{} {
 	if rec.RoutePool != "" {
 		out["route_pool"] = rec.RoutePool
 	}
+	if len(rec.ClassifierScores) > 0 {
+		out["classifier_scores"] = rec.ClassifierScores
+	}
 	if rec.OutputAction != "" {
 		out["output_action"] = strings.ToUpper(rec.OutputAction)
 	}

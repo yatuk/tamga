@@ -3,9 +3,11 @@ package proxy
 import (
 	"context"
 	"fmt"
+	"math"
 
 	"github.com/yatuk/tamga/internal/classifier"
 	"github.com/yatuk/tamga/internal/errkind"
+	"github.com/yatuk/tamga/internal/events"
 	"github.com/yatuk/tamga/internal/extract"
 	"github.com/yatuk/tamga/internal/policy"
 	"github.com/yatuk/tamga/internal/scanner"
@@ -21,6 +23,10 @@ type classifyOutcome struct {
 	partial bool
 	// err is set when the classifier could not answer at all.
 	err error
+	// record holds every text's scores, the primary's and the shadow's,
+	// when the service runs a shadow model; nil otherwise. It goes on the
+	// request's event and into the request log.
+	record *events.ClassifierRecord
 }
 
 // errClassifierNotConfigured is the failure when the policy turns the
@@ -110,6 +116,7 @@ func classifySegments(ctx context.Context, guard *classifier.Guard, set policy.C
 		if signalled {
 			threshold = set.SignalThreshold
 		}
+		recordShadow(&out, set, segs[segIdx[j]], segIdx[j], res, threshold)
 		if res.Score < threshold {
 			continue
 		}
@@ -135,6 +142,40 @@ func classifySegments(ctx context.Context, guard *classifier.Guard, set policy.C
 	}
 	return out
 }
+
+// recordShadow adds one text to the record of a request scored with a
+// shadow model, and counts how the shadow compared. It does nothing when
+// the service runs no shadow. Nothing here reaches the verdict.
+func recordShadow(out *classifyOutcome, set policy.ClassifierSettings, seg extract.Segment, idx int, res classifier.Result, threshold float64) {
+	if res.ShadowModel == "" {
+		return
+	}
+	if out.record == nil {
+		out.record = &events.ClassifierRecord{
+			Model: res.Model, Threshold: set.Threshold,
+			ShadowModel: res.ShadowModel, ShadowThreshold: set.ShadowThreshold,
+		}
+	}
+	flagged := res.Score >= threshold
+	t := events.ClassifierText{
+		Seg: idx, Role: string(seg.Role),
+		Score: roundScore(res.Score), Threshold: threshold, Flagged: flagged,
+		Truncated: res.Truncated, Cached: res.Cached, ShadowSkipped: res.ShadowSkipped,
+	}
+	if res.HasShadow {
+		shadow := roundScore(res.ShadowScore)
+		t.Shadow = &shadow
+		t.ShadowFlagged = res.ShadowScore >= set.ShadowThreshold
+	}
+	out.record.Texts = append(out.record.Texts, t)
+	if !res.Cached {
+		classifier.RecordShadow(res.ShadowModel, classifier.ShadowOutcome(flagged, res, set.ShadowThreshold))
+	}
+}
+
+// roundScore keeps four decimals: what a threshold is compared at, and no
+// more than a stored record needs.
+func roundScore(s float64) float64 { return math.Round(s*1e4) / 1e4 }
 
 // classifierSeverity is fixed: the score is a confidence, carried on the
 // finding as such, and says nothing about how much harm the text would do.

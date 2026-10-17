@@ -705,6 +705,10 @@ export interface paths {
          *       action `ROUTE` the request was answered there; with `BLOCK` the
          *       pool could not take it and the request was stopped. Absent on
          *       every other request.
+         *     - `classifier_scores` holds the inline classifier's score and its
+         *       shadow model's for each text it was asked about, without the text,
+         *       when the classifier service ran a shadow model for the request.
+         *       Absent on every other request.
          *     - `output_action`, `output_findings` and `output_risk` describe the
          *       scan of the response, and are absent when it was not scanned.
          *       `output_findings` is `[]` for a response that was scanned and
@@ -5147,6 +5151,7 @@ export interface components {
             policy_version?: string;
             /** @description The internal pool a ROUTE verdict named; see SecurityEvent. */
             route_pool?: string;
+            classifier_scores?: components["schemas"]["ClassifierScores"];
             /** @description Absent when not known; never a zero standing in for an unknown count. */
             input_tokens?: number;
             /** @description Absent when not known. */
@@ -5162,6 +5167,45 @@ export interface components {
             /** @description The risk of the response as the proxy scored it. Absent when the response was not scanned. */
             output_risk?: Record<string, never>;
             endpoint?: string;
+        };
+        /**
+         * @description What the inline classifier and its shadow model said about each text
+         *     of a request, without the texts. Present only when the classifier
+         *     service ran a shadow model (a candidate scored next to the model in
+         *     service, never acted on); see docs/operations.md, "Shadow mode".
+         */
+        ClassifierScores: {
+            /** @description The model in service. */
+            model?: string;
+            /** @description scan.classifier.threshold. */
+            threshold?: number;
+            shadow_model?: string;
+            /** @description scan.classifier.shadow_threshold (default threshold). */
+            shadow_threshold?: number;
+            /** @description The texts the classifier was asked about, newest first. */
+            texts?: {
+                /** @description Index of the text's segment in the request. */
+                seg?: number;
+                role?: string;
+                /** @description The primary model's score, four decimals. */
+                score?: number;
+                /** @description The threshold the text was judged by (signal_threshold for a text with a signal). */
+                threshold?: number;
+                /** @description The primary score was at or above threshold. */
+                flagged?: boolean;
+                truncated?: boolean;
+                /** @description The scores are those the text was given for an earlier request. */
+                cached?: boolean;
+                /** @description The shadow model's score. Absent when it gave none. */
+                shadow?: number;
+                /** @description The shadow score was at or above shadow_threshold. */
+                shadow_flagged?: boolean;
+                /**
+                 * @description Why the shadow gave no score.
+                 * @enum {string}
+                 */
+                shadow_skipped?: "late" | "busy" | "failed";
+            }[];
         };
         TimeseriesPoint: {
             /** Format: date-time */

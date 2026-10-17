@@ -458,6 +458,13 @@ func main() {
 			} else {
 				log.Info().Str("reason", h.TopicsReason).Msg("classifier has no banned-topic model loaded")
 			}
+			// Optional and off by default: a candidate scored in shadow,
+			// recorded and never acted on.
+			if h.ShadowAvailable {
+				log.Info().Str("model", h.ShadowModel).Msg("classifier shadow model ready: its scores are recorded, not acted on")
+			} else {
+				log.Debug().Str("reason", h.ShadowReason).Msg("classifier has no shadow model loaded")
+			}
 		}()
 	}
 	eventBus.Subscribe(events.OperatorStateAnalyzerHandler(analyzerClient))

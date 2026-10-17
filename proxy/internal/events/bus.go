@@ -79,6 +79,10 @@ type Event struct {
 	// BLOCK the pool could not take it and the request was stopped: it is
 	// never sent to the provider instead.
 	RoutePool string
+	// Classifier holds the inline classifier's scores and its shadow
+	// model's, text by text and without the texts, when the classifier
+	// service runs a shadow model. Nil otherwise.
+	Classifier *ClassifierRecord
 }
 
 const defaultChanCap = 1000

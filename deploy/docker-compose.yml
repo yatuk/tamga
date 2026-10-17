@@ -220,6 +220,9 @@ services:
   # The second, optional directory holds the model for banned topics
   # (docs/operations.md, "Banned topics"). Left empty, topic calls answer
   # UNAVAILABLE and injection scoring is unaffected.
+  # The third, optional directory holds a candidate injection model scored in
+  # shadow next to the one in service (docs/operations.md, "Shadow mode").
+  # Left empty, no shadow runs and nothing else changes.
   classifier:
     profiles: ["classifier"]
     build:
@@ -238,9 +241,14 @@ services:
       - TAMGA_TOPICS_MODEL_DIR=/models/topics
       - TAMGA_TOPICS_MODEL_NAME=${TAMGA_TOPICS_MODEL_NAME:-mdeberta-v3-base-xnli-multilingual-nli-2mil7}
       - TAMGA_TOPICS_THREADS=${TAMGA_TOPICS_THREADS:-0}
+      - TAMGA_CLASSIFIER_SHADOW_MODEL_DIR=/models/shadow
+      - TAMGA_CLASSIFIER_SHADOW_MODEL_NAME=${TAMGA_CLASSIFIER_SHADOW_MODEL_NAME:-}
+      - TAMGA_CLASSIFIER_SHADOW_THREADS=${TAMGA_CLASSIFIER_SHADOW_THREADS:-0}
+      - TAMGA_CLASSIFIER_SHADOW_WAIT_MS=${TAMGA_CLASSIFIER_SHADOW_WAIT_MS:-20}
     volumes:
       - ${TAMGA_CLASSIFIER_MODEL_PATH:-../models/prompt-injection-guard-small}:/models/classifier:ro
       - ${TAMGA_TOPICS_MODEL_PATH:-../models/mdeberta-nli}:/models/topics:ro
+      - ${TAMGA_CLASSIFIER_SHADOW_MODEL_PATH:-../models/shadow}:/models/shadow:ro
     networks:
       - internal
     restart: unless-stopped
@@ -296,6 +304,7 @@ services:
       - ./migrations/018_drop_tenant_rls.up.sql:/docker-entrypoint-initdb.d/018_drop_tenant_rls.sql:ro
       - ./migrations/019_drop_unused_tables.up.sql:/docker-entrypoint-initdb.d/019_drop_unused_tables.sql:ro
       - ./migrations/020_route_pool.up.sql:/docker-entrypoint-initdb.d/020_route_pool.sql:ro
+      - ./migrations/021_classifier_scores.up.sql:/docker-entrypoint-initdb.d/021_classifier_scores.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tamga}"]
       interval: 5s

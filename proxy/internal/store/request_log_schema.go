@@ -27,7 +27,7 @@ import (
 //     schemaRecheck without a restart.
 
 // requestLogOptionalColumns are the columns later migrations added to
-// request_logs (003, 006, 017, 020), with the type a value is written as.
+// request_logs (003, 006, 017, 020, 021), with the type a value is written as.
 var requestLogOptionalColumns = []struct{ name, sqlType string }{
 	{"model_family", "text"},
 	{"output_findings", "jsonb"},
@@ -38,6 +38,7 @@ var requestLogOptionalColumns = []struct{ name, sqlType string }{
 	{"policy_version", "text"},
 	{"output_risk", "jsonb"},
 	{"route_pool", "text"},
+	{"classifier_scores", "jsonb"},
 }
 
 // schemaRecheck is how often a table found incomplete is looked at again.
@@ -109,7 +110,8 @@ WHERE $14::timestamptz IS NULL OR NOT EXISTS (
   ` + opt("output_risk", "output_risk", "NULL::jsonb") + `,
   ` + opt("policy_name", "COALESCE(policy_name,'')", "''") + `,
   ` + opt("policy_version", "COALESCE(policy_version,'')", "''") + `,
-  ` + opt("route_pool", "COALESCE(route_pool,'')", "''")
+  ` + opt("route_pool", "COALESCE(route_pool,'')", "''") + `,
+  ` + opt("classifier_scores", "classifier_scores", "NULL::jsonb")
 	return sc
 }
 
@@ -132,7 +134,7 @@ func (sc *requestLogSchema) insertArgs(org interface{}, r RequestLog) []interfac
 	optional := [...]interface{}{
 		nullIfEmpty(r.ModelFamily), jsonOrNull(r.OutputFindings), nullIfEmpty(r.OutputAction), cost,
 		nullIfEmpty(r.CacheStatus), nullIfEmpty(r.PolicyName), nullIfEmpty(r.PolicyVersion), jsonOrNull(r.OutputRisk),
-		nullIfEmpty(r.RoutePool),
+		nullIfEmpty(r.RoutePool), jsonOrNull(r.ClassifierScores),
 	}
 	for _, i := range sc.optional {
 		args = append(args, optional[i])
@@ -192,7 +194,7 @@ WHERE attrelid = to_regclass('request_logs') AND attnum > 0 AND NOT attisdropped
 // that starts behind a long query does not hold up the writers queued behind it.
 const ensureLockTimeout = "5s"
 
-// EnsureRequestLogColumns adds the columns of migrations 017 and 020 to
+// EnsureRequestLogColumns adds the columns of migrations 017, 020 and 021 to
 // request_logs when they are not there. Adding a nullable column with no default changes
 // the catalog only: the table is not rewritten, and the ACCESS EXCLUSIVE lock
 // on it and its partitions is held for the moment the change takes. The
@@ -206,7 +208,7 @@ func (s *PostgresStore) EnsureRequestLogColumns(ctx context.Context) error {
 	if err := s.pool.QueryRow(ctx, `
 SELECT count(*) FROM information_schema.columns
 WHERE table_schema = current_schema() AND table_name = 'request_logs'
-  AND column_name IN ('policy_name', 'policy_version', 'output_risk', 'route_pool')`).Scan(&present); err == nil && present == 4 {
+  AND column_name IN ('policy_name', 'policy_version', 'output_risk', 'route_pool', 'classifier_scores')`).Scan(&present); err == nil && present == 5 {
 		return nil
 	}
 	ctx2, cancel := context.WithTimeout(ctx, insertTimeout)
@@ -224,7 +226,8 @@ ALTER TABLE request_logs
     ADD COLUMN IF NOT EXISTS policy_name TEXT,
     ADD COLUMN IF NOT EXISTS policy_version TEXT,
     ADD COLUMN IF NOT EXISTS output_risk JSONB,
-    ADD COLUMN IF NOT EXISTS route_pool TEXT`); err != nil {
+    ADD COLUMN IF NOT EXISTS route_pool TEXT,
+    ADD COLUMN IF NOT EXISTS classifier_scores JSONB`); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx2); err != nil {

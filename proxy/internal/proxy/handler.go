@@ -611,6 +611,9 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 	// attack by its meaning. When they have not already blocked the request,
 	// a local model reads the text that came from outside the application.
 	// Its findings can only make the verdict stricter.
+	// The scores of a shadow model, when the service runs one; recorded with
+	// the request, never part of its verdict.
+	var classifierRecord *events.ClassifierRecord
 	if set, on := pol.ClassifierSettings(); on && segs != nil && action != policy.ActionBlock {
 		var res classifyOutcome
 		if cfg.Classifier == nil {
@@ -621,6 +624,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 			clsSpan.SetAttributes(attribute.Int("classifier.texts", res.asked), attribute.Int("classifier.findings", len(res.findings)))
 			clsSpan.End()
 		}
+		classifierRecord = res.record
 		switch {
 		case res.err != nil:
 			// The policy asked for a second opinion and did not get one.
@@ -852,7 +856,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 	}
 	// What the response tells the proxy is collected here and goes out with
 	// the request's event, which is published when the request is over.
-	outcome := &requestOutcome{policyName: pol.Name, policyVersion: pol.Version, verified: who.verified(), routePool: routeName}
+	outcome := &requestOutcome{policyName: pol.Name, policyVersion: pol.Version, verified: who.verified(), routePool: routeName, classifier: classifierRecord}
 	ctx = withOutcome(ctx, outcome)
 	// A decision on the response is published from the upstream callbacks,
 	// which have this context and not the request.

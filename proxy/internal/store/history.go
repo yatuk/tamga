@@ -72,6 +72,9 @@ type RequestRecord struct {
 	PolicyVersion  string
 	// RoutePool is empty when no ROUTE verdict named a pool for the request.
 	RoutePool string
+	// ClassifierScores is nil unless the classifier service ran a shadow
+	// model for the request (events.ClassifierRecord).
+	ClassifierScores json.RawMessage
 }
 
 // RequestCount is the number of requests for one provider and action, with
@@ -122,12 +125,12 @@ type RiskProfile struct {
 
 func scanRequestRecord(row pgx.Row) (RequestRecord, error) {
 	var rec RequestRecord
-	var findings, outputFindings, outputRisk []byte
+	var findings, outputFindings, outputRisk, classifierScores []byte
 	err := row.Scan(&rec.RequestID, &rec.Provider, &rec.Model, &rec.ModelFamily,
 		&rec.Endpoint, &rec.ActionTaken, &rec.InputTokens, &rec.OutputTokens,
 		&findings, &rec.FindingsCount, &rec.ScanLatencyMs, &rec.TotalLatencyMs, &rec.CreatedAt,
 		&rec.CostUSD, &rec.CacheStatus, &outputFindings, &rec.OutputAction, &outputRisk,
-		&rec.PolicyName, &rec.PolicyVersion, &rec.RoutePool)
+		&rec.PolicyName, &rec.PolicyVersion, &rec.RoutePool, &classifierScores)
 	if err != nil {
 		return rec, err
 	}
@@ -137,6 +140,9 @@ func scanRequestRecord(row pgx.Row) (RequestRecord, error) {
 	}
 	if len(outputRisk) > 0 {
 		rec.OutputRisk = json.RawMessage(outputRisk)
+	}
+	if len(classifierScores) > 0 {
+		rec.ClassifierScores = json.RawMessage(classifierScores)
 	}
 	return rec, nil
 }

@@ -102,6 +102,33 @@ func TestClassifierSettings_SignalThreshold(t *testing.T) {
 	}
 }
 
+// shadow_threshold reads the shadow model's scores. It defaults to the
+// primary's threshold and may be above or below it.
+func TestClassifierSettings_ShadowThreshold(t *testing.T) {
+	tests := []struct {
+		scan string
+		want float64
+	}{
+		{"  classifier:\n    enabled: true", DefaultClassifierThreshold},
+		{"  classifier:\n    enabled: true\n    threshold: 0.9", 0.9},
+		{"  classifier:\n    enabled: true\n    shadow_threshold: 0.995", 0.995},
+		{"  classifier:\n    enabled: true\n    threshold: 0.98\n    shadow_threshold: 0.6", 0.6},
+	}
+	for _, tt := range tests {
+		p, err := parseScan(t, tt.scan)
+		if err != nil {
+			t.Fatalf("%q: %v", tt.scan, err)
+		}
+		s, on := p.ClassifierSettings()
+		if !on || s.ShadowThreshold != tt.want {
+			t.Errorf("%q: shadow threshold %v, want %v", tt.scan, s.ShadowThreshold, tt.want)
+		}
+	}
+	if _, err := parseScan(t, "  classifier:\n    enabled: true\n    shadow_threshold: -0.1"); err == nil || !strings.Contains(err.Error(), "shadow_threshold") {
+		t.Errorf("err = %v, want one naming shadow_threshold", err)
+	}
+}
+
 // A signal is acted on only by a rule that names its category. A rule for
 // injection without a types list does not act on it at any sensitivity, and
 // neither does scan.default_action; hidden text that spells something is an

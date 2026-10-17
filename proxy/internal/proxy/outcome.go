@@ -38,6 +38,9 @@ type requestOutcome struct {
 
 	// routePool is the internal pool a ROUTE verdict named (events.Event.RoutePool).
 	routePool string
+
+	// classifier is the shadow comparison record (events.Event.Classifier).
+	classifier *events.ClassifierRecord
 }
 
 type outcomeKey struct{}
@@ -132,6 +135,7 @@ func (o *requestOutcome) fill(e *events.Event) {
 	e.PolicyName, e.PolicyVersion = o.policyName, o.policyVersion
 	e.OrgVerified = o.verified
 	e.RoutePool = o.routePool
+	e.Classifier = o.classifier
 	e.InputTokens, e.OutputTokens = o.inTok, o.outTok
 	if o.costKnown {
 		e.CostKnown, e.CostUSD = true, o.costUSD

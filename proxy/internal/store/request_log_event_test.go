@@ -85,6 +85,8 @@ func TestRequestLog_BothWritersBuildTheSameRow(t *testing.T) {
 	blocked.OutputFindings, blocked.OutputAction, blocked.OutputScanned, blocked.OutputRisk = nil, "", false, scanner.RiskScore{}
 	anonymous := fullRequestEvent()
 	anonymous.OrgID, anonymous.OrgVerified = "", false
+	shadowed := fullRequestEvent()
+	shadowed.Classifier = shadowRecord()
 
 	for name, tc := range map[string]struct {
 		e         events.Event
@@ -94,6 +96,7 @@ func TestRequestLog_BothWritersBuildTheSameRow(t *testing.T) {
 		"hashed findings": {fullRequestEvent(), hashing},
 		"blocked":         {blocked, nil},
 		"no organisation": {anonymous, nil},
+		"shadow scores":   {shadowed, nil},
 	} {
 		t.Run(name, func(t *testing.T) {
 			cap := &captureStore{NoopStore: &NoopStore{}}
@@ -120,6 +123,45 @@ func TestRequestLog_BothWritersBuildTheSameRow(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func shadowRecord() *events.ClassifierRecord {
+	shadow := 0.9931
+	return &events.ClassifierRecord{
+		Model: "prompt-injection-guard-small", Threshold: 0.98, ShadowModel: "tamga-tr-candidate", ShadowThreshold: 0.995,
+		Texts: []events.ClassifierText{
+			{Seg: 2, Role: "user", Score: 0.12, Threshold: 0.98, Shadow: &shadow},
+			{Seg: 0, Role: "tool", Score: 0.4, Threshold: 0.9, ShadowSkipped: "late"},
+		},
+	}
+}
+
+// The shadow comparison is stored as it was recorded, by both writers, and
+// a request without one stores none.
+func TestRequestLog_ClassifierScores(t *testing.T) {
+	e := fullRequestEvent()
+	e.Classifier = shadowRecord()
+	row, ok := RequestLogFromEvent(e, evOrg, nil)
+	if !ok {
+		t.Fatal("no row")
+	}
+	var got events.ClassifierRecord
+	if err := json.Unmarshal(row.ClassifierScores, &got); err != nil {
+		t.Fatalf("%s: %v", row.ClassifierScores, err)
+	}
+	if !reflect.DeepEqual(&got, e.Classifier) {
+		t.Fatalf("stored %s", row.ClassifierScores)
+	}
+	for _, key := range []string{`"shadow":0.9931`, `"shadow_skipped":"late"`, `"shadow_model":"tamga-tr-candidate"`, `"seg":2`} {
+		if !strings.Contains(string(row.ClassifierScores), key) {
+			t.Errorf("stored record lacks %s: %s", key, row.ClassifierScores)
+		}
+	}
+	plain, _ := RequestLogFromEvent(fullRequestEvent(), evOrg, nil)
+	viaNATS, _ := RequestLogFromV2(overNATS(t, fullRequestEvent()), evOrg, nil)
+	if plain.ClassifierScores != nil || viaNATS.ClassifierScores != nil {
+		t.Fatalf("a request without a shadow stored %s / %s", plain.ClassifierScores, viaNATS.ClassifierScores)
 	}
 }
 

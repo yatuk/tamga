@@ -23,6 +23,7 @@ import (
 	"github.com/yatuk/tamga/internal/apikeys"
 	"github.com/yatuk/tamga/internal/classifier"
 	"github.com/yatuk/tamga/internal/errkind"
+	"github.com/yatuk/tamga/internal/events"
 	"github.com/yatuk/tamga/internal/extract"
 	"github.com/yatuk/tamga/internal/policy"
 	"github.com/yatuk/tamga/internal/ratelimit"
@@ -434,6 +435,10 @@ type scanEval struct {
 	// route is the internal pool the policy names for the action ROUTE, set
 	// when that was the verdict of the rules.
 	route string
+	// classifier is the shadow comparison record (classifyOutcome.record).
+	// The scan API publishes no event and drops it; the LiteLLM route
+	// stores it with its event.
+	classifier *events.ClassifierRecord
 }
 
 // scanInput is what evaluate reads: a chat request in OpenAI's shape, built
@@ -608,6 +613,7 @@ func (h *scanHandler) evaluateInput(ctx context.Context, call *scanCall, request
 			return ev, "classifier_unavailable"
 		}
 		res := classifySegments(ctx, h.opts.Classifier, set, requestID, segs, findings)
+		ev.classifier = res.record
 		// What it did read counts, also when it could not read everything.
 		if len(res.findings) > 0 {
 			findings = append(findings, res.findings...)

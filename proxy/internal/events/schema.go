@@ -104,6 +104,11 @@ func eventToV2(e Event) EventV2 {
 	if e.RoutePool != "" {
 		payload["route_pool"] = e.RoutePool
 	}
+	if e.Classifier != nil {
+		if cj, err := json.Marshal(e.Classifier); err == nil {
+			payload["classifier"] = json.RawMessage(cj)
+		}
+	}
 
 	var traceID string
 	if e.TraceContext != nil {
