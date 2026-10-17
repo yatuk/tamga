@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { leadFinding, providerName, roleName } from "./names";
+import { kindName, kindType, leadFinding, providerName, roleName, typeName } from "./names";
 import type { SecurityEvent } from "@/lib/api/types-core";
 
 describe("providerName", () => {
@@ -37,5 +37,16 @@ describe("a bridge row", () => {
     expect(lead.category).toBe("tc_kimlik");
     expect(roleName(lead.role)).toBe("Assistant message");
     expect(roleName(row.findings[0].role)).toBe("Tool description");
+  });
+});
+
+describe("a language finding", () => {
+  // The proxy names the languages and their shares in the match, never the text.
+  const finding = { type: "language", category: "language_not_allowed", severity: "medium", match: "de 92%, en 8%", confidence: 0.92, role: "user" };
+
+  it("is named for what it is and belongs to its own family", () => {
+    expect(kindName(finding.category)).toBe("Language not allowed");
+    expect(kindType(finding.category)).toBe("language");
+    expect(typeName(finding.type)).toBe("Language");
   });
 });
