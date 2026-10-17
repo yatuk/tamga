@@ -239,6 +239,16 @@ providers:
 #     deny_hosts: [files.example.net, "*.tracker.example"]
 #     allow_hosts: [charts.example.com]     # your own domains: not judged by form
 #
+# The places tools may send data to. A tool call in an answer whose tool
+# matches an entry and whose arguments name a host or an e-mail domain the
+# entry does not allow is a tool_destination finding; name it in block_on
+# to withhold the call. A tool no entry names is not checked. See
+# docs/agents.md, "Limit where tools may send data".
+#   block_on: [tool_destination]
+#   tool_destinations:
+#     - tools: [send_email, "mcp__mail__*"]
+#       allow: [example.com]
+#
 # An answer that is meant to be JSON can be held to a schema. A mismatch is
 # an output_schema finding (schema_mismatch, or not_json): in block_on it
 # withholds the answer, otherwise it is recorded. when: requested checks an
@@ -311,6 +321,10 @@ providers:
 #     injection_detection: { action: STRIP, sensitivity: low, applies_to: [tool] }
 #     injection:           { action: BLOCK, sensitivity: low,
 #                            applies_to: [system, user, assistant, tool_definition, request] }
+#
+#   For a tool result that is JSON, scan.strip_scope: field (below, off
+#   here) replaces only the strings that hold the instruction and keeps the
+#   rest of the tool result; text, the default, replaces all of it.
 #
 # classifier: a local model that reads the text the rules did not block and
 # reports what it takes for an injection as an `injection` finding of

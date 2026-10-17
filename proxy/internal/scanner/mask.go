@@ -32,6 +32,9 @@ var maskableTypes = map[string]bool{
 	"custom":         true,
 	"competitor":     true,
 	"malicious_link": true,
+	// The address of a place a tool call sends data to: masked, the call
+	// goes nowhere.
+	ToolDestinationFindingType: true,
 }
 
 // MaskableType reports whether findings of this type have a span that REDACT

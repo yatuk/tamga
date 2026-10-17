@@ -702,7 +702,7 @@ func (h *scanHandler) evaluateInput(ctx context.Context, call *scanCall, request
 
 	// The same for STRIP.
 	if action == policy.ActionStrip {
-		res, stripErr := stripSegments(scanProvider, body, segs, findings, actionOf, false)
+		res, stripErr := stripSegments(scanProvider, body, segs, findings, actionOf, false, newFieldStripper(ctx, pol, h.cfg.Registry.Without(scanExcluded...), pipelineCfg))
 		reason := ""
 		if stripErr == nil {
 			if reason = in.fixed(res.edited); reason == "" {
