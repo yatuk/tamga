@@ -95,6 +95,15 @@ The shipped policy is written for chat traffic. For agents, look at:
   A `redact_on` finding in streamed thinking ends the stream
   (`redact_signed_thinking`). If that happens in your sessions, the value is
   usually one the request carried in: redact it on the way in.
+- **`scan.on_error`** (`block` in the shipped policy). If a scanner fails,
+  the scan runs past its deadline or a scanner is shed under load, the
+  request gets a 503 `tamga_scan_unavailable` with `Retry-After: 1` and does
+  not reach the provider, so a crashed check cannot let an injected tool
+  result through. Most agents retry a 503. Set `pass` only if you accept that
+  a request goes out with less inspection than configured; it is then
+  marked `X-Tamga-Scan-Degraded: true`. A policy that leaves the key out
+  fails closed for requests with tool results or tool definitions and fails
+  open for plain chat.
 - **A block in the middle of a session ends the turn.** The agent sees a 403
   where it expected a model response. For tool results use `STRIP`, below.
 

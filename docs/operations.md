@@ -863,6 +863,15 @@ also stops after 1000 findings in one piece of text or after its time
 budget. The scan is then reported as incomplete, and what happens is
 `scan.on_error`: the shipped policy blocks.
 
+`scan.on_error` takes `block` (503 `tamga_scan_unavailable` with
+`Retry-After: 1`) or `pass` (forward on the findings of the scanners that
+did run, marked `X-Tamga-Scan-Degraded: true`). It covers every way a scan
+can fail: a scanner that errors or panics, the scan deadline, a scanner shed
+under load or refused by a full queue, and the inline classifier failing or
+missing its deadline. Left out, a request that carries tool results or tool
+definitions fails closed like `block`, and a plain chat request fails open
+like `pass`; the coverage report (`fail_open`) warns about the missing key.
+
 One case does not follow `scan.on_error`. When the policy would mask or
 strip what was found and the scan did not reach the end of the text, the
 request is refused with 503 `tamga_redaction_incomplete`, also under
