@@ -403,11 +403,13 @@ configured. Nothing is downloaded; the provider's terms of service apply.
 ### Classifier (`classifier/`)
 
 No model is in the image. The operator mounts one at
-`TAMGA_CLASSIFIER_MODEL_DIR`. The documentation and Compose file point at:
+`TAMGA_CLASSIFIER_MODEL_DIR`, and optionally a second, for banned topics, at
+`TAMGA_TOPICS_MODEL_DIR`. The documentation and Compose file point at:
 
 | Model | When it arrives | Licence on the model card |
 |---|---|---|
 | `Horizon-Labs/prompt-injection-guard-small` | downloaded by the operator (docs/operations.md, "Inline classifier") | apache-2.0 (<https://huggingface.co/Horizon-Labs/prompt-injection-guard-small>). The card names its backbone, `jhu-clsp/mmBERT-small`, as MIT and lists its training sets with the licences Apache-2.0, MIT, CC-BY-4.0, CC0 and ODC-BY; those were not checked one by one |
+| `MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7`, revision `b5113eb38ab63efdd7f280f8c144ea8b13f978ce`, its `onnx/model_quantized.onnx` | downloaded by the operator, optional (docs/operations.md, "Banned topics") | mit (<https://huggingface.co/MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7>); the `LICENSE` file in the repository at that revision is the MIT text. The card lists its training sets, most of them machine-translated; their licences were not checked one by one |
 
 ### Data in the source tree
 

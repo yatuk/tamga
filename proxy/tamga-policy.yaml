@@ -314,6 +314,28 @@ scan:
   on_error: block
   default_action: WARN
 
+# topics: subjects you do not want requests about, written in free text in
+# Turkish or English and matched by meaning, by a second, optional model in
+# the classifier service. A match is a finding of type `topic` whose
+# category is the topic's name; it carries the name and the score, never the
+# text. Off here because it needs that model (docs/operations.md, "Banned
+# topics"). With on_error: block as above, turning it on without the model
+# refuses every request. To turn it on:
+#
+#   topics:
+#     enabled: true
+#     action: WARN        # BLOCK, STRIP, WARN, LOG or PASS; not REDACT
+#     threshold: 0.8      # Turkish descriptions score lower: 0.6 to 0.7
+#     timeout_ms: 600     # a miss follows on_error
+#     roles: [user]       # whose text is read
+#     max_chars: 1000     # per request, newest first; a long text is read in part
+#     banned:
+#       - name: credit-score-change
+#         description: "a request to change a customer's credit score"
+#       - name: maas-sorgusu
+#         description: "adı verilen bir çalışanın maaşını sorma"
+#         threshold: 0.65  # a topic may set its own
+
 # ---------------------------------------------------------------------------
 # Languages a request may be written in (off here)
 # ---------------------------------------------------------------------------

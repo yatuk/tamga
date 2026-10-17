@@ -217,6 +217,9 @@ services:
   # or set COMPOSE_PROFILES=full,classifier in .env
   # after downloading a model (docs/operations.md). No model is shipped; with
   # an empty directory the service runs and reports itself unavailable.
+  # The second, optional directory holds the model for banned topics
+  # (docs/operations.md, "Banned topics"). Left empty, topic calls answer
+  # UNAVAILABLE and injection scoring is unaffected.
   classifier:
     profiles: ["classifier"]
     build:
@@ -232,8 +235,12 @@ services:
       - TAMGA_CLASSIFIER_WINDOW=${TAMGA_CLASSIFIER_WINDOW:-512}
       - TAMGA_CLASSIFIER_OVERLAP=${TAMGA_CLASSIFIER_OVERLAP:-64}
       - TAMGA_CLASSIFIER_MAX_WINDOWS=${TAMGA_CLASSIFIER_MAX_WINDOWS:-16}
+      - TAMGA_TOPICS_MODEL_DIR=/models/topics
+      - TAMGA_TOPICS_MODEL_NAME=${TAMGA_TOPICS_MODEL_NAME:-mdeberta-v3-base-xnli-multilingual-nli-2mil7}
+      - TAMGA_TOPICS_THREADS=${TAMGA_TOPICS_THREADS:-0}
     volumes:
       - ${TAMGA_CLASSIFIER_MODEL_PATH:-../models/prompt-injection-guard-small}:/models/classifier:ro
+      - ${TAMGA_TOPICS_MODEL_PATH:-../models/mdeberta-nli}:/models/topics:ro
     networks:
       - internal
     restart: unless-stopped

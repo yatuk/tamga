@@ -1278,6 +1278,30 @@
 - Architecture diagrams corrected: the analyzer was drawn on the request
   path; it runs after the response.
 
+### Banned topics (optional)
+- A new policy section, `topics`, lists subjects in free text, in Turkish
+  or English ("a request to change a customer's credit score"). The
+  classifier service matches each request against them with a second,
+  optional model (zero-shot natural-language inference), and a match is a
+  `topic` finding named after the topic, with its score and never the text,
+  under the section's `action` (BLOCK, STRIP, WARN, LOG or PASS). Off by
+  default; `threshold` (0.8, and per topic), `timeout_ms` (600), `roles`
+  (`user`), `max_chars` (1000), at most 16 topics. A failure follows
+  `scan.on_error`, with `X-Tamga-Scan-Degraded: topics`; the topic model
+  has its own deadline and its own breaker. New header
+  `X-Tamga-Topics: ok | partial`, new metrics `tamga_topics_*`. The scan
+  API applies it too. Changing the section needs the admin role. See
+  docs/operations.md, "Banned topics", for the measured precision, recall
+  and latency, which are modest: at 0.8 it found 11 of 30 requests in the
+  evaluation set with English descriptions and 2 of 30 with Turkish ones.
+- The classifier service's protocol gains `ClassifyTopics` and three
+  fields in the health answer; the injection RPC is unchanged. The service
+  loads the topic model from `TAMGA_TOPICS_MODEL_DIR` when it is set.
+- **The Compose `classifier` service now also mounts
+  `${TAMGA_TOPICS_MODEL_PATH:-../models/mdeberta-nli}` at `/models/topics`.**
+  Without a model there, Docker creates the empty directory, the service
+  logs `topics_unavailable` once at startup, and nothing else changes.
+
 ### Keys
 - **API keys are stored in PostgreSQL.** They were kept in memory and lost on
   every restart, and differed between replicas. With a database configured
