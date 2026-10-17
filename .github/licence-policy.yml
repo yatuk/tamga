@@ -108,51 +108,54 @@ deny:
 # One entry per package (or family of packages) whose licence is in `review`.
 # `package` is a glob. `decision` is pending, allow or deny.
 # The entries below are every dependency that is in review today
-# (2026-10-17, from THIRD_PARTY_LICENSES.md). All are pending: the maintainer
-# has not decided, and the gate fails on each until it is decided.
+# (2026-10-17, from THIRD_PARTY_LICENSES.md). The maintainer allowed all
+# five on 2026-10-17; a new entry starts as pending and the gate fails on it
+# until it is decided.
 decisions:
   - ecosystem: npm
     component: dashboard
     package: "@img/sharp-libvips-*"
     licence: LGPL-3.0-or-later
-    decision: pending
+    decision: allow
     note: >-
       Prebuilt libvips, one package per platform. Optional dependencies of
       sharp, which is an optional dependency of next (image optimisation).
       The question: does the published console image contain one, and if so
       are LGPL-3.0's conditions (licence text, source offer, replaceable
-      library) met by pointing at the upstream package.
+      library) met by pointing at the upstream package. Allowed by the
+      maintainer on 2026-10-17; whether the published image holds libvips
+      is still to be checked, and if it does its licence text ships with it.
   - ecosystem: npm
     component: dashboard
     package: "@img/sharp-w*"
     licence: Apache-2.0 AND LGPL-3.0-or-later
-    decision: pending
+    decision: allow
     note: >-
       sharp for Windows and WebAssembly (`@img/sharp-win32-*`,
       `@img/sharp-wasm32`, the latter also MIT), with libvips inside. Not
       installed in the Linux image. Same question as above for anyone who runs
-      the console on those platforms.
+      the console on those platforms. Allowed by the maintainer on 2026-10-17.
   - ecosystem: npm
     component: dashboard
     package: "@ibm/plex*"
     licence: OFL-1.1
-    decision: pending
+    decision: allow
     note: >-
       IBM Plex font files, through @carbon/styles. The console serves them to
       browsers. OFL-1.1 asks that the fonts keep their licence and are not
-      sold on their own.
+      sold on their own. Allowed by the maintainer on 2026-10-17.
   - ecosystem: npm
     component: dashboard
     package: caniuse-lite
     licence: CC-BY-4.0
-    decision: pending
-    note: Browser-support data, through next. Build-time data; attribution is the condition.
+    decision: allow
+    note: Browser-support data, through next. Build-time data; attribution is the condition. Allowed by the maintainer on 2026-10-17.
   - ecosystem: python
     component: analyzer
     package: regex
     licence: Apache-2.0 AND CNRI-Python
-    decision: pending
+    decision: allow
     note: >-
       Required by presidio-analyzer. Runs inside the analyzer service, a
       separate process from the proxy. See THIRD_PARTY_LICENSES.md, "Entries
-      a person should look at".
+      a person should look at". Allowed by the maintainer on 2026-10-17.
