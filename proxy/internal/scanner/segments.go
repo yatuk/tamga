@@ -39,6 +39,12 @@ func (r *Registry) ScanSegments(ctx context.Context, segs []extract.Segment, cfg
 	if firstErr == nil {
 		firstErr = acrossErr
 	}
+	// Verdicts on a whole segment with its role: the language check.
+	whole, wholeErr := r.scanWholeSegments(ctx, segs)
+	all = append(all, whole...)
+	if firstErr == nil {
+		firstErr = wholeErr
+	}
 	// What only the place of a text in the conversation shows. It belongs
 	// to the jailbreak scanner's rules and is left out with it.
 	if r.has("jailbreak") {
