@@ -666,7 +666,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 			logger.Warn().Str("error_kind", errkind.Of(res.err)).Msg("topic model unavailable")
 			markDegraded(w, "topics")
 			span.SetAttributes(attribute.Bool("tamga.scan_degraded", true))
-			if pol.BlockOnScanError() {
+			if pol.BlockOnScanError(carriesToolContent(segs)) {
 				logger.Warn().Msg("topic model unavailable and scan.on_error is block: request refused")
 				polSpan.End()
 				writeScanUnavailable(w, requestID)
