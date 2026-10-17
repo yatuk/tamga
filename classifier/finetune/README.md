@@ -91,8 +91,9 @@ had to be settled before adding it:
 2. where its rows come from: deepset's train split, whose English originals
    the base model was trained on, is `trd_tuning.csv`; deepset's test split,
    which the model's card lists as an evaluation set and not as training
-   data, is `trd_locked.csv`. `run` scores `trd_locked.csv` before and after
-   and does not read `trd_tuning.csv`;
+   data, is `trd_locked.csv`. `run` scores `trd_locked.csv` before and after,
+   and reads `trd_tuning.csv` only with `--with-trd-tuning`, which is off by
+   default because it made the model worse (next section);
 3. that no row of either is in `tr_locked.csv`: none is, and no text is in
    both of its parts (`TestDeepsetTurkishSplit`).
 
@@ -132,6 +133,26 @@ Not measured. What can be said honestly:
   on CPU has not finished after half an hour, something is wrong (most
   likely padding to `--max-length`; the rows are short and batches are
   padded to their longest row).
+
+## Three seeds, with and without the translated rows (2026-10-17)
+
+Six runs, the command above with seeds 20261011, 1 and 2, each once as it
+is and once with `--with-trd-tuning` (1,161 training rows instead of 616).
+Recall of the fine-tuned model, lowest to highest over the three seeds:
+
+| Training rows | `tr_locked` at FPR ≤ 2% | `tr_locked` at 0.98 | `trd_locked` at 0.98 | `holdout` at FPR ≤ 2% | `holdout` at 0.98 |
+|---|---|---|---|---|---|
+| none (the base model) | 0.400 | 0.508 | 0.136 | 0.842 | 0.921 |
+| `tr_tuning` + `prompts` | 0.654 to 0.708 | 0.654 to 0.885 | 0.169 to 0.186 | 0.974 | 0.921 to 0.974 |
+| the same + `trd_tuning` | 0.277 to 0.323 | 0.477 to 0.685 | 0.407 to 0.559 | 0.921 to 0.974 | 0.816 to 0.921 |
+
+The false-positive rate at 0.98 stayed between 0 and 0.040 in every run.
+Adding the translated rows lifts the set they come from and costs half
+the recall on the Turkish locked set and some on the English holdout, so
+they are not used. The seed moves `tr_locked` at 0.98 by up to 0.23: one
+run says little about a threshold. The candidate for the service is the
+run with the default seed, chosen before these runs, not the best of the
+three on a locked set.
 
 ## After the run
 

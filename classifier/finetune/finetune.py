@@ -19,8 +19,9 @@ What it does, in order (``run``):
 
 The two locked sets are read in steps 2 and 4 only. No row of them, and
 nothing derived from a score on them, reaches step 3. ``trd_tuning.csv`` (the
-tuning part of the translated deepset set) is not read at all yet: the base
-model was trained on the English originals of its rows.
+tuning part of the translated deepset set) joins the training rows with
+``--with-trd-tuning``. It is never scored: the base model was trained on the
+English originals of its rows, so a score on it says little.
 
 Only the standard library is imported at module level. torch and
 transformers are imported inside the functions that need them, so the
@@ -329,9 +330,11 @@ def train(tokenizer, model, train_rows: list[Row], dev_rows: list[Row], args, de
         model.load_state_dict(best_state)
 
 
-def training_rows() -> list[Row]:
+def training_rows(with_trd_tuning: bool = False) -> list[Row]:
     rows = build_rows(read_corpus(REDTEAM / "tr_tuning.csv"), "tr_tuning")
     rows += build_rows(read_corpus(REDTEAM / "prompts.csv"), "prompts")
+    if with_trd_tuning:
+        rows += build_rows(read_corpus(REDTEAM / "trd_tuning.csv"), "trd_tuning")
     return rows
 
 
@@ -344,7 +347,7 @@ def evaluation_sets() -> dict[str, list[Row]]:
 
 
 def cmd_build_data(args) -> int:
-    rows = training_rows()
+    rows = training_rows(args.with_trd_tuning)
     train_rows, dev_rows = split_train_dev(rows)
     out = Path(args.out)
     write_jsonl(out / "train.jsonl", train_rows)
@@ -362,7 +365,7 @@ def cmd_run(args) -> int:
     device = args.device or ("cuda" if torch.cuda.is_available() else "cpu")
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    rows = training_rows()
+    rows = training_rows(args.with_trd_tuning)
     train_rows, dev_rows = split_train_dev(rows)
     write_jsonl(out / "train.jsonl", train_rows)
     write_jsonl(out / "dev.jsonl", dev_rows)
@@ -390,6 +393,7 @@ def cmd_run(args) -> int:
         "train_tr": sum(r.lang == "tr" for r in train_rows),
         "epochs": args.epochs,
         "seed": args.seed,
+        "with_trd_tuning": args.with_trd_tuning,
         "device": device,
     }
     (out / "report.md").write_text(report_markdown(before, after, meta), encoding="utf-8")
@@ -419,6 +423,7 @@ def main(argv: list[str] | None = None) -> int:
 
     build = sub.add_parser("build-data", help="write train.jsonl and dev.jsonl; needs no model and no torch")
     build.add_argument("--out", default=str(Path(__file__).resolve().parent / "out"))
+    build.add_argument("--with-trd-tuning", action="store_true", help="also train on trd_tuning.csv")
     build.set_defaults(func=cmd_build_data)
 
     run = sub.add_parser("run", help="measure, fine-tune, measure again, write report.md")
@@ -432,6 +437,7 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--max-length", type=int, default=512)
     run.add_argument("--seed", type=int, default=20261011)
     run.add_argument("--device", default="")
+    run.add_argument("--with-trd-tuning", action="store_true", help="also train on trd_tuning.csv")
     run.set_defaults(func=cmd_run)
 
     args = parser.parse_args(argv)
