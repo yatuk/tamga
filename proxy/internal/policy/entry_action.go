@@ -13,6 +13,9 @@ import (
 //	custom_entities: [{name: musteri_no, pattern: ..., action: REDACT}]
 //	competitors:     [{name: Acme, patterns: [...], action: BLOCK}]
 //
+// A banned topic (topics.go) is decided the same way, with the action of
+// the topics section for every topic it lists.
+//
 // How it is decided, for both kinds alike:
 //
 //   - The entry's action, when it has one, applies to every match of that
@@ -79,6 +82,9 @@ func (p *Policy) entryAction(f scanner.Finding) (Action, bool) {
 		if a, ok := p.languageAction(); ok {
 			best, found = a, true
 		}
+	case "topic":
+		// A banned topic's action is the section's (topics.go).
+		return p.topicEntryAction(f.Category)
 	}
 	return best, found
 }
@@ -114,6 +120,7 @@ var unmaskableKinds = map[string]string{
 	"content_moderation": "a content moderation finding is a verdict on a piece of text, not a value with a place in it",
 	"operator_state":     "an operator-state finding is a verdict on the request, not a value with a place in it",
 	"language":           "a language finding is a verdict on a whole message, not a value with a place in it",
+	"topic":              "a topic finding is a verdict on a whole text, not a value with a place in it",
 }
 
 // unmaskableOutputKeys are the names output_rules.redact_on cannot hold:

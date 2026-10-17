@@ -143,6 +143,21 @@ func (cfg Config) handleMetrics(w http.ResponseWriter, _ *http.Request) {
 		_, _ = fmt.Fprintln(w, "# TYPE tamga_classifier_short_circuited_total counter")
 		_, _ = fmt.Fprintf(w, "tamga_classifier_short_circuited_total %d\n", cs.ShortCircuited)
 	}
+	if topicStats != nil {
+		ts := topicStats()
+		_, _ = fmt.Fprintln(w, "# HELP tamga_topics_calls_total Calls made to the banned-topic model.")
+		_, _ = fmt.Fprintln(w, "# TYPE tamga_topics_calls_total counter")
+		_, _ = fmt.Fprintf(w, "tamga_topics_calls_total %d\n", ts.Calls)
+		_, _ = fmt.Fprintln(w, "# HELP tamga_topics_errors_total Banned-topic calls that failed or timed out.")
+		_, _ = fmt.Fprintln(w, "# TYPE tamga_topics_errors_total counter")
+		_, _ = fmt.Fprintf(w, "tamga_topics_errors_total %d\n", ts.Errors)
+		_, _ = fmt.Fprintln(w, "# HELP tamga_topics_cached_texts_total Texts answered from the banned-topic cache.")
+		_, _ = fmt.Fprintln(w, "# TYPE tamga_topics_cached_texts_total counter")
+		_, _ = fmt.Fprintf(w, "tamga_topics_cached_texts_total %d\n", ts.CachedTexts)
+		_, _ = fmt.Fprintln(w, "# HELP tamga_topics_short_circuited_total Requests not sent to the banned-topic model because its breaker was open.")
+		_, _ = fmt.Fprintln(w, "# TYPE tamga_topics_short_circuited_total counter")
+		_, _ = fmt.Fprintf(w, "tamga_topics_short_circuited_total %d\n", ts.ShortCircuited)
+	}
 
 	_, _ = fmt.Fprintln(w, "# HELP tamga_extract_unknown_block_total Content blocks of a type the extractor has no rule for.")
 	_, _ = fmt.Fprintln(w, "# TYPE tamga_extract_unknown_block_total counter")
@@ -258,6 +273,14 @@ var classifierStats func() classifier.Stats
 // SetClassifierStats registers the source of the classifier counters. Call
 // once at startup.
 func SetClassifierStats(fn func() classifier.Stats) { classifierStats = fn }
+
+// topicStats returns the banned-topic counters; nil when no classifier
+// service is configured.
+var topicStats func() classifier.Stats
+
+// SetTopicStats registers the source of the banned-topic counters. Call
+// once at startup.
+func SetTopicStats(fn func() classifier.Stats) { topicStats = fn }
 
 // alertStats returns the alert delivery counters; nil when nothing delivers
 // alerts.

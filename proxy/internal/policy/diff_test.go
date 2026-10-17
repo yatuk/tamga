@@ -40,6 +40,9 @@ var ownerPrivileged = []string{
 	"providers", "exceptions", "governance", "data", "vault", "cache",
 	"body_limits", "rate_limit", "cost", "scan", "operator_state", "canary",
 	"language",
+	// Turned on without a topic model and with scan.on_error: block, it
+	// refuses every request, as scan.classifier does.
+	"topics",
 }
 
 func TestEverySectionIsClassified(t *testing.T) {

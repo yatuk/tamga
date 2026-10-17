@@ -120,6 +120,9 @@ type HandlerConfig struct {
 	// Classifier is the inline prompt-injection classifier (optional). It is
 	// asked only when the policy turns it on (scan.classifier).
 	Classifier *classifier.Guard
+	// Topics is the classifier service's banned-topic model (optional). It
+	// is asked only when the policy turns topics on.
+	Topics *classifier.TopicGuard
 	// GetPolicy returns the current policy (hot-reload safe).
 	GetPolicy func() *policy.Policy
 	RateLimit *ratelimit.Limiter
@@ -636,6 +639,44 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 			w.Header().Set("X-Tamga-Classifier", "partial")
 		case res.asked > 0:
 			w.Header().Set("X-Tamga-Classifier", "ok")
+		}
+		if len(res.findings) > 0 {
+			findings = append(findings, res.findings...)
+			action, exceptionMatches = pol.EvaluateWithRole(findings, userRole, strictMode)
+		}
+	}
+
+	// ── Banned topics ───────────────────────────────────────────────────
+	// The operator's own list of subjects, matched by meaning. Asked, like
+	// the classifier, only when nothing has blocked the request yet, under
+	// a deadline of its own; a failure is a failed scan (scan.on_error).
+	if set, on := pol.TopicSettings(); on && segs != nil && action != policy.ActionBlock {
+		var res topicOutcome
+		if cfg.Topics == nil {
+			res.err = errTopicsNotConfigured
+		} else {
+			_, topSpan := telemetry.Tracer().Start(ctx, "classifier.topics")
+			res = topicSegments(ctx, cfg.Topics, set, requestID, segs)
+			topSpan.SetAttributes(attribute.Int("topics.texts", res.asked), attribute.Int("topics.findings", len(res.findings)))
+			topSpan.End()
+		}
+		switch {
+		case res.err != nil:
+			scanner.RecordDegraded("topics")
+			logger.Warn().Str("error_kind", errkind.Of(res.err)).Msg("topic model unavailable")
+			markDegraded(w, "topics")
+			span.SetAttributes(attribute.Bool("tamga.scan_degraded", true))
+			if pol.BlockOnScanError() {
+				logger.Warn().Msg("topic model unavailable and scan.on_error is block: request refused")
+				polSpan.End()
+				writeScanUnavailable(w, requestID)
+				return
+			}
+		case res.partial:
+			scanner.RecordDegraded("topics_partial")
+			w.Header().Set("X-Tamga-Topics", "partial")
+		case res.asked > 0:
+			w.Header().Set("X-Tamga-Topics", "ok")
 		}
 		if len(res.findings) > 0 {
 			findings = append(findings, res.findings...)
