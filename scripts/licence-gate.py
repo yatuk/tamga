@@ -21,6 +21,12 @@ second way of reading a licence. The policy is .github/licence-policy.yml.
     python scripts/licence-gate.py --json findings.json
         Also write every judged dependency as JSON.
 
+    python scripts/licence-gate.py --sbom-dir sboms --sbom-version v0.9.0
+        Also write a CycloneDX 1.6 SBOM for each of the proxy, the analyzer
+        and the classifier: the dependencies judged here, each with its
+        licence and the category the policy gave it. They are written in
+        report and enforce mode alike, before the exit code is decided.
+
 Needs PyYAML for the policy file; everything else is the standard library.
 No network is used. This is a check of declared licences against a list. It
 is not legal advice.
@@ -39,6 +45,7 @@ import os
 import re
 import sys
 from pathlib import Path
+from urllib.parse import quote
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_POLICY = ROOT / ".github" / "licence-policy.yml"
@@ -49,6 +56,9 @@ UNREADABLE = {"", "MISSING", "UNRECOGNISED", "NOT-INSPECTED", "UNKNOWN"}
 # Worst first. An expression joined by AND is as bad as its worst part; one
 # joined by OR is as good as its best alternative.
 ORDER = ["deny", "unreadable", "unknown", "review", "allow"]
+
+# Licence ids joined by AND, OR or WITH, as a CycloneDX `expression` needs.
+SPDX_EXPRESSION = re.compile(r"[A-Za-z0-9.+-]+(?: (?:AND|OR|WITH) [A-Za-z0-9.+-]+)*")
 
 
 def load_inventory():
@@ -164,7 +174,7 @@ def collect(inv, pip_envs: dict[str, dict], policy: Policy) -> tuple[list[dict],
         notes.append(f"go: no modules read ({go_info})")
     outside = 0
     for r in go_rows:
-        shipped = r["direct"] or r["linked"]
+        shipped = r["linked"]
         if not shipped and not policy.judge_outside:
             outside += 1
             continue
@@ -189,6 +199,7 @@ def collect(inv, pip_envs: dict[str, dict], policy: Policy) -> tuple[list[dict],
                          "licence": r["license"] or "MISSING", "source": r["source"]})
         notes.append(f"npm {component}: {info['skipped_dev']} development entries of the lockfile left out")
 
+    evidence = inv.checked_python_evidence()
     components = (
         ("analyzer", lambda: inv.requirements_lines(ROOT / "analyzer/requirements.txt")),
         ("classifier", lambda: inv.requirements_lines(ROOT / "classifier/requirements.txt")),
@@ -204,14 +215,27 @@ def collect(inv, pip_envs: dict[str, dict], policy: Policy) -> tuple[list[dict],
             env = local_env
             notes.append(f"python {component}: licences read from the interpreter running this script, not from "
                          f"an environment built for it (pass --pip {component}=FILE)")
-        direct, trans, missing = inv.python_component(load(), env)
+        direct, trans, missing = inv.python_component(load(), env,
+                                                      None if component in pip_envs else evidence.get(component))
         for r in direct + trans:
             rows.append({"ecosystem": "python", "component": component, "name": r["name"],
                          "version": r.get("version", ""), "licence": r["license"] or "MISSING",
                          "source": r.get("source", "")})
-        if missing:
+        if missing and component in pip_envs:
+            # Not installed in an environment built from the component's own
+            # requirements: an optional or other-platform dependency, not
+            # something the component ships.
             notes.append(f"python {component}: required but not installed where inspected, so not judged: "
                          + ", ".join(sorted(missing)))
+        elif missing:
+            # The interpreter running this script says nothing about what the
+            # component installs, so a gap here is a gap in the inventory.
+            notes.append(f"python {component}: required but not installed where inspected: "
+                         + ", ".join(sorted(missing)))
+            for name in missing:
+                rows.append({"ecosystem": "python", "component": component, "name": name,
+                             "version": "", "licence": "NOT-INSPECTED",
+                             "source": "required by an installed distribution but not installed"})
     return rows, notes
 
 
@@ -312,6 +336,67 @@ def summary_markdown(items: list[dict], mode: str) -> str:
     return "\n".join(out) + "\n"
 
 
+def write_sboms(items: list[dict], directory: Path, version: str) -> list[Path]:
+    """Write checked CycloneDX inventories for the shipped service dependencies."""
+    directory.mkdir(parents=True, exist_ok=True)
+    written = []
+    for component in ("proxy", "analyzer", "classifier"):
+        components = []
+        seen = set()
+        for item in sorted((i for i in items if i["component"] == component),
+                           key=lambda i: (i["name"].lower(), i["version"])):
+            key = (item["ecosystem"], item["name"], item["version"])
+            if key in seen:
+                continue
+            seen.add(key)
+            name = item["name"]
+            # The inventory appends " (differs from the pin)" to a version.
+            pkg_version = item["version"].split(" ", 1)[0]
+            if item["ecosystem"] == "go":
+                package_url = f"pkg:golang/{quote(name, safe='/')}"
+            else:
+                # The purl spec's pypi names are lower case with `-` for `_`.
+                package_url = f"pkg:pypi/{quote(name.lower().replace('_', '-'), safe='')}"
+            if pkg_version:
+                package_url += f"@{quote(pkg_version, safe='.+-')}"
+            dependency = {
+                "type": "library",
+                "bom-ref": package_url,
+                "name": name,
+                "version": pkg_version,
+                "purl": package_url,
+                "properties": [
+                    {"name": "tamga:licence-category", "value": item["category"]},
+                    {"name": "tamga:licence-source", "value": item["source"]},
+                ],
+            }
+            if item["licence"] not in UNREADABLE:
+                if SPDX_EXPRESSION.fullmatch(item["licence"]):
+                    dependency["licenses"] = [{"expression": item["licence"]}]
+                else:
+                    # "BSD (unspecified)" and the like are not SPDX expressions.
+                    dependency["licenses"] = [{"license": {"name": item["licence"]}}]
+            components.append(dependency)
+        document = {
+            "bomFormat": "CycloneDX",
+            "specVersion": "1.6",
+            "version": 1,
+            "metadata": {
+                "component": {
+                    "type": "application",
+                    "name": f"tamga-{component}",
+                    "version": version,
+                },
+                "properties": [{"name": "tamga:licence-policy", "value": ".github/licence-policy.yml"}],
+            },
+            "components": components,
+        }
+        path = directory / f"tamga-{component}_{version}.cdx.json"
+        path.write_text(json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        written.append(path)
+    return written
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--policy", type=Path, default=DEFAULT_POLICY)
@@ -319,6 +404,9 @@ def main() -> int:
     ap.add_argument("--pip", action="append", default=[], metavar="NAME=FILE",
                     help="NAME is analyzer, classifier or sdk-python; FILE is the output of third-party-licenses.py dump-pip")
     ap.add_argument("--json", type=Path, help="write every judged dependency to this file")
+    ap.add_argument("--sbom-dir", type=Path,
+                    help="write checked CycloneDX SBOMs for the proxy, analyzer and classifier")
+    ap.add_argument("--sbom-version", default="snapshot", help="component version written into the SBOMs")
     args = ap.parse_args()
 
     try:
@@ -356,6 +444,8 @@ def main() -> int:
     print(text)
     if args.json:
         args.json.write_text(json.dumps(items, indent=1, sort_keys=True), encoding="utf-8")
+    if args.sbom_dir:
+        write_sboms(items, args.sbom_dir, args.sbom_version)
     step_summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if step_summary:
         with open(step_summary, "a", encoding="utf-8") as fh:

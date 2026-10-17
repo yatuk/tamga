@@ -4,27 +4,26 @@
 # scripts/third-party-licenses.py (the generator of THIRD_PARTY_LICENSES.md)
 # and sorts every shipped dependency into allow, review, deny or unreadable.
 #
-# THE SETS BELOW ARE A PROPOSAL. The maintainer has not decided them. Until
-# that decision is made the gate runs in report mode: it prints what it would
-# refuse and exits 0. Nothing here is legal advice, and the reasons quote
-# what a licence's steward or the FSF licence list says, not a conclusion of
-# this project about compatibility with AGPL-3.0.
+# The gate is enforced: it exits 1 on a finding, and the release workflow
+# and the scheduled licence workflow fail with it. Nothing here is legal
+# advice, and the reasons quote what a licence's steward or the FSF licence
+# list says, not a conclusion of this project about compatibility with
+# AGPL-3.0.
 #
-# To turn the gate on:
-#   1. Read `decisions` at the end of this file and give every entry that
-#      says `pending` a decision: `allow` or `deny`.
-#   2. Correct the sets if you disagree with a proposal.
-#   3. Change `mode: report` to `mode: enforce`.
-# In enforce mode the gate fails on: a licence in `deny`; a licence in
-# `review` whose package has no `allow` decision; a licence in no set at
-# all; and, with `unreadable: fail`, a dependency whose licence could not be
-# read.
+# The gate fails on: a licence in `deny`; a licence in `review` whose
+# package has no `allow` decision (a `pending` decision fails); a licence in
+# no set at all; and, with `unreadable: fail`, a dependency whose licence
+# could not be read.
+#
+# The sets and the decisions are the maintainer's. Each entry under
+# `decisions` that says `pending` has not been decided: give it `allow` or
+# `deny`. `mode: report` prints the same findings and exits 0.
 
 version: 1
 
 # report  : print the findings, exit 0.
 # enforce : print the findings, exit 1 when there is one.
-mode: report
+mode: enforce
 
 # What to do with a dependency whose licence is MISSING, UNRECOGNISED or
 # NOT-INSPECTED (not installed where the gate ran). `fail` or `warn`.
@@ -39,7 +38,8 @@ judge_go_modules_outside_binaries: false
 
 allow:
   # Permissive licences: attribution and a copy of the licence text, no
-  # condition on the licence of the combined work.
+  # condition on the licence of the combined work. The classifier's
+  # onnxruntime (MIT) and tokenizers (Apache-2.0) are allowed by this group.
   - licences: [MIT, MIT-0, MIT-CMU, ISC, 0BSD, BSD-2-Clause, BSD-3-Clause,
                Apache-2.0, Zlib, BSL-1.0, HPND, BlueOak-1.0.0]
     reason: Permissive; attribution only. The FSF list names each as GPL-compatible (Apache-2.0 with GPLv3 only).
@@ -108,8 +108,8 @@ deny:
 # One entry per package (or family of packages) whose licence is in `review`.
 # `package` is a glob. `decision` is pending, allow or deny.
 # The entries below are every dependency that is in review today
-# (2026-10-11, from THIRD_PARTY_LICENSES.md). All are pending: the maintainer
-# has not decided.
+# (2026-10-17, from THIRD_PARTY_LICENSES.md). All are pending: the maintainer
+# has not decided, and the gate fails on each until it is decided.
 decisions:
   - ecosystem: npm
     component: dashboard
