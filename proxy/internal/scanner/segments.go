@@ -29,6 +29,19 @@ import (
 func (r *Registry) ScanSegments(ctx context.Context, segs []extract.Segment, cfg PipelineConfig) ([]Finding, error) {
 	var all []Finding
 	perSeg, firstErr := r.scanUnits(ctx, segs, cfg)
+	// A tool result that is JSON is read once more, decoded (tool_json.go).
+	fromJSON, idErr, jsonErr := r.scanToolJSON(ctx, segs, perSeg, func(ctx context.Context, text []byte) ([]Finding, error) {
+		return r.ScanRaw(ctx, text, cfg)
+	})
+	if firstErr == nil {
+		firstErr = idErr
+	}
+	if firstErr == nil {
+		firstErr = jsonErr
+	}
+	for i := range fromJSON {
+		perSeg[i] = append(perSeg[i], fromJSON[i]...)
+	}
 	for i := range perSeg {
 		perSeg[i] = dedupeFindings(perSeg[i])
 		all = append(all, perSeg[i]...)
@@ -115,10 +128,28 @@ func (r *Registry) ScanSegmentsRemote(ctx context.Context, segs []extract.Segmen
 		close(next)
 		wg.Wait()
 	}
-	var all []Finding
 	for i := range segs {
 		if errs[i] != nil {
 			return nil, errs[i]
+		}
+	}
+	// The decoded reading of a tool result that is JSON (tool_json.go):
+	// its strings go to the remote scanner, its units to r's own injection
+	// scanners.
+	fromJSON, idErr, jsonErr := r.scanToolJSON(ctx, segs, perSeg, func(ctx context.Context, text []byte) ([]Finding, error) {
+		found, err := scan(ctx, text)
+		if err != nil {
+			return nil, err
+		}
+		return SettleRaw(found, text), nil
+	})
+	if idErr != nil {
+		return nil, idErr
+	}
+	var all []Finding
+	for i := range segs {
+		if i < len(fromJSON) && len(fromJSON[i]) > 0 {
+			perSeg[i] = dedupeFindings(append(perSeg[i], fromJSON[i]...))
 		}
 		all = append(all, perSeg[i]...)
 	}
@@ -127,6 +158,9 @@ func (r *Registry) ScanSegmentsRemote(ctx context.Context, segs []extract.Segmen
 	all = append(all, across...)
 	if r.has("jailbreak") {
 		all = append(all, ConversationFindings(segs, all)...)
+	}
+	if err == nil {
+		err = jsonErr
 	}
 	return all, err
 }
