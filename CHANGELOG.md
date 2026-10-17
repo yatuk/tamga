@@ -17,6 +17,21 @@
   before.
 
 ### Deployment and operations
+- **Compose no longer publishes Jaeger or NATS monitoring on every host
+  interface.** Their unauthenticated ports, 16686 and 8222, now bind to
+  `127.0.0.1`; set `TAMGA_OBSERVABILITY_BIND=0.0.0.0` to restore the old
+  reachability. PostgreSQL, Redis, NATS client traffic, the analyzer,
+  classifier and scanner service remain private to the Compose network.
+  **The example credentials are now empty instead of usable placeholder
+  passwords, so a new full-stack install must fill all three before it can
+  start correctly.** Compose loads the operator env file into each proxy,
+  so documented proxy settings now reach the service; the minimal profile
+  explicitly clears full-stack integrations. **An existing `.env` setting
+  that Compose previously ignored takes effect after the proxy is recreated;
+  review settings such as `TAMGA_DEV_MODE`, `TAMGA_REQUIRE_KEY`, TLS paths and
+  retention before running `up -d`.** Analyzer, classifier, scanner
+  service and console settings are wired to their documented inputs, and the
+  proxy waits for the analyzer healthcheck instead of only its process start.
 - **The proxy can run on its own with Docker Compose.**
   `docker compose --env-file .env -f deploy/docker-compose.yml --profile minimal up -d`
   starts one container, `proxy-minimal`, with no database, Redis, NATS,

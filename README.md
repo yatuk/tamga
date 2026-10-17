@@ -121,6 +121,11 @@ docker compose --env-file .env -f deploy/docker-compose.yml up -d
 the admin key (`TAMGA_ADMIN_KEY` from `.env`) under Settings and keeps it in
 that browser.
 
+The other services are not published to the host. Jaeger's UI on `16686` and
+NATS monitoring on `8222` are local diagnostics bound to `127.0.0.1`; set
+`TAMGA_OBSERVABILITY_BIND=0.0.0.0` only if you deliberately want those
+unauthenticated endpoints reachable from the network.
+
 > `--env-file .env` is required. Compose only auto-loads a `.env` next to the
 > compose file, so without it the database password is empty, Postgres will
 > not start, and `COMPOSE_PROFILES` is not read. An `.env` made before 0.9.0

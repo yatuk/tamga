@@ -12,6 +12,12 @@ No container image is published. For Helm and Terraform, build the proxy
 image from `proxy/Dockerfile`, push it to a registry your cluster can pull
 from, and pass its repository and tag.
 
+In the Compose stack only the proxy and console bind to all host interfaces.
+The Jaeger UI and NATS monitoring endpoints bind to `127.0.0.1`; every other
+supporting service is available only on the Compose network. The complete
+environment and Compose setting table is in
+[operations.md](../docs/operations.md#configuration).
+
 ## Helm
 
 The chart installs the proxy only:
