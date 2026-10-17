@@ -32,7 +32,8 @@ cap per organisation, and one policy for every provider route. One
 dashboard for the LLM usage that goes through the proxy. The vendors' own
 clients (ChatGPT Enterprise or Claude in a browser, Copilot in an editor)
 talk to the vendor directly and are not seen unless they can be pointed at
-the proxy.
+the proxy. Copilot's inline suggestions cannot be; its chat can, with a
+custom model in VS Code ([editors](ide.md#github-copilot)).
 
 **Result:** spend through the proxy stops at the daily cap; one request log
 and one policy across teams for the traffic Tamga sees.
