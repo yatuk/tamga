@@ -24,6 +24,7 @@ var knownScannerTypes = map[string]struct{}{
 	"competitor":         {},
 	"custom":             {},
 	"operator_state":     {},
+	"language":           {},
 }
 
 // isValidSeverity returns true for the four canonical severity levels.

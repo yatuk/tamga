@@ -39,6 +39,7 @@ func mustLoad(t *testing.T, yamlText string) *Policy {
 var ownerPrivileged = []string{
 	"providers", "exceptions", "governance", "data", "vault", "cache",
 	"body_limits", "rate_limit", "cost", "scan", "operator_state", "canary",
+	"language",
 }
 
 func TestEverySectionIsClassified(t *testing.T) {
