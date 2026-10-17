@@ -21,6 +21,9 @@ any other client. This page is what to set and what to expect.
 
 ## Claude Code
 
+Editor clients other than Claude Code (Continue, Cline, Cursor, Copilot and
+others) are covered in [Coding assistants in editors](ide.md).
+
 Point it at Tamga's Anthropic route and, if you use Tamga keys, send yours in
 a custom header:
 
