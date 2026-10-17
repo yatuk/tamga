@@ -39,6 +39,11 @@ class ClassifierServiceStub:
                 request_serializer=classifier_dot_v1_dot_classifier__pb2.ClassifyRequest.SerializeToString,
                 response_deserializer=classifier_dot_v1_dot_classifier__pb2.ClassifyResponse.FromString,
                 _registered_method=True)
+        self.ClassifyTopics = channel.unary_unary(
+                '/proto.classifier.v1.ClassifierService/ClassifyTopics',
+                request_serializer=classifier_dot_v1_dot_classifier__pb2.TopicsRequest.SerializeToString,
+                response_deserializer=classifier_dot_v1_dot_classifier__pb2.TopicsResponse.FromString,
+                _registered_method=True)
         self.Health = channel.unary_unary(
                 '/proto.classifier.v1.ClassifierService/Health',
                 request_serializer=classifier_dot_v1_dot_classifier__pb2.HealthRequest.SerializeToString,
@@ -51,6 +56,15 @@ class ClassifierServiceServicer:
 
     def Classify(self, request, context):
         """Classify scores texts. UNAVAILABLE means no model is loaded.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ClassifyTopics(self, request, context):
+        """ClassifyTopics scores texts against topics given in free text, with a
+        zero-shot natural-language-inference model. UNAVAILABLE means no topic
+        model is loaded.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -70,6 +84,11 @@ def add_ClassifierServiceServicer_to_server(servicer, server):
                     servicer.Classify,
                     request_deserializer=classifier_dot_v1_dot_classifier__pb2.ClassifyRequest.FromString,
                     response_serializer=classifier_dot_v1_dot_classifier__pb2.ClassifyResponse.SerializeToString,
+            ),
+            'ClassifyTopics': grpc.unary_unary_rpc_method_handler(
+                    servicer.ClassifyTopics,
+                    request_deserializer=classifier_dot_v1_dot_classifier__pb2.TopicsRequest.FromString,
+                    response_serializer=classifier_dot_v1_dot_classifier__pb2.TopicsResponse.SerializeToString,
             ),
             'Health': grpc.unary_unary_rpc_method_handler(
                     servicer.Health,
@@ -104,6 +123,33 @@ class ClassifierService:
             '/proto.classifier.v1.ClassifierService/Classify',
             classifier_dot_v1_dot_classifier__pb2.ClassifyRequest.SerializeToString,
             classifier_dot_v1_dot_classifier__pb2.ClassifyResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ClassifyTopics(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/proto.classifier.v1.ClassifierService/ClassifyTopics',
+            classifier_dot_v1_dot_classifier__pb2.TopicsRequest.SerializeToString,
+            classifier_dot_v1_dot_classifier__pb2.TopicsResponse.FromString,
             options,
             channel_credentials,
             insecure,

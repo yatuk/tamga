@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1e\x63lassifier/v1/classifier.proto\x12\x13proto.classifier.v1\"4\n\x0f\x43lassifyRequest\x12\x12\n\nrequest_id\x18\x01 \x01(\t\x12\r\n\x05texts\x18\x02 \x03(\t\"Y\n\x10\x43lassifyResponse\x12\x0e\n\x06scores\x18\x01 \x03(\x02\x12\x11\n\ttruncated\x18\x02 \x03(\x08\x12\r\n\x05model\x18\x03 \x01(\t\x12\x13\n\x0b\x64uration_ms\x18\x04 \x01(\x01\"\x0f\n\rHealthRequest\"B\n\x0eHealthResponse\x12\x11\n\tavailable\x18\x01 \x01(\x08\x12\r\n\x05model\x18\x02 \x01(\t\x12\x0e\n\x06reason\x18\x03 \x01(\t2\xbf\x01\n\x11\x43lassifierService\x12W\n\x08\x43lassify\x12$.proto.classifier.v1.ClassifyRequest\x1a%.proto.classifier.v1.ClassifyResponse\x12Q\n\x06Health\x12\".proto.classifier.v1.HealthRequest\x1a#.proto.classifier.v1.HealthResponseB9Z7github.com/yatuk/tamga/proto/classifier/v1;classifierv1b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1e\x63lassifier/v1/classifier.proto\x12\x13proto.classifier.v1\"4\n\x0f\x43lassifyRequest\x12\x12\n\nrequest_id\x18\x01 \x01(\t\x12\r\n\x05texts\x18\x02 \x03(\t\"Y\n\x10\x43lassifyResponse\x12\x0e\n\x06scores\x18\x01 \x03(\x02\x12\x11\n\ttruncated\x18\x02 \x03(\x08\x12\r\n\x05model\x18\x03 \x01(\t\x12\x13\n\x0b\x64uration_ms\x18\x04 \x01(\x01\"B\n\rTopicsRequest\x12\x12\n\nrequest_id\x18\x01 \x01(\t\x12\r\n\x05texts\x18\x02 \x03(\t\x12\x0e\n\x06topics\x18\x03 \x03(\t\"0\n\x0bTopicScores\x12\x0e\n\x06scores\x18\x01 \x03(\x02\x12\x11\n\ttruncated\x18\x02 \x01(\x08\"g\n\x0eTopicsResponse\x12\x31\n\x07results\x18\x01 \x03(\x0b\x32 .proto.classifier.v1.TopicScores\x12\r\n\x05model\x18\x02 \x01(\t\x12\x13\n\x0b\x64uration_ms\x18\x03 \x01(\x01\"\x0f\n\rHealthRequest\"\x89\x01\n\x0eHealthResponse\x12\x11\n\tavailable\x18\x01 \x01(\x08\x12\r\n\x05model\x18\x02 \x01(\t\x12\x0e\n\x06reason\x18\x03 \x01(\t\x12\x18\n\x10topics_available\x18\x04 \x01(\x08\x12\x14\n\x0ctopics_model\x18\x05 \x01(\t\x12\x15\n\rtopics_reason\x18\x06 \x01(\t2\x9a\x02\n\x11\x43lassifierService\x12W\n\x08\x43lassify\x12$.proto.classifier.v1.ClassifyRequest\x1a%.proto.classifier.v1.ClassifyResponse\x12Y\n\x0e\x43lassifyTopics\x12\".proto.classifier.v1.TopicsRequest\x1a#.proto.classifier.v1.TopicsResponse\x12Q\n\x06Health\x12\".proto.classifier.v1.HealthRequest\x1a#.proto.classifier.v1.HealthResponseB9Z7github.com/yatuk/tamga/proto/classifier/v1;classifierv1b\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -36,10 +36,16 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_CLASSIFYREQUEST']._serialized_end=107
   _globals['_CLASSIFYRESPONSE']._serialized_start=109
   _globals['_CLASSIFYRESPONSE']._serialized_end=198
-  _globals['_HEALTHREQUEST']._serialized_start=200
-  _globals['_HEALTHREQUEST']._serialized_end=215
-  _globals['_HEALTHRESPONSE']._serialized_start=217
-  _globals['_HEALTHRESPONSE']._serialized_end=283
-  _globals['_CLASSIFIERSERVICE']._serialized_start=286
-  _globals['_CLASSIFIERSERVICE']._serialized_end=477
+  _globals['_TOPICSREQUEST']._serialized_start=200
+  _globals['_TOPICSREQUEST']._serialized_end=266
+  _globals['_TOPICSCORES']._serialized_start=268
+  _globals['_TOPICSCORES']._serialized_end=316
+  _globals['_TOPICSRESPONSE']._serialized_start=318
+  _globals['_TOPICSRESPONSE']._serialized_end=421
+  _globals['_HEALTHREQUEST']._serialized_start=423
+  _globals['_HEALTHREQUEST']._serialized_end=438
+  _globals['_HEALTHRESPONSE']._serialized_start=441
+  _globals['_HEALTHRESPONSE']._serialized_end=578
+  _globals['_CLASSIFIERSERVICE']._serialized_start=581
+  _globals['_CLASSIFIERSERVICE']._serialized_end=863
 # @@protoc_insertion_point(module_scope)
