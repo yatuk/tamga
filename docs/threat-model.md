@@ -132,7 +132,7 @@ as the proxy sets it up has no test. The Helm chart has no NetworkPolicy.
 |---|---|
 | Release artefacts signed with Sigstore keyless, with SLSA provenance and an SBOM per binary archive and image; the build jobs hold no signing identity; actions pinned by commit | `.github/workflows/release.yml`; [verifying-a-release.md](verifying-a-release.md). **The workflow has not run: no release exists and nothing is signed yet** |
 | Known-vulnerability checks: `govulncheck` and `gosec` (failing), npm audit and pip-audit (report only) | `.github/workflows/proxy-ci.yml`, `vulnerability-report.yml` |
-| Dependency licences judged against a policy (report only until the maintainer decides it) | `scripts/licence-gate.py`, `.github/licence-policy.yml` |
+| Dependency licences judged against a policy, enforced in the release and the weekly licence workflow; the release's CycloneDX dependency SBOMs are written from the same check | `scripts/licence-gate.py`, `.github/licence-policy.yml` |
 | The bundled BIN dataset is checked against a recorded SHA-256 | `scripts/verify-bin-data.sh` |
 | Containers run as a non-root user; the chart runs with a read-only root filesystem and no capabilities | the Dockerfiles; `deploy/helm/tamga-proxy/templates/deployment.yaml` |
 

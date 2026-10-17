@@ -1,14 +1,23 @@
-name: Dependency licences (report)
+name: Dependency licences
 
 # Judges the licence of every shipped dependency against
 # .github/licence-policy.yml with scripts/licence-gate.py.
 #
-# The policy file says `mode: report`: the job prints what it would refuse
-# and does not fail. The allow, review and deny sets in that file are a
-# proposal the maintainer has not yet decided. Changing `mode` to `enforce`
-# there makes this job fail on a finding; nothing in this workflow changes.
+# The policy is enforced: an unknown, unreadable or denied licence, or a
+# reviewed licence without an explicit allow decision, fails the job.
+#
+# It runs weekly, by hand, and from release.yml (workflow_call), which
+# attaches the checked CycloneDX SBOMs it writes to the release. It does
+# not run on pull requests.
 
 on:
+  workflow_call:
+    inputs:
+      artifact_version:
+        description: Version written into the generated SBOMs.
+        required: false
+        default: snapshot
+        type: string
   schedule:
     - cron: "0 7 * * 1" # Mondays at 07:00 UTC
   workflow_dispatch:
@@ -31,8 +40,9 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: proxy/go.mod
-          cache: true
-          cache-dependency-path: proxy/go.sum
+          # The release calls this workflow, and a release reads no cache an
+          # earlier run wrote.
+          cache: false
       - name: Download Go modules
         working-directory: proxy
         run: go mod download
@@ -74,12 +84,16 @@ jobs:
         run: python -m pip install pyyaml==6.0.2
 
       - name: Licence gate
+        env:
+          SBOM_VERSION: ${{ inputs.artifact_version || 'snapshot' }}
         run: |
           python scripts/licence-gate.py \
             --pip "analyzer=$RUNNER_TEMP/pip-meta/analyzer.json" \
             --pip "classifier=$RUNNER_TEMP/pip-meta/classifier.json" \
             --pip "sdk-python=$RUNNER_TEMP/pip-meta/sdk-python.json" \
-            --json "$RUNNER_TEMP/licence-findings.json"
+            --json "$RUNNER_TEMP/licence-findings.json" \
+            --sbom-dir "$RUNNER_TEMP/dependency-sboms" \
+            --sbom-version "$SBOM_VERSION"
 
       - name: Upload the findings
         if: always()
@@ -88,3 +102,11 @@ jobs:
           name: licence-findings
           path: ${{ runner.temp }}/licence-findings.json
           if-no-files-found: ignore
+
+      - name: Upload the checked dependency SBOMs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dependency-sboms
+          path: ${{ runner.temp }}/dependency-sboms/
+          if-no-files-found: error
