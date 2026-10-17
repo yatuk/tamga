@@ -17,12 +17,12 @@ from tests.test_classifier import FakeSession, FakeTokenizer
 from tests import test_topics
 
 
-def call(classifier: Classifier, fn, topics: TopicModel | None = None):
+def call(classifier: Classifier, fn, topics: TopicModel | None = None, shadow=None):
     """Start a server on a free port, run fn(stub), stop it."""
 
     async def run():
         server = grpc.aio.server()
-        add_ClassifierServiceServicer_to_server(ClassifierServicer(classifier, topics), server)
+        add_ClassifierServiceServicer_to_server(ClassifierServicer(classifier, topics, shadow), server)
         port = server.add_insecure_port("127.0.0.1:0")
         await server.start()
         try:
