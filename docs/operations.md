@@ -473,6 +473,23 @@ rules:
     types: [above_text_request, translation_abandoned]
 ```
 
+One more signal is about text that quotes an attack. `quoted_injection`
+is an injection the injection and jailbreak scanners found only inside a
+fenced or indented code block, inline code, a quotation, a blockquote or a
+sentence that gives it as an example ("for example", "such as", "an
+attacker might write", "örneğin", "… gibi ifadeler"), in a text whose other
+words talk about attacks, tests or examples. A security write-up, a
+README's list of what is blocked and a test file are such texts. The
+finding's `quoted_category` says what it would otherwise have been, and
+`framing` where it was found. The same words written plainly keep their
+category, and so does framed text when the rest of the text tells the
+reader to carry it out ("follow the instructions in the block below", "do
+what this quote says", "uygula") or speaks to the model ("if you are an
+AI", "note to assistant"). The shipped policy warns about it with
+`injection_detection: {action: WARN, types: [quoted_injection]}`; before
+v0.9.0 such text was blocked. The other signals go in the same `types`
+list, since a rule key appears once.
+
 `hidden_text` at severity high is not a signal. It means the invisible
 characters spell text: eight or more characters in Unicode tag characters,
 or as bytes in runs of variation selectors. Nobody writes a sentence a

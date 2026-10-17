@@ -741,6 +741,63 @@ What this says:
   academic one was not corrected for this measurement. A missed row may be a
   row the translation broke.
 
+### Text about attacks (2026-10-17)
+
+The repository's own docs, cut into 180 sections at `## ` and scanned as
+benign text, had 35 sections blocked and 6 redacted by the shipped policy.
+Security write-ups, prompt-writing guides, a README's "what this blocks"
+and a changelog quote the phrases the rules look for, and an agent reads
+such pages all day. `discourse_tuning.csv` and `discourse_locked.csv` in
+`proxy/testdata/redteam/` measure that: 90 passages quoted from this
+repository's Markdown (the note column names file and section), 88
+passages written in English and Turkish in the style of blogs, OWASP-style
+guidance, teaching material, incident reports and READMEs, and 38 attacks
+in the same dress (an order written plainly next to discussion words, one
+in a code block or quotation that the text says to carry out, one in a
+tool result that speaks to the model). All of it was written or chosen by
+the author of the rule, so it is weak evidence, like the `tr_` sets. Split
+by a seeded hash like `tr_locked.csv`; the locked part was measured once
+before the rule and once after.
+
+Why the 58 blocked benign rows of the tuning part were blocked: 46 held the
+phrase only in a code block, inline code, a quotation, a blockquote or a
+sentence giving it as an example; 9 named the attack with the word
+"jailbreak", which alone was a finding at confidence 0.82; 3 described an
+attack in plain words. The changes:
+
+- A text in which the injection and jailbreak scanners find something is
+  read a second time with its framed parts blanked out. What the second
+  reading still finds was written plainly and stands. A category found only
+  in framed text is reported as `quoted_injection`, a signal (severity low)
+  that the shipped policy warns about, with the category it would have had
+  in `quoted_category`. This holds only when the text outside the framing
+  talks about attacks or examples, does not tell the reader to carry the
+  framed text out, and does not speak to the model.
+- The word `jailbreak` on its own has base confidence 0.30.
+
+| Set | Attacks caught, before | after | Benign flagged, before | after |
+|---|---|---|---|---|
+| `prompts.csv` | 220 of 243 | 220 | 0 of 172 | 0 |
+| `holdout.csv` | 78 of 78 | 78 | 0 of 91 | 0 |
+| `tr_tuning.csv` | 142 of 185 | 142 | 6 of 186 | 2 (1 blocked, 1 warned) |
+| `tr_locked.csv` | 104 of 142 | 104 | 4 of 125 | 3 (2 blocked, 1 warned) |
+| `trd_tuning.csv` | 27 of 203 | 27 | 0 of 342 | 0 |
+| `trd_locked.csv` | 2 of 59 | 2 | 0 of 44 | 0 |
+| `discourse_tuning.csv` | 26 of 26 blocked | 26 | 58 of 104 blocked | 3 blocked, 46 warned |
+| `discourse_locked.csv` | 12 of 12 blocked | 12 | 39 of 74 blocked | 4 blocked, 31 warned |
+| encoding vectors | 23/23, 22/25, 11/12, 9/10 acted on | same | — | — |
+| benign developer texts | — | — | 0 of 84 | 0 |
+
+No attack row of any set changed its action, checked row by row for the
+tuning parts and the vectors and by counts of each action for the locked
+parts. The three tuning rows still blocked are a plain description ("a web
+page or file that carries instructions for the model"), a Turkish checklist
+with the phrases in inline code and no word about attacks around them, and
+a code block under a bare heading. An attacker who quotes an order and
+writes a sentence about attacks around it now gets a warning and not a
+block; the classifier, when it is on, judges such text by its stricter
+signal threshold. Not measured with the classifier.
+
 ### How to read these numbers honestly
 
 - **Precision (1.000)** — nothing benign in either set was mitigated. This

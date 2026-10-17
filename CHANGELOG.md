@@ -1499,6 +1499,35 @@
   [docs/operations.md](docs/operations.md#languages-a-request-may-be-written-in).
 
 ### Detection
+- **Text that quotes an injection while it discusses it is warned about,
+  not blocked.** Security write-ups, prompt-writing guides, a README's
+  "what this blocks" and this repository's own docs were blocked: of 180
+  sections of its Markdown, 35. When the injection and jailbreak scanners
+  find something only inside a code block, inline code, a quotation, a
+  blockquote or a sentence giving it as an example, in a text whose other
+  words talk about attacks or examples and neither tell the model to carry
+  the quoted text out nor speak to the model, the finding is the new signal
+  `quoted_injection` (severity low; `quoted_category` names what it would
+  have been). **The shipped policy has a new rule,
+  `injection_detection: {action: WARN, types: [quoted_injection]}`, so such
+  requests are now forwarded with a warning where they were blocked. A
+  policy without that rule lets them through, since a signal is acted on
+  only by a rule that names it, and `output_rules.block_on: [injection]`
+  no longer blocks such an answer.** **The word `jailbreak` on its own is
+  now severity low (base confidence 0.30, was 0.82), so a text that only
+  names the attack is no longer blocked.** The same instruction written
+  plainly, or framed with an order to follow it, is blocked as before. A new
+  red-team set, `discourse_tuning.csv` and `discourse_locked.csv` (90
+  passages of the repository's docs, 88 written passages in English and
+  Turkish, 38 attacks in the same dress), measured the change: benign rows
+  blocked went from 58 of 104 to 3 (46 warned) in the tuning part and from
+  39 of 74 to 4 (31 warned) in the locked part; all 38 attacks are blocked
+  before and after, and no attack row of any other set changed its action.
+  Benign Turkish rows flagged went from 6 to 2 (`tr_tuning.csv`) and from 4
+  to 3 (`tr_locked.csv`). An attacker who quotes an order and writes a
+  sentence about attacks around it gets a warning instead of a block.
+  Numbers per set in `docs/benchmarks/README.md`. The scanner version is
+  1.11.0.
 - **Turkish prompt injection: a set of the repository's own, and where the
   rules stand on it.** `proxy/testdata/redteam/tr_tuning.csv` and
   `tr_locked.csv` hold Turkish attacks and deliberately hard benign Turkish
