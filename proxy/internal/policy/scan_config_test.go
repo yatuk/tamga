@@ -53,25 +53,29 @@ func TestScanSection_ParsesAndValidates(t *testing.T) {
 func TestScanOnError(t *testing.T) {
 	tests := []struct {
 		yaml  string
-		block bool
+		block bool // a plain chat request
+		tools bool // a request with tool results or tool definitions
 	}{
-		{"", false},
-		{"scan:\n  on_malformed: block\n", false},
-		{"scan:\n  on_error: pass\n", false},
-		{"scan:\n  on_error: block\n", true},
-		{"scan:\n  on_error: BLOCK\n", true},
+		{"", false, true},
+		{"scan:\n  on_malformed: block\n", false, true},
+		{"scan:\n  on_error: pass\n", false, false},
+		{"scan:\n  on_error: block\n", true, true},
+		{"scan:\n  on_error: BLOCK\n", true, true},
 	}
 	for _, tt := range tests {
 		pol, err := LoadFromBytes([]byte("version: \"1.0\"\nname: t\n" + tt.yaml))
 		if err != nil {
 			t.Fatalf("%q: %v", tt.yaml, err)
 		}
-		if got := pol.BlockOnScanError(); got != tt.block {
-			t.Errorf("%q: BlockOnScanError = %v, want %v", tt.yaml, got, tt.block)
+		if got := pol.BlockOnScanError(false); got != tt.block {
+			t.Errorf("%q: BlockOnScanError(chat) = %v, want %v", tt.yaml, got, tt.block)
+		}
+		if got := pol.BlockOnScanError(true); got != tt.tools {
+			t.Errorf("%q: BlockOnScanError(tools) = %v, want %v", tt.yaml, got, tt.tools)
 		}
 	}
 	var none *Policy
-	if none.BlockOnScanError() {
+	if none.BlockOnScanError(true) {
 		t.Error("a nil policy must not block on scan errors")
 	}
 }
