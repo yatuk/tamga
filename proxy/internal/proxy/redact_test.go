@@ -354,10 +354,10 @@ func TestStrip_UnlocatedFindingBlocks(t *testing.T) {
 	strip := func(scanner.Finding) policy.Action { return policy.ActionStrip }
 	// What scanner.AssignSegments leaves of a finding it could place nowhere.
 	unlocated := []scanner.Finding{{Type: "injection", Category: "instruction_override"}}
-	if _, err := stripSegments("openai", nil, segs, unlocated, strip, false); err != errStripUnlocated {
+	if _, err := stripSegments("openai", nil, segs, unlocated, strip, false, nil); err != errStripUnlocated {
 		t.Fatalf("err = %v, want unlocated", err)
 	}
-	if _, err := stripSegments("openai", nil, segs, nil, strip, false); err != errStripUnlocated {
+	if _, err := stripSegments("openai", nil, segs, nil, strip, false, nil); err != errStripUnlocated {
 		t.Fatalf("with nothing to strip: err = %v, want unlocated", err)
 	}
 	if got := stripFailure(errStripUnlocated); got != "unlocated" {

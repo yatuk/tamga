@@ -78,6 +78,9 @@ func scanResponseBody(ctx context.Context, reg *scanner.Registry, outputReg *sca
 				err = extraErr
 			}
 		}
+		// The places the answer's tool calls send data to, held to
+		// output_rules.tool_destinations.
+		findings = append(findings, toolDestinationFindings(pol, res.Segments)...)
 		findings, err = withSchemaFindings(scanCtx, pol, raw, findings, err)
 		out := outputScanResult{findings: findings, action: pol.EvaluateOutput(findings)}
 		if out.action == policy.ActionRedact && err != nil {

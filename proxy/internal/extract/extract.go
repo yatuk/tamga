@@ -72,6 +72,10 @@ type Segment struct {
 	// attachment. The token then holds the encoded form (after any
 	// "data:…;base64," prefix), so Text cannot be written back as it is.
 	Encoding string
+	// Tool is the name of the tool a KindToolArgs segment is an argument
+	// of, when the body names it. It is the model's or the client's word
+	// for the tool, as written.
+	Tool string
 }
 
 // Skipped is a string under a content root that was deliberately not scanned.
@@ -348,6 +352,19 @@ func (x *extractor) nestedJSON(n *node, role Role, kind, path string) {
 	}
 }
 
+// nameTool sets the tool name on the tool-call segments emitted since the
+// segment at from.
+func (x *extractor) nameTool(from int, name string) {
+	if name == "" {
+		return
+	}
+	for i := from; i < len(x.res.Segments); i++ {
+		if x.res.Segments[i].Kind == KindToolArgs {
+			x.res.Segments[i].Tool = name
+		}
+	}
+}
+
 func index(path string, i int) string {
 	return path + "[" + strconv.Itoa(i) + "]"
 }
@@ -427,6 +444,11 @@ func (x *extractor) openAIToolCall(tc *node, path string) {
 		x.payload(tc, RoleAssistant, KindToolArgs, path)
 		return
 	}
+	name := tc.get("name").text(x.src)
+	if fn := tc.get("function"); fn != nil && fn.kind == 'o' && name == "" {
+		name = fn.get("name").text(x.src)
+	}
+	defer x.nameTool(len(x.res.Segments), name)
 	done := map[string]bool{}
 	if fn := tc.get("function"); fn != nil && fn.kind == 'o' {
 		done["function"] = true
@@ -605,6 +627,7 @@ func (x *extractor) anthropicBlock(b *node, role Role, kind, p string) {
 		x.emit(b.get("text"), role, kind, p+".text")
 		x.rest(b, map[string]bool{"text": true}, role, kind, p)
 	case t == "tool_use" || t == "server_tool_use" || t == "mcp_tool_use":
+		defer x.nameTool(len(x.res.Segments), b.get("name").text(x.src))
 		x.payload(b.get("input"), RoleAssistant, KindToolArgs, p+".input")
 		x.rest(b, map[string]bool{"input": true}, RoleAssistant, KindToolArgs, p)
 	case strings.HasSuffix(t, "tool_result"):
@@ -720,7 +743,11 @@ func (x *extractor) geminiPart(part *node, role Role, path string) {
 			x.media(v, role, KindText, p)
 		case "functionCall", "function_call":
 			done[k] = true
+			from := len(x.res.Segments)
 			x.payloadOf(v, "args", RoleAssistant, KindToolArgs, p)
+			if v.kind == 'o' {
+				x.nameTool(from, v.get("name").text(x.src))
+			}
 		case "functionResponse", "function_response":
 			done[k] = true
 			x.payloadOf(v, "response", RoleTool, KindToolResult, p)

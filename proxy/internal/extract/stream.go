@@ -44,6 +44,10 @@ type StreamDelta struct {
 	Sealed bool
 	// Text is the decoded piece.
 	Text string
+	// Tool is the name of the tool a KindToolArgs piece is for. The parser
+	// leaves it empty (the name comes in StreamEvent.Tools); whoever keeps
+	// the channel sets it before ArgumentSegments.
+	Tool string
 	// start and end delimit the JSON string token in the event's data.
 	start, end int
 	// objectArgs says the arguments are an object in the buffered shape
@@ -71,6 +75,20 @@ type StreamEvent struct {
 	Whole []Segment
 	// SealedThinking says the KindThinking segments of Whole are signed.
 	SealedThinking bool
+	// Tools names the tools whose calls the event opens, by the channel
+	// that will carry their arguments. A stream names a tool once, in the
+	// event that opens its call, and not in the events that carry its
+	// arguments.
+	Tools []ToolName
+	// WholeChannel is the tool-call channel whose arguments the KindToolArgs
+	// values of Whole repeat, for an event that closes a call without
+	// naming its tool (the Responses API's ".done" events).
+	WholeChannel string
+}
+
+// ToolName says which tool the arguments of a channel are for.
+type ToolName struct {
+	Channel, Name string
 }
 
 // ParseStreamEvent reads the data of one streamed event. It returns false
@@ -146,6 +164,13 @@ func (p *streamParser) present(n *node) bool {
 	return n != nil && string(p.data[n.start:n.end]) != "null"
 }
 
+// name records the tool a channel's arguments are for.
+func (p *streamParser) name(channel string, n *node) {
+	if name := p.str(n); name != "" {
+		p.ev.Tools = append(p.ev.Tools, ToolName{Channel: channel, Name: name})
+	}
+}
+
 // add yields the string n as a piece of channel.
 func (p *streamParser) add(n *node, d StreamDelta) {
 	if n == nil || n.kind != 's' {
@@ -195,6 +220,11 @@ func (p *streamParser) openAIChat(choices *node) {
 					call := StreamDelta{Channel: ch + ".t" + ti, Kind: KindToolArgs}
 					path := msg + ".tool_calls[" + ti + "]"
 					open := `"tool_calls":[{"index":` + ti + `,`
+					for _, key := range []string{"function", "custom"} {
+						if fn := tc.get(key); fn != nil && fn.kind == 'o' {
+							p.name(call.Channel, fn.get("name"))
+						}
+					}
 					if fn := tc.get("function"); fn != nil && fn.kind == 'o' {
 						call.Path = path + ".function.arguments"
 						if args := fn.get("arguments"); args != nil && args.kind != 's' {
@@ -211,6 +241,7 @@ func (p *streamParser) openAIChat(choices *node) {
 			}
 			if fc := d.get("function_call"); fc != nil && fc.kind == 'o' {
 				call := StreamDelta{Channel: ch + ".fc", Kind: KindToolArgs, Path: msg + ".function_call.arguments"}
+				p.name(call.Channel, fc.get("name"))
 				p.add(fc.get("arguments"), alone(call, `"function_call":{"arguments":`, `}`))
 			}
 		}
@@ -240,6 +271,9 @@ func (p *streamParser) anthropic(typ string, root *node) {
 		if b := root.get("content_block"); b != nil && b.kind == 'o' {
 			p.whole().anthropicBlock(b, RoleAssistant, KindText, "content_block")
 			p.ev.SealedThinking = true
+			if strings.HasSuffix(p.str(b.get("type")), "tool_use") {
+				p.name(ch, b.get("name"))
+			}
 		}
 	case "content_block_delta":
 		d := root.get("delta")
@@ -308,11 +342,13 @@ func (p *streamParser) responses(typ string, root *node) {
 		p.add(delta, StreamDelta{Channel: item + ".args", Kind: KindToolArgs, Path: out + ".arguments"})
 	case "response.function_call_arguments.done", "response.mcp_call_arguments.done":
 		p.ev.Ends = append(p.ev.Ends, item+".args")
+		p.ev.WholeChannel = item + ".args"
 		p.whole().nestedJSON(root.get("arguments"), RoleAssistant, KindToolArgs, "arguments")
 	case "response.custom_tool_call_input.delta":
 		p.add(delta, StreamDelta{Channel: item + ".args", Kind: KindToolArgs, Path: out + ".input"})
 	case "response.custom_tool_call_input.done":
 		p.ev.Ends = append(p.ev.Ends, item+".args")
+		p.ev.WholeChannel = item + ".args"
 		p.whole().emit(root.get("input"), RoleAssistant, KindToolArgs, "input")
 	case "response.code_interpreter_call_code.delta":
 		p.add(delta, StreamDelta{Channel: item + ".code", Kind: KindToolArgs, Path: out + ".code"})
@@ -335,6 +371,9 @@ func (p *streamParser) responses(typ string, root *node) {
 		}
 	case "response.output_item.added":
 		p.item(root.get("item"), "item")
+		if it := root.get("item"); it != nil && it.kind == 'o' {
+			p.name(item+".args", it.get("name"))
+		}
 	case "response.output_item.done":
 		p.ev.Ends = append(p.ev.Ends, item)
 		p.item(root.get("item"), "item")
@@ -475,6 +514,7 @@ func ArgumentSegments(d StreamDelta, arguments string) (doc []byte, segs []Segme
 	doc = encodeString(arguments)
 	x := &extractor{src: doc, res: &Result{}}
 	x.nestedJSON(&node{kind: 's', start: 0, end: len(doc)}, RoleAssistant, KindToolArgs, d.Path)
+	x.nameTool(0, d.Tool)
 	if d.objectArgs {
 		// Where the buffered answer has an object, its members are reached
 		// with a dot: content[1].input.city.

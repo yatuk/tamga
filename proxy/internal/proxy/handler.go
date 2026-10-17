@@ -767,7 +767,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 	// could not be, the request is blocked.
 	var stripped stripResult
 	if action == policy.ActionStrip {
-		res, stripErr := stripSegments(provider, body, segs, findings, actionOf, vaultOn)
+		res, stripErr := stripSegments(provider, body, segs, findings, actionOf, vaultOn, newFieldStripper(scanCtx, pol, cfg.Registry, pipelineCfg))
 		if stripErr != nil {
 			reason := stripFailure(stripErr)
 			logger.Warn().Str("error_kind", errkind.Of(stripErr)).Str("reason", reason).Msg("STRIP not possible, blocking instead")
@@ -812,7 +812,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 			return
 		}
 		if strips {
-			res, stripErr := stripSegments(provider, body, segs, findings, stripOnly(actionOf), false)
+			res, stripErr := stripSegments(provider, body, segs, findings, stripOnly(actionOf), false, newFieldStripper(scanCtx, pol, cfg.Registry, pipelineCfg))
 			if stripErr != nil {
 				reason := stripFailure(stripErr)
 				logger.Warn().Str("error_kind", errkind.Of(stripErr)).Str("reason", reason).Msg("STRIP not possible on a routed request, blocking instead")
@@ -940,6 +940,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 		logger.Warn().
 			Int("findings", len(findings)).
 			Int("stripped_segments", stripped.stripped).
+			Int("stripped_fields", stripped.fields).
 			Int("redacted", stripped.redacted).
 			Int64("total_ms", time.Since(start).Milliseconds()).
 			Str("action", "STRIP").
@@ -960,6 +961,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 		logger.Info().
 			Int("findings", len(findings)).
 			Int("stripped_segments", stripped.stripped).
+			Int("stripped_fields", stripped.fields).
 			Int64("total_ms", time.Since(start).Milliseconds()).
 			Str("action", "ROUTE").
 			Str("pool", routeName).
@@ -1286,7 +1288,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 					// Reasoning and tool-call arguments are scanned as what
 					// they are; one tool call's arguments are kept back up
 					// to what a buffered answer may be.
-					g.scanSegs = streamSegmentScanner(ctx, cfg.Registry, cfg.OutputOnlyRegistry, pipeCfg)
+					g.scanSegs = withToolDestinations(pol, streamSegmentScanner(ctx, cfg.Registry, cfg.OutputOnlyRegistry, pipeCfg))
 					if n := pol.OutputRules.BufferBytes; n > 0 {
 						g.argsMax = n
 					}

@@ -156,6 +156,9 @@ type streamChannel struct {
 	args   []byte
 	last   extract.StreamDelta
 	unread bool
+	// tool is the name of the tool the arguments are for, from the event
+	// that opened the call.
+	tool string
 	// doc is the whole text of the channel, kept while a schema is to judge
 	// it. docOver says it grew past schemaMax and is not kept any more;
 	// judged that the schema has had its say. unheld is set when text held
@@ -244,6 +247,9 @@ func (g *streamGuard) event(raw []byte) (out []byte, stop bool) {
 		return append(flush, raw...), false
 	}
 	ev, ok := extract.ParseStreamEvent(data)
+	for _, tn := range ev.Tools {
+		g.channel(tn.Channel).tool = tn.Name
+	}
 	if !ok || (len(ev.Deltas) == 0 && len(ev.Ends) == 0 && !ev.EndsAll && len(ev.Whole) == 0) {
 		return raw, false
 	}
@@ -290,6 +296,17 @@ func (g *streamGuard) event(raw []byte) (out []byte, stop bool) {
 	}
 
 	var edits []extract.Edit
+	if ev.WholeChannel != "" {
+		// The values repeat a tool call's arguments without naming the
+		// tool; the channel knows it.
+		if ch, ok := g.channels[ev.WholeChannel]; ok && ch.tool != "" {
+			for i := range ev.Whole {
+				if ev.Whole[i].Kind == extract.KindToolArgs && ev.Whole[i].Tool == "" {
+					ev.Whole[i].Tool = ch.tool
+				}
+			}
+		}
+	}
 	if len(ev.Whole) > 0 {
 		var stopped bool
 		if edits, stopped = g.judgeSegments(ev.Whole, ev.SealedThinking, true); stopped {
@@ -454,7 +471,9 @@ func (g *streamGuard) completeArgs(ch *streamChannel) (released string, stopped 
 	if args == "" {
 		return "", false
 	}
-	doc, segs := extract.ArgumentSegments(ch.last, args)
+	last := ch.last
+	last.Tool = ch.tool
+	doc, segs := extract.ArgumentSegments(last, args)
 	edits, stopped := g.judgeSegments(segs, false, false)
 	if stopped {
 		return "", true
@@ -515,7 +534,7 @@ func (g *streamGuard) judgeSegments(segs []extract.Segment, sealedThinking, repe
 		if s.Text == "" {
 			continue
 		}
-		if known, ok := g.judged[s.Kind+"\x00"+s.Text]; ok {
+		if known, ok := g.judged[s.Kind+"\x00"+s.Tool+"\x00"+s.Text]; ok {
 			for _, f := range known {
 				f.Seg, f.Role, f.Path = i, string(s.Role), s.Path
 				found = append(found, judged{f, true})
@@ -550,7 +569,7 @@ func (g *streamGuard) judgeSegments(segs []extract.Segment, sealedThinking, repe
 				if g.judged == nil {
 					g.judged = make(map[string][]scanner.Finding)
 				}
-				g.judged[s.Kind+"\x00"+s.Text] = per[k]
+				g.judged[s.Kind+"\x00"+s.Tool+"\x00"+s.Text] = per[k]
 				g.judgedBytes += len(s.Text)
 			}
 		}

@@ -195,6 +195,10 @@ type OutputRules struct {
 	// keeps the digest, and with it the cache key, it had before they existed.
 	Links      *OutputLinks      `yaml:"links" json:"links,omitempty"`
 	JSONSchema *OutputJSONSchema `yaml:"json_schema" json:"json_schema,omitempty"`
+	// ToolDestinations are the places tools may send data to, by tool
+	// (tool_destinations.go). Left out of the JSON form when unset, for the
+	// same reason.
+	ToolDestinations []ToolDestination `yaml:"tool_destinations" json:"tool_destinations,omitempty"`
 }
 
 // Governance controls dual-control and approval requirements.
@@ -444,6 +448,25 @@ type ScanConfig struct {
 	DefaultAction string `yaml:"default_action" json:"default_action"`
 	// Classifier configures the inline prompt-injection classifier.
 	Classifier *ClassifierConfig `yaml:"classifier" json:"classifier,omitempty"`
+	// StripScope is how much of a piece of text STRIP takes out: "text"
+	// (the default) replaces the whole piece, "field" replaces, in a tool
+	// result that is JSON, only the strings that hold the instruction
+	// (StripFields). It is left out of the JSON form when unset, so that a
+	// policy without it keeps its digest.
+	StripScope string `yaml:"strip_scope" json:"strip_scope,omitempty"`
+}
+
+// Values of scan.strip_scope.
+const (
+	StripScopeText  = "text"
+	StripScopeField = "field"
+)
+
+// StripFields reports whether STRIP takes out only the strings of a JSON
+// tool result that hold what it strips, and leaves the rest of the tool
+// result as it was. Off unless scan.strip_scope is "field".
+func (p *Policy) StripFields() bool {
+	return p != nil && p.Scan != nil && strings.EqualFold(strings.TrimSpace(p.Scan.StripScope), StripScopeField)
 }
 
 // Values of scan.on_error.
@@ -512,6 +535,11 @@ func (c *ScanConfig) validate() error {
 	case "", ActionBlock, ActionWarn, ActionLog, ActionPass:
 	default:
 		return fmt.Errorf("scan.default_action: unknown value %q (BLOCK, WARN, LOG or PASS)", c.DefaultAction)
+	}
+	switch strings.ToLower(strings.TrimSpace(c.StripScope)) {
+	case "", StripScopeText, StripScopeField:
+	default:
+		return fmt.Errorf("scan.strip_scope: unknown value %q (text or field)", c.StripScope)
 	}
 	return c.Classifier.validate()
 }
