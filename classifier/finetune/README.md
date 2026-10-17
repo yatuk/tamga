@@ -16,8 +16,9 @@ change. The report it wrote:
 "before" is the base model, "after" the fine-tuned one, both in 32-bit
 PyTorch, not the int8 ONNX the service runs. Both sets were written by the
 author of the rules (see "What a good result would and would not show"
-below). The fine-tuned model is not in the service: it has not been
-exported to ONNX, and no default has changed.
+below). The fine-tuned model is not in the service and no default has
+changed. `export.py` turns it into a directory the service can load; see
+"Exporting for the service" below.
 
 Nothing in this directory is part of the classifier service. It is left out
 of the image (`classifier/.dockerignore`) and adds nothing to
@@ -135,13 +136,11 @@ Not measured. What can be said honestly:
 ## After the run
 
 The number in the report is for the fine-tuned model in PyTorch. The service
-runs an int8 ONNX export, and exporting has not been scripted here:
+runs an int8 ONNX export:
 
-1. Export `out/model/` to ONNX and quantize it the way the base model's
-   export was made. The file `onnx/quantization_check.json` in the operator's
-   copy says that export quantizes the embeddings only (`gather_only`); how
-   to reproduce that exactly has not been worked out.
-2. Put the export in a model directory and measure it through the proxy's
+1. Export `out/model/` with `export.py` and check its parity (next
+   section).
+2. Point the service at the export and measure it through the proxy's
    own path: `go run ./cmd/redteam -classifier localhost:50052 -sweep` on
    `prompts.csv` and `holdout.csv`, as `make redteam-classifier-report`
    does. The proxy strips long hashes and keys before asking the
@@ -149,6 +148,109 @@ runs an int8 ONNX export, and exporting has not been scripted here:
 3. Only then change a default. The shipped threshold (0.98) was chosen as
    the lowest with no false positive on the two older sets for the base
    model; a fine-tuned model needs its own sweep.
+
+## Exporting for the service
+
+`export.py` (same environment as `finetune.py`, plus `onnx` and
+`onnxruntime`; `onnxruntime.quantization` imports `onnx`) has three
+commands:
+
+```bash
+# PyTorch directory -> the layout the service loads. --out must be new or
+# empty; --threads limits torch and onnxruntime.
+python classifier/finetune/export.py export \
+    --model classifier/finetune/out/model --out /path/to/tamga-tr-export
+
+# Score tr_locked.csv, trd_locked.csv and holdout.csv with the PyTorch
+# model, the fp32 ONNX and the int8 ONNX; writes parity.md and parity.json
+# into the export directory (--report elsewhere).
+python classifier/finetune/export.py parity \
+    --model classifier/finetune/out/model --export /path/to/tamga-tr-export
+
+# Whether the service would load a directory, and which file; runs no model.
+python classifier/finetune/export.py check /path/to/tamga-tr-export
+```
+
+What `export` writes, the same layout as the operator's copy in
+`models/prompt-injection-guard-small/`:
+
+| File | What it is |
+|---|---|
+| `onnx/model_quantized.onnx` | int8, the file the service loads first |
+| `onnx/model.onnx` | fp32, for `parity`; the service does not load it while the int8 file is there. `--drop-fp32` deletes it (about 560 MB) |
+| `config.json`, `tokenizer.json`, `tokenizer_config.json` | copied; `tokenizer.json` with the padding and truncation the training run saved in it set to none, as in the shipped file (the service turns both off anyway) |
+| `export.json` | the settings, the library versions, the size and SHA-256 of each file, and the graph check below |
+
+How it is made, matched to what the shipped `onnx/model_quantized.onnx`
+shows when read with `onnx`: the legacy (TorchScript) exporter, opset 17,
+inputs `input_ids` and `attention_mask` (int64, `[batch, seq]`), output
+`logits` (`[batch, 2]`), then `quantize_dynamic` with
+`op_types_to_quantize=["Gather"]`, per-tensor `QUInt8`: only the token
+embedding table is int8, every MatMul stays fp32. That is the variant the
+operator copy's `quantization_check.json` calls `gather_only`. The export
+is traced at 200 tokens and refused if the fp32 graph differs from PyTorch
+by more than 1e-3 in the logits at 9 and 700 tokens, so the sequence axis
+is known to be dynamic.
+
+`parity` scores all three through the service's own code: the int8 export
+is loaded by `app.classifier.Classifier` from the directory, and the fp32
+file and the PyTorch model are wrapped with `Classifier.from_parts`, so the
+tokenizer, the windows and the softmax are the same for all three. (Without
+structlog installed, its log calls are dropped.)
+
+**Pointing the service at the export.** The service reads the directory
+named by `TAMGA_CLASSIFIER_MODEL_DIR`; in Compose that is fixed at
+`/models/classifier`, and `TAMGA_CLASSIFIER_MODEL_PATH` in `.env` names the
+host directory mounted there (default `../models/prompt-injection-guard-small`).
+Set `TAMGA_CLASSIFIER_MODEL_NAME` too, so the verdicts name the model they
+came from. Nothing in this repository points at an export: the default
+model, the threshold and every other default are unchanged.
+
+### One test export, 2026-10-17
+
+`export` and `parity` were run once each on the model of the run at the top
+of this file, on the laptop CPU limited to 4 threads (Python 3.14, torch
+2.14.1, transformers 5.20.1, onnx 1.23, onnxruntime 1.31). `export` took 42
+seconds and `parity` 90.
+
+The int8 file is 268,405,226 bytes (the shipped one 268,409,234), with the
+same opset, inputs, outputs, IR version, number of initializers and single
+uint8 weight. Its graph has a few nodes fewer (115 Gather and 134 MatMul
+against 116 and 135, and some shape arithmetic), which probably comes from the
+transformers version tracing the attention mask differently; the
+weights that are quantized are the same. The fp32 export differs from
+PyTorch by at most 7.6e-6 in the logits at the untraced lengths.
+
+| Set | Rows | PyTorch / int8 max | mean | fp32 / int8 max | PyTorch / fp32 max | Rows across 0.98 |
+|---|---|---|---|---|---|---|
+| `tr_locked.csv` | 255 | 0.1315 | 0.0020 | 0.1315 | 0.000004 | 0 |
+| `trd_locked.csv` | 103 | 0.0388 | 0.0021 | 0.0388 | 0.000003 | 0 |
+| `holdout.csv` | 129 | 0.0319 | 0.0008 | 0.0319 | 0.000004 | 0 |
+
+All the difference is quantization: fp32 ONNX matches PyTorch. The largest
+differences are on rows scored in the middle (0.72 against 0.59 for
+`tr-a-obf-002`), far from 0.98, and no row of any set changes side of 0.98.
+The base model's own check (`quantization_check.json`) reports a largest
+difference of 0.038 for the same quantization, on its own set.
+
+The int8 model as `finetune.py`'s `measure()` reads it:
+
+| Set | Attacks | Benign | Threshold at FPR ≤ 2% | FPR | Recall | Recall at 0.98 | FPR at 0.98 |
+|---|---|---|---|---|---|---|---|
+| `tr_locked.csv` | 130 | 125 | 0.9988 | 0.016 | 0.715 | 0.838 | 0.032 |
+| `trd_locked.csv` | 59 | 44 | 0.0002 | 0.000 | 0.746 | 0.186 | 0.000 |
+| `holdout.csv` | 38 | 91 | 0.9822 | 0.011 | 0.974 | 0.974 | 0.011 |
+
+PyTorch scored through the service's windows gives the same `tr_locked.csv`
+and `holdout.csv` numbers as the fine-tune report at the top (0.708 and
+0.974 recall), so the service's path and `finetune.py`'s agree on these
+short rows. On `trd_locked.csv` 2% of 44 benign rows is less than one row,
+so its threshold is just above the highest benign score, which is very low;
+at 0.98 the fine-tuned model catches 11 of its 59 attacks. That is a
+property of the model, not of the export: PyTorch and int8 agree on it.
+
+Not measured: latency of the export in the service, and the proxy's own
+sweep (`cmd/redteam -sweep`) against it.
 
 ## What a good result would and would not show
 
