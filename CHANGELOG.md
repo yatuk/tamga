@@ -1453,6 +1453,26 @@
   longer dropped silently. Findings a rule leaves alone on purpose are not
   affected.
 - A misspelled value under `scan:` is a load error.
+- **A `language` section: the languages a request may be written in.** With
+  `enabled: true` and `allow: [tr, en]`, a user or tool message whose prose
+  is, for more than `max_foreign_share` (0.3) of its letters, in another
+  language gets a finding of type `language` (category
+  `language_not_allowed`), and the section's `action` (`BLOCK`, `STRIP`,
+  `WARN`, `LOG` or `PASS`; `WARN` when left out) applies to it. Code, stack
+  traces, log lines, URLs, addresses, paths, identifiers and numbers are not
+  counted, and a message with fewer than `min_letters` (40) letters of prose
+  is not judged. The finding names the languages and their shares, never
+  the text. A language code the detector does not know, `REDACT` or `ROUTE`
+  as the action, and `assistant` in `scope` fail the load; answers are not
+  checked. Changing the section needs the admin role. The detector is
+  lingua-go (Apache-2.0) in its low-accuracy mode; whatlanggo was measured
+  and misread short Turkish four to seven times in ten. The shipped policy
+  has the section off, and a policy without it is unchanged, digest
+  included. **The proxy binary, and with it the image, is about 128 MB
+  larger (45.5 MB to 173.9 MB for linux/amd64): lingua-go embeds its models
+  whatever languages are used.** A proxy whose policy turns the check on
+  holds about 53 MiB more memory. See
+  [docs/operations.md](docs/operations.md#languages-a-request-may-be-written-in).
 
 ### Detection
 - **Turkish prompt injection: a set of the repository's own, and where the

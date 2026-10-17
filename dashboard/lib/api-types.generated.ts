@@ -5694,8 +5694,8 @@ export interface components {
              * @description The sections the change touches that need the admin role: a
              *     top-level section (`providers`, `exceptions`, `governance`,
              *     `data`, `pricing`, `vault`, `cache`, `body_limits`, `rate_limit`,
-             *     `cost`, `scan`, `operator_state`, `canary`, and any section
-             *     added later) or `rules.<name>.notify`.
+             *     `cost`, `scan`, `operator_state`, `canary`, `language`, and any
+             *     section added later) or `rules.<name>.notify`.
              * @example [
              *       "providers",
              *       "rules.pii_detection.notify"

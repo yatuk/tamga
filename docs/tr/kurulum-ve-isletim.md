@@ -406,6 +406,30 @@ Bilmeniz gerekenler:
   uyarlayın. Her şablonun neyi kapsadığı ve neyi kapsamadığı:
   [policy-templates.md](../policy-templates.md).
 
+Modele yalnızca belirli dillerde yazılmış isteklerin gitmesini istiyorsanız
+(örneğin yalnızca Türkçe ve İngilizce) policy'nin `language` bölümünü
+kullanın. Depodaki dosyada kapalıdır:
+
+```yaml
+language:
+  enabled: true
+  allow: [tr, en]          # ISO 639-1 kodları
+  action: WARN             # BLOCK, STRIP, WARN, LOG ya da PASS
+  min_letters: 40
+  max_foreign_share: 0.3
+  scope: [user, tool]
+```
+
+Her mesaj ayrı değerlendirilir. Kod blokları, hata yığınları (stack trace),
+log satırları, URL'ler, e-posta adresleri, dosya yolları, tanımlayıcılar ve
+sayılar hesaba katılmaz; `min_letters` harften kısa bir metin için karar
+verilmez. Harflerinin `max_foreign_share` oranından fazlası izin verilmeyen
+dillerde olan mesaj bir `language` bulgusu alır; bulgu dilleri ve oranlarını
+gösterir (`de 92%, en 8%`), metni göstermez. Türkçe karakter kullanılmadan
+yazılmış Türkçe de Türkçe sayılır. Model yanıtları denetlenmez. Bilinmeyen
+bir dil kodu policy'nin yüklenmesini durdurur. Ayrıntılar ve ölçümler:
+[Languages a request may be written in](../operations.md#languages-a-request-may-be-written-in).
+
 Değişikliği uygulamadan önce doğrulayın, sonra yükleyin:
 
 ```bash

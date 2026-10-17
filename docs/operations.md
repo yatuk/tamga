@@ -1159,7 +1159,8 @@ one, or a text whose two halves are in different scripts. Only a change
 towards a script other than Latin counts, because people who write in
 Russian or Chinese paste English logs all day. Turkish and English are both
 Latin and never count. A change between two languages of one script
-(English to German) is not seen; that needs a language model. The change of
+(English to German) is not seen here; the `language` section (below) tells
+languages apart, and is a policy of its own, not a signal. The change of
 script is not a finding. When the lower threshold is what made the
 classifier's finding, that finding's metadata names the signal
 (`signal: script_switch`). The default, 0.90, was
@@ -1169,6 +1170,146 @@ carries a signal. A value equal to `threshold` turns the signals off.
 
 The classifier service has no authentication of its own and receives prompt
 text in the clear. Keep it on the internal network, next to the proxy.
+
+## Languages a request may be written in
+
+The `language` section of the policy names the languages a request may be
+written in. A message in another one gets a finding, and the section's
+action decides what happens to it. It is off in the shipped policy.
+
+```yaml
+language:
+  enabled: true
+  allow: [tr, en]          # ISO 639-1
+  action: BLOCK            # BLOCK, STRIP, WARN, LOG or PASS; WARN when left out
+  min_letters: 40          # less prose than this is not judged
+  max_foreign_share: 0.3   # share of the letters that may be in other languages
+  scope: [user, tool]      # system, user, tool
+```
+
+**What is judged.** Each message part of a role in `scope` (the same pieces
+of text the other scanners read, with their roles: a user message, a tool
+result, a system prompt) is judged on its own. Only its prose counts. Left
+out are fenced and indented code blocks that read as code (a fenced block
+that reads as prose is judged: a fence does not make German into code),
+other lines that read as code, stack traces (Java, JavaScript, Python, Go),
+log lines (a timestamp or a level at the start, `key=value` pairs), and,
+inside the remaining lines, URLs, e-mail addresses, file paths,
+identifiers (`snake_case`, `camelCase`, dotted names, words with digits),
+inline code and numbers. Invisible characters are dropped first, so a word
+split by zero-width spaces is read as one word.
+
+The prose is cut into pieces of about a sentence (at least 50 letters) and
+the detector names the language of each. The share of a language is the
+share of the letters in the pieces it was named for. A message is found when
+the languages outside `allow` hold more than `max_foreign_share` of its
+letters: a Turkish message that quotes a German sentence passes, a German
+message with an English greeting does not. A piece the detector is unsure
+of counts for the allowed language: when the most likely language is not
+allowed and an allowed one is within 0.5 of it in confidence, the piece
+counts as the allowed one (short English sentences are read as Italian, and
+short Turkish ones as Azerbaijani, often enough to need this). A message
+with fewer than `min_letters` letters of prose is not judged.
+
+At most 3000 letters of one message are put to the detector, in pieces
+spread over all of it, and at most 6000 letters of one request, newest
+message first; older messages past that are not judged (an agent resends
+its history, and the history was judged when it was new). A long message's
+verdict is remembered for ten minutes, as the other scanners' are.
+
+**The finding.** Type `language`, category `language_not_allowed`, severity
+`medium`, with the role and path of the message and no position: it is a
+verdict on the whole message. The match names the languages and their
+shares, never the text: `de 92%, en 8%`. Its confidence is the share outside
+`allow`, and its metadata holds `languages` (`de=0.92,en=0.08`),
+`foreign_share` and `letters` (how many letters were judged).
+
+**The action.** The section's `action` applies to the finding as a custom
+entity's own action applies to its matches: a rule keyed `language` or
+`language_detection` applies as well and the stronger action wins,
+`scan.default_action` does not apply, and an exception waives the rule but
+not the section's action. `STRIP` replaces the message part with the
+placeholder and forwards the rest, which is what a tool result in another
+language needs in an agent session. `REDACT` (there is no span to mask) and
+`ROUTE` are refused when the policy loads.
+
+**Loading.** A misspelled key, a language code the detector does not know,
+an empty `allow` while the section is enabled, `min_letters` outside 10 to
+10000, `max_foreign_share` below 0 or from 1 up, and a role in `scope` other
+than `system`, `user` and `tool` fail the load. `assistant` is refused on
+purpose: answers are not checked. Checking what the model writes may come
+later. Changing the section needs the admin role, as `scan` does.
+
+**Where it applies.** On the proxy path, in the scan API and on the LiteLLM
+route, and in the policy editor's simulation (the sample is judged as a user
+message). A body the extractor does not know, scanned as raw bytes, has no
+messages and is not judged. Answers are not judged.
+
+**What it does not do.** It is a check on what people write, not a defence
+against someone who wants past it. Lines made to look like log lines or code,
+and identifiers written for the purpose, are left out by design; look-alike
+letters from another script are not folded, as they are part of the
+languages that use them. A language the detector does not know (it knows
+75) is read as the nearest one it does.
+
+### The detector, and how it was chosen
+
+The detector is [lingua-go](https://github.com/pemistahl/lingua-go) v1.4.0
+(Apache-2.0) in its low-accuracy mode, over all 75 of its languages. It sits
+behind a small interface (`internal/scanner/langid`), so another can take
+its place. The other candidate measured was
+[whatlanggo](https://github.com/abadojack/whatlanggo) v1.0.1 (MIT).
+
+Both were measured on 150 texts written for this purpose: requests of the
+kind a help desk or an engineering team sends, in Turkish (with and without
+Turkish letters), English, Turkish with English terms in it, German,
+Spanish, Russian, Arabic and French. Short is 16 to 43 letters (one
+sentence), two sentences is 39 to 73 letters, medium is 98 to 170 letters.
+The numbers are for one text in one call; "verdict" means the text was
+judged correctly against `allow: [tr, en]`: a Turkish, English or mixed text
+passes, any other is found.
+
+| Detector | Turkish (short / two / medium) | Turkish without Turkish letters | English | Turkish with English | German, Spanish, Russian, Arabic, French |
+|---|---|---|---|---|---|
+| whatlanggo | 6/10, 4/5, 10/10 | 3/10, 2/5, 9/10 | 9/10, 5/5, 10/10 | 7/8 | 27/27, 13/13, 27/27 |
+| lingua, 75 languages, low accuracy (chosen) | 9/10, 5/5, 10/10 | 9/10, 5/5, 10/10 | 9/10, 4/5, 10/10 | 8/8 | 27/27, 13/13, 27/27 |
+| lingua, 75 languages, full | 10/10, 5/5, 10/10 | 10/10, 5/5, 10/10 | 9/10, 5/5, 10/10 | 8/8 | 27/27, 13/13, 27/27 |
+| lingua, 6 languages (tr, en, de, es, ru, ar), full | 10/10, 5/5, 10/10 | 10/10, 5/5, 10/10 | 10/10, 5/5, 10/10 | 8/8 | 25/27, 12/13, 25/27 |
+| the language check as built, `min_letters: 10` | 9/10, 5/5, 10/10 | 9/10, 5/5, 10/10 | 9/10, 5/5, 10/10 | 8/8 | 27/27, 13/13, 27/27 |
+| the language check as built, `min_letters: 40` (default) | 10/10, 5/5, 10/10 | 10/10, 5/5, 10/10 | 10/10, 5/5, 10/10 | 8/8 | 1/27, 12/13, 27/27 |
+
+With the default `min_letters` the short texts are mostly not judged, which
+is why they pass whatever their language; the one two-sentence text missed
+has 39 letters. The six-language detector names a French text as English,
+Spanish or German: a detector restricted to a few languages reads every other language
+as one of them, and with English allowed that lets it through.
+
+| Detector | Time per call: short / two / medium | Memory once loaded | Added to the proxy binary |
+|---|---|---|---|
+| whatlanggo | 0.11 / 0.12 / 0.17 ms | under 1 MiB | +0.4 MB |
+| lingua, 75 languages, low accuracy (chosen) | 0.20 / 0.34 / 0.91 ms | 53 MiB | +128.3 MB |
+| lingua, 75 languages, full | 0.33 / 0.67 / 1.01 ms | 992 MiB | +128.3 MB |
+| lingua, 6 languages, full | 0.06 / 0.07 / 0.12 ms | 136 MiB | +128.3 MB |
+| the language check as built (prose, pieces, detector) | 0.27 / 0.40 / 1.03 ms; 9 ms for a 3800-letter message | 53 MiB | +128.3 MB |
+
+Times are from one machine whose processor was shared with other work, so
+they are an upper bound. The binary is `cmd/tamga` built as the Dockerfile
+builds it (linux/amd64, `-trimpath -ldflags="-s -w"`): 45.5 MB before, 46.0
+MB with whatlanggo, 173.9 MB with lingua-go. Restricting lingua-go to a few
+languages does not make the binary smaller: its models are embedded as one
+directory (123 MB of compressed files), whichever languages are used.
+
+whatlanggo is small and fast, and it is wrong about Turkish: it read a
+short Turkish sentence as Javanese, Azerbaijani or a language without a
+two-letter code four times in ten, and seven times in ten when the sentence was written
+without Turkish letters (as Javanese, Uzbek, Chichewa, Estonian or
+Italian); one medium-length text in ten without Turkish letters it read as
+Hausa. Under a policy that allows Turkish, each of those is a Turkish user
+refused. lingua-go named nine or ten in ten of the same texts right in
+either mode, and its low-accuracy mode does it with a twentieth of the
+memory of the full mode. Its cost is the size of the binary and of the
+image, and 53 MiB of memory in a proxy whose policy turns the check on; the
+models are not loaded otherwise.
 
 ## Analyzer
 
