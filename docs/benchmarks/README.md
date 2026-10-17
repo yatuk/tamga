@@ -599,7 +599,8 @@ Threshold sweep on `prompts.csv` (rules + classifier; `-sweep` prints it):
 
 0.98 is the default because it is the lowest value with no false positive
 here. On `holdout.csv` the same sweep gives 12 false positives at 0.50, 2 at
-0.90 and none from 0.98 up.
+0.90 and none from 0.98 up. A sweep of the model alone over 13,052 benign
+rows is in [Choosing the classifier's threshold](#choosing-the-classifiers-threshold-2026-10-17).
 
 Classifier call latency over four runs: p50 14–24 ms, p95 23–58 ms, p99
 28–93 ms, worst call 108 ms after warm-up. The spread between runs is large,
@@ -645,8 +646,8 @@ did not get worse. What this does not show:
   measured in the next section; on them the gain is smaller and, on long
   jailbreaks, absent.
 - **The model as the service runs it.** The service runs an int8 ONNX
-  export. The fine-tuned model has not been exported or quantized, and its
-  numbers after that are not known. No default has changed.
+  export. This table is the 32-bit model; its int8 export is measured in
+  "Choosing the classifier's threshold" below. No default has changed.
 - **The proxy's path.** These are the model's scores on the raw text. The
   proxy asks the classifier only about what the rules did not block, and
   strips hashes and keys first (see "With the inline classifier").
@@ -797,6 +798,195 @@ a code block under a bare heading. An attacker who quotes an order and
 writes a sentence about attacks around it now gets a warning and not a
 block; the classifier, when it is on, judges such text by its stricter
 signal threshold. Not measured with the classifier.
+
+### Choosing the classifier's threshold (2026-10-17)
+
+The shipped threshold, 0.98, was chosen for the base model as the lowest
+with no false positive on `prompts.csv` and `holdout.csv` ("With the inline
+classifier" above), 202 benign rows. The fine-tuned model had never been
+swept. `classifier/finetune/sweep.py` chooses a threshold for a model
+directory from more evidence:
+
+```bash
+python classifier/finetune/sweep.py MODEL_DIR [--external DIR] [--fpr 0.01] [--threads 8]
+```
+
+It scores, through the service's own code (`app.classifier`, the int8
+file the service loads, its windows), every attack and benign row of the
+tuning sets (`prompts.csv`, `holdout.csv`, `tr_tuning.csv`,
+`trd_tuning.csv`, `discourse_tuning.csv`), the 84 benign developer texts of
+`cmd/redteam` (written out by `go test`), and with `--external` the attack
+and benign rows of a directory of CSV files. Each text is first put through
+a port of the proxy's `Prepare` (long hashes, keys and base64 taken out; a
+text with fewer than 12 letters is not asked about and scores 0). It
+proposes the lowest threshold at which at most 1% of the pooled benign rows
+score at or above it, rounded up to three decimals. The locked parts
+(`tr_locked.csv`, `trd_locked.csv`, `discourse_locked.csv`) are scored only
+after that, at the proposal and at 0.98; nothing about them reaches the
+choice (`test_the_proposal_never_reads_a_locked_score`). The rules are not
+run: these are the model's numbers on what the proxy would send it, not the
+proxy's verdicts.
+
+**A local measurement.** `--external` was pointed at the local copy of the
+Yıldız Technical University set described above (CC BY-NC-SA 4.0). **No row
+of it is in this repository** and only counts and rates of it are reported;
+its rows are marked `local:` below. It supplies 12,082 of the 13,052 pooled
+benign rows, so the pooled rate is mostly its rate; the proposal on the 970
+repository rows alone is given next to it. Run on a laptop CPU (8
+onnxruntime threads, Python 3.14, onnxruntime 1.31), 20,671 distinct texts
+per model, 11 minutes each.
+
+The two models: the shipped `prompt-injection-guard-small` int8 file, and
+the export of the fine-tuned model of seed 20261011 (the run at the top of
+`classifier/finetune/README.md`, the one candidate, chosen before any
+locked-set result), made with `export.py` on 2026-10-17: its int8 file is
+268,405,226 bytes, SHA-256 `e5b46a8b…10896aa`, and its parity report is the
+same as the test export's (largest PyTorch/int8 difference 0.1315 on
+`tr_locked.csv`, no row across 0.98). The proposed threshold is in bold.
+
+#### Shipped model (`prompt-injection-guard-small`, int8)
+
+Recall per attack set:
+
+| Set | Rows | 0.5 | 0.9 | **0.912** | 0.95 | 0.98 | 0.99 | 0.995 | 0.999 |
+|---|---|---|---|---|---|---|---|---|---|
+| `prompts.csv` | 102 | 0.941 | 0.873 | 0.853 | 0.755 | 0.696 | 0.608 | 0.569 | 0.353 |
+| `holdout.csv` | 38 | 0.974 | 0.947 | 0.947 | 0.921 | 0.921 | 0.868 | 0.842 | 0.632 |
+| `tr_tuning.csv` | 165 | 0.861 | 0.727 | 0.727 | 0.709 | 0.612 | 0.552 | 0.497 | 0.352 |
+| `trd_tuning.csv` | 203 | 0.429 | 0.291 | 0.286 | 0.222 | 0.177 | 0.128 | 0.103 | 0.059 |
+| `discourse_tuning.csv` | 26 | 0.962 | 0.923 | 0.923 | 0.923 | 0.923 | 0.923 | 0.885 | 0.846 |
+| local: `Injection-Attack-Detection` | 1042 | 0.134 | 0.084 | 0.081 | 0.069 | 0.055 | 0.044 | 0.037 | 0.017 |
+| local: `Jack` | 651 | 0.545 | 0.253 | 0.235 | 0.181 | 0.121 | 0.078 | 0.055 | 0.020 |
+| local: `rogue` | 2003 | 0.365 | 0.203 | 0.193 | 0.158 | 0.115 | 0.089 | 0.067 | 0.029 |
+| local: `xTRam1_1` | 647 | 0.601 | 0.430 | 0.414 | 0.383 | 0.317 | 0.266 | 0.226 | 0.139 |
+| local: `xTRam1_2` | 2411 | 0.567 | 0.417 | 0.412 | 0.378 | 0.329 | 0.292 | 0.258 | 0.200 |
+| local: `Yash_(1)` | 187 | 0.636 | 0.572 | 0.572 | 0.561 | 0.524 | 0.497 | 0.455 | 0.348 |
+| local: `Yash_(2)` | 339 | 0.628 | 0.519 | 0.507 | 0.419 | 0.357 | 0.298 | 0.248 | 0.130 |
+
+False-positive rate per benign set:
+
+| Set | Rows | 0.5 | 0.9 | **0.912** | 0.95 | 0.98 | 0.99 | 0.995 | 0.999 |
+|---|---|---|---|---|---|---|---|---|---|
+| `prompts.csv` | 163 | 0.067 | 0.031 | 0.025 | 0.012 | 0.006 | 0.000 | 0.000 | 0.000 |
+| `holdout.csv` | 91 | 0.132 | 0.022 | 0.022 | 0.011 | 0.000 | 0.000 | 0.000 | 0.000 |
+| `tr_tuning.csv` | 186 | 0.043 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 |
+| `trd_tuning.csv` | 342 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 |
+| `discourse_tuning.csv` | 104 | 0.365 | 0.250 | 0.250 | 0.202 | 0.115 | 0.087 | 0.087 | 0.029 |
+| benign developer texts | 84 | 0.202 | 0.083 | 0.060 | 0.036 | 0.012 | 0.000 | 0.000 | 0.000 |
+| local: `Injection-Attack-Detection` | 508 | 0.004 | 0.004 | 0.004 | 0.002 | 0.002 | 0.002 | 0.000 | 0.000 |
+| local: `Jack` | 1323 | 0.021 | 0.009 | 0.009 | 0.007 | 0.002 | 0.002 | 0.002 | 0.000 |
+| local: `rogue` | 2996 | 0.047 | 0.015 | 0.014 | 0.011 | 0.007 | 0.005 | 0.003 | 0.000 |
+| local: `xTRam1_1` | 1401 | 0.021 | 0.009 | 0.009 | 0.004 | 0.003 | 0.001 | 0.000 | 0.000 |
+| local: `xTRam1_2` | 5679 | 0.014 | 0.004 | 0.004 | 0.003 | 0.002 | 0.001 | 0.001 | 0.001 |
+| local: `Yash_(1)` | 69 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 |
+| local: `Yash_(2)` | 106 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 |
+| pooled | 13052 | 0.0279 | 0.0103 | 0.0099 | 0.0071 | 0.0039 | 0.0027 | 0.0021 | 0.0005 |
+
+Proposed (FPR <= 1% on the 13052 pooled benign rows): **0.912** (exact 0.911984, FPR 0.0099). On the 970 repository rows alone: 0.996 (exact 0.995066, FPR 0.0082).
+
+| Locked part | Attacks | Benign | Threshold | Recall | FPR |
+|---|---|---|---|---|---|
+| `tr_locked.csv` | 130 | 125 | 0.912 | 0.662 | 0.048 |
+| `tr_locked.csv` | 130 | 125 | 0.98 | 0.515 | 0.032 |
+| `trd_locked.csv` | 59 | 44 | 0.912 | 0.169 | 0.000 |
+| `trd_locked.csv` | 59 | 44 | 0.98 | 0.136 | 0.000 |
+| `discourse_locked.csv` | 12 | 74 | 0.912 | 1.000 | 0.230 |
+| `discourse_locked.csv` | 12 | 74 | 0.98 | 1.000 | 0.162 |
+
+#### Fine-tuned candidate (export of seed 20261011, int8)
+
+Recall per attack set:
+
+| Set | Rows | 0.5 | 0.9 | 0.95 | 0.98 | **0.983** | 0.99 | 0.995 | 0.999 |
+|---|---|---|---|---|---|---|---|---|---|
+| `prompts.csv` | 102 | 0.980 | 0.971 | 0.971 | 0.971 | 0.971 | 0.971 | 0.961 | 0.922 |
+| `holdout.csv` | 38 | 1.000 | 0.974 | 0.974 | 0.974 | 0.974 | 0.974 | 0.974 | 0.947 |
+| `tr_tuning.csv` | 165 | 1.000 | 1.000 | 0.994 | 0.988 | 0.988 | 0.988 | 0.982 | 0.964 |
+| `trd_tuning.csv` | 203 | 0.438 | 0.369 | 0.350 | 0.325 | 0.315 | 0.300 | 0.276 | 0.236 |
+| `discourse_tuning.csv` | 26 | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 | 0.962 | 0.962 |
+| local: `Injection-Attack-Detection` | 1042 | 0.160 | 0.131 | 0.114 | 0.104 | 0.103 | 0.096 | 0.085 | 0.061 |
+| local: `Jack` | 651 | 0.696 | 0.515 | 0.449 | 0.353 | 0.339 | 0.298 | 0.250 | 0.155 |
+| local: `rogue` | 2003 | 0.410 | 0.308 | 0.276 | 0.231 | 0.222 | 0.203 | 0.179 | 0.128 |
+| local: `xTRam1_1` | 647 | 0.685 | 0.598 | 0.573 | 0.522 | 0.518 | 0.490 | 0.448 | 0.386 |
+| local: `xTRam1_2` | 2411 | 0.641 | 0.559 | 0.529 | 0.490 | 0.485 | 0.465 | 0.436 | 0.370 |
+| local: `Yash_(1)` | 187 | 0.770 | 0.743 | 0.733 | 0.722 | 0.711 | 0.706 | 0.706 | 0.668 |
+| local: `Yash_(2)` | 339 | 0.690 | 0.622 | 0.605 | 0.563 | 0.558 | 0.549 | 0.525 | 0.460 |
+
+False-positive rate per benign set:
+
+| Set | Rows | 0.5 | 0.9 | 0.95 | 0.98 | **0.983** | 0.99 | 0.995 | 0.999 |
+|---|---|---|---|---|---|---|---|---|---|
+| `prompts.csv` | 163 | 0.006 | 0.006 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 |
+| `holdout.csv` | 91 | 0.033 | 0.011 | 0.011 | 0.011 | 0.000 | 0.000 | 0.000 | 0.000 |
+| `tr_tuning.csv` | 186 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 |
+| `trd_tuning.csv` | 342 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 |
+| `discourse_tuning.csv` | 104 | 0.260 | 0.202 | 0.202 | 0.154 | 0.154 | 0.144 | 0.125 | 0.067 |
+| benign developer texts | 84 | 0.012 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 |
+| local: `Injection-Attack-Detection` | 508 | 0.006 | 0.002 | 0.002 | 0.002 | 0.002 | 0.002 | 0.002 | 0.000 |
+| local: `Jack` | 1323 | 0.039 | 0.023 | 0.019 | 0.014 | 0.013 | 0.011 | 0.008 | 0.004 |
+| local: `rogue` | 2996 | 0.058 | 0.031 | 0.025 | 0.020 | 0.020 | 0.018 | 0.013 | 0.007 |
+| local: `xTRam1_1` | 1401 | 0.016 | 0.007 | 0.006 | 0.005 | 0.005 | 0.003 | 0.002 | 0.002 |
+| local: `xTRam1_2` | 5679 | 0.015 | 0.010 | 0.008 | 0.005 | 0.005 | 0.004 | 0.003 | 0.002 |
+| local: `Yash_(1)` | 69 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 |
+| local: `Yash_(2)` | 106 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 |
+| pooled | 13052 | 0.0285 | 0.0165 | 0.0135 | 0.0103 | 0.0099 | 0.0085 | 0.0066 | 0.0035 |
+
+Proposed (FPR <= 1% on the 13052 pooled benign rows): **0.983** (exact 0.982975, FPR 0.0099). On the 970 repository rows alone: 0.999 (exact 0.998464, FPR 0.0072).
+
+| Locked part | Attacks | Benign | Threshold | Recall | FPR |
+|---|---|---|---|---|---|
+| `tr_locked.csv` | 130 | 125 | 0.983 | 0.815 | 0.032 |
+| `tr_locked.csv` | 130 | 125 | 0.98 | 0.838 | 0.032 |
+| `trd_locked.csv` | 59 | 44 | 0.983 | 0.186 | 0.000 |
+| `trd_locked.csv` | 59 | 44 | 0.98 | 0.186 | 0.000 |
+| `discourse_locked.csv` | 12 | 74 | 0.983 | 1.000 | 0.162 |
+| `discourse_locked.csv` | 12 | 74 | 0.98 | 1.000 | 0.176 |
+
+What this says:
+
+- **The shipped model keeps 0.98.** Its pooled proposal, 0.912, is
+  carried by the local rows, on which it rarely errs; on the repository's
+  own rows 0.912 flags 25% of `discourse_tuning.csv`, 6% of the developer
+  texts and 2.5% of `prompts.csv`, and 4.8% of the locked Turkish benign
+  rows. On the repository rows alone the proposal is 0.996. At 0.98 the
+  pooled rate is 0.39%, inside the target. Nothing here argues for a lower
+  default.
+- **At the same pooled rate the candidate catches more on every attack
+  set.** Compared at 1% on the pooled rows (shipped at 0.912, candidate at
+  0.983): `prompts.csv` 0.853 against 0.971, `holdout.csv` 0.947 against
+  0.974, `trd_tuning.csv` 0.286 against 0.315, the local safe-guard files
+  0.414 and 0.412 against 0.518 and 0.485, `Jack` 0.235 against 0.339. On
+  the locked parts, at the proposals: `tr_locked.csv` 0.662 against 0.815
+  recall with 4.8% against 3.2% of its benign rows flagged, `trd_locked.csv`
+  0.169 against 0.186, and `discourse_locked.csv` 23% against 16% of its
+  benign rows flagged, all 12 attacks caught by both.
+- **Its mistakes are in other places.** The candidate's false positives at
+  0.983 are long role-play prompts (2.0% of the benign `rogue` rows, 1.3%
+  of `Jack`'s, against 1.4% and 0.9% for the shipped model at 0.912) and
+  text about attacks (15%); it flags none of the developer texts.
+- **Training rows.** The candidate was trained on the rows of
+  `prompts.csv` and `tr_tuning.csv`, attacks and benign: its numbers there
+  (0.971 and 0.988 recall, no false positive) are training numbers.
+  Leaving those 349 benign rows out of the pool moves its proposal from
+  0.983 to 0.985 (the shipped model's from 0.912 to 0.909).
+  `tr_locked.csv` was written by the same author in the same ten families.
+- **Text about attacks.** In the proxy, a quoted injection that the rules
+  report as the signal `quoted_injection` is judged at `signal_threshold`
+  (0.90), where the shipped model flags 25% and the candidate 20% of
+  `discourse_tuning.csv`'s benign rows. Neither model reads framing the way
+  the rule now does.
+- **Not the proxy's numbers.** The rules come first in the proxy and
+  block most attacks of the repository's own sets before the classifier is
+  asked; of the deepset and local sets they catch little (see above).
+
+**Recommendation.** No default changes: the shipped model at 0.98 stays.
+The candidate is better on every attack set at the same false-positive
+rate on this pool, and more of its errors are on long role-play prompts,
+of which real traffic may hold more than this pool does. That is the case
+for running it in shadow, not for switching: set it up as in docs/operations.md
+("Shadow mode") with `scan.classifier.shadow_threshold: 0.983`, and read
+`shadow_only` and `primary_only` on your own traffic before changing the
+model or the threshold.
 
 ### How to read these numbers honestly
 

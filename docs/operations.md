@@ -265,6 +265,10 @@ Other service inputs and Compose-only settings:
 | Classifier | `TAMGA_CLASSIFIER_WINDOW` | `512` | Passed |
 | Classifier | `TAMGA_CLASSIFIER_OVERLAP` | `64` | Passed |
 | Classifier | `TAMGA_CLASSIFIER_MAX_WINDOWS` | `16` | Passed |
+| Classifier | `TAMGA_CLASSIFIER_SHADOW_MODEL_DIR` | empty (no shadow) | Fixed to `/models/shadow`; `TAMGA_CLASSIFIER_SHADOW_MODEL_PATH` selects the host directory (default `../models/shadow`; empty there means no shadow). See [Shadow mode](#shadow-mode) |
+| Classifier | `TAMGA_CLASSIFIER_SHADOW_MODEL_NAME` | mounted directory name | Passed |
+| Classifier | `TAMGA_CLASSIFIER_SHADOW_THREADS` | `TAMGA_CLASSIFIER_THREADS` | Passed |
+| Classifier | `TAMGA_CLASSIFIER_SHADOW_WAIT_MS` | `20` | Passed |
 | Console | `NEXT_PUBLIC_API_URL` | `http://localhost:8443` | Build argument; rebuild the console after changing it |
 | Console | `NEXT_PUBLIC_SITE_URL` | `https://tamgaproxy.com` | Build argument for metadata; rebuild after changing it |
 | Console | `NEXT_PUBLIC_MARKETING_URL` | `https://tamgaproxy.com` | Build argument for public-site links; rebuild after changing it |
@@ -1187,6 +1191,152 @@ carries a signal. A value equal to `threshold` turns the signals off.
 
 The classifier service has no authentication of its own and receives prompt
 text in the clear. Keep it on the internal network, next to the proxy.
+
+### Shadow mode
+
+A new injection model, or the same one at a new threshold, should be judged
+on your traffic before it decides anything. In shadow mode the classifier
+service loads a second, candidate model and scores every text the model in
+service scores. The candidate's scores are recorded next to the primary's
+and never change a verdict, a header or a response. It is off by default.
+
+**Turn it on.** Put the candidate (a directory of the same shape as the
+primary's: `onnx/model_quantized.onnx`, `tokenizer.json`, `config.json`;
+`classifier/finetune/export.py` writes one) where Compose mounts it, and
+recreate the classifier:
+
+```bash
+cat >> .env <<'ENV'
+TAMGA_CLASSIFIER_SHADOW_MODEL_PATH=../models/tamga-tr-candidate
+TAMGA_CLASSIFIER_SHADOW_MODEL_NAME=tamga-tr-candidate
+TAMGA_CLASSIFIER_SHADOW_THREADS=4
+TAMGA_CLASSIFIER_THREADS=4
+ENV
+docker compose --env-file .env -f deploy/docker-compose.yml --profile full --profile classifier up -d classifier
+```
+
+Set the threshold the candidate would ship with in the policy, next to the
+primary's (default: the primary's `threshold`). Choose it with
+`classifier/finetune/sweep.py` (docs/benchmarks/README.md, "Choosing the
+classifier's threshold"):
+
+```yaml
+scan:
+  classifier:
+    enabled: true
+    threshold: 0.98          # the model in service; decides
+    shadow_threshold: 0.983  # the candidate; only sorts its scores
+```
+
+The service logs `shadow_ready` with the model's name, and its Health RPC
+reports `shadow_available`, `shadow_model` and `shadow_reason`; the proxy
+logs `classifier shadow model ready` at startup. A shadow directory that is
+empty, missing or broken is reported there (`shadow_unavailable` in the
+service log) and changes nothing else: the primary scores as before. To
+turn shadow mode off, empty the directory or unset the path, and recreate
+the classifier.
+
+**What it does per call.** The shadow starts on a thread of its own before
+the primary and runs beside it. Once the primary has its scores, the call
+waits at most `TAMGA_CLASSIFIER_SHADOW_WAIT_MS` (default 20) for the
+shadow's, and returns without them when they are later (`late`). A shadow
+still busy with an earlier call is skipped for this one (`busy`), not
+queued; one that fails is `failed`. The proxy counts these as `missing`.
+
+**What it costs.** Both models share the CPU, and the shadow holds about
+as much memory as the primary (one more ONNX file and tokenizer). Measured
+on a laptop CPU (16 logical processors) with both shipped models' int8
+files, 4 onnxruntime threads for each, the service's own code without the
+gRPC layer, one text per call and calls back to back (the worst case for
+sharing):
+
+| Text | Primary alone, p50 / p95 / p99 | With the shadow, p50 / p95 / p99 | Shadow scores returned |
+|---|---|---|---|
+| A sentence or two | 12.7 / 19.5 / 21.4 ms | 14.8 / 20.1 / 22.8 ms | 300 of 300 |
+| About 400 tokens | 66.2 / 95.0 / 101.9 ms | 89.4 / 109.3 / 122.7 ms | 120 of 120 |
+
+The wait is bounded by construction: a call returned at most the shadow
+wait after the primary's scores were ready (with 5 ms, the call took 0.2 to
+5 ms longer than the primary at p50). The rest of the difference is the
+primary's own run slowed by the shared cores: about 2 ms on short text and
+20 to 30 ms at p50 on 400-token text, by run. On long text the p99 reached
+154 ms in one of three runs, above the default `timeout_ms` of 150, where
+the primary alone stayed under 102 ms. So:
+
+- give the two models separate cores: `TAMGA_CLASSIFIER_THREADS` plus
+  `TAMGA_CLASSIFIER_SHADOW_THREADS` no more than the cores the container
+  has;
+- raise `scan.classifier.timeout_ms` while the shadow runs if your traffic
+  has long tool results, or run the shadow for a measured period and turn
+  it off;
+- a shadow with fewer threads than the primary is slower than it and is
+  mostly `late` or `busy` on long text (2 threads: no long text scored in
+  120 calls), which costs the full wait and records little. Turning off
+  onnxruntime's thread spinning for the shadow was measured and made both
+  slower; it is not offered.
+
+**Reading the comparison.** Each text the primary scores is sorted, at
+the threshold it was judged by (`threshold`, or `signal_threshold` for a
+text with a signal) and at `shadow_threshold`:
+
+| Outcome | Meaning |
+|---|---|
+| `both` | both flag it |
+| `neither` | neither does |
+| `shadow_only` | the candidate would have flagged it, the model in service did not |
+| `primary_only` | the model in service flagged it, the candidate would not have |
+| `missing` | the candidate gave no score (`late`, `busy`, `failed`) |
+
+`/metrics` counts them, once per text scored (a text answered from the
+cache is not counted again):
+
+```text
+tamga_classifier_shadow_texts_total{shadow_model="tamga-tr-candidate",outcome="shadow_only"} 12
+```
+
+```promql
+sum by (outcome) (increase(tamga_classifier_shadow_texts_total[7d]))
+```
+
+`shadow_only` is what switching would add: attacks the model in service
+misses, or the candidate's false positives. `primary_only` is what
+switching would lose. Neither number says which; the requests do. Each
+request scored with a shadow stores both scores per text, without the
+text, in `request_logs.classifier_scores` (migration
+`021_classifier_scores`, which the proxy also applies at startup), and the
+console's event detail (`GET /api/v1/events/{request_id}`) returns it as
+`classifier_scores`:
+
+```json
+{"model": "prompt-injection-guard-small", "threshold": 0.98,
+ "shadow_model": "tamga-tr-candidate", "shadow_threshold": 0.983,
+ "texts": [{"seg": 2, "role": "user", "score": 0.1203, "threshold": 0.98,
+            "flagged": false, "shadow": 0.9931, "shadow_flagged": true}]}
+```
+
+`seg` is the text's place in the request, `cached` marks scores from an
+earlier request of the conversation. To list the requests the two disagree
+on:
+
+```sql
+SELECT request_id, created_at, t->>'role' AS role,
+       (t->>'score')::float AS primary_score, (t->>'shadow')::float AS shadow_score
+FROM request_logs, jsonb_array_elements(classifier_scores->'texts') AS t
+WHERE classifier_scores IS NOT NULL
+  AND created_at > now() - interval '7 days'
+  AND NOT (t ? 'cached')
+  AND (t->>'flagged')::bool <> COALESCE((t->>'shadow_flagged')::bool, false)
+ORDER BY created_at DESC;
+```
+
+The text is not stored, so judging a disagreement needs the request
+itself, from your application's own records. Decide on a switch only from
+enough of them, then point `TAMGA_CLASSIFIER_MODEL_PATH` at the candidate
+and set `threshold` to the value it was compared at.
+
+The scan API (`POST /api/v1/scan`) asks the same service and counts the
+comparison in the metric; it stores no request, so it records no scores.
+The LiteLLM route stores them as the proxy path does.
 
 ## Languages a request may be written in
 
