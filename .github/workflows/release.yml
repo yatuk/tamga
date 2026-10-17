@@ -7,8 +7,17 @@ name: Release
 #
 # A dry run builds everything a release builds (binaries, images, chart,
 # extension archive, SDK packages, SBOMs, checksums) and keeps the files as
-# a workflow artifact. It pushes no image, signs nothing, creates no
-# attestation and no release: the jobs that do those are skipped.
+# a workflow artifact. It pushes no image, creates no attestation and no
+# release, and no job of it can ask for a signing certificate. It signs
+# every release file with a throwaway key made in the job, with the
+# transparency log off, and verifies those signatures: the same commands as
+# a release, with nothing sent to Sigstore. Image signing is skipped, since
+# a local image has no registry digest to sign.
+#
+# The licence gate (.github/workflows/licence-gate.yml) runs beside the
+# builds and writes the checked dependency SBOMs. Nothing is signed or
+# published unless it passes; a dry run goes on to its local signing when it
+# fails, so both results show in one run, and the run fails.
 #
 # What a release publishes, and how to check it, is in
 # docs/verifying-a-release.md. Keep that file and this one in step: the
@@ -142,6 +151,15 @@ jobs:
       - name: Extension tests
         working-directory: extension
         run: node --test
+
+  licences:
+    name: Dependency licences and SBOMs
+    needs: plan
+    permissions:
+      contents: read
+    uses: ./.github/workflows/licence-gate.yml
+    with:
+      artifact_version: ${{ needs.plan.outputs.version }}
 
   # ── Binaries ──────────────────────────────────────────────────────────────
   binaries:
@@ -428,7 +446,7 @@ jobs:
   # ── Sign the images, attest them, then give them their version tag ────────
   sign-images:
     name: Sign image (${{ matrix.name }})
-    needs: [plan, images]
+    needs: [plan, images, licences]
     if: needs.plan.outputs.publish == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -532,7 +550,17 @@ jobs:
   # ── Put the release files together and write the checksums ────────────────
   collect:
     name: Checksums
-    needs: [plan, binaries, packages, images]
+    needs: [plan, binaries, packages, images, licences]
+    # Every build must have passed. The licence gate must have passed for a
+    # release; a dry run carries on after a failed gate (the run still fails)
+    # so that the signing below is tried too.
+    if: >-
+      !cancelled()
+      && needs.binaries.result == 'success'
+      && needs.packages.result == 'success'
+      && needs.images.result == 'success'
+      && (needs.licences.result == 'success'
+          || (needs.licences.result == 'failure' && needs.plan.outputs.publish != 'true'))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -550,6 +578,10 @@ jobs:
           pattern: image-*
           path: dist
           merge-multiple: true
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dependency-sboms
+          path: dist
       - name: Image digests and checksums
         working-directory: dist
         run: |
@@ -580,19 +612,17 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  # ── Sign the checksums, attest the files, create the release ──────────────
-  publish:
-    name: Publish the release
-    needs: [plan, collect, sign-images]
+  # ── Sign every release file (keyless), attest them, create the release ────
+  sign-files:
+    name: Sign release files
+    needs: [plan, collect, licences]
     if: needs.plan.outputs.publish == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
-      contents: write # creates the release and uploads its files
+      contents: read
       id-token: write # the Sigstore certificate is issued to this job's OIDC token
-      attestations: write # the provenance attestation is recorded with GitHub
     env:
-      VERSION: ${{ needs.plan.outputs.version }}
       CERT_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/release.yml@${{ github.ref }}
       CERT_ISSUER: https://token.actions.githubusercontent.com
     steps:
@@ -606,14 +636,106 @@ jobs:
         working-directory: dist
         run: sha256sum --check --strict SHA256SUMS
 
-      - name: Sign the checksum file (cosign, keyless)
+      # SHA256SUMS and each file it lists get a bundle `<file>.sigstore.json`.
+      - name: Sign and verify every file (cosign, keyless)
         working-directory: dist
         run: |
           set -euo pipefail
-          cosign sign-blob --yes --bundle SHA256SUMS.sigstore.json SHA256SUMS
-          cosign verify-blob SHA256SUMS --bundle SHA256SUMS.sigstore.json \
-            --certificate-identity "$CERT_IDENTITY" \
-            --certificate-oidc-issuer "$CERT_ISSUER"
+          files=(SHA256SUMS)
+          while read -r _ file; do files+=("${file#\*}"); done < SHA256SUMS
+          for file in "${files[@]}"; do
+            cosign sign-blob --yes --bundle "${file}.sigstore.json" "$file"
+            cosign verify-blob "$file" --bundle "${file}.sigstore.json" \
+              --certificate-identity "$CERT_IDENTITY" \
+              --certificate-oidc-issuer "$CERT_ISSUER" > /dev/null
+          done
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: signed-release-files
+          path: dist/
+          if-no-files-found: error
+          retention-days: 30
+
+  # ── Dry run: the same signing and verification, with nothing sent out ─────
+  # No id-token permission: this job cannot get a Sigstore certificate. The
+  # key is made here and thrown away with the runner. --use-signing-config
+  # =false and --tlog-upload=false keep cosign from contacting Rekor or a
+  # timestamp authority, and the step fails if a bundle holds a log entry.
+  sign-files-dry-run:
+    name: Sign release files (dry run, local key)
+    needs: [plan, collect]
+    # Not the default success(): it would skip this job after a failed licence
+    # gate, which collect lets a dry run carry on from.
+    if: >-
+      !cancelled()
+      && needs.collect.result == 'success'
+      && needs.plan.outputs.publish != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-files
+          path: dist
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2 (installs cosign v3.0.6)
+
+      - name: The checksums must still match the files
+        working-directory: dist
+        run: sha256sum --check --strict SHA256SUMS
+
+      - name: Sign and verify every file (cosign, throwaway key, no log)
+        working-directory: dist
+        env:
+          COSIGN_PASSWORD: dry-run-only-not-a-secret
+        run: |
+          set -euo pipefail
+          keys="$RUNNER_TEMP/cosign-dry-run"
+          mkdir -p "$keys"
+          (cd "$keys" && cosign generate-key-pair)
+          files=(SHA256SUMS)
+          while read -r _ file; do files+=("${file#\*}"); done < SHA256SUMS
+          for file in "${files[@]}"; do
+            bundle="${file}.sigstore.json"
+            cosign sign-blob --yes --key "$keys/cosign.key" \
+              --use-signing-config=false --tlog-upload=false \
+              --bundle "$bundle" "$file"
+            entries="$(jq '.verificationMaterial.tlogEntries // [] | length' "$bundle")"
+            if [ "$entries" != "0" ]; then
+              echo "::error::$bundle has a transparency log entry; a dry run must not write one"
+              exit 1
+            fi
+            cosign verify-blob "$file" --bundle "$bundle" \
+              --key "$keys/cosign.pub" --insecure-ignore-tlog=true > /dev/null
+          done
+          echo "Dry run: ${#files[@]} files signed with a throwaway key and verified; nothing was uploaded." >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dry-run-signed-release-files
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish the release
+    needs: [plan, licences, sign-files, sign-images]
+    if: needs.plan.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # creates the release and uploads its files
+      id-token: write # signs the provenance attestation through GitHub OIDC
+      attestations: write # records the provenance attestation with GitHub
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: signed-release-files
+          path: dist
 
       - name: Attest build provenance of every release file (SLSA)
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
@@ -629,7 +751,7 @@ jobs:
           {
             echo "Changes: see the \`${VERSION}\` section of [CHANGELOG.md](https://github.com/${GITHUB_REPOSITORY}/blob/${VERSION}/CHANGELOG.md)."
             echo
-            echo "Every file below is listed in \`SHA256SUMS\`, which is signed (\`SHA256SUMS.sigstore.json\`). The container images are named, by digest, in \`image-digests_${VERSION}.txt\`. How to check the signatures, the provenance and the SBOMs: [docs/verifying-a-release.md](https://github.com/${GITHUB_REPOSITORY}/blob/${VERSION}/docs/verifying-a-release.md)."
+            echo "Every release payload is listed in \`SHA256SUMS\`; it and each payload have a \`.sigstore.json\` signature bundle. The container images are named, by digest, in \`image-digests_${VERSION}.txt\`. How to check the signatures, the provenance and the SBOMs: [docs/verifying-a-release.md](https://github.com/${GITHUB_REPOSITORY}/blob/${VERSION}/docs/verifying-a-release.md)."
           } > "$RUNNER_TEMP/notes.md"
           flags=(--repo "$GITHUB_REPOSITORY" --verify-tag --draft --title "$VERSION" --notes-file "$RUNNER_TEMP/notes.md")
           [ "$PRERELEASE" = "true" ] && flags+=(--prerelease)
