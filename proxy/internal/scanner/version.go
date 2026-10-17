@@ -42,15 +42,21 @@ package scanner
 // (gıthub.com with a dotless ı) is a link_homoglyph finding. An answer a
 // build of 1.8.0 stored as clean can hold such a link, which a policy that
 // lists malicious_link in output_rules masks or blocks.
-const ScannerVersion = "1.10.0"
+//
+// 1.11.0: an injection a text only quotes while it discusses it is the
+// signal quoted_injection and not a verdict (injection_framing.go), and the
+// word "jailbreak" alone is severity low. Both make fewer verdicts. The
+// second reading, with the quoted parts blanked out, is a text the scanners
+// had not read before, so the version moves with it.
+const ScannerVersion = "1.11.0"
 
 // ScannerVersions maps each scanner name to its current semantic version.
 var ScannerVersions = map[string]string{
 	"pii":                "1.5.0", // mersis_no, imei, passport_tr, license_plate_tr (pii_tr_ids.go)
-	"injection":          "1.3.0", // a phrase that ends in a Turkish verb counts only where the verb is a command
+	"injection":          "1.4.0", // what a text only quotes while it discusses it is quoted_injection
 	"secret":             "1.2.0", // read in the folded reading with the case kept, with positions
 	"content_moderation": "1.0.0",
-	"jailbreak":          "1.5.0", // Turkish rules by stem and ending; quoted parts joined; data_exfiltration
+	"jailbreak":          "1.6.0", // what a text only quotes while it discusses it is quoted_injection
 	"custom":             "1.1.0", // patterns are also run on the normalised readings
 	"malicious_link":     "1.1.0", // look-alikes of protected names written in Latin letters only
 	"output_schema":      "1.0.0", // answers only: output_rules.json_schema
