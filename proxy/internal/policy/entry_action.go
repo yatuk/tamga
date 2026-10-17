@@ -133,6 +133,7 @@ var unmaskableOutputKeys = map[string]string{
 	"hidden_text":             "hidden text is a mark on the answer, not a value to mask",
 	"above_text_request":      "a request for the text above is a mark on a message, not a value to mask",
 	"translation_abandoned":   "a dropped translation is a mark on the answer, not a value to mask",
+	"quoted_injection":        "a quoted injection is a mark on the answer, not a value to mask",
 	"content_moderation":      "a content moderation finding is a verdict on the answer, not a value with a place in it",
 	"operator_state":          "an operator-state finding is a verdict, not a value with a place in the answer",
 	"operator_state_semantic": "an operator-state finding is a verdict, not a value with a place in the answer",

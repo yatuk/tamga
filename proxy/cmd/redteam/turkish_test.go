@@ -124,7 +124,7 @@ func (s trScore) table() string {
 // The tuning part is a floor like the two older sets: a change that catches
 // fewer of its attacks or flags more of its benign rows fails here.
 func TestTurkishTuningSet(t *testing.T) {
-	const minCaught, maxFlagged = 142, 6
+	const minCaught, maxFlagged = 142, 2
 	s := scoreTurkish(t, trTuningCSV)
 	t.Log(s.table())
 	t.Logf("missed: %v", s.missed)
@@ -143,7 +143,7 @@ func TestTurkishTuningSet(t *testing.T) {
 // failure means the rules changed what they find on text they were not
 // written against; look for the cause in the tuning part.
 func TestTurkishLockedSet(t *testing.T) {
-	const minCaught, maxFlagged = 104, 4
+	const minCaught, maxFlagged = 104, 3
 	s := scoreTurkish(t, trLockedCSV)
 	t.Log(s.table())
 	if s.tp < minCaught {

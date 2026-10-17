@@ -43,6 +43,8 @@ rules:
   #     action: WARN
   #     applies_to: [system]
   #
+  # (in place of the injection_detection rule below: a key appears once).
+  #
   # The role is whatever the request says. Only narrow a rule this way when
   # your own server builds the request; a caller who reaches the proxy
   # directly can label any text "system".
@@ -55,11 +57,12 @@ rules:
   # the system prompt) and translation_abandoned (one text asks for a
   # translation and then tells its reader to drop it). No rule acts on a
   # signal unless it names the category, whatever its sensitivity;
-  # scan.default_action does not either. To be told about them, add:
+  # scan.default_action does not either. To be told about them, name them in
+  # the injection_detection rule below:
   #
   #   injection_detection:
   #     action: WARN
-  #     types: [unreadable_block, hidden_text, above_text_request, translation_abandoned]
+  #     types: [quoted_injection, unreadable_block, hidden_text, above_text_request, translation_abandoned]
   #
   # hidden_text is severity high, and an ordinary injection finding that the
   # rule below blocks, when the invisible characters spell text (tag
@@ -70,6 +73,19 @@ rules:
     notify:
       - channel: slack
         webhook: ${SLACK_WEBHOOK_URL}
+
+  # quoted_injection is a fifth signal: an injection that a text holds only
+  # in a code block, inline code, a quotation or a sentence that gives it as
+  # an example, while the rest of the text talks about attacks and neither
+  # tells the model to carry it out nor speaks to the model. A security
+  # write-up, a README's "what this blocks" and a test file are such texts.
+  # The finding's metadata names the category it would otherwise have had
+  # (quoted_category). It is warned about here and not blocked. Without
+  # this rule such text passes; with BLOCK it is stopped, as before v0.9.0.
+  # The signals named above go in the same types list.
+  injection_detection:
+    action: WARN
+    types: [quoted_injection]
 
   # There is no rule for source code in answers here, and one would do
   # nothing. A rule key is matched to a finding as "<type>_detection" or

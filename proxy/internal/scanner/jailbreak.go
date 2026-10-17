@@ -29,8 +29,13 @@ var (
 // Scan returns findings for the jailbreak heuristics applied to both the raw
 // content and the normalized variant produced by the normalize package. It
 // stops between two heuristics when the context ends, and then returns what
-// it found together with an ErrScanDegraded error.
+// it found together with an ErrScanDegraded error. What a text only quotes
+// while it discusses it is reported as a signal (injection_framing.go).
 func (s *JailbreakScanner) Scan(ctx context.Context, content []byte) ([]Finding, error) {
+	return scanFramed(ctx, content, func(text []byte) ([]Finding, error) { return s.scan(ctx, text) })
+}
+
+func (s *JailbreakScanner) scan(ctx context.Context, content []byte) ([]Finding, error) {
 	st := &scanStop{ctx: ctx, scanner: s.Name()}
 	if st.stopped() {
 		return nil, st.err

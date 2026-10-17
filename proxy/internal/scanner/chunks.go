@@ -96,8 +96,15 @@ type scanUnit struct {
 // would make it shed scanners.
 func (r *Registry) scanUnits(ctx context.Context, segs []extract.Segment, cfg PipelineConfig) ([][]Finding, error) {
 	var units []*scanUnit
+	// A chunk of a segment that was cut is judged by what its segment
+	// frames, not by what it seems to frame (injection_framing.go).
+	framings := map[int]*segmentFraming{}
 	for i, seg := range segs {
-		for _, c := range splitChunks(seg.Text) {
+		chunks := splitChunks(seg.Text)
+		if len(chunks) > 1 {
+			framings[i] = &segmentFraming{text: seg.Text}
+		}
+		for _, c := range chunks {
 			units = append(units, &scanUnit{seg: i, chunk: c})
 		}
 	}
@@ -106,7 +113,11 @@ func (r *Registry) scanUnits(ctx context.Context, segs []extract.Segment, cfg Pi
 		seg := segs[u.seg]
 		part := seg
 		part.Text = seg.Text[u.chunk.start:u.chunk.end]
-		found, err := r.ScanAllWithConfig(ctx, []byte(part.Text), cfg)
+		uctx := ctx
+		if sf := framings[u.seg]; sf != nil {
+			uctx = withChunkFraming(ctx, sf, u.chunk)
+		}
+		found, err := r.ScanAllWithConfig(uctx, []byte(part.Text), cfg)
 		for j := range found {
 			placeFinding(&found[j], u.seg, part)
 		}

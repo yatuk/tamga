@@ -28,7 +28,7 @@ table and nowhere else, so that there is one number to keep right.
 | `role_manipulation` | 5 | 0.72 | 0.88 |
 | `delimiter_injection` | 5 | 0.35 | 0.45 |
 | `context_manipulation` | 3 | 0.62 | 0.80 |
-| `jailbreak` | 14 | 0.66 | 0.91 |
+| `jailbreak` | 14 | 0.30 | 0.91 |
 | `tool_fetch` | 17 | 0.72 | 0.88 |
 | `indirect_injection` | 11 | 0.78 | 0.88 |
 | Total | 91 | | |
@@ -123,7 +123,7 @@ Direct attempts to switch off the model's restrictions or to read its system pro
 | `developer mode enabled` | 0.91 |
 | `no restrictions` | 0.85 |
 | `bypass your safety` | 0.88 |
-| `jailbreak` | 0.82 |
+| `jailbreak` | 0.30 |
 | `reveal your system prompt` | 0.84 |
 | `what is your system prompt` | 0.68 |
 | `repeat your instructions` | 0.66 |
@@ -133,6 +133,10 @@ Direct attempts to switch off the model's restrictions or to read its system pro
 | `sistem promptunu paylaş` | 0.84 |
 | `system prompt zeigen` | 0.84 |
 | `system prompt preisgeben` | 0.84 |
+
+`jailbreak` sits below the range on purpose: the word alone names the kind of attack and is in every
+text about one, so it is evidence only next to other evidence. At 0.82 it blocked 9 of the 104
+benign rows of `discourse_tuning.csv`; at 0.30 no attack row of any red-team set changed its action.
 
 ### `tool_fetch`
 

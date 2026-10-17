@@ -78,6 +78,7 @@ var signalCategories = map[string]bool{
 	categoryUnreadableBlock:      true,
 	categoryAboveTextRequest:     true,
 	categoryTranslationAbandoned: true,
+	categoryQuotedInjection:      true,
 }
 
 // Signal reports whether f marks its text as odd without being a verdict on
