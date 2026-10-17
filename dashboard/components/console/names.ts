@@ -46,11 +46,12 @@ const KIND_NAMES: Record<string, string> = {
   pypi_token: "PyPI token",
   artifactory_key: "Artifactory key",
   url_credentials: "Credentials in a URL",
+  language_not_allowed: "Language not allowed",
 };
 
 const TYPE_NAMES: Record<string, string> = {
   pii: "Personal data", secret: "Secret", injection: "Prompt injection", custom: "Custom pattern",
-  malicious_link: "Malicious link", output_schema: "Answer schema",
+  malicious_link: "Malicious link", output_schema: "Answer schema", language: "Language",
 };
 
 const ROLE_NAMES: Record<string, string> = {
@@ -85,6 +86,7 @@ const KIND_TYPES: Record<string, string> = {
   azure_storage_key: "secret", gitlab_token: "secret", npm_token: "secret", sendgrid_key: "secret", mailchimp_key: "secret",
   square_token: "secret", discord_bot_token: "secret", telegram_bot_token: "secret", pypi_token: "secret",
   artifactory_key: "secret", url_credentials: "secret",
+  language_not_allowed: "language",
 };
 export const kindType = (category: string) => KIND_TYPES[category] ?? "custom";
 
