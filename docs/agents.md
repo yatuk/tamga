@@ -65,6 +65,41 @@ A rule can be limited to some of these with `applies_to`
 ([policy](operations.md#sample-policy-yaml)). Images, audio and PDFs are not
 read.
 
+### Tool results that are JSON
+
+MCP tools answer with a text block that holds the tool's JSON output, and
+function results are JSON strings. An instruction then sits in a string
+value, and the encoder may write any character of it as an escape
+(`\u0069gnore` is "ignore"); a tool that wraps another tool's output encodes
+it a second time (`\\u0069gnore`). The text as written holds none of the
+words. So a tool result that is JSON is read twice: as written, keys and
+all, and decoded.
+
+The decoded reading parses the document and reads its strings, and any
+string that is itself a JSON document is read as one, to three documents
+inside the tool result. The strings are read in units: the string values of one object, the
+strings of one array, a document that is a single string. The values of one
+unit are joined with a line break, so an instruction split over the `name`
+and the `description` of one item is read as one sentence. Two units are
+never joined: the title of one search result and the title of the next are
+not a text anybody wrote, and the scanners would find an instruction across
+almost any separator. An instruction a unit holds is a finding when the
+text as written did not already give its category.
+
+A string in which an escape can hide a value (a digit written as an escape,
+a line break right before a number; not the `<`, `>` and `&` that encoders
+write for HTML) is also read by the PII and secret scanners. What they find
+is placed on the escaped bytes it was read from, so `REDACT` masks exactly
+those, in both layers of a document encoded twice, and the tool result is
+still JSON afterwards.
+
+Only tool results are read this way: the encoding is the tool's and the
+words are someone else's. Limits: a tool result over 1 MiB is read as
+written only; past 512 units the remaining strings are added to the last
+unit. Gemini sends a function response as an object, which is already read
+string by string. How this was measured, case by case, is in
+[the benchmark notes](benchmarks/README.md#tool-results-that-are-json-2026-10-17).
+
 ## Settings to change for agents
 
 The shipped policy is written for chat traffic. For agents, look at:
@@ -145,7 +180,10 @@ Things to know:
   compressed or encrypted block. A rule has to name them in `types` to act
   on them.
 - The whole piece of text goes, not the suspicious sentence. A model cannot
-  be trusted to ignore half of a document it was shown.
+  be trusted to ignore half of a document it was shown. For a tool result
+  that is JSON this can remove the data the user asked for along with the
+  one record that carried the instruction; `scan.strip_scope: field`, below,
+  is the narrower choice.
 - The rest of the request is still held to its own rules: a finding under a
   `REDACT` rule elsewhere is redacted in the same pass.
 - If the piece cannot be replaced, the request is blocked and the response
@@ -157,6 +195,100 @@ Things to know:
 - A false positive costs the model one tool result, which it can usually ask
   for again. That is cheaper than a false block, and it is still a cost:
   watch the `STRIP` events.
+
+### Strip only the strings that carry the instruction
+
+```yaml
+scan:
+  strip_scope: field    # text (the default): the whole tool result
+```
+
+With `strip_scope: field`, a tool result that is JSON keeps everything but
+the strings that hold what is stripped. Each of them is replaced by the
+placeholder inside its quotes, so the tool result is still JSON with its
+keys, numbers and other records. For a filing search whose second filing's
+title carries the instruction, the model reads:
+
+```json
+{"company":"Example Corp","filings":[
+  {"form":"10-K","title":"Annual report 2025","filed":"2026-02-27"},
+  {"form":"8-K","title":"[Content removed by Tamga security policy.]","filed":"2026-03-04"}]}
+```
+
+Which strings go: in each unit (the strings of one object or one array) that
+holds the instruction, those strings that hold it alone; when none does
+alone, as with an instruction split over a name and a description, all the
+strings of that unit. The tool result is then scanned again as it would be
+sent. If anything in it is still stripped, or it is no longer JSON, the
+whole tool result is stripped as without the setting. The whole tool result
+also goes when it is not JSON, when the instruction reaches it from a
+neighbouring tool result, and when what holds it is the classifier, a
+banned topic or the language check, whose verdicts cannot be located in a
+string. A value a `REDACT` rule masks elsewhere in the same tool result is
+still masked. The log line of the request counts the strings as
+`stripped_fields`; `X-Tamga-Stripped-Count` still counts tool results.
+
+It is off by default because it is not plainly safer. The rest of a record
+an attacker wrote stays in front of the model, and an instruction phrased
+so that no rule matches it is left there too, where the whole-text strip
+would have taken it out with the matched sentence. Turn it on where losing
+the data costs more than that: search, filings, reviews, issue lists, where
+one record is third-party text and the others are what the user asked for.
+
+## Limit where tools may send data
+
+A text classifier has to recognise a request to send data out. The rules
+miss most such requests: of the 12 data-exfiltration requests in the
+locked Turkish set they block 0
+([numbers](benchmarks/README.md#requests-to-send-data-out)). A list of where
+each tool may send data does not depend on the wording: it holds the tool
+call itself, whatever text led the model there. It covers data that leaves
+through a tool; data the model writes into its answer is a matter for
+`output_rules.block_on` and the link scanner.
+
+```yaml
+output_rules:
+  enabled: true
+  block_on: [tool_destination]
+  streaming:
+    enabled: true            # without it, streamed answers are not read
+    max_buffer_bytes: 8192
+  tool_destinations:
+    - tools: [send_email, "mcp__mail__*"]
+      allow: [example.com]   # recipients @example.com and @*.example.com
+    - tools: [http_request, fetch_url]
+      allow: [api.example.com, "*.internal.example"]
+```
+
+Every tool call in an answer whose tool name matches an entry (`*` stands
+for any run of characters) is read for the places its arguments name: the
+host of every address with an authority (`https://`, `sftp://`, any
+scheme), the domain of every e-mail address, and a value that is a host
+name or an IP address under a key that names a place (`host`, `server`,
+`to`, `cc`, `url`, `webhook` and the like). A place that no matching entry
+allows is a `tool_destination` finding (category
+`destination_not_allowed`, the host as its match). In `block_on` the answer
+is withheld, or the stream ends before the tool call reaches the agent; in
+`redact_on` the address is masked in the arguments and the call goes out
+with nowhere to send to. Entries that name the same tool add up. An allow
+entry is written as in `output_rules.links`: it covers the host and what is
+under it, `*.example.com` only what is under it, an IP address that address
+alone. An empty `allow` allows nowhere. Off unless the section is there.
+
+Things to know:
+
+- A tool no entry names is not checked. A tool call whose name the proxy
+  cannot read is checked only against an entry whose `tools` hold `"*"`.
+- Nothing is resolved or fetched. An allowed host that redirects, forwards
+  mail or proxies requests is a way out; list the hosts you control.
+- An address without a scheme (`//host/path`, `host/path`) and a host under
+  a key not in the list above are not read as places.
+- Tools the provider runs itself (Anthropic `server_tool_use` and
+  `mcp_tool_use`, the Responses API's `mcp_call`) have run before the answer
+  reaches Tamga. Their findings are recorded; nothing is stopped.
+- The policy warns at load when neither `block_on` nor `redact_on` names
+  `tool_destination` (the findings are then only recorded) and when
+  `output_rules.streaming` is off.
 
 ## Speed
 
@@ -184,6 +316,12 @@ read that file, and the turns after it are not.
 - In a tool call's arguments the strings are read, as in a buffered answer.
   A value written as a JSON number (`{"id": 10000000146}`) or as a key is
   not.
+- A tool result that is JSON is still read as written too, and there the
+  scanners can find an instruction across two records whose words only meet
+  in the raw text (two search titles in a row). Two benign rows of the
+  tool-JSON set are blocked that way, before and after the decoded reading.
+- A tool result that is plain text with JSON inside it (`Result: {...}`) is
+  read as written only.
 - Some stream shapes are still unread: Gemini's partial function-call
   arguments, Anthropic citation deltas, and `content` sent as a list of
   parts in an OpenAI-style chunk.

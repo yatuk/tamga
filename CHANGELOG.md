@@ -1197,6 +1197,61 @@
     with a threshold above 1 or a cooldown.
 
 ### Agents
+- **A tool result that is JSON is read decoded as well as as written.**
+  MCP tools and function results return JSON, and an instruction in a
+  string value could be put out of the scanners' reach by writing it in
+  `\uXXXX` escapes, by a second layer of encoding (a tool that wraps
+  another's output), or by splitting it over two fields of one object. The
+  proxy now parses such a tool result, reads every string decoded (and a
+  string that holds a JSON document as that document, to three levels),
+  and gives the injection scanners each unit alone: the string values of
+  one object, the strings of one array. Two records are never read as one
+  text. Strings in which an escape can hide a value are read by the PII and
+  secret scanners too, and what they find is placed on the escaped bytes,
+  so REDACT masks the right ones and the tool result stays JSON. Local and
+  remote scanning (the scanner service) both do it.
+  **Verdicts change: a tool result with an instruction behind escapes or a
+  second encoding, or split over two fields of one object, is now blocked
+  (or stripped under a STRIP rule) where it passed, and a value behind
+  escapes in a tool result (an e-mail address, a TC identity number) is now
+  masked or blocked. A JSON tool result that only quotes an injection while
+  it discusses one can now get the `quoted_injection` warning where it
+  passed (3 of the 104 benign discourse rows, sent as JSON).** On the new tool-JSON set the shipped policy blocks
+  62 of 62 tuning and 55 of 58 locked attacks, from 27 and 26, with the
+  same benign rows flagged as before (2 of 33, 1 of 21). No other red-team
+  set moved. `ScannerVersion` is 1.12.0: **answers cached by an older build
+  are not served by this one.**
+- **`scan.strip_scope: field` strips only the strings of a JSON tool result
+  that hold the instruction.** STRIP replaces the whole piece of text a
+  finding is in, which for a search, filing or review result takes the data
+  the user asked for along with the poisoned record. With the new setting
+  the strings of the unit that holds the instruction are replaced by the
+  placeholder inside their quotes, the tool result is scanned again, and it
+  is stripped whole when anything is still found, when it is no longer
+  JSON, or when the finding cannot be located in a string (classifier,
+  topics, language, an instruction split over two tool results). Off by
+  default; with it unset nothing changes. **The STRIP and ROUTE log lines
+  carry a new field, `stripped_fields`.**
+- **`output_rules.tool_destinations` holds where tools may send data.** An
+  entry names tools (with `*` patterns) and the hosts and e-mail domains
+  they may send to. Every tool call in an answer, buffered or streamed, in
+  the OpenAI chat, Responses, Anthropic and Gemini shapes, is read for the
+  addresses, e-mail domains and host values its arguments name; one that no
+  entry allows is a `tool_destination` finding (category
+  `destination_not_allowed`) that `block_on` withholds and `redact_on`
+  masks. Off unless the section is there; a policy that sets it without
+  naming `tool_destination` in `block_on` or `redact_on` loads with a
+  warning. The rules block 0 of the 12 data-exfiltration requests of the
+  locked Turkish set; this check holds the tool call whatever the request
+  said (`docs/benchmarks/README.md`, "Requests to send data out"). Tool-call
+  segments now carry the tool's name, and the stream guard learns it from
+  the event that opens the call.
+- **Red-team set of tool results that are JSON.** `tooljson_tuning.csv` and
+  `tooljson_locked.csv` (174 rows, split by a seeded hash, the locked part
+  measured before the change) are scanned as tool results through
+  `ScanSegments`, with floors in `cmd/redteam/tooljson_test.go`.
+  `TestToolResultEncodingMatrix` sends each encoding through the proxy in
+  three request shapes and pins what is found and what STRIP leaves.
 - **A failed scan now refuses a request that carries tool results or tool
   definitions, also under a policy that leaves `scan.on_error` out.** Before,
   an unset key forwarded every request on a scan that had failed, timed out

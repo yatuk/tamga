@@ -988,6 +988,147 @@ for running it in shadow, not for switching: set it up as in docs/operations.md
 `shadow_only` and `primary_only` on your own traffic before changing the
 model or the threshold.
 
+### Tool results that are JSON (2026-10-17)
+
+MCP tools return JSON, so a hidden instruction arrives in a string value,
+often behind escapes (`\u003c!-- note to ai --\u003e`), and encoded twice
+when one tool wraps another's output. Until this change the scanners read a
+tool result as written, with its escapes, and an escape put the words out
+of their reach. The proxy now reads a tool result that is JSON a second
+time, decoded ([what is decoded](../agents.md#tool-results-that-are-json)).
+
+**End to end through the proxy.** `TestToolResultEncodingMatrix`
+(`proxy/internal/proxy/tool_result_json_test.go`) sends one instruction,
+in English and in Turkish, in each of the three request shapes that carry
+tool results (OpenAI chat `role: tool`, Anthropic `tool_result` blocks with
+MCP `[{"type":"text","text":…}]` content, the Responses API's
+`function_call_output`), to a proxy in front of a fake provider. The
+result did not depend on the shape: each row below holds for all three.
+"Shipped rule" is the shipped `injection` rule (BLOCK); "STRIP" is the
+two-rule policy of the agents guide (STRIP in tool results).
+
+| How the instruction arrives | Before: found / shipped rule | After: found / shipped rule | What STRIP leaves (before and after) | With `strip_scope: field` |
+|---|---|---|---|---|
+| plain text | yes / BLOCK | yes / BLOCK | nothing of the tool result | nothing of the tool result |
+| a JSON string value | yes / BLOCK | yes / BLOCK | nothing | the other strings |
+| JSON, `<`, `>` as `\u003c`, `\u003e` (Go's encoder) | yes / BLOCK | yes / BLOCK | nothing | the other strings |
+| JSON, every character `\uXXXX` | **no / PASS** | yes / BLOCK | before: all of it, instruction included; after: nothing | the other strings |
+| JSON encoded twice | yes / BLOCK | yes / BLOCK | nothing | the other strings |
+| JSON encoded twice, every character escaped | **no / PASS** | yes / BLOCK | before: all of it; after: nothing | the other strings |
+| JSON, `\n` and `\"` between the words | yes / BLOCK | yes / BLOCK | nothing | the other strings |
+| split over the name and description of one object | yes / BLOCK | yes / BLOCK | nothing | the other records and the price |
+| split over two tool results | yes / BLOCK | yes / BLOCK | neither tool result | neither tool result |
+| base64 in a field | yes / BLOCK | yes / BLOCK | nothing | the other strings |
+| in a filing title (EN) or a product review (TR) next to the data asked for | yes / BLOCK | yes / BLOCK | nothing, the other filing or review included | the other filing or review |
+
+Findings were `instruction_override` and `indirect_injection` throughout
+(with `jailbreak` for the Turkish text, `encoded_override` for English
+base64). STRIP takes out the whole piece of text a finding is in. That is
+the whole tool result in every shape here: OpenAI and the Responses API
+carry one string per tool result, and the Anthropic shape one text block.
+In the filing and review rows that is the reviewer's point: the record the
+user asked for goes with the poisoned one. `scan.strip_scope: field` (off
+by default) narrows it to the strings that hold the instruction; in the
+split row both halves go and the item's price stays.
+
+Two rows were caught before only by luck of the wording, which the
+corpus below shows: the split over two fields was found because the
+scanners read across the `","description":"` between the halves, which
+they do not always do (3 of the 8 split rows of the tuning part were caught
+before); and `\n` between words was caught in this sentence and not in
+most others (2 of 18 escaped rows of the tuning part).
+
+**The tool-JSON set.** `tooljson_tuning.csv` and `tooljson_locked.csv` in
+`proxy/testdata/redteam/` are 174 tool results written for this test by the
+author of the rules: 11 instructions (6 English, 5 Turkish) in 9 to 10
+encodings each, put in a field a tool fills from someone else's text
+(a search snippet, an issue body, a filing title, a review, a calendar
+description, a mail snippet, a file's content); 16 instructions split over
+two fields of one object; and 54 benign tool results (ordinary tool
+output, text about the attack, records whose words read as an instruction
+only when joined, escaped benign text). It is split by a seeded hash like
+the Turkish set (`tamga-tj-2026-10-17`, 40% locked); the locked part was
+measured before any code was changed for it and is not looked at by row. A
+row is scanned as the content of one tool result, the way the proxy scans
+a request (`TestToolJSONTuningSet`, `TestToolJSONLockedSet`); an attack
+counts when the shipped policy blocks it on its injection findings.
+
+| Part | Attacks caught, before | after | Benign flagged, before | after |
+|---|---|---|---|---|
+| `tooljson_tuning.csv` | 27 of 62 (0.435) | 62 of 62 (1.000) | 2 of 33 | 2 of 33 |
+| `tooljson_locked.csv` | 26 of 58 (0.448) | 55 of 58 (0.948) | 1 of 21 | 1 of 21 |
+
+By category, before and after, tuning then locked: escaped 2/18 and 1/20
+to 18/18 and 19/20; encoded twice or three times 7/21 and 4/12 to 21/21 and
+12/12; split 3/8 and 5/8 to 8/8 and 8/8; base64 6/6 and 3/5, unchanged;
+plain values 9/9 and 13/13, unchanged. The three benign rows that are
+blocked before and after are records whose words read as an instruction
+only across two records (two search titles in a row). The decoded reading
+never joins two records; the text as written does, and is still read. Of
+the 16 split rows, 12 are attacks only when the two fields are read
+together; in the other 4 one half is blocked alone
+(`TestToolJSONSplitHalves`).
+
+No other set changed: every attack and benign count of `prompts.csv`,
+`holdout.csv`, the Turkish, deepset and discourse sets, the encoding vectors
+and the benign developer texts is the same before and after
+(`go test ./cmd/redteam/ -v`). Those sets are scanned as loose text, which
+the decoded reading does not touch; they were run to show that.
+
+The same rows sent as JSON tool results show what the decoded reading
+changes for text that is not about tools. Each row of two tuning parts was
+put in the `body` of an issue (`{"number":12,"title":"Issue","body":…}`,
+Go's encoder) and scanned as a tool result, with the shipped policy acting
+on the injection findings (a spot check, not a test in the repository):
+
+| Part, as JSON tool results | Before | After |
+|---|---|---|
+| `tr_tuning.csv`, attacks blocked | 134 of 185 | 142 of 185 |
+| `tr_tuning.csv`, benign blocked / warned | 1 / 1 | 1 / 1 |
+| `discourse_tuning.csv`, attacks blocked | 26 of 26 | 26 of 26 |
+| `discourse_tuning.csv`, benign blocked / warned | 38 / 9 | 38 / 12 |
+
+Wrapped in JSON, the rules blocked 8 Turkish attacks fewer than as loose
+text (142); now they block as many. Three texts about attacks
+that passed as JSON are now warned about (`quoted_injection`): decoded,
+the phrase they quote is read, and read as quoted. No more are blocked.
+
+**Cost.** One more pass of the injection scanners over the decoded
+strings, read together (and each unit alone only when that pass finds a
+new category), and one more pass of all scanners over the strings in which
+an escape can hide a value. Both are answered from the scan cache when an
+agent sends the same tool result again. On a busy laptop a 1.2 KB JSON tool
+result went from 3.8 ms to 5.6 ms of scanning; an 11 KB one with 50 records
+measured within the noise of the machine (18 to 53 ms after, 37 to 41 ms
+before). Not measured on a quiet machine.
+
+### Requests to send data out
+
+The rules catch little of a request to export data in bulk. On the
+Turkish set, category `tr.exfiltration` (`TestTurkishTuningSet`,
+`TestTurkishLockedSet`, 2026-10-17):
+
+| Part | Caught |
+|---|---|
+| `tr_tuning.csv` | 6 of 20 |
+| `tr_locked.csv` | **0 of 12** |
+
+and `prompts.csv` has `data.exfiltration` and `data.exfiltration.tr` at
+0 of 2 each. Such a request needs no override phrase: it asks for
+something the model can do. A text classifier has to recognise the intent
+from the wording; the next one is worded differently.
+
+For data that leaves through a tool there is a check that does not read
+the wording: `output_rules.tool_destinations`, a list of the hosts and
+recipient domains each tool may send to, held against the tool calls in
+the model's answers, buffered and streamed
+([how](../agents.md#limit-where-tools-may-send-data)). A model that was
+talked into mailing the customer table to an outside address produces a
+tool call to that address, and the call is withheld whatever the request
+said. It does nothing for data the model writes into its answer, and an
+allowed host that forwards is a way out. It is not a number on this set:
+the set holds requests, and the check holds answers.
+
 ### How to read these numbers honestly
 
 - **Precision (1.000)** — nothing benign in either set was mitigated. This
@@ -1001,6 +1142,9 @@ model or the threshold.
   matching cannot do. Closing that gap is what the optional inline
   classifier is for. In the run above it caught 6 of the 20 at threshold
   0.98; see [With the inline classifier](#with-the-inline-classifier).
+  For data sent out through a tool, a list of allowed destinations does
+  what no text rule here does; see
+  [Requests to send data out](#requests-to-send-data-out).
 - **Latency** — the median scan is a fraction of a millisecond and the
   tail stays under 2 ms, well inside a 5 ms budget.
 
