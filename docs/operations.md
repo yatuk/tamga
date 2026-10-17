@@ -1311,6 +1311,213 @@ memory of the full mode. Its cost is the size of the binary and of the
 image, and 53 MiB of memory in a proxy whose policy turns the check on; the
 models are not loaded otherwise.
 
+## Banned topics
+
+Some requests are not attacks and not data leaks, but still not something
+the model should be asked: a change to a customer's credit score, the salary
+of a named colleague. The `topics` section lists such subjects in free text,
+in Turkish or English, and the classifier service matches each request
+against them by meaning, with a second, optional model. It is off by
+default.
+
+A match is a finding of type `topic` whose category is the topic's name. It
+carries the name, the score (`match: "topic score 0.86"`, and `confidence`)
+and where the text was (role and path), never the text or the topic's
+description. The section's `action` applies to every match, the way a custom
+entity's action applies to its matches; a rule keyed `topic` (with `types`
+naming topics) applies as well, and the stronger action wins.
+
+**Set it up.** No model ships with Tamga. The numbers below were measured
+with [`MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7`](https://huggingface.co/MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7)
+at revision `b5113eb38ab63efdd7f280f8c144ea8b13f978ce` (MIT, the int8
+`onnx/model_quantized.onnx` of 339 MB). Put `config.json`, `tokenizer.json`
+and `onnx/model_quantized.onnx` from it, with its `LICENSE`, in
+`models/mdeberta-nli/`, or point `TAMGA_TOPICS_MODEL_PATH` at the directory
+you keep them in. Any natural-language-inference model exported to ONNX
+whose `config.json` names an `entailment` and a `contradiction` label can be
+used instead. The classifier profile mounts the directory next to the
+injection model's; the proxy reaches it at the same `TAMGA_CLASSIFIER_ADDR`:
+
+```bash
+echo 'TAMGA_CLASSIFIER_ADDR=classifier:50052' >> .env
+docker compose --env-file .env -f deploy/docker-compose.yml --profile full --profile classifier up -d
+```
+
+Without the second directory the service starts as before: topic calls
+answer `UNAVAILABLE` and injection scoring is not affected. The service's
+health answer says which of the two models is loaded, and the proxy logs it
+at startup. Then, in the policy:
+
+```yaml
+topics:
+  enabled: true
+  action: WARN          # BLOCK, STRIP, WARN, LOG or PASS
+  threshold: 0.8
+  timeout_ms: 600       # a missed deadline is a failed scan: see on_error
+  roles: [user]
+  max_chars: 1000
+  banned:
+    - name: credit-score-change
+      description: "a request to change a customer's credit score"
+    - name: maas-sorgusu
+      description: "adı verilen bir çalışanın maaşını sorma"
+      threshold: 0.65   # a topic may set its own
+```
+
+A name is lower-case letters, digits, `-` and `_`, at most 64; a
+description is at most 300 bytes; at most 16 topics. A misspelled key, an
+action that is not one of the five, `REDACT` (a match is a verdict on a
+whole text and has no span to mask), a duplicate name and an empty
+description each fail the load. The section is validated when it is off as
+well. Changing it needs the admin role, as `scan` does: turned on without
+the model and with `scan.on_error: block`, it refuses every request.
+
+The service reads these settings from its environment:
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `TAMGA_TOPICS_MODEL_DIR` | not set (Compose: `/models/topics`) | Directory of the NLI model. Not set: no topic model |
+| `TAMGA_TOPICS_MODEL_NAME` | the directory's name | Name reported in health answers and logs |
+| `TAMGA_TOPICS_THREADS` | `TAMGA_CLASSIFIER_THREADS` | CPU threads for the topic model |
+| `TAMGA_TOPICS_WINDOW` | 128 | Tokens per model run, the request and the topic together |
+| `TAMGA_TOPICS_OVERLAP` | 16 | Tokens two windows of a long text share |
+| `TAMGA_TOPICS_MAX_WINDOWS` | 8 | Windows read per text; past that the text is marked truncated |
+| `TAMGA_TOPICS_TEMPLATE` | `This is {}.` | Sentence each description is put into; `{}` is the description |
+
+**What happens to a request.**
+
+- The topic model is asked only when the policy turns topics on and nothing
+  has blocked the request already, after the inline classifier. It has its
+  own deadline (`timeout_ms`) and its own circuit breaker: after five
+  failures in a row it is not asked for ten seconds, and a service without
+  a topic model does not open the injection classifier's breaker.
+- Text of the listed roles is sent, newest first, up to `max_chars`. A text
+  longer than what is left is read from its start up to the limit. Text the
+  proxy sent in the last ten minutes, with the same list of topics, is
+  answered from memory.
+- `X-Tamga-Topics: ok` says every text was read; `partial` says some was
+  not read whole. When the model cannot answer (no model, down, deadline
+  missed, breaker open) the response carries
+  `X-Tamga-Scan-Degraded: topics` (`classifier,topics` when the injection
+  classifier failed too) and `scan.on_error` decides: `block` answers 503,
+  `pass` forwards the request. The scan API gives no verdict in that case,
+  whatever `on_error` says.
+- A proxy key calling the scan API is told the finding's type, `topic`, and
+  not the topic's name, as for custom entities and competitors.
+- `/metrics` has `tamga_topics_calls_total`, `tamga_topics_errors_total`,
+  `tamga_topics_cached_texts_total` and `tamga_topics_short_circuited_total`.
+
+**How well it works.** Measured on a set written for this purpose,
+`classifier/tests/data/topics_eval.json`: five banking topics, each with an
+English and a Turkish description, and 70 requests: 6 that are each topic's
+request (3 English, 3 Turkish), 6 hard negatives per topic that use its
+words without being that request ("how is a credit score calculated?",
+"show me the score, I only want to read it"), and 10 ordinary ones. Every
+request was scored against every topic, once with the English descriptions
+and once with the Turkish ones. A topic's positives are its six requests;
+every other text is a negative for it. Run it with
+`python -m tests.eval_topics --model-dir <dir>` in `classifier/`. The set is
+small: one request more or less moves a per-topic recall by 0.17.
+
+All five topics together (precision and recall pooled over topics; hard
+negatives flagged out of 30; other false matches out of 290):
+
+| Descriptions | Threshold | Precision | Recall | Hard negatives flagged | Other false matches |
+|---|---|---|---|---|---|
+| English | 0.6 | 0.22 | 0.77 | 18 | 65 |
+| English | 0.7 | 0.52 | 0.57 | 10 | 6 |
+| English | **0.8** | 0.85 | 0.37 | 2 | 0 |
+| English | 0.9 | 1.00 | 0.03 | 0 | 0 |
+| Turkish | 0.6 | 0.46 | 0.40 | 3 | 11 |
+| Turkish | 0.7 | 0.83 | 0.17 | 0 | 1 |
+| Turkish | 0.8 | 1.00 | 0.07 | 0 | 0 |
+
+Per topic, English descriptions (precision / recall; "–" where nothing was
+flagged):
+
+| Topic | 0.7 | 0.8 | Hard negatives flagged at 0.8 |
+|---|---|---|---|
+| credit-score-change | 0.50 / 0.67 | 0.75 / 0.50 | 1 of 6 |
+| employee-salary | 0.43 / 1.00 | 0.83 / 0.83 | 1 of 6 |
+| kyc-bypass | 1.00 / 0.17 | 1.00 / 0.17 | 0 of 6 |
+| stock-advice | 0.56 / 0.83 | 1.00 / 0.33 | 0 of 6 |
+| record-tampering | 1.00 / 0.17 | – / 0.00 | 0 of 6 |
+
+Per topic, Turkish descriptions:
+
+| Topic | 0.6 | 0.7 | Hard negatives flagged at 0.6 |
+|---|---|---|---|
+| credit-score-change | 0.36 / 0.67 | 1.00 / 0.50 | 0 of 6 |
+| employee-salary | – / 0.00 | – / 0.00 | 0 of 6 |
+| kyc-bypass | 1.00 / 0.17 | – / 0.00 | 0 of 6 |
+| stock-advice | 0.50 / 0.67 | 0.67 / 0.33 | 1 of 6 |
+| record-tampering | 0.50 / 0.50 | – / 0.00 | 2 of 6 |
+
+The language of the request mattered less than that of the description:
+with English descriptions, Turkish requests were found about as often as
+English ones (at 0.8, 5 of 15 Turkish and 6 of 15 English).
+
+The hypothesis template was chosen on the same set. Pooled precision and
+recall:
+
+| Template | English, 0.7 | English, 0.8 | Turkish, 0.6 | Turkish, 0.7 |
+|---|---|---|---|---|
+| `This is {}.` (default) | 0.52 / 0.57 | 0.85 / 0.37 | 0.46 / 0.40 | 0.83 / 0.17 |
+| `{}` (the description alone) | 0.59 / 0.43 | 0.80 / 0.13 | 0.52 / 0.50 | 1.00 / 0.27 |
+| `This text is about {}.` | 0.54 / 0.47 | 0.62 / 0.17 | 0.36 / 0.57 | 0.77 / 0.33 |
+| `This text contains {}.` | 0.43 / 0.63 | 0.80 / 0.27 | 0.26 / 0.37 | 1.00 / 0.27 |
+| `Bu metin {} hakkında.` | 0.50 / 0.47 | 0.89 / 0.27 | 0.65 / 0.50 | 0.71 / 0.17 |
+
+The score is the probability of entailment against contradiction, with
+"neutral" left out. Taken over all three classes, the model calls almost
+every topic sentence neutral, and at 0.5 it found 2 of 30 requests.
+
+Latency, on an Intel Core Ultra 7 255H with four threads, one call as the
+proxy makes it:
+
+| Text | Topics | Median | 95th percentile |
+|---|---|---|---|
+| one short request (5 to 20 words) | 1 | 15 ms | 18 ms |
+| one short request | 5 | 63 to 67 ms | 75 to 78 ms |
+| 394 characters (101 tokens) | 5 | 178 ms | |
+| 833 characters (214 tokens) | 5 | 456 ms | |
+| 1964 characters (526 tokens) | 5 | 1053 ms | |
+
+A call costs about 13 ms per topic for a short message and about 0.1 ms per
+character per topic beyond that. The defaults (1000 characters, 600 ms)
+hold five topics; with more topics, lower `max_chars` or raise
+`timeout_ms`. The two models share the service's CPU, so a topic call
+running next to an injection call slows both.
+
+**What to set.** Start on `WARN` or `LOG` and read the scores the findings
+carry on your own traffic before you choose `BLOCK`. With English
+descriptions, 0.8 is a starting point: on this set it flagged 2 of 30 hard
+negatives and found a little over a third of the requests. Turkish
+descriptions score lower; begin at 0.6 to 0.7 for them, or write the
+description in English (the request may still be in Turkish). Set a
+threshold per topic once you know how each behaves: they differ a great
+deal.
+
+**What it cannot do.**
+
+- It does not tell a request from a question about the same subject well.
+  "How is a credit score calculated?" and "raise this customer's credit
+  score" share most of their meaning to this model; most of its errors on
+  this set were hard negatives like that.
+- Recall is low at thresholds where precision is high. At 0.8 it missed
+  about two thirds of the requests in this set; some topics (here the KYC
+  and record-tampering ones) were almost never found. Treat it as a signal
+  to review, not as a control that stops a determined user, who can phrase a
+  request so it does not match.
+- Results depend on how the description is worded, and a wording that works
+  in one language may not in the other. Measure each topic you add.
+- The model reads at most `max_chars` of a request and eight windows of one
+  text; what it did not read it cannot match.
+- The model was trained on machine-translated data and quantized to int8;
+  the full-precision model was not measured here.
+- The service receives the request text and the descriptions in the clear,
+  as for the inline classifier. Keep it on the internal network.
+
 ## Analyzer
 
 The analyzer is a separate Python service. It does two things: it renders
