@@ -475,7 +475,8 @@ func (b *litellmHandler) record(ctx context.Context, call *scanCall, requestID s
 		PolicyName:     pol.Name,
 		PolicyVersion:  pol.Version,
 		// Set when the rules said ROUTE and the bridge blocked instead.
-		RoutePool: ev.route,
+		RoutePool:  ev.route,
+		Classifier: ev.classifier,
 	}
 	if ev.action == policy.ActionBlock {
 		e.EventType = "request_blocked"

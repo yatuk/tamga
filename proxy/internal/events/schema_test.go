@@ -322,3 +322,24 @@ func TestEventV2_AllEventTypes(t *testing.T) {
 		})
 	}
 }
+
+// The shadow comparison travels in the payload under "classifier", and is
+// absent from a request scored without a shadow model.
+func TestEventToV2_ClassifierRecord(t *testing.T) {
+	shadow := 0.5
+	e := Event{RequestID: "r", EventType: "request_scanned", Action: "PASS",
+		Classifier: &ClassifierRecord{Model: "p", Threshold: 0.98, ShadowModel: "c", ShadowThreshold: 0.99,
+			Texts: []ClassifierText{{Seg: 1, Role: "user", Score: 0.1, Threshold: 0.98, Shadow: &shadow}}}}
+	raw, ok := eventToV2(e).Payload["classifier"].(json.RawMessage)
+	if !ok {
+		t.Fatalf("payload has no classifier record: %v", eventToV2(e).Payload)
+	}
+	var got ClassifierRecord
+	if err := json.Unmarshal(raw, &got); err != nil || got.ShadowModel != "c" || len(got.Texts) != 1 || *got.Texts[0].Shadow != 0.5 {
+		t.Fatalf("record %s: %v", raw, err)
+	}
+	e.Classifier = nil
+	if _, ok := eventToV2(e).Payload["classifier"]; ok {
+		t.Fatal("a request without a shadow carries a classifier record")
+	}
+}

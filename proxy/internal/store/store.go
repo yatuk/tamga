@@ -47,6 +47,9 @@ type RequestLog struct {
 	PolicyVersion string
 	// RoutePool is the internal pool a ROUTE verdict named (events.Event.RoutePool).
 	RoutePool string
+	// ClassifierScores (JSON) is events.Event.Classifier: the classifier's
+	// and its shadow model's scores, nil when no shadow model ran.
+	ClassifierScores []byte
 }
 
 // SecurityEvent is a row from request_logs for dashboard listing.

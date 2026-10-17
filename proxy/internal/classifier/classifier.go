@@ -30,6 +30,23 @@ type Result struct {
 	// Truncated means the text was too long to score whole; a low Score is
 	// then not a verdict.
 	Truncated bool
+	// Model names the model that gave Score.
+	Model string
+	// Cached says the result came from the Guard's cache: the text was
+	// scored for an earlier request.
+	Cached bool
+
+	// The shadow model's answer, when the service runs one: a candidate
+	// scored next to the model in service, recorded and never acted on.
+	// ShadowModel is empty when the service runs none. HasShadow says
+	// ShadowScore was given; when it was not, ShadowSkipped says why
+	// ("late", "busy", "failed"). A text answered from the cache carries
+	// what the shadow said when the text was first scored.
+	ShadowModel     string
+	HasShadow       bool
+	ShadowScore     float64
+	ShadowTruncated bool
+	ShadowSkipped   string
 }
 
 // Scorer scores texts. The gRPC client is one; tests use their own.
@@ -83,6 +100,28 @@ func (c *Client) Score(ctx context.Context, requestID string, texts []string) ([
 		if i < len(resp.Truncated) {
 			out[i].Truncated = resp.Truncated[i]
 		}
+		out[i].Model = resp.Model
+	}
+	if resp.ShadowModel != "" {
+		// The shadow never fails the call: scores that do not fit the texts
+		// are dropped and reported as a failed shadow.
+		skipped := resp.ShadowSkipped
+		ok := len(resp.ShadowScores) == len(texts)
+		if !ok && skipped == "" {
+			skipped = "failed"
+		}
+		for i := range out {
+			out[i].ShadowModel = resp.ShadowModel
+			if !ok {
+				out[i].ShadowSkipped = skipped
+				continue
+			}
+			out[i].HasShadow = true
+			out[i].ShadowScore = float64(resp.ShadowScores[i])
+			if i < len(resp.ShadowTruncated) {
+				out[i].ShadowTruncated = resp.ShadowTruncated[i]
+			}
+		}
 	}
 	return out, nil
 }
@@ -105,6 +144,10 @@ type HealthStatus struct {
 	TopicsAvailable bool
 	TopicsModel     string
 	TopicsReason    string
+	// The shadow injection model, optional and off unless configured.
+	ShadowAvailable bool
+	ShadowModel     string
+	ShadowReason    string
 }
 
 // HealthDetail reports both models.
@@ -116,6 +159,7 @@ func (c *Client) HealthDetail(ctx context.Context) (HealthStatus, error) {
 	return HealthStatus{
 		Available: resp.Available, Model: resp.Model, Reason: resp.Reason,
 		TopicsAvailable: resp.TopicsAvailable, TopicsModel: resp.TopicsModel, TopicsReason: resp.TopicsReason,
+		ShadowAvailable: resp.ShadowAvailable, ShadowModel: resp.ShadowModel, ShadowReason: resp.ShadowReason,
 	}, nil
 }
 
@@ -219,6 +263,7 @@ func (g *Guard) Score(ctx context.Context, requestID string, texts []string, tim
 		keys[i] = sha256.Sum256([]byte(t))
 		if e, ok := g.cache[keys[i]]; ok && now.Sub(e.seen) < cacheTTL {
 			out[i] = e.res
+			out[i].Cached = true
 			continue
 		}
 		missIdx = append(missIdx, i)

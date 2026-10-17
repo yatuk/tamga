@@ -323,6 +323,8 @@ providers:
 #     threshold: 0.98     # lower catches more and flags more ordinary text
 #     signal_threshold: 0.90  # for text with an unreadable block, hidden
 #                             # characters or a change of script in it
+#     shadow_threshold: 0.98  # only with a shadow model in the service: where
+#                             # its recorded scores count as "would flag"
 #     roles: [user, tool] # whose text is sent
 #     max_chars: 6000     # per request, newest first; the rest is not classified
 scan:

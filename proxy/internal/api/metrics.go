@@ -143,6 +143,15 @@ func (cfg Config) handleMetrics(w http.ResponseWriter, _ *http.Request) {
 		_, _ = fmt.Fprintln(w, "# TYPE tamga_classifier_short_circuited_total counter")
 		_, _ = fmt.Fprintf(w, "tamga_classifier_short_circuited_total %d\n", cs.ShortCircuited)
 	}
+	// Shadow mode: how a candidate model's scores compared with the verdict
+	// of the model in service, text by text. Absent until a shadow answered.
+	if shadow := classifier.ShadowStats(); len(shadow) > 0 {
+		_, _ = fmt.Fprintln(w, "# HELP tamga_classifier_shadow_texts_total Texts scored by the classifier's shadow model, by how it compared with the model in service (both, neither, shadow_only, primary_only, missing).")
+		_, _ = fmt.Fprintln(w, "# TYPE tamga_classifier_shadow_texts_total counter")
+		for _, c := range shadow {
+			_, _ = fmt.Fprintf(w, "tamga_classifier_shadow_texts_total{shadow_model=%q,outcome=%q} %d\n", c.Model, c.Outcome, c.Texts)
+		}
+	}
 	if topicStats != nil {
 		ts := topicStats()
 		_, _ = fmt.Fprintln(w, "# HELP tamga_topics_calls_total Calls made to the banned-topic model.")

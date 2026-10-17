@@ -33,6 +33,14 @@ type ClassifierConfig struct {
 	// flagged 1 of 117 and 2 of 85 benign samples when applied to every
 	// text, and here it applies only to the few that carry a signal.
 	SignalThreshold float64 `yaml:"signal_threshold" json:"signal_threshold,omitempty"`
+	// ShadowThreshold is the threshold the shadow model is read at, when the
+	// classifier service runs one (TAMGA_CLASSIFIER_SHADOW_MODEL_DIR): a
+	// candidate model scored next to the one in service, whose scores are
+	// recorded and never acted on. It only sorts the shadow's scores into
+	// "would have flagged" and "would not" for the comparison metric and the
+	// stored record, so it is the threshold the candidate would ship with.
+	// Default: threshold. Choose it with classifier/finetune/sweep.py.
+	ShadowThreshold float64 `yaml:"shadow_threshold" json:"shadow_threshold,omitempty"`
 	// Roles are the message roles whose text is sent to the classifier.
 	// Default: user and tool, the text that reaches the model from outside
 	// the application.
@@ -66,6 +74,9 @@ func (c *ClassifierConfig) validate() error {
 	if c.SignalThreshold < 0 || c.SignalThreshold > 1 {
 		return fmt.Errorf("scan.classifier.signal_threshold: %v is out of range (0 to 1)", c.SignalThreshold)
 	}
+	if c.ShadowThreshold < 0 || c.ShadowThreshold > 1 {
+		return fmt.Errorf("scan.classifier.shadow_threshold: %v is out of range (0 to 1)", c.ShadowThreshold)
+	}
 	if c.MaxChars < 0 {
 		return fmt.Errorf("scan.classifier.max_chars: %d must not be negative", c.MaxChars)
 	}
@@ -84,6 +95,8 @@ type ClassifierSettings struct {
 	// SignalThreshold is the threshold for text that carries a signal. It
 	// is never above Threshold.
 	SignalThreshold float64
+	// ShadowThreshold is the shadow model's threshold (see ClassifierConfig).
+	ShadowThreshold float64
 	MaxChars        int
 	roles           map[string]bool
 }
@@ -116,6 +129,10 @@ func (p *Policy) ClassifierSettings() (ClassifierSettings, bool) {
 	}
 	if s.SignalThreshold > s.Threshold {
 		s.SignalThreshold = s.Threshold
+	}
+	s.ShadowThreshold = c.ShadowThreshold
+	if s.ShadowThreshold == 0 {
+		s.ShadowThreshold = s.Threshold
 	}
 	if c.MaxChars == 0 {
 		s.MaxChars = DefaultClassifierMaxChars

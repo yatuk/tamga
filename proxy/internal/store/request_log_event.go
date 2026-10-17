@@ -103,6 +103,11 @@ func RequestLogFromEvent(e events.Event, defaultOrgID string, getPolicy func() *
 			rl.OutputRisk = b
 		}
 	}
+	if e.Classifier != nil {
+		if b, err := json.Marshal(e.Classifier); err == nil {
+			rl.ClassifierScores = b
+		}
+	}
 	return rl, true
 }
 
@@ -171,6 +176,13 @@ func eventFromV2(ev events.EventV2) (events.Event, bool) {
 	}
 	payloadInto(p, "findings", &e.Findings)
 	payloadInto(p, "output_findings", &e.OutputFindings)
+	if _, ok := p["classifier"]; ok {
+		var rec events.ClassifierRecord
+		payloadInto(p, "classifier", &rec)
+		if rec.ShadowModel != "" {
+			e.Classifier = &rec
+		}
+	}
 	if scanned, _ := p["output_scanned"].(bool); scanned {
 		e.OutputScanned = true
 		payloadInto(p, "output_risk", &e.OutputRisk)
