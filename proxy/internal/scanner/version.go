@@ -48,7 +48,14 @@ package scanner
 // word "jailbreak" alone is severity low. Both make fewer verdicts. The
 // second reading, with the quoted parts blanked out, is a text the scanners
 // had not read before, so the version moves with it.
-const ScannerVersion = "1.11.0"
+//
+// 1.12.0: a tool result that is JSON is read a second time, decoded
+// (tool_json.go): what \u escapes or a document encoded twice hide, and an
+// instruction split over two fields of one object, are found. Answers can
+// hold tool_destination findings (output_rules.tool_destinations). A
+// request a build of 1.11.0 forwarded and cached the answer to can be one
+// this build blocks.
+const ScannerVersion = "1.12.0"
 
 // ScannerVersions maps each scanner name to its current semantic version.
 var ScannerVersions = map[string]string{
@@ -60,6 +67,7 @@ var ScannerVersions = map[string]string{
 	"custom":             "1.1.0", // patterns are also run on the normalised readings
 	"malicious_link":     "1.1.0", // look-alikes of protected names written in Latin letters only
 	"output_schema":      "1.0.0", // answers only: output_rules.json_schema
+	"tool_destination":   "1.0.0", // answers only: output_rules.tool_destinations
 }
 
 // BINDatasetVersion identifies the embedded binlist.csv snapshot.
