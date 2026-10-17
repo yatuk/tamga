@@ -221,7 +221,7 @@ func framingOf(text string) framing {
 			fr.spans = append(fr.spans, framedSpan{l.start, l.start + len(l.text), "blockquote"})
 		}
 	}
-	fr.spans = append(fr.spans, inlineCode(text, fenced)...)
+	fr.spans = append(fr.spans, inlineCodeSpans(text, fenced)...)
 	fr.spans = append(fr.spans, quotations(text, fenced)...)
 	examples, cues := exampleSpans(text, fenced)
 	fr.spans = append(fr.spans, examples...)
@@ -337,9 +337,9 @@ func indentedBlocks(lines []lineAt, fenced func(int) bool) []framedSpan {
 	return out
 }
 
-// inlineCode returns the code spans: a run of backticks, and the next run
+// inlineCodeSpans returns the code spans: a run of backticks, and the next run
 // of as many on the same line.
-func inlineCode(text string, fenced func(int) bool) []framedSpan {
+func inlineCodeSpans(text string, fenced func(int) bool) []framedSpan {
 	type run struct{ start, n int }
 	var out []framedSpan
 	var runs []run
