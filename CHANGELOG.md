@@ -1429,6 +1429,25 @@
   to 0.97. All three sets were written by the same author as the rules,
   the fine-tuned model has not been exported to the ONNX form the service
   runs, and no default has changed. The scanner version is 1.10.0.
+- **A Turkish set written by someone else, and what the rules and the
+  classifier do on it.** `proxy/testdata/redteam/trd_tuning.csv` and
+  `trd_locked.csv` are the Turkish translation of `deepset/prompt-injections`
+  published as `beratcmn/turkish-prompt-injections` (Apache-2.0), read row by
+  row against the source: 154 translations corrected, 13 rows left out, no
+  label changed, deepset's own train/test split kept. The rules catch 27 of
+  203 attacks in the tuning part and 2 of 59 in the locked part, and flag no
+  benign row; most of these attacks carry no override phrase. On the locked
+  part the classifier scores most attacks far below 0.98: recall at that
+  threshold is 0.14 before the Turkish fine-tune and 0.19 after.
+  `classifier/finetune` now scores `trd_locked.csv` too, and on a set too
+  small for its false-positive target it puts the threshold just above the
+  highest benign score instead of reporting no threshold. The Turkish set of
+  Yıldız Technical University (Aytaş et al., *Applied Sciences* 2026,
+  CC BY-NC-SA 4.0) was measured on a local copy and is not in the
+  repository; the numbers are in `docs/benchmarks/README.md`. On its short
+  injections the fine-tune raises recall (0.58 to 0.70 on one file at a 2%
+  false-positive rate); **on its long role-play jailbreaks it does not, and
+  at 0.98 it flags more benign text (2.0% of one file instead of 0.6%).**
 - **Look-alike host names written in Latin letters only are reported.**
   `gıthub.com` with a dotless ı, `paypał.com`, `akbánk.com` and their
   punycode passed the link scanner, which looked for mixed scripts. A host

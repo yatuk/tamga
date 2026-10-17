@@ -641,8 +641,9 @@ On the locked Turkish set, recall at the same false-positive rate went from
 did not get worse. What this does not show:
 
 - **Independent evidence.** Both sets, and the tuning set, were written by
-  the author of the rules. A Turkish set written by someone else, with
-  benign texts as well as attacks, is still needed.
+  the author of the rules. Two Turkish sets written by someone else are
+  measured in the next section; on them the gain is smaller and, on long
+  jailbreaks, absent.
 - **The model as the service runs it.** The service runs an int8 ONNX
   export. The fine-tuned model has not been exported or quantized, and its
   numbers after that are not known. No default has changed.
@@ -650,6 +651,95 @@ did not get worse. What this does not show:
   proxy asks the classifier only about what the rules did not block, and
   strips hashes and keys first (see "With the inline classifier").
 - **One run.** One seed, one machine; no spread is known.
+
+### Two Turkish sets written by someone else (2026-10-17)
+
+The sets above were all written by the author of the rules. These two were
+not, so they are the better test of both the rules and the fine-tune.
+
+**The translated deepset set.** `trd_tuning.csv` and `trd_locked.csv` in
+`proxy/testdata/redteam/` are `beratcmn/turkish-prompt-injections`
+(Apache-2.0), a Turkish translation of `deepset/prompt-injections`, with
+every row read against its source and 154 of 661 translations corrected
+(`NOTICE` lists the changes). deepset's split is kept: train is the tuning
+part, test the locked part. The rules, by the count of
+`TestDeepsetTurkishTuningSet` and `TestDeepsetTurkishLockedSet` (an attack
+counts only when an injection finding is acted on):
+
+| Part | Attacks caught | Benign flagged |
+|---|---|---|
+| `trd_tuning.csv` | 27 of 203 (0.133) | 0 of 342 |
+| `trd_locked.csv` | 2 of 59 (0.034) | 0 of 44 |
+
+Most of deepset's attacks have no override phrase: a new task slipped after
+a question, a persona, "act as". The rules are written for phrases, and
+miss them. The two classifiers, scored the way `classifier/finetune` scores
+(at most 2% of the set's benign rows flagged; on 44 benign rows that is
+none, so the threshold sits just above the highest benign score):
+
+| Set | Model | Attacks | Benign | Threshold at FPR ≤ 2% | FPR | Recall | Recall at 0.98 | FPR at 0.98 |
+|---|---|---|---|---|---|---|---|---|
+| `trd_locked.csv` | before | 59 | 44 | 0.0120 | 0.000 | 0.678 | 0.136 | 0.000 |
+| `trd_locked.csv` | after | 59 | 44 | 0.0002 | 0.000 | 0.746 | 0.186 | 0.000 |
+
+The models rank these attacks above the benign rows, but score most of
+them far below the shipped threshold of 0.98, where recall is 0.14 and
+0.19. A threshold of 0.0120 is not one a deployment could use: ordinary
+benign text elsewhere scores above it. `trd_tuning.csv` is not scored here:
+the base model was trained on the English originals of its rows.
+
+**The Yıldız Technical University set.** Aytaş, Şen, Diri, Biricik and
+Bayram published about 20,000 Turkish translations of five English sets
+with the paper "Benchmarking Prompt Injection Attacks on LLMs: Turkish
+Vulnerability Assessment and English Comparative Analysis", *Applied
+Sciences* 16(13), 6740 (2026), <https://doi.org/10.3390/app16136740>, as
+`OnerAYTAS/Turkish_prompt_injection_jailbreak_dataset` (commit `444e9b6`).
+Its licence is CC BY-NC-SA 4.0, so **no row of it is in this repository**,
+and it is not used for training: only the numbers below, measured on a
+local copy. Each file keeps its source set's labels; exact duplicate texts
+were counted once.
+
+| File (source set) | Model | Attacks | Benign | Recall at FPR ≤ 2% | Recall at 0.98 | FPR at 0.98 | Rules: recall | Rules: FPR |
+|---|---|---|---|---|---|---|---|---|
+| `xTRam1_1` (safe-guard) | before | 647 | 1401 | 0.584 | 0.304 | 0.003 | 0.224 | 0.001 |
+| | after | | | 0.699 | 0.501 | 0.004 | | |
+| `xTRam1_2` (safe-guard) | before | 2411 | 5679 | 0.607 | 0.323 | 0.001 | 0.216 | 0.002 |
+| | after | | | 0.655 | 0.469 | 0.005 | | |
+| `Yash (1)` | before | 187 | 69 | 0.674 | 0.524 | 0.000 | 0.075 | 0.000 |
+| | after | | | 0.775 | 0.722 | 0.000 | | |
+| `Yash (2)` | before | 339 | 106 | 0.717 | 0.360 | 0.000 | 0.059 | 0.000 |
+| | after | | | 0.723 | 0.563 | 0.000 | | |
+| `Injection-Attack-Detection` | before | 1042 | 508 | 0.270 | 0.055 | 0.002 | 0.019 | 0.000 |
+| | after | | | 0.253 | 0.106 | 0.002 | | |
+| `rogue` (rogue-security) | before | 2003 | 2996 | 0.224 | 0.102 | 0.006 | 0.131 | 0.007 |
+| | after | | | 0.206 | 0.208 | 0.020 | | |
+| `Jack` (jackhhao) * | before | 651 | 1323 | 0.369 | 0.077 | 0.003 | 0.323 | 0.005 |
+| | after | | | 0.292 | 0.223 | 0.014 | | |
+
+\* The base model was trained on jackhhao's train split, and this file
+does not say which rows came from it. safe-guard (`xTRam1`) was kept out of
+the base model's training; the other sources are not on its training list.
+"Rules" is `proxy/cmd/redteam` with the shipped policy, where any action
+counts. The set also holds `AYTAS.csv` (790 harmful requests, no benign
+rows) and rows labelled `toxicity`; those are not injections and are left
+out of the table.
+
+What this says:
+
+- **The fine-tune helps on injections, not on jailbreaks.** On the safe-guard
+  and Yash files, which are mostly short injections, recall went up at the
+  same false-positive rate (on the smaller safe-guard file from 0.58 to
+  0.70). On `rogue` and `Jack`, long role-play jailbreaks (a median attack
+  of 800 to 1,600 characters), it did not, and at 0.98 it flags more benign
+  rows: 2.0% of `rogue`'s instead of 0.6%. The tuning set holds few prompts
+  of that kind. In `Injection-Attack-Detection` most rows labelled attacks
+  are short requests or templates (`[Değişken: ...]`) with no instruction
+  to the model in them; neither model nor the rules do well there.
+- **The rules catch little of either set.** Most of these attacks carry no
+  phrase a rule can match; that is what the classifier is for.
+- **Machine translation.** Both sets were translated by machine, and the
+  academic one was not corrected for this measurement. A missed row may be a
+  row the translation broke.
 
 ### How to read these numbers honestly
 

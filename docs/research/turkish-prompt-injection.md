@@ -70,13 +70,16 @@ not be opened; see [could not verify](#could-not-verify).
 
 ## Datasets that hold Turkish injection text
 
-Recorded, not downloaded. Licence and size are as the dataset card states.
+Licence and size are as the dataset card states. Both were downloaded on
+2026-10-17 with the owner's approval; the first is in the repository, the
+second is not.
 
 | Dataset | Host | Size | Licence | What it is |
 |---|---|---|---|---|
-| `beratcmn/turkish-prompt-injections` | <https://huggingface.co/datasets/beratcmn/turkish-prompt-injections> | 661 rows (train 546, test 115) | Apache-2.0 | A Turkish translation of `deepset/prompt-injections`; columns `text`, `label`, `original` (the English source). The card does not say how it was translated or define the labels |
+| `beratcmn/turkish-prompt-injections` | <https://huggingface.co/datasets/beratcmn/turkish-prompt-injections> | 661 rows (train 546, test 115) | Apache-2.0 | A Turkish translation of `deepset/prompt-injections`; columns `text`, `label`, `original` (the English source). The card does not say how it was translated or define the labels. In the repository, corrected, as `proxy/testdata/redteam/trd_tuning.csv` and `trd_locked.csv` |
+| `OnerAYTAS/Turkish_prompt_injection_jailbreak_dataset` | <https://huggingface.co/datasets/OnerAYTAS/Turkish_prompt_injection_jailbreak_dataset> | About 20,500 rows in eight files | CC BY-NC-SA 4.0 | Yıldız Technical University; the set of Aytaş et al., *Applied Sciences* 16(13), 6740 (2026), <https://doi.org/10.3390/app16136740>. Machine translations (translategemma, Google Translate, DeepL) of safe-guard-prompt-injection, Yash0728/toxicity_prompt-injection, jackhhao/jailbreak-classification, rogue-security/prompt-injections-benchmark and Injection-Attack-Detection-Dataset, each with its source's labels, plus 790 harmful requests. Non-commercial: measured on a local copy only (`docs/benchmarks/README.md`) |
 
-It is not proposed as training data for the fine-tune in this
+Neither is used as training data for the fine-tune in this
 round. `classifier/finetune/README.md` says what would have to be checked
 before one is: the licence on the day of download, where the rows come from
 (a translation of `deepset/prompt-injections` carries that set's licence
@@ -85,8 +88,8 @@ current model was trained or evaluated on.
 
 Two things matter for S6-2:
 
-- The one set found is small (hundreds of rows) and is a translation of an
-  English set, so it carries that set's phrasing.
+- Both sets are machine translations of English sets, so they carry those
+  sets' phrasing, and the larger one may not be used commercially.
 - A useful Turkish set pairs attacks with benign texts that share their
   vocabulary, and the Tamga set is written that way: the benign half is as
   important as the attack half, because in Turkish the trigger words
