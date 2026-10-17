@@ -255,7 +255,11 @@ providers:
 # panics, the scan times out, or a scanner is shed under load.
 #   block  answer 503 (code tamga_scan_unavailable). Shipped here.
 #   pass   forward on the findings of the scanners that did run, with
-#          X-Tamga-Scan-Degraded: true. Also what a policy without this key does.
+#          X-Tamga-Scan-Degraded: true.
+# Left out, a plain chat request is forwarded as with pass, and a request that
+# carries tool results or tool definitions (agent traffic) is refused as with
+# block. Set it either way to get the same answer for both. Block is set
+# below because a crashed check must not let an injected tool result through.
 #
 # default_action: the action for a finding whose type has no rule at all
 # (BLOCK, WARN, LOG or PASS). It does not affect findings a rule leaves

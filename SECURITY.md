@@ -124,8 +124,9 @@ applications can reach it. Note:
   a file you download and mount; Tamga does not fetch or verify it, so pin
   the revision you measured.
 - When a scanner errors, panics or is shed under load, `scan.on_error` decides:
-  `block` (the shipped policy) answers 503, `pass` or no setting forwards the
-  request. Watch `tamga_scan_degraded_total` and the `X-Tamga-Scan-Degraded`
+  `block` (the shipped policy) answers 503, `pass` forwards the
+  request. With no setting, a request that carries tool results or tool
+  definitions gets the 503 and a plain chat request is forwarded. Watch `tamga_scan_degraded_total` and the `X-Tamga-Scan-Degraded`
   response header either way.
 - The role of a piece of text (system, user, tool, …) is read from the request
   body, which the caller writes. A rule narrowed with `applies_to` trusts the

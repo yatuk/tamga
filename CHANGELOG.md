@@ -1197,6 +1197,16 @@
     with a threshold above 1 or a cooldown.
 
 ### Agents
+- **A failed scan now refuses a request that carries tool results or tool
+  definitions, also under a policy that leaves `scan.on_error` out.** Before,
+  an unset key forwarded every request on a scan that had failed, timed out
+  or been shed under load. Now such a request gets a 503
+  `tamga_scan_unavailable`; a plain chat request under an unset key is still
+  forwarded, marked `X-Tamga-Scan-Degraded: true`. A policy that sets
+  `on_error: pass` keeps forwarding both. The shipped `proxy/tamga-policy.yaml`
+  already sets `block` and is unchanged. Tests pin the three failures
+  (scanner error, deadline, load shedding) for chat, tool results and tool
+  definitions under `block`, `pass` and an unset key.
 - **A long tool result or file no longer stalls the proxy.** Scanning a large
   piece of text did not finish: the secret scanner's separator normalisation
   copied the rest of the text at every character, so its cost grew with the
