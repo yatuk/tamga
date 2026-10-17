@@ -3,8 +3,10 @@
 # asynchronous work, and it needs a tokenizer and a model runtime that the
 # analyzer does not install.
 #
-# No model is baked in: mount one at TAMGA_CLASSIFIER_MODEL_DIR, and the
-# optional model for banned topics at TAMGA_TOPICS_MODEL_DIR.
+# No model is baked in: mount one at TAMGA_CLASSIFIER_MODEL_DIR, the
+# optional model for banned topics at TAMGA_TOPICS_MODEL_DIR, and an optional
+# candidate injection model to score in shadow at
+# TAMGA_CLASSIFIER_SHADOW_MODEL_DIR.
 FROM python:3.11-slim AS builder
 
 RUN python -m venv /opt/venv

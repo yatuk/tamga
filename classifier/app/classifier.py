@@ -70,14 +70,22 @@ class Classifier:
         overlap: int | None = None,
         max_windows: int | None = None,
         threads: int | None = None,
+        dir_env: str = "TAMGA_CLASSIFIER_MODEL_DIR",
+        name_env: str = "TAMGA_CLASSIFIER_MODEL_NAME",
+        label: str = "classifier",
     ) -> None:
-        self.model_dir = model_dir if model_dir is not None else os.environ.get("TAMGA_CLASSIFIER_MODEL_DIR", "")
+        # dir_env and name_env name the variables this instance reads its
+        # directory and its name from, and label starts its log events: the
+        # shadow model (app.shadow) is a second instance with its own.
+        self.model_dir = model_dir if model_dir is not None else os.environ.get(dir_env, "")
         self.window = window or _env_int("TAMGA_CLASSIFIER_WINDOW", 512)
         self.overlap = overlap if overlap is not None else _env_int("TAMGA_CLASSIFIER_OVERLAP", 64)
         self.max_windows = max_windows or _env_int("TAMGA_CLASSIFIER_MAX_WINDOWS", 16)
         self.threads = threads or _env_int("TAMGA_CLASSIFIER_THREADS", 0)
         self.model_name = ""
-        self.reason = "TAMGA_CLASSIFIER_MODEL_DIR is not set"
+        self.reason = f"{dir_env} is not set"
+        self._name_env = name_env
+        self._label = label
         self._session = None
         self._tokenizer = None
         self._inputs: list[str] = []
@@ -109,7 +117,7 @@ class Classifier:
         model_file = next((root / f for f in _MODEL_FILES if (root / f).is_file()), None)
         if model_file is None or not (root / "tokenizer.json").is_file():
             self.reason = f"no ONNX model and tokenizer.json found in {self.model_dir}"
-            logger.warning("classifier_unavailable", reason=self.reason)
+            logger.warning(f"{self._label}_unavailable", reason=self.reason)
             return
         try:
             import onnxruntime as ort
@@ -137,11 +145,11 @@ class Classifier:
             self._inputs = [i.name for i in session.get_inputs()]
             self._tokenizer = tokenizer
             self._session = session
-            self.model_name = os.environ.get("TAMGA_CLASSIFIER_MODEL_NAME", "") or root.name
+            self.model_name = os.environ.get(self._name_env, "") or root.name
             self.reason = ""
         except Exception as exc:  # a broken model must not take the analyzer down
             self.reason = f"model could not be loaded: {exc}"
-            logger.warning("classifier_unavailable", reason=self.reason)
+            logger.warning(f"{self._label}_unavailable", reason=self.reason)
             return
 
         # The first runs of a session are several times slower than the
@@ -151,7 +159,7 @@ class Classifier:
         for _ in range(3):
             self.score(["warm up", "warm up the full window " * self.window])
         logger.info(
-            "classifier_loaded",
+            f"{self._label}_loaded",
             model=self.model_name,
             file=model_file.name,
             window=self.window,

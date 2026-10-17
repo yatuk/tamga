@@ -25,6 +25,7 @@ from classifier.v1.classifier_pb2_grpc import (  # type: ignore[import-untyped]
 )
 
 from app.classifier import Classifier, ClassifierUnavailable
+from app.shadow import Shadow
 from app.topics import TopicModel, TopicsUnavailable
 
 logger = structlog.get_logger()
@@ -44,9 +45,10 @@ MAX_TOPIC_TEXT_CHARS = 50_000
 
 
 class ClassifierServicer(ClassifierServiceServicer):
-    def __init__(self, classifier: Classifier, topics: TopicModel | None = None) -> None:
+    def __init__(self, classifier: Classifier, topics: TopicModel | None = None, shadow: Shadow | None = None) -> None:
         self._classifier = classifier
         self._topics = topics if topics is not None else TopicModel(model_dir="")
+        self._shadow = shadow if shadow is not None else Shadow(Classifier(model_dir="", dir_env="TAMGA_CLASSIFIER_SHADOW_MODEL_DIR"))
 
     async def Classify(  # type: ignore[override]
         self,
@@ -60,6 +62,10 @@ class ClassifierServicer(ClassifierServiceServicer):
         texts = list(request.texts)
         if len(texts) > MAX_TEXTS or sum(len(t) for t in texts) > MAX_CHARS:
             await context.abort(grpc.StatusCode.RESOURCE_EXHAUSTED, "too much text in one call")
+        # The shadow model, when one is loaded, starts first and runs beside
+        # the primary on a thread of its own (app.shadow). Its scores are
+        # only returned, never acted on here.
+        shadow_job = self._shadow.start(texts)
         try:
             # Inference is CPU-bound; off the event loop, so health checks
             # are still answered while it runs.
@@ -69,11 +75,20 @@ class ClassifierServicer(ClassifierServiceServicer):
         except Exception as exc:
             logger.warning("classifier_failed", request_id=request.request_id, error=str(exc))
             await context.abort(grpc.StatusCode.INTERNAL, "classifier failed")
+        primary_ms = round((time.monotonic() - start) * 1000, 2)
+        shadow = await self._shadow.collect(shadow_job)
         return ClassifyResponse(
             scores=[s.score for s in scores],
             truncated=[s.truncated for s in scores],
             model=clf.model_name,
-            duration_ms=round((time.monotonic() - start) * 1000, 2),
+            # The primary's own time: what a shadow wait adds is in the
+            # call's time as the caller sees it, not here.
+            duration_ms=primary_ms,
+            shadow_scores=[s.score for s in shadow.scores],
+            shadow_truncated=[s.truncated for s in shadow.scores],
+            shadow_model=self._shadow.model_name if self._shadow.available else "",
+            shadow_duration_ms=shadow.duration_ms,
+            shadow_skipped=shadow.skipped,
         )
 
     async def ClassifyTopics(  # type: ignore[override]
@@ -115,7 +130,7 @@ class ClassifierServicer(ClassifierServiceServicer):
         request: HealthRequest,
         context: grpc.aio.ServicerContext,
     ) -> HealthResponse:
-        clf, topics = self._classifier, self._topics
+        clf, topics, shadow = self._classifier, self._topics, self._shadow
         return HealthResponse(
             available=clf.available,
             model=clf.model_name,
@@ -123,10 +138,13 @@ class ClassifierServicer(ClassifierServiceServicer):
             topics_available=topics.available,
             topics_model=topics.model_name,
             topics_reason=topics.reason,
+            shadow_available=shadow.available,
+            shadow_model=shadow.model_name,
+            shadow_reason=shadow.reason,
         )
 
 
-async def serve(classifier: Classifier, port: int, topics: TopicModel | None = None) -> grpc.aio.Server:
+async def serve(classifier: Classifier, port: int, topics: TopicModel | None = None, shadow: Shadow | None = None) -> grpc.aio.Server:
     server = grpc.aio.server(
         options=[
             ("grpc.keepalive_time_ms", 30000),
@@ -135,7 +153,7 @@ async def serve(classifier: Classifier, port: int, topics: TopicModel | None = N
             ("grpc.http2.max_pings_without_data", 0),
         ],
     )
-    servicer = ClassifierServicer(classifier, topics)
+    servicer = ClassifierServicer(classifier, topics, shadow)
     add_ClassifierServiceServicer_to_server(servicer, server)
     server.add_insecure_port(f"[::]:{port}")
     await server.start()
@@ -146,13 +164,15 @@ async def serve(classifier: Classifier, port: int, topics: TopicModel | None = N
         model=classifier.model_name,
         topics_available=servicer._topics.available,
         topics_model=servicer._topics.model_name,
+        shadow_available=servicer._shadow.available,
+        shadow_model=servicer._shadow.model_name,
     )
     return server
 
 
 async def main() -> None:
     port = int(os.environ.get("TAMGA_CLASSIFIER_PORT", "50052"))
-    server = await serve(Classifier(), port, TopicModel())
+    server = await serve(Classifier(), port, TopicModel(), Shadow())
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):

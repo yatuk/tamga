@@ -7,6 +7,11 @@
 // A second, optional model matches text against topics the operator wrote
 // down (ClassifyTopics). Each model is loaded or not on its own; a missing
 // topic model does not affect Classify.
+//
+// A third, optional model is a shadow: a candidate injection model that
+// scores every text Classify scores, next to the model in service. Its
+// scores are returned for the caller to record and compare; they are not a
+// verdict, and a missing or slow shadow does not affect the primary scores.
 
 syntax = "proto3";
 
@@ -46,6 +51,23 @@ message ClassifyResponse {
   string model = 3;
 
   double duration_ms = 4;
+
+  // The shadow model's scores, one per text in request order, when a
+  // shadow model is loaded and scored this call in time. Empty otherwise;
+  // shadow_skipped then says why. Never a verdict.
+  repeated float shadow_scores = 5;
+  repeated bool shadow_truncated = 6;
+
+  // Name of the shadow model; empty when none is loaded.
+  string shadow_model = 7;
+
+  double shadow_duration_ms = 8;
+
+  // Why a loaded shadow model gave no scores for this call: "late" (it did
+  // not finish within the service's shadow wait after the primary), "busy"
+  // (it was still scoring an earlier call) or "failed". Empty when it
+  // scored, and when no shadow model is loaded.
+  string shadow_skipped = 9;
 }
 
 message TopicsRequest {
@@ -92,4 +114,10 @@ message HealthResponse {
   bool topics_available = 4;
   string topics_model = 5;
   string topics_reason = 6;
+
+  // The same for the shadow injection model, which is optional and off
+  // unless a directory is configured for it.
+  bool shadow_available = 7;
+  string shadow_model = 8;
+  string shadow_reason = 9;
 }
