@@ -1,0 +1,191 @@
+{
+  "version": 1,
+  "about": [
+    "Python licence metadata recorded from an installed environment, for packages",
+    "that the interpreter running scripts/third-party-licenses.py does not have.",
+    "Used only for a component that has no --pip environment, and only for a",
+    "package that interpreter lacks. Each entry is the dump-pip record of the",
+    "distribution (Requires-Dist entries for extras left out).",
+    "classifier: onnxruntime, tokenizers and everything their base install",
+    "requires, read on 2026-10-17 from a Python 3.14 venv where",
+    "classifier/requirements.txt was installed (win_amd64 wheels)."
+  ],
+  "python": {
+    "classifier": {
+      "anyio": {
+        "license": "MIT",
+        "name": "anyio",
+        "requires": [
+          "exceptiongroup>=1.0.2; python_version < \"3.11\"",
+          "idna>=2.8",
+          "typing_extensions>=4.16.0; python_version < \"3.15\""
+        ],
+        "source": "License-Expression (recorded wheel metadata)",
+        "version": "4.15.1"
+      },
+      "click": {
+        "license": "BSD-3-Clause",
+        "name": "click",
+        "requires": [],
+        "source": "License-Expression (recorded wheel metadata)",
+        "version": "8.5.0"
+      },
+      "filelock": {
+        "license": "MIT",
+        "name": "filelock",
+        "requires": [],
+        "source": "License-Expression (recorded wheel metadata)",
+        "version": "3.32.3"
+      },
+      "flatbuffers": {
+        "license": "Apache-2.0",
+        "name": "flatbuffers",
+        "requires": [],
+        "source": "License field (recorded wheel metadata)",
+        "version": "25.12.19"
+      },
+      "fsspec": {
+        "license": "BSD-3-Clause",
+        "name": "fsspec",
+        "requires": [],
+        "source": "License-Expression (recorded wheel metadata)",
+        "version": "2026.7.0"
+      },
+      "h11": {
+        "license": "MIT",
+        "name": "h11",
+        "requires": [],
+        "source": "License field (recorded wheel metadata)",
+        "version": "0.16.0"
+      },
+      "hf-xet": {
+        "license": "Apache-2.0",
+        "name": "hf-xet",
+        "requires": [],
+        "source": "License-Expression (recorded wheel metadata)",
+        "version": "1.7.0"
+      },
+      "httpcore2": {
+        "license": "BSD-3-Clause",
+        "name": "httpcore2",
+        "requires": [
+          "h11>=0.16",
+          "truststore>=0.10"
+        ],
+        "source": "License-Expression (recorded wheel metadata)",
+        "version": "2.13.1"
+      },
+      "httpx2": {
+        "license": "BSD-3-Clause",
+        "name": "httpx2",
+        "requires": [
+          "anyio>=4.10; sys_platform != 'emscripten'",
+          "httpcore2==2.13.1; sys_platform != 'emscripten'",
+          "httpx2-jsfetch; sys_platform == 'emscripten' and python_version >= '3.12'",
+          "idna>=3.18",
+          "truststore>=0.10; sys_platform != 'emscripten'",
+          "typing-extensions>=4.5.0; python_version < '3.13'"
+        ],
+        "source": "License-Expression (recorded wheel metadata)",
+        "version": "2.13.1"
+      },
+      "huggingface-hub": {
+        "license": "Apache-2.0",
+        "name": "huggingface_hub",
+        "requires": [
+          "click<9.0.0,>=8.4.2",
+          "filelock>=3.10.0",
+          "fsspec>=2023.5.0",
+          "hf-xet<2.0.0,>=1.6.0; platform_machine == \"x86_64\" or platform_machine == \"amd64\" or platform_machine == \"AMD64\" or platform_machine == \"arm64\" or platform_machine == \"ARM64\" or platform_machine == \"aarch64\"",
+          "httpx2<3,>=2.0.0",
+          "packaging>=20.9",
+          "pyyaml>=5.1",
+          "tomli>=1.1.0; python_version < \"3.11\"",
+          "tqdm>=4.42.1",
+          "typing-extensions>=4.1.0"
+        ],
+        "source": "License field (recorded wheel metadata)",
+        "version": "2.2.0"
+      },
+      "idna": {
+        "license": "BSD-3-Clause",
+        "name": "idna",
+        "requires": [],
+        "source": "License-Expression (recorded wheel metadata)",
+        "version": "3.20"
+      },
+      "numpy": {
+        "license": "BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0",
+        "name": "numpy",
+        "requires": [],
+        "source": "License-Expression (recorded wheel metadata)",
+        "version": "2.5.4"
+      },
+      "onnxruntime": {
+        "license": "MIT",
+        "name": "onnxruntime",
+        "requires": [
+          "flatbuffers",
+          "numpy>=1.21.6",
+          "packaging",
+          "protobuf>=4.25.8"
+        ],
+        "source": "License field (recorded wheel metadata)",
+        "version": "1.31.0"
+      },
+      "packaging": {
+        "license": "Apache-2.0 OR BSD-2-Clause",
+        "name": "packaging",
+        "requires": [],
+        "source": "License-Expression (recorded wheel metadata)",
+        "version": "26.3"
+      },
+      "protobuf": {
+        "license": "BSD-3-Clause",
+        "name": "protobuf",
+        "requires": [],
+        "source": "License field (recorded wheel metadata)",
+        "version": "7.36.2"
+      },
+      "pyyaml": {
+        "license": "MIT",
+        "name": "PyYAML",
+        "requires": [],
+        "source": "License field (recorded wheel metadata)",
+        "version": "6.0.3"
+      },
+      "tokenizers": {
+        "license": "Apache-2.0",
+        "name": "tokenizers",
+        "requires": [
+          "huggingface-hub>=0.16.4,<3.0"
+        ],
+        "source": "Trove classifier (recorded wheel metadata)",
+        "version": "0.23.3"
+      },
+      "tqdm": {
+        "license": "MPL-2.0 AND MIT",
+        "name": "tqdm",
+        "requires": [
+          "colorama; platform_system == \"Windows\""
+        ],
+        "source": "License field (recorded wheel metadata)",
+        "version": "4.70.1"
+      },
+      "truststore": {
+        "license": "MIT",
+        "name": "truststore",
+        "requires": [],
+        "source": "License-Expression (recorded wheel metadata)",
+        "version": "0.10.5"
+      },
+      "typing-extensions": {
+        "license": "PSF-2.0",
+        "name": "typing_extensions",
+        "requires": [],
+        "source": "License-Expression (recorded wheel metadata)",
+        "version": "4.16.0"
+      }
+    }
+  }
+}

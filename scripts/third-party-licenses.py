@@ -41,7 +41,10 @@ Where the data comes from:
           distribution metadata (License-Expression, License, classifiers) for
           the licences. Without `--pip NAME=FILE` the metadata is read from
           the interpreter running the script, which may hold other versions or
-          lack the package: both cases are written into the table.
+          lack the package: both cases are written into the table. A package
+          that interpreter lacks is taken from the records in
+          scripts/third-party-licence-data.json when there is one (the
+          "recorded wheel metadata" rows); --pip does not use the records.
 
 This is an inventory, not legal advice. The sections between the MANUAL
 markers in the output file are kept as they are across regenerations.
@@ -53,13 +56,16 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 from collections import Counter
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "THIRD_PARTY_LICENSES.md"
+EVIDENCE = ROOT / "scripts" / "third-party-licence-data.json"
 
 MANUAL_BEGIN = "<!-- BEGIN MANUAL: kept across regenerations -->"
 MANUAL_END = "<!-- END MANUAL -->"
@@ -180,13 +186,21 @@ def detect_license_text(text: str) -> list[str]:
 
 def go_modules() -> tuple[list[dict], str]:
     proxy = ROOT / "proxy"
-    env = dict(os.environ, GOPROXY="off", GOFLAGS="-mod=mod", GOOS="linux", GOARCH="amd64", CGO_ENABLED="0")
     try:
-        raw = subprocess.run(["go", "list", "-m", "-json", "all"], cwd=proxy, env=env,
-                             capture_output=True, text=True, check=True).stdout
-        linked_raw = subprocess.run(
-            ["go", "list", "-deps", "-f", "{{with .Module}}{{.Path}}{{end}}", "./cmd/..."],
-            cwd=proxy, env=env, capture_output=True, text=True, check=True).stdout
+        # `go list -m` reports a module's directory only when go.sum holds the
+        # hash of its zip, and -mod=mod adds missing hashes. It writes them to
+        # a copy of go.mod and go.sum (-modfile), so proxy/go.sum is untouched.
+        with tempfile.TemporaryDirectory() as tmp:
+            shutil.copyfile(proxy / "go.mod", Path(tmp) / "go.mod")
+            if (proxy / "go.sum").is_file():
+                shutil.copyfile(proxy / "go.sum", Path(tmp) / "go.sum")
+            env = dict(os.environ, GOPROXY="off", GOFLAGS=f"-mod=mod -modfile={Path(tmp) / 'go.mod'}",
+                       GOOS="linux", GOARCH="amd64", CGO_ENABLED="0")
+            raw = subprocess.run(["go", "list", "-m", "-json", "all"], cwd=proxy, env=env,
+                                 capture_output=True, text=True, check=True).stdout
+            linked_raw = subprocess.run(
+                ["go", "list", "-deps", "-f", "{{with .Module}}{{.Path}}{{end}}", "./cmd/..."],
+                cwd=proxy, env=env, capture_output=True, text=True, check=True).stdout
         goversion = subprocess.run(["go", "version"], capture_output=True, text=True).stdout.strip()
     except (OSError, subprocess.CalledProcessError) as exc:
         return [], f"go list failed: {exc}"
@@ -347,6 +361,20 @@ def dump_pip() -> dict:
     return {"python": sys.version.split()[0], "distributions": out}
 
 
+def checked_python_evidence() -> dict[str, dict[str, dict]]:
+    """Recorded dump-pip entries per component, from scripts/third-party-licence-data.json.
+
+    They fill in packages the interpreter running this script does not have,
+    so the file can be regenerated where those packages are not installed.
+    They are not used for a component given with --pip: an environment built
+    from the requirements is the better source.
+    """
+    data = json.loads(EVIDENCE.read_text(encoding="utf-8"))
+    if data.get("version") != 1 or not isinstance(data.get("python"), dict):
+        raise ValueError(f"{EVIDENCE} must contain version 1 Python evidence")
+    return data["python"]
+
+
 REQ_NAME = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*(\[[^\]]*\])?\s*([^;#]*)")
 
 
@@ -379,8 +407,12 @@ def marker_applies(marker: str, extras: set[str]) -> bool:
     return True
 
 
-def python_component(direct_lines: list[str], env: dict) -> tuple[list[dict], list[dict], list[str]]:
+def python_component(direct_lines: list[str], env: dict,
+                     evidence: dict[str, dict] | None = None) -> tuple[list[dict], list[dict], list[str]]:
     dists = env["distributions"]
+    evidence = evidence or {}
+    available = dict(evidence)
+    available.update(dists)
     direct_rows, missing = [], []
     seen: dict[str, bool] = {}
     queue: list[tuple[str, set[str]]] = []
@@ -390,7 +422,7 @@ def python_component(direct_lines: list[str], env: dict) -> tuple[list[dict], li
             continue
         name, extras, spec, _ = req
         key = norm(name)
-        d = dists.get(key)
+        d = available.get(key)
         direct_rows.append({
             "name": name, "declared": spec or "(any)",
             "version": (d["version"] + (" (differs from the pin)" if spec.startswith("==") and spec[2:].strip() != d["version"] else "")) if d else "",
@@ -403,7 +435,7 @@ def python_component(direct_lines: list[str], env: dict) -> tuple[list[dict], li
     trans: dict[str, dict] = {}
     while queue:
         key, extras = queue.pop()
-        for r in dists[key]["requires"]:
+        for r in available[key]["requires"]:
             req = parse_requirement(r)
             if not req:
                 continue
@@ -414,7 +446,7 @@ def python_component(direct_lines: list[str], env: dict) -> tuple[list[dict], li
             if k in seen:
                 continue
             seen[k] = True
-            d = dists.get(k)
+            d = available.get(k)
             if not d:
                 missing.append(name)
                 continue
@@ -570,6 +602,7 @@ def generate(pip_envs: dict[str, dict]) -> tuple[str, list[str]]:
         ("sdk-python", "Python: SDK (`sdk/python/pyproject.toml`)", lambda: pyproject_dependencies(ROOT / "sdk/python/pyproject.toml")),
     )
     local_env = None
+    evidence = checked_python_evidence()
     for key, title, load in components:
         L += [f"## {title}", ""]
         if key in pip_envs:
@@ -582,8 +615,9 @@ def generate(pip_envs: dict[str, dict]) -> tuple[str, list[str]]:
             env = local_env
             L += ["Licences read from the pip metadata of the interpreter that ran the generator, NOT from an",
                   "environment built from this requirements file: versions may differ from the pins, and",
-                  "packages that are not installed are marked NOT-INSPECTED.", ""]
-        direct, trans, missing = python_component(load(), env)
+                  "packages that are not installed are marked NOT-INSPECTED unless",
+                  "`scripts/third-party-licence-data.json` records them (\"recorded wheel metadata\").", ""]
+        direct, trans, missing = python_component(load(), env, None if key in pip_envs else evidence.get(key))
         L += ["### Direct", ""]
         L += table(["Package", "Declared", "Inspected version", "Licence (declared)", "Read from"],
                    [[r["name"], r["declared"], r["version"] or "-", r["license"] or "MISSING", r["source"]] for r in direct])

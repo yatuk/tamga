@@ -245,7 +245,8 @@ None.
 
 Licences read from the pip metadata of the interpreter that ran the generator, NOT from an
 environment built from this requirements file: versions may differ from the pins, and
-packages that are not installed are marked NOT-INSPECTED.
+packages that are not installed are marked NOT-INSPECTED unless
+`scripts/third-party-licence-data.json` records them ("recorded wheel metadata").
 
 ### Direct
 
@@ -299,7 +300,8 @@ optional or for another platform): `httptools`, `uvloop`, `watchfiles`, `websock
 
 Licences read from the pip metadata of the interpreter that ran the generator, NOT from an
 environment built from this requirements file: versions may differ from the pins, and
-packages that are not installed are marked NOT-INSPECTED.
+packages that are not installed are marked NOT-INSPECTED unless
+`scripts/third-party-licence-data.json` records them ("recorded wheel metadata").
 
 ### Direct
 
@@ -307,17 +309,22 @@ packages that are not installed are marked NOT-INSPECTED.
 |---|---|---|---|---|
 | grpcio | ==1.81.1 | 1.81.1 | Apache-2.0 | License-Expression |
 | protobuf | >=6.33.5,<7 | 6.33.6 | BSD-3-Clause | License field |
-| onnxruntime | >=1.20,<2 | - | NOT-INSPECTED | not installed in the inspected environment |
-| tokenizers | >=0.21,<1 | - | NOT-INSPECTED | not installed in the inspected environment |
+| onnxruntime | >=1.20,<2 | 1.31.0 | MIT | License field (recorded wheel metadata) |
+| tokenizers | >=0.21,<1 | 0.23.3 | Apache-2.0 | Trove classifier (recorded wheel metadata) |
 | numpy | >=1.26 | 2.4.6 | BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0 | License-Expression |
 | structlog | ==24.4.0 | 26.1.0 (differs from the pin) | MIT OR Apache-2.0 | License-Expression |
 
 ### Transitive
 
-Distributions reached through Requires-Dist: 1.
+Distributions reached through Requires-Dist: 16.
 
 | Licence | Count |
 |---|---|
+| BSD-3-Clause | 5 |
+| MIT | 5 |
+| Apache-2.0 | 3 |
+| Apache-2.0 OR BSD-2-Clause | 1 |
+| MPL-2.0 AND MIT | 1 |
 | PSF-2.0 | 1 |
 
 None outside the permissive set.
@@ -326,7 +333,8 @@ None outside the permissive set.
 
 Licences read from the pip metadata of the interpreter that ran the generator, NOT from an
 environment built from this requirements file: versions may differ from the pins, and
-packages that are not installed are marked NOT-INSPECTED.
+packages that are not installed are marked NOT-INSPECTED unless
+`scripts/third-party-licence-data.json` records them ("recorded wheel metadata").
 
 ### Direct
 
@@ -361,7 +369,7 @@ project's own conclusion about compatibility.
 | `@ibm/plex*` fonts (through `@carbon/styles`) | console, npm | `OFL-1.1` | Entry "SIL Open Font License 1.1", under licences for fonts: a free copyleft licence for fonts. The entry makes no statement about GPL compatibility |
 | `caniuse-lite` (through `next`) | console, npm | `CC-BY-4.0` | Entry "Creative Commons Attribution 4.0 license" (`#ccby`): compatible with all versions of the GNU GPL; not recommended for software |
 | `pgregory.net/rapid` | proxy, Go, tests only (not in the binaries) | MPL-2.0 (detected) | Entry "Mozilla Public License (MPL) version 2.0": listed among the GPL-compatible licences |
-| `asyncpg` (analyzer); `onnxruntime`, `tokenizers` (classifier); everything they pull in | Python | not inspected | These were not installed where the generator ran, so neither they nor their dependencies appear in the tables above. Run the generator against the built images (see the script header) |
+| `asyncpg` (analyzer) and what it pulls in | analyzer, Python | not inspected | Not installed where the generator ran, and no copy of its metadata was found in the local Python environments and caches searched on 2026-10-17, so it is unresolved here. The release's licence gate installs `analyzer/requirements.txt`, reads it there, and fails on a licence it cannot read |
 
 The FSF list's statements above are about the GNU GPL. This file does not
 extend them to the AGPL.
