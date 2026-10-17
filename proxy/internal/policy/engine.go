@@ -410,6 +410,9 @@ type Policy struct {
 	// It is left out of the JSON form when absent, so that a policy without
 	// it keeps its digest.
 	Language *LanguageConfig `yaml:"language" json:"language,omitempty"`
+	// Topics is left out of the JSON form when unset, so that a policy
+	// without it keeps its digest (see OutputRules.Links).
+	Topics *TopicsConfig `yaml:"topics" json:"topics,omitempty"`
 }
 
 // Values of scan.on_malformed.

@@ -89,11 +89,34 @@ func (c *Client) Score(ctx context.Context, requestID string, texts []string) ([
 
 // Health reports whether the service has a model loaded.
 func (c *Client) Health(ctx context.Context) (available bool, model, reason string, err error) {
-	resp, err := c.stub.Health(ctx, &pb.HealthRequest{})
+	h, err := c.HealthDetail(ctx)
 	if err != nil {
 		return false, "", "", err
 	}
-	return resp.Available, resp.Model, resp.Reason, nil
+	return h.Available, h.Model, h.Reason, nil
+}
+
+// HealthStatus is what the service says about each of its models.
+type HealthStatus struct {
+	Available bool
+	Model     string
+	Reason    string
+	// The topic model, which is optional and loaded on its own.
+	TopicsAvailable bool
+	TopicsModel     string
+	TopicsReason    string
+}
+
+// HealthDetail reports both models.
+func (c *Client) HealthDetail(ctx context.Context) (HealthStatus, error) {
+	resp, err := c.stub.Health(ctx, &pb.HealthRequest{})
+	if err != nil {
+		return HealthStatus{}, err
+	}
+	return HealthStatus{
+		Available: resp.Available, Model: resp.Model, Reason: resp.Reason,
+		TopicsAvailable: resp.TopicsAvailable, TopicsModel: resp.TopicsModel, TopicsReason: resp.TopicsReason,
+	}, nil
 }
 
 func (c *Client) Close() error {
@@ -113,6 +136,30 @@ const (
 	breakerCooldown  = 10 * time.Second
 )
 
+// breaker stops calls to a service that failed breakerThreshold times in a
+// row, for breakerCooldown. After the cooldown one call is let through; a
+// success closes it again.
+type breaker struct {
+	failures  atomic.Int32
+	openUntil atomic.Int64 // unix nanos; 0 when closed
+}
+
+func (b *breaker) open(now time.Time) bool {
+	until := b.openUntil.Load()
+	return until != 0 && now.UnixNano() < until
+}
+
+func (b *breaker) fail(now time.Time) {
+	if b.failures.Add(1) >= breakerThreshold {
+		b.openUntil.Store(now.Add(breakerCooldown).UnixNano())
+	}
+}
+
+func (b *breaker) succeed() {
+	b.failures.Store(0)
+	b.openUntil.Store(0)
+}
+
 type cacheEntry struct {
 	res  Result
 	seen time.Time
@@ -130,8 +177,7 @@ type Guard struct {
 	mu    sync.Mutex
 	cache map[[32]byte]cacheEntry
 
-	failures  atomic.Int32
-	openUntil atomic.Int64 // unix nanos; 0 when closed
+	breaker breaker
 
 	calls, cached, errorsN, shortCircuited atomic.Int64
 }
@@ -184,7 +230,7 @@ func (g *Guard) Score(ctx context.Context, requestID string, texts []string, tim
 		return out, nil
 	}
 
-	if until := g.openUntil.Load(); until != 0 && now.UnixNano() < until {
+	if g.breaker.open(now) {
 		g.shortCircuited.Add(1)
 		return nil, ErrOpen
 	}
@@ -195,13 +241,10 @@ func (g *Guard) Score(ctx context.Context, requestID string, texts []string, tim
 	res, err := g.scorer.Score(callCtx, requestID, missTexts)
 	if err != nil {
 		g.errorsN.Add(1)
-		if g.failures.Add(1) >= breakerThreshold {
-			g.openUntil.Store(g.now().Add(breakerCooldown).UnixNano())
-		}
+		g.breaker.fail(g.now())
 		return nil, err
 	}
-	g.failures.Store(0)
-	g.openUntil.Store(0)
+	g.breaker.succeed()
 
 	g.mu.Lock()
 	if len(g.cache)+len(missIdx) > cacheSize {

@@ -426,21 +426,37 @@ func main() {
 	// The scan API asks the same classifier through a guard of its own, so
 	// that failed scans cannot open the breaker the proxy path relies on.
 	var scanClassifierGuard *classifier.Guard
+	// Banned topics go to the same service, to its second model, through
+	// guards of their own: a service without a topic model fails every
+	// topic call, and that must not open the injection breaker.
+	var topicGuard, scanTopicGuard *classifier.TopicGuard
 	if classifierClient, err := classifier.NewClient(cfg.ClassifierAddr); err != nil {
 		log.Warn().Err(err).Str("addr", cfg.ClassifierAddr).Msg("classifier client unavailable")
 	} else if classifierClient != nil {
 		classifierGuard = classifier.NewGuard(classifierClient)
 		scanClassifierGuard = classifier.NewGuard(classifierClient)
+		topicGuard = classifier.NewTopicGuard(classifierClient)
+		scanTopicGuard = classifier.NewTopicGuard(classifierClient)
 		api.SetClassifierStats(classifierGuard.Stats)
+		api.SetTopicStats(topicGuard.Stats)
 		go func() {
 			hctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			if ok, model, reason, err := classifierClient.Health(hctx); err != nil {
+			h, err := classifierClient.HealthDetail(hctx)
+			switch {
+			case err != nil:
 				log.Warn().Err(err).Str("addr", cfg.ClassifierAddr).Msg("classifier not reachable at startup")
-			} else if !ok {
-				log.Warn().Str("reason", reason).Msg("classifier has no model loaded")
+				return
+			case !h.Available:
+				log.Warn().Str("reason", h.Reason).Msg("classifier has no model loaded")
+			default:
+				log.Info().Str("model", h.Model).Msg("classifier ready")
+			}
+			// Optional: only a policy with topics enabled needs it.
+			if h.TopicsAvailable {
+				log.Info().Str("model", h.TopicsModel).Msg("banned-topic model ready")
 			} else {
-				log.Info().Str("model", model).Msg("classifier ready")
+				log.Info().Str("reason", h.TopicsReason).Msg("classifier has no banned-topic model loaded")
 			}
 		}()
 	}
@@ -741,6 +757,7 @@ func main() {
 		Registry:           registry,
 		Keys:               apiKeyStore,
 		Classifier:         classifierGuard,
+		Topics:             topicGuard,
 		OutputOnlyRegistry: outputRegistry,
 		GetPolicy:          getPolicy,
 		RateLimit:          rateLimiter,
@@ -779,6 +796,7 @@ func main() {
 	scanAPI, litellmBridge := proxy.NewScanHandlers(proxyCfg, proxy.ScanOptions{
 		AdminKey:    cfg.AdminKey,
 		Classifier:  scanClassifierGuard,
+		Topics:      scanTopicGuard,
 		CORSOrigins: cfg.CORSOrigins,
 	})
 

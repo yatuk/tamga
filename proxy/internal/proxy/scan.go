@@ -57,18 +57,21 @@ var scanRoles = map[string]bool{"system": true, "user": true, "assistant": true,
 // scanUnplacedTypes are the finding types reported without a position. Where
 // exactly a detector matched an attack is of more use to whoever is writing
 // the attack than to the caller.
-var scanUnplacedTypes = map[string]bool{"injection": true, "jailbreak": true, "content_moderation": true, "classifier": true}
+var scanUnplacedTypes = map[string]bool{"injection": true, "jailbreak": true, "content_moderation": true, "classifier": true, "topic": true}
 
 // scanNamedTypes are the finding types whose category is a name the operator
-// chose: a custom entity, a competitor. Together those names are the watch
+// chose: a custom entity, a competitor, a banned topic. Together those names are the watch
 // list. A proxy key is the one handed to applications and browser extensions,
 // so it is told the type and not the name; the other scopes already read the
 // policy.
-var scanNamedTypes = map[string]bool{"custom": true, "competitor": true}
+var scanNamedTypes = map[string]bool{"custom": true, "competitor": true, "topic": true}
 
 // scanClassifierHeader says the inline classifier did not read all of the
 // text, on a verdict that was given all the same.
 const scanClassifierHeader = "X-Tamga-Classifier"
+
+// scanTopicsHeader says the same of the banned-topic model.
+const scanTopicsHeader = "X-Tamga-Topics"
 
 // The scan API's error messages. They are fixed: nothing from the request,
 // a scanner or a decoder is passed on.
@@ -96,6 +99,9 @@ type ScanOptions struct {
 	// its own, not HandlerConfig.Classifier: a Guard holds the circuit
 	// breaker, and failed scans must not open the one the proxy path uses.
 	Classifier *classifier.Guard
+	// Topics is the banned-topic model for scans: a TopicGuard of its own,
+	// for the same reason.
+	Topics *classifier.TopicGuard
 	// CORSOrigins is the management API's origin allowlist (comma-separated).
 	// A request from a web page of any other origin is refused.
 	CORSOrigins string
@@ -627,6 +633,30 @@ func (h *scanHandler) evaluateInput(ctx context.Context, call *scanCall, request
 				mark = "incomplete"
 			}
 			ev.headers = append(ev.headers, [2]string{scanClassifierHeader, mark})
+		}
+	}
+
+	// Banned topics, on the same terms as the classifier above.
+	if set, on := pol.TopicSettings(); on && action != policy.ActionBlock {
+		if h.opts.Topics == nil {
+			call.logger.Warn().Msg("topics is enabled in the policy and no classifier service is configured")
+			return ev, "topics_unavailable"
+		}
+		res := topicSegments(ctx, h.opts.Topics, set, requestID, segs)
+		if len(res.findings) > 0 {
+			findings = append(findings, res.findings...)
+			action, _ = pol.EvaluateWithRole(findings, userRole, strictMode)
+		}
+		if res.err != nil || res.partial {
+			call.logger.Warn().Bool("partial", res.partial).Msg("topic model did not read the text")
+			mark := "partial"
+			if res.err != nil || res.asked == 0 {
+				if !scanActs(action) {
+					return ev, "topics_unavailable"
+				}
+				mark = "incomplete"
+			}
+			ev.headers = append(ev.headers, [2]string{scanTopicsHeader, mark})
 		}
 	}
 

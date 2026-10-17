@@ -99,7 +99,9 @@ type scanRigOptions struct {
 	policy string
 	// scorer backs two classifier guards, the proxy path's and the scan
 	// API's, as cmd/tamga gives each its own.
-	scorer   classifier.Scorer
+	scorer classifier.Scorer
+	// topics backs two banned-topic guards in the same way.
+	topics   classifier.TopicScorer
 	scanners []scanner.Scanner
 	origins  string
 	devMode  bool
@@ -202,6 +204,10 @@ func newScanRig(t *testing.T, o scanRigOptions) *scanRig {
 	if o.scorer != nil {
 		cfg.Classifier = classifier.NewGuard(o.scorer)
 		opts.Classifier = classifier.NewGuard(o.scorer)
+	}
+	if o.topics != nil {
+		cfg.Topics = classifier.NewTopicGuard(o.topics)
+		opts.Topics = classifier.NewTopicGuard(o.topics)
 	}
 	g.guard = cfg.Classifier
 	scan, bridge := NewScanHandlers(cfg, opts)
