@@ -63,9 +63,10 @@ Tamga sees only the requests that are sent to it. It does not see:
   or gemini.google.com in a browser goes from the browser to that site and
   never reaches the proxy. A [browser extension](docs/browser-extension.md)
   for those three sites exists as an MVP: it asks your Tamga for a verdict at
-  paste and at send. It has not been verified on the live sites, it is not
-  in any store (you load or pack it yourself), and it covers neither file
-  uploads nor the sites' apps.
+  paste and at send. It was run once on the live sites (2026-10-11: a block and a
+  redaction seen on all three; a paste, a clean send and Tamga being down
+  not tried), it is not in any store (you load or pack it yourself), and it
+  covers neither file uploads nor the sites' apps.
 - **Traffic between an agent and its MCP servers.** The agent talks to them
   directly. What a tool returned reaches Tamga only when the agent puts it in
   its next model request, as a tool result.
@@ -532,8 +533,9 @@ custom entity UI · the security fixes listed in the [changelog](CHANGELOG.md).
   second per core ([agents](docs/agents.md#speed)).
 - Traffic from a browser to a chat site, and between an agent and its MCP
   servers, does not pass through a proxy at all. For three chat sites there
-  is a [browser extension](docs/browser-extension.md), an MVP whose site
-  selectors are unverified.
+  is a [browser extension](docs/browser-extension.md), an MVP run once on
+  the live sites, with some flows not yet tried there
+  ([record](extension/README.md)).
 - There is no multi-region replication, no SSO sign-in beyond GitHub OAuth
   (SSO settings are stored and used by no sign-in; the SCIM routes have no
   store behind them) and no custom roles.
@@ -541,7 +543,7 @@ custom entity UI · the security fixes listed in the [changelog](CHANGELOG.md).
 **Planned next,** in this order, with no dates and no promise: a locked
 evaluation set for the scanners and the classifier · response scanners for
 malicious links and for JSON that does not match a schema · the browser
-extension checked against the live chat sites. MCP inspection is not in the
+extension's remaining flows tried on the live chat sites. MCP inspection is not in the
 plan.
 
 ## Related projects

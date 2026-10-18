@@ -601,10 +601,9 @@
   STRIP are not sent, REDACT offers the redacted text and puts it in the box,
   WARN asks, PASS shows nothing. With no verdict (unreachable, a timeout of
   2.5 seconds, 5xx, 429) a send is held; an administrator can set
-  `failMode: open`. **It has not been run against the live sites.** The
-  selectors for each site are listed as unverified, dated 2026-10-11, and
-  the tests run against local pages that reproduce the structure they
-  assume. It was run unpacked in Edge 155 against those pages only.
+  `failMode: open`. **It was first run against local pages only; it was then
+  run once on the live sites on 2026-10-11, and `extension/README.md`
+  records what was seen and what was not tried.** It was run unpacked in Edge 155 against those pages only.
 - **Nothing is published to a browser store.** It is loaded unpacked, or
   packed, signed and force-installed by the organisation itself.
   `docs/browser-extension.md` has the policy JSON, what Tamga needs (a
