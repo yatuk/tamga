@@ -9,7 +9,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o scanner-service ./cmd/
 
 # Stage 2 — minimal runtime.
 # TODO: pin by digest (image:tag@sha256:...): docs/operations.md, "Image pins".
-FROM alpine:3.21
+FROM alpine:3.24
 
 LABEL org.opencontainers.image.title="Tamga scanner service" \
       org.opencontainers.image.description="Standalone gRPC scanner service of the Tamga LLM security proxy" \
