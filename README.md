@@ -59,14 +59,17 @@ BDDK workloads, with first-class Turkish PII (TC Kimlik, Turkish IBAN and phone 
 
 Tamga sees only the requests that are sent to it. It does not see:
 
-- **Chat websites.** Text someone types or pastes into chatgpt.com, claude.ai
-  or gemini.google.com in a browser goes from the browser to that site and
-  never reaches the proxy. A [browser extension](docs/browser-extension.md)
-  for those three sites exists as an MVP: it asks your Tamga for a verdict at
-  paste and at send. It was run once on the live sites (2026-10-11: a block and a
+- **Chat websites.** Text someone types or pastes into chatgpt.com, claude.ai,
+  gemini.google.com or another chat site in a browser goes from the browser
+  to that site and never reaches the proxy. A [browser extension](docs/browser-extension.md)
+  for those and fourteen other chat sites ([the list](docs/browser-extension.md#sites):
+  DeepSeek, Copilot, Perplexity, Grok, Mistral, Meta AI, Qwen, Kimi, Poe,
+  HuggingChat, AI Studio and others) exists as an MVP: it asks your Tamga for a verdict at
+  paste and at send. It was run once on the first three sites (2026-10-11: a block and a
   redaction seen on all three; a paste, a clean send and Tamga being down
-  not tried), it is not in any store (you load or pack it yourself), and it
-  covers neither file uploads nor the sites' apps.
+  not tried) and on none of the others, it is not in any store (you load or pack it yourself), and it
+  reads attached text files but not PDF, office documents or images, and
+  does not cover the sites' apps.
 - **Traffic between an agent and its MCP servers.** The agent talks to them
   directly. What a tool returned reaches Tamga only when the agent puts it in
   its next model request, as a tool result.
