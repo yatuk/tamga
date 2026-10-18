@@ -72,7 +72,10 @@ Tamga sees only the requests that are sent to it. It does not see:
   its next model request, as a tool result.
 - **Anything else that does not pass through the proxy.** An application that
   still calls the provider's own URL is not scanned. Tamga does not discover
-  or stop such calls.
+  or stop such calls. A company web proxy that terminates TLS can ask Tamga
+  about requests to the main AI APIs and chat sites over
+  [ICAP](docs/icap.md); that was tested with a test client only, and the
+  chat sites' request formats were not verified.
 - **Images, audio and PDFs.** They are forwarded without being read. An
   attached text file is decoded and scanned.
 
@@ -461,6 +464,7 @@ default. Prompt and response bodies are not written to the database.
 | [Writing a scanner](docs/scanner-development.md) | Stateful scanners with request context |
 | [Migrating from LLM Guard](docs/migrating-from-llm-guard.md) | Scanner by scanner: what Tamga replaces, in part or not at all |
 | [LiteLLM guardrail](docs/litellm.md) | Adding Tamga to a LiteLLM proxy as a guardrail, without its proxy in the path |
+| [Behind a company web proxy (ICAP)](docs/icap.md) | Letting Squid or a secure web gateway that intercepts TLS ask Tamga about requests to AI services. Not run against a real web proxy |
 | [Coding assistants in editors](docs/ide.md) | Which of Claude Code, Continue, Cline, Roo Code, Aider, Copilot, Cursor, JetBrains AI Assistant, Zed and Windsurf can be pointed at Tamga, the setting for each, and what Tamga then sees |
 | [Browser extension](docs/browser-extension.md) | Checking what is pasted or sent on three chat sites against your own Tamga |
 | [Policy templates](docs/policy-templates.md) | Starting-point policies for KVKK, banks, public bodies and software teams. Not legal advice |

@@ -553,6 +553,27 @@
   scanner-service with the proxy: an older one still sends the old form.**
   `proxy/docs/PCI_LOGGING_POLICY.md` describes the new form.
 
+### ICAP
+- **A company web proxy can ask Tamga about requests to AI services over
+  ICAP** (RFC 3507, REQMOD only), so that browsers without the extension,
+  desktop apps and editor assistants that call a vendor directly are seen
+  where the web proxy terminates their TLS. `TAMGA_ICAP_ADDR` turns on a
+  listener of its own (`icap://<host>:1344/reqmod`);
+  `TAMGA_ICAP_ALLOWED_CLIENTS` lists the web proxies that may connect
+  (loopback only by default) and `TAMGA_ICAP_MAX_CONNECTIONS` bounds them.
+  Requests to the OpenAI, Anthropic, Gemini, Mistral and Azure OpenAI chat
+  APIs are scanned with the proxy path's extractor, scanners and policy;
+  REDACT and STRIP rewrite the body, BLOCK and ROUTE answer the user with an
+  HTTP 403 inside the ICAP reply, and a scan without a verdict is a 503.
+  Requests to the chatgpt.com, claude.ai and gemini.google.com back-ends are
+  read generically and never rewritten, because their formats were not
+  verified. Everything else gets a 204 without its body being read. Each
+  judged request is recorded with `icap <route>` as its endpoint and the
+  web proxy's user name as its user. Tested with an ICAP client in the
+  tests only; no Squid or gateway was run. See `docs/icap.md`. **Off by
+  default: a deployment that does not set `TAMGA_ICAP_ADDR` opens no new
+  port and sees no change.**
+
 ### LiteLLM
 - **Tamga can be added to a LiteLLM proxy as a guardrail**, without Tamga's
   proxy in the traffic path. `POST /api/v1/beta/litellm_basic_guardrail_api`
