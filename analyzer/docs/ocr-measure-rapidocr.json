@@ -1,0 +1,383 @@
+{
+  "engine": "rapidocr",
+  "engine_status": "rapidocr 3.10.0, models in the rapidocr package directory",
+  "options": {},
+  "lang": "tur+eng",
+  "threads": 4,
+  "repeat": 5,
+  "machine": "Windows AMD64, 16 logical CPUs, Python 3.14.7",
+  "processor": "Intel64 Family 6 Model 197 Stepping 2, GenuineIntel",
+  "cold_ms": 2480.1081999903545,
+  "total": {
+    "cer": 0.018874773139745917,
+    "tr_cer": 0.21935483870967742,
+    "tr_letters": 155,
+    "tr_by_letter": {
+      "\u00c7": {
+        "wrong": 1,
+        "of": 6
+      },
+      "\u00d6": {
+        "wrong": 2,
+        "of": 8
+      },
+      "\u00dc": {
+        "wrong": 2,
+        "of": 9
+      },
+      "\u00e7": {
+        "wrong": 0,
+        "of": 12
+      },
+      "\u00f6": {
+        "wrong": 1,
+        "of": 9
+      },
+      "\u00fc": {
+        "wrong": 2,
+        "of": 23
+      },
+      "\u011e": {
+        "wrong": 2,
+        "of": 2
+      },
+      "\u011f": {
+        "wrong": 2,
+        "of": 13
+      },
+      "\u0130": {
+        "wrong": 8,
+        "of": 8
+      },
+      "\u0131": {
+        "wrong": 7,
+        "of": 31
+      },
+      "\u015e": {
+        "wrong": 1,
+        "of": 7
+      },
+      "\u015f": {
+        "wrong": 6,
+        "of": 27
+      }
+    },
+    "recall": {
+      "card": {
+        "found": 13,
+        "of": 13
+      },
+      "email": {
+        "found": 11,
+        "of": 13
+      },
+      "iban": {
+        "found": 13,
+        "of": 13
+      },
+      "tckn": {
+        "found": 13,
+        "of": 13
+      }
+    },
+    "latency_ms_median": 766.2864499725401,
+    "latency_ms_max": 948.4065000433475
+  },
+  "images": [
+    {
+      "file": "customer_table.png",
+      "kind": "screenshot of a customer table",
+      "cer": 0.00408997955010225,
+      "tr_letters": 18,
+      "tr_errors": 2,
+      "identifiers": [
+        {
+          "type": "tckn",
+          "found": true
+        },
+        {
+          "type": "tckn",
+          "found": true
+        },
+        {
+          "type": "tckn",
+          "found": true
+        },
+        {
+          "type": "tckn",
+          "found": true
+        },
+        {
+          "type": "iban",
+          "found": true
+        },
+        {
+          "type": "iban",
+          "found": true
+        },
+        {
+          "type": "iban",
+          "found": true
+        },
+        {
+          "type": "iban",
+          "found": true
+        },
+        {
+          "type": "card",
+          "found": true
+        },
+        {
+          "type": "card",
+          "found": true
+        },
+        {
+          "type": "card",
+          "found": true
+        },
+        {
+          "type": "card",
+          "found": true
+        },
+        {
+          "type": "email",
+          "found": true
+        },
+        {
+          "type": "email",
+          "found": true
+        },
+        {
+          "type": "email",
+          "found": true
+        },
+        {
+          "type": "email",
+          "found": true
+        }
+      ],
+      "latency_ms": 925.3355999826454,
+      "confidence": 0.989885172413793
+    },
+    {
+      "file": "chat.png",
+      "kind": "chat screenshot",
+      "cer": 0.0025380710659898475,
+      "tr_letters": 19,
+      "tr_errors": 0,
+      "identifiers": [
+        {
+          "type": "iban",
+          "found": true
+        },
+        {
+          "type": "tckn",
+          "found": true
+        },
+        {
+          "type": "card",
+          "found": true
+        },
+        {
+          "type": "email",
+          "found": true
+        }
+      ],
+      "latency_ms": 513.2169999997132,
+      "confidence": 0.9884904232804231
+    },
+    {
+      "file": "customer_table_photo.jpg",
+      "kind": "photo of the table: low contrast, rotated 3.5 degrees, blurred, JPEG",
+      "cer": 0.06339468302658487,
+      "tr_letters": 18,
+      "tr_errors": 15,
+      "identifiers": [
+        {
+          "type": "tckn",
+          "found": true
+        },
+        {
+          "type": "tckn",
+          "found": true
+        },
+        {
+          "type": "tckn",
+          "found": true
+        },
+        {
+          "type": "tckn",
+          "found": true
+        },
+        {
+          "type": "iban",
+          "found": true
+        },
+        {
+          "type": "iban",
+          "found": true
+        },
+        {
+          "type": "iban",
+          "found": true
+        },
+        {
+          "type": "iban",
+          "found": true
+        },
+        {
+          "type": "card",
+          "found": true
+        },
+        {
+          "type": "card",
+          "found": true
+        },
+        {
+          "type": "card",
+          "found": true
+        },
+        {
+          "type": "card",
+          "found": true
+        },
+        {
+          "type": "email",
+          "found": true
+        },
+        {
+          "type": "email",
+          "found": false
+        },
+        {
+          "type": "email",
+          "found": false
+        },
+        {
+          "type": "email",
+          "found": true
+        }
+      ],
+      "latency_ms": 948.4065000433475,
+      "confidence": 0.9544112473118279
+    },
+    {
+      "file": "turkish_text.png",
+      "kind": "Turkish sentences, every Turkish letter in both cases",
+      "cer": 0.023809523809523808,
+      "tr_letters": 73,
+      "tr_errors": 10,
+      "identifiers": [],
+      "latency_ms": 768.5020999633707,
+      "confidence": 0.9762687922705312
+    },
+    {
+      "file": "english_form.png",
+      "kind": "English form with identifiers",
+      "cer": 0.0,
+      "tr_letters": 0,
+      "tr_errors": 0,
+      "identifiers": [
+        {
+          "type": "tckn",
+          "found": true
+        },
+        {
+          "type": "iban",
+          "found": true
+        },
+        {
+          "type": "card",
+          "found": true
+        },
+        {
+          "type": "email",
+          "found": true
+        }
+      ],
+      "latency_ms": 764.0707999817096,
+      "confidence": 0.9898890566037736
+    },
+    {
+      "file": "small_font_10px.png",
+      "kind": "10 px text",
+      "cer": 0.009389671361502348,
+      "tr_letters": 9,
+      "tr_errors": 2,
+      "identifiers": [
+        {
+          "type": "tckn",
+          "found": true
+        },
+        {
+          "type": "iban",
+          "found": true
+        },
+        {
+          "type": "card",
+          "found": true
+        },
+        {
+          "type": "email",
+          "found": true
+        }
+      ],
+      "latency_ms": 732.6588000287302,
+      "confidence": 0.9791942583732056
+    },
+    {
+      "file": "small_font_8px.png",
+      "kind": "8 px text",
+      "cer": 0.018779342723004695,
+      "tr_letters": 9,
+      "tr_errors": 4,
+      "identifiers": [
+        {
+          "type": "tckn",
+          "found": true
+        },
+        {
+          "type": "iban",
+          "found": true
+        },
+        {
+          "type": "card",
+          "found": true
+        },
+        {
+          "type": "email",
+          "found": true
+        }
+      ],
+      "latency_ms": 672.5809000199661,
+      "confidence": 0.9753491866028708
+    },
+    {
+      "file": "dark_mono.png",
+      "kind": "light monospace text on a dark background",
+      "cer": 0.009389671361502348,
+      "tr_letters": 9,
+      "tr_errors": 1,
+      "identifiers": [
+        {
+          "type": "tckn",
+          "found": true
+        },
+        {
+          "type": "iban",
+          "found": true
+        },
+        {
+          "type": "card",
+          "found": true
+        },
+        {
+          "type": "email",
+          "found": true
+        }
+      ],
+      "latency_ms": 860.9146999660879,
+      "confidence": 0.9872481067961165
+    }
+  ]
+}

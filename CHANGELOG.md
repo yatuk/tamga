@@ -223,6 +223,19 @@
   they do without `TAMGA_INTEGRATION_DB`; the new `TAMGA_STORE_NO_DOCKER=1`
   makes the store package's `TestMain` start no container even when docker is
   installed. The weekly job and the release gate are unchanged.
+- **The analyzer has an OCR module, off by default** (`analyzer/app/ocr`,
+  `TAMGA_OCR_ENGINE=rapidocr|tesseract|off`). RapidOCR runs PP-OCRv6 models
+  on onnxruntime in the process; Tesseract runs the system binary and is
+  available only with the `tur` traineddata. Both decode only PNG, JPEG,
+  WebP, GIF and BMP, check the pixel count before decoding, stop at a
+  timeout, and never log the text. Neither is in the default image: build
+  with `--build-arg OCR_RAPIDOCR=true` (the models are fetched at build time,
+  pinned by SHA-256; about 205 MB more) or `OCR_TESSERACT=true` (about 95 MB
+  more). `analyzer/requirements-ocr.txt` lists the Python packages;
+  `requirements.txt` is unchanged. Measured on a fake-identifier sample set,
+  RapidOCR recovered every TCKN, IBAN and card number at 766 ms per image on
+  four threads (`analyzer/docs/ocr.md`, `scripts/ocr_measure.py`). With
+  `TAMGA_OCR_ENGINE` unset nothing changes.
 
 ### Security
 - **A Tamga key can be sent in the base URL**, for editor clients that take a
