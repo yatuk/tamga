@@ -7,6 +7,7 @@ import { test } from 'node:test';
 import { TAB_SCANS_PER_MINUTE, classifySender, createHandler } from '../src/background/handler.js';
 import { loadSettings, mergeSettings } from '../src/background/settings.js';
 import { parseConfigReply, parseScanReply } from '../src/shared/protocol.js';
+import { SITES, SITE_IDS } from '../src/shared/sites.js';
 import { EXTENSION_ORIGIN, KEY, PASS_BODY, RUNTIME_ID, TAMGA, area, guardedFetch, pageSender, response, siteSender } from './helpers/fakes.js';
 
 function rig({ managed = {}, local = { tamgaUrl: TAMGA, tamgaKey: KEY }, permitted = true, respond = () => response(200, PASS_BODY) } = {}) {
@@ -58,6 +59,30 @@ test('without the host permission nothing is fetched', async () => {
   assert.equal(r.fetchImpl.calls.length, 0);
 });
 
+test('a content script on every address of every site is answered as that site', () => {
+  for (const id of SITE_IDS) {
+    for (const origin of SITES[id].origins) {
+      const url = `${origin}${SITES[id].path ?? ''}/c/1`;
+      assert.deepEqual(classifySender({ ...siteSender(origin, 4), url }, RUNTIME_ID, EXTENSION_ORIGIN), { kind: 'site', site: id, tabId: 4 }, url);
+    }
+  }
+});
+
+test('sites: a site the options page did not offer is on; a list set by policy is taken as it is', () => {
+  const sites = (managed, local) => mergeSettings(managed, local).settings.sites;
+  const added = SITE_IDS.filter((id) => !['claude', 'chatgpt', 'gemini'].includes(id));
+  // Saved by the previous version, which offered three sites: the rest are on.
+  assert.deepEqual(sites({}, { sites: ['claude', 'chatgpt', 'gemini'] }), [...SITE_IDS]);
+  assert.deepEqual(sites({}, { sites: ['claude'] }), ['claude', ...added]);
+  // Saved by this version: what was unticked stays off, and only that.
+  assert.deepEqual(sites({}, { sites: ['claude', 'chatgpt', 'gemini'], sitesKnown: [...SITE_IDS] }), ['claude', 'chatgpt', 'gemini']);
+  assert.deepEqual(sites({}, { sites: SITE_IDS.filter((id) => id !== 'poe'), sitesKnown: [...SITE_IDS] }), SITE_IDS.filter((id) => id !== 'poe'));
+  assert.deepEqual(sites({}, { sites: [], sitesKnown: [...SITE_IDS, 'later'] }), []);
+  // Nothing saved: all of them. Policy: exactly its list, whatever is stored locally.
+  assert.deepEqual(sites({}, {}), [...SITE_IDS]);
+  assert.deepEqual(sites({ sites: ['claude', 'chatgpt', 'gemini'] }, { sites: [], sitesKnown: [] }), ['claude', 'chatgpt', 'gemini']);
+});
+
 test('senders the worker does not answer', async () => {
   const strangers = [
     undefined,
@@ -69,6 +94,9 @@ test('senders the worker does not answer', async () => {
     { ...siteSender(), frameId: 3 }, // a frame inside the page
     { ...siteSender(), tab: undefined },
     { ...siteSender(), url: 'not a url' },
+    // huggingface.co is HuggingChat under /chat only.
+    { ...siteSender('https://huggingface.co'), url: 'https://huggingface.co/models' },
+    { ...siteSender('https://huggingface.co'), url: 'https://huggingface.co/chatbots' },
   ];
   for (const sender of strangers) {
     const r = rig();

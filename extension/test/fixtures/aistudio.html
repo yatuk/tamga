@@ -1,0 +1,31 @@
+<!doctype html>
+<!--
+  The structure the aistudio adapter assumes. It is NOT a copy of
+  aistudio.google.com and was not checked against it (signed out, the site
+  shows a welcome page): an Angular textarea with
+  formcontrolname="promptText" and the Run button inside an ms-run-button
+  element, as the open-source projects named in
+  src/content/adapters/aistudio.js describe it. The wrapper, the labels and
+  the file input are assumed. Written 2026-10-18.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Fixture: the structure assumed for aistudio.google.com</title>
+  </head>
+  <body>
+    <main>
+      <p data-fixture="log"></p>
+      <div class="prompt-box-container">
+        <textarea class="textarea" formcontrolname="promptText" aria-label="Enter a prompt" data-fixture="composer">Hello
+second line</textarea>
+        <input type="file" multiple hidden data-fixture="file">
+        <ms-run-button><button type="submit" aria-label="Run" data-fixture="send"><span data-fixture="send-icon">Run</span></button></ms-run-button>
+      </div>
+    </main>
+    <script type="module">
+      import { attachFakeSite } from './fake-site.js';
+      attachFakeSite(document, { composer: '[data-fixture="composer"]', send: '[data-fixture="send"]' });
+    </script>
+  </body>
+</html>

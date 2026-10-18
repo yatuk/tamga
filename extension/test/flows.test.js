@@ -9,6 +9,7 @@ import { test } from 'node:test';
 
 import { createHandler } from '../src/background/handler.js';
 import { RESEND_CHECK_MS, SLOW_CHECK_MS } from '../src/content/controller.js';
+import { ADAPTERS } from '../src/content/adapters/index.js';
 import { SITES } from '../src/shared/sites.js';
 import { chooseFiles, firePaste, pressEnter } from './helpers/dom.js';
 import { EXTENSION_ORIGIN, KEY, PASS_BODY, RUNTIME_ID, TAMGA, area, guardedFetch, response, siteSender } from './helpers/fakes.js';
@@ -43,7 +44,9 @@ async function wire(fixture, { failMode = 'closed' } = {}) {
     extensionOrigin: EXTENSION_ORIGIN,
     openOptions: async () => {},
   });
-  const sender = siteSender(SITES[fixture]); // the fixture's own site, as the worker sees it
+  // The fixture's own site, as the worker sees it: a page at /chat/1 on its
+  // first address, which is also under HuggingChat's /chat.
+  const sender = siteSender(SITES[fixture].origins[0]);
   const config = await handle({ type: 'tamga/config' }, sender);
   const h = setup(fixture, { answers: async (message) => copy(await handle(copy(message), sender)), config: copy(config) });
   await h.controller.start();
@@ -54,7 +57,7 @@ async function flush() {
   for (let i = 0; i < 20; i++) await settle();
 }
 
-for (const fixture of ['claude', 'chatgpt', 'gemini']) {
+for (const fixture of Object.keys(ADAPTERS)) {
   test(`${fixture}: a clean text is checked by Tamga and sent on, once, with nothing shown`, async () => {
     const { h, tamga } = await wire(fixture);
     type(h.doc, h.box, 'what is the capital of France');

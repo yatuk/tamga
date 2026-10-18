@@ -3,12 +3,21 @@
 // live sites, which nobody has checked these selectors against.
 
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { test } from 'node:test';
 
 import { editableRoot, makeAdapter, readText, replaceText } from '../src/content/adapters/base.js';
-import { ADAPTERS, adapterForOrigin, attachState, generic, resolveBox, resolveSend } from '../src/content/adapters/index.js';
-import { SITES } from '../src/shared/sites.js';
-import { loadFixture, loadHTML } from './helpers/dom.js';
+import { ADAPTERS, adapterForUrl, attachState, generic, resolveBox, resolveSend } from '../src/content/adapters/index.js';
+import { SITES, siteForUrl } from '../src/shared/sites.js';
+import { FIXTURES, loadFixture, loadHTML } from './helpers/dom.js';
+
+/** A fixture with one string in it replaced. */
+const fixtureWith = (name, from, to) => {
+  const html = readFileSync(resolve(FIXTURES, `${name}.html`), 'utf8');
+  assert.ok(html.includes(from), `${name}.html has no ${from}`);
+  return loadHTML(html.replace(from, to));
+};
 
 const q = (doc, name) => doc.querySelector(`[data-fixture="${name}"]`);
 
@@ -49,16 +58,21 @@ for (const id of Object.keys(ADAPTERS)) {
 
   test(`${id}: a key press in the box resolves to this adapter; a click on the button to the box`, () => {
     const { doc } = loadFixture(id);
-    const inside = q(doc, 'composer').childNodes[0];
+    // Inside the editor's first paragraph, or the textarea itself.
+    const inside = q(doc, 'composer').childNodes[0] || q(doc, 'composer');
     assert.deepEqual(resolveBox(adapter, doc, inside), { adapter, composer: q(doc, 'composer') });
     assert.deepEqual(resolveSend(adapter, doc, q(doc, 'send-icon')), { adapter, button: q(doc, 'send'), composer: q(doc, 'composer') });
     assert.equal(resolveSend(adapter, doc, q(doc, 'log')), null);
     assert.equal(attachState(adapter, doc), 'site');
   });
 
-  test(`${id}: belongs to ${SITES[id]} and to no other origin`, () => {
-    assert.equal(adapterForOrigin(SITES[id]), adapter);
-    assert.equal(adapterForOrigin(`${SITES[id]}.evil.example.invalid`), null);
+  test(`${id}: belongs to ${SITES[id].origins.join(', ')} and to no other origin`, () => {
+    const path = SITES[id].path ?? '';
+    for (const origin of SITES[id].origins) {
+      assert.equal(adapterForUrl(`${origin}${path}/c/1`), adapter);
+      assert.equal(adapterForUrl(`${origin}.evil.example.invalid${path}/c/1`), null);
+      assert.equal(adapterForUrl(`${origin.replace('https:', 'http:')}${path}/c/1`), null);
+    }
   });
 
   test(`${id}: when its selectors match nothing the generic fallback takes the same page`, () => {
@@ -66,6 +80,12 @@ for (const id of Object.keys(ADAPTERS)) {
     const broken = makeAdapter({ id, composer: ['div.gone'], sendButton: ['button.gone'] });
     assert.equal(attachState(broken, doc), 'generic');
     assert.deepEqual(resolveBox(broken, doc, q(doc, 'composer')), { adapter: generic, composer: q(doc, 'composer') });
+    if (FALLBACK_MISSES_SEND[id]) {
+      // Said in the README: a send by Enter is still held there, a click on
+      // the control is not.
+      assert.equal(resolveSend(broken, doc, q(doc, 'send-icon')), null);
+      return;
+    }
     // On gemini there is no form around the box and the button's only name
     // is a translated label: the fallback finds it by that label and by the
     // class of its wrapper.
@@ -74,7 +94,28 @@ for (const id of Object.keys(ADAPTERS)) {
   });
 }
 
-const NEGATIVES = { chatgpt: ['attach', 'voice'], gemini: ['upload', 'dictation', 'model'] };
+// Fixtures whose send control the generic fallback cannot tell by itself
+// until it has watched the box go from empty to holding text, and why.
+const FALLBACK_MISSES_SEND = {
+  copilot: 'named "Submit", in no form',
+  perplexity: 'named "Submit" in English, in no form; the Turkish "Gönder" is found (below)',
+  kimi: 'a div, not a button',
+  notebook: 'named "Submit", in no form',
+  aistudio: 'named "Run", in no form',
+};
+
+const NEGATIVES = {
+  chatgpt: ['attach', 'voice'],
+  gemini: ['upload', 'dictation', 'model'],
+  perplexity: ['attach', 'model', 'dictation'],
+  mistral: ['attach'],
+  grok: ['attach', 'model'],
+  metaai: ['attach'],
+  qwen: ['mode'],
+  kimi: ['tools'],
+  huggingchat: ['attach', 'voice'],
+  zai: ['more'],
+};
 
 for (const [id, names] of Object.entries(NEGATIVES)) {
   test(`${id}: the ${names.join(', ')} buttons are not taken for the send button, by the adapter or by the fallback`, () => {
@@ -92,6 +133,7 @@ for (const [id, names] of Object.entries(NEGATIVES)) {
       generic.observeSend(doc, box);
       box.textContent = 'hello';
       for (const name of names) assert.equal(resolveSend(site, doc, q(doc, name)), null, `${name} resolved as a send after watching`);
+      if (site === broken && FALLBACK_MISSES_SEND[id]) continue;
       assert.equal(resolveSend(site, doc, q(doc, 'send')).button, q(doc, 'send'));
     }
   });
@@ -239,4 +281,71 @@ test('replaceText reports failure when the page puts its own text back', () => {
   const box = q(doc, 'composer');
   box.addEventListener('input', () => { box.textContent = 'the editor knows better'; });
   assert.equal(replaceText(box, 'redacted'), false);
+});
+
+test('huggingchat: under /chat on huggingface.co, and nowhere else there', () => {
+  for (const url of ['https://huggingface.co/chat', 'https://huggingface.co/chat/', 'https://huggingface.co/chat/conversation/1']) {
+    assert.equal(adapterForUrl(url), ADAPTERS.huggingchat, url);
+  }
+  for (const url of ['https://huggingface.co/', 'https://huggingface.co/models', 'https://huggingface.co/chatbots', 'https://huggingface.co/spaces/x/chat']) {
+    assert.equal(adapterForUrl(url), null, url);
+  }
+  assert.equal(siteForUrl('not a url'), null);
+});
+
+test('a site with two addresses: each is that site', () => {
+  for (const [id, origins] of [
+    ['copilot', ['https://copilot.microsoft.com', 'https://copilot.com']],
+    ['m365copilot', ['https://m365.cloud.microsoft', 'https://copilot.cloud.microsoft']],
+    ['notebook', ['https://notebook.google.com', 'https://notebooklm.google.com']],
+  ]) {
+    for (const origin of origins) assert.equal(siteForUrl(`${origin}/chat`), id, origin);
+  }
+  assert.equal(siteForUrl('https://www.copilot.com/'), null, 'www.copilot.com is not listed');
+  assert.equal(siteForUrl('https://kimi.com/'), null, 'kimi.com redirects to www.kimi.com');
+});
+
+// Seen on 2026-10-18 with the Turkish interface: the send button's only
+// name is "Gönder". The site's own selectors miss it; the fallback finds it
+// by the word, beside the box and after it.
+for (const [id, english] of [['perplexity', 'aria-label="Submit" data-fixture="send"'], ['metaai', 'aria-label="Send message" data-slot="button" data-fixture="send"']]) {
+  test(`${id}: with the Turkish label the send button is found by the fallback`, () => {
+    const { doc } = fixtureWith(id, english, english.replace(/aria-label="[^"]*"/, 'aria-label="Gönder"'));
+    const site = ADAPTERS[id];
+    assert.equal(site.findSendButton(doc), null);
+    assert.deepEqual(resolveSend(site, doc, q(doc, 'send-icon')), { adapter: site, button: q(doc, 'send'), composer: q(doc, 'composer') });
+    for (const name of NEGATIVES[id]) assert.equal(resolveSend(site, doc, q(doc, name)), null, name);
+  });
+}
+
+test('metaai: the signed-out one-line input is the box, by the site\'s selectors only', () => {
+  const { doc } = loadHTML('<html><body><main><div class="bar"><div class="field"><input type="text" aria-label="Meta AI\'a Sor" placeholder="Meta AI\'a istediğin her şeyi sor..." id="box"></div>' +
+    '<button aria-label="Dosya eki ekle" data-testid="composer-add-attachment-button" id="attach">+</button><button aria-label="Gönder" id="send">s</button></div></main></body></html>');
+  const site = ADAPTERS.metaai;
+  const box = doc.querySelector('#box');
+  box.value = 'my question';
+  assert.equal(site.findComposer(doc), box);
+  assert.equal(site.readText(box), 'my question');
+  assert.deepEqual(resolveBox(site, doc, box), { adapter: site, composer: box });
+  assert.deepEqual(resolveSend(site, doc, doc.querySelector('#send')), { adapter: site, button: doc.querySelector('#send'), composer: box });
+  assert.equal(resolveSend(site, doc, doc.querySelector('#attach')), null);
+  assert.equal(site.replaceText(box, 'my [email_REDACTED] question'), true);
+  assert.equal(box.value, 'my [email_REDACTED] question');
+  // Nothing else takes a one-line input for a message box.
+  const broken = makeAdapter({ id: 'metaai', composer: ['div.gone'], sendButton: ['button.gone'] });
+  assert.equal(resolveBox(broken, doc, box), null);
+});
+
+test('qwen: the voice control in the send slot while the box is empty is not a send', () => {
+  const { doc } = fixtureWith('qwen', '<div class="chat-prompt-send-button"><button class="send-button" aria-label="Send" data-fixture="send"><span data-fixture="send-icon">Send</span></button></div>',
+    '<div class="omb"><div role="button" tabindex="0" aria-label="Voice mode" class="omb__btn" data-fixture="voice"><span>v</span></div></div>');
+  assert.equal(ADAPTERS.qwen.findSendButton(doc), null);
+  assert.equal(resolveSend(ADAPTERS.qwen, doc, q(doc, 'voice')), null);
+  assert.equal(resolveSend(ADAPTERS.qwen, doc, q(doc, 'voice').childNodes[0]), null);
+});
+
+test('kimi: the send control is a div, and a click inside it is a send', () => {
+  const { doc } = loadFixture('kimi');
+  assert.equal(q(doc, 'send').tagName, 'DIV');
+  assert.deepEqual(resolveSend(ADAPTERS.kimi, doc, q(doc, 'send-icon')), { adapter: ADAPTERS.kimi, button: q(doc, 'send'), composer: q(doc, 'composer') });
 });

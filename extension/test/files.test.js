@@ -69,6 +69,12 @@ for (const id of Object.keys(ADAPTERS)) {
   test(`${id}: finds the file input of its fixture`, () => {
     const { doc } = loadFixture(id);
     const input = doc.querySelector('[data-fixture="file"]');
+    if (ADAPTERS[id].selectors.fileInput.length === 0) {
+      // No selector of its own: the fallback watches every file input.
+      assert.deepEqual(ADAPTERS[id].findFileInputs(doc), []);
+      assert.deepEqual(resolveFileInput(ADAPTERS[id], input), { adapter: generic, input });
+      return;
+    }
     assert.deepEqual(ADAPTERS[id].findFileInputs(doc), [input]);
     assert.equal(ADAPTERS[id].matchFileInput(input), true);
     assert.equal(doc.querySelector(ADAPTERS[id].selectors.fileInput[0]), input, 'the first selector is the one that matches');
@@ -87,7 +93,7 @@ test('any other file input on the page is the fallback\'s, and a text input is n
 
 // ---------- a file picked in the site's file input ----------
 
-for (const fixture of ['claude', 'chatgpt', 'gemini', 'generic']) {
+for (const fixture of [...Object.keys(ADAPTERS), 'generic']) {
   test(`${fixture}: a clean text file is held until checked, then handed to the page once`, { skip }, async () => {
     const h = setup(fixture, { answers: [verdict('PASS')] });
     const events = chooseFiles(h.win, h.fileInput, [file('notes.txt', 'meeting at noon')]);

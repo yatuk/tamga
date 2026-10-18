@@ -86,7 +86,7 @@ export function fakeUI() {
 
 /** Puts text in a message box the way typing would leave it. */
 export function type(doc, el, text) {
-  if (el.tagName === 'TEXTAREA') {
+  if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
     el.value = text;
     return;
   }

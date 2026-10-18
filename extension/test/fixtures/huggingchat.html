@@ -1,0 +1,37 @@
+<!doctype html>
+<!--
+  The structure the huggingchat adapter assumes. It is NOT a copy of
+  huggingface.co/chat: a form holding a textarea with a placeholder, a
+  hidden file input, an attach button, a voice-recording button
+  (type="button") and a submit button named submit with aria-label "Send
+  message". That much was read from the live page signed out on 2026-10-18
+  (English interface); the nesting is shortened. The attach and voice
+  buttons are negatives. Written 2026-10-18.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Fixture: the structure assumed for huggingface.co/chat</title>
+  </head>
+  <body>
+    <main>
+      <p data-fixture="log"></p>
+      <form>
+        <div class="tools">
+          <input class="absolute hidden size-0" aria-label="Upload file" type="file" multiple data-fixture="file">
+          <button type="button" aria-label="Add attachment" data-fixture="attach"><span>+</span></button>
+        </div>
+        <div class="field">
+          <textarea rows="1" role="combobox" placeholder="Ask anything" data-fixture="composer">Hello
+second line</textarea>
+          <button type="button" aria-label="Start voice recording" data-fixture="voice"><span>Mic</span></button>
+          <button type="submit" name="submit" aria-label="Send message" data-fixture="send"><span data-fixture="send-icon">Send</span></button>
+        </div>
+      </form>
+    </main>
+    <script type="module">
+      import { attachFakeSite } from './fake-site.js';
+      attachFakeSite(document, { composer: '[data-fixture="composer"]', send: '[data-fixture="send"]' });
+    </script>
+  </body>
+</html>

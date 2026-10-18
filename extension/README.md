@@ -1,9 +1,9 @@
 # Tamga for chat sites (browser extension, MVP)
 
 Tamga's proxy sees the requests applications send to it. It does not see what
-someone types into claude.ai, chatgpt.com or gemini.google.com in a browser.
-This extension asks your own Tamga, at the moment of paste or send on those
-three sites, what the policy says about the text
+someone types into claude.ai, chatgpt.com, gemini.google.com or another AI
+chat site in a browser. This extension asks your own Tamga, at the moment of
+paste or send on the [sites it knows](#sites), what the policy says about the text
 ([`POST /api/v1/scan`](../docs/operations.md#checking-a-text-without-sending-it)),
 and acts on the answer before the text reaches the site.
 
@@ -22,7 +22,13 @@ cannot be asked, the notice for `STRIP`, and the generic fallback's way of
 finding a send button that is in no form and has no English name. Written on
 2026-10-18 and likewise run only under `node --test`: the check of
 [attached text files](#attached-files) and the [Firefox
-build](#firefox). The flows above that were not tried live are now each
+build](#firefox). Also written on 2026-10-18 and run only under `node
+--test`: the fourteen [sites](#sites) after the first three. On seven of
+them the message box and the send button were read from the live page
+signed out, on one only a signed-out box that leads to sign-in; on the other
+six the selectors come from open-source projects and were not compared with
+the live page at all. The extension has not been loaded on any of them. The
+status paragraph above is about the first three only. The flows above that were not tried live are now each
 run end to end under Node, from the page through the worker's handler to a
 fake Tamga (`test/flows.test.js`); the [live-test
 checklist](#live-test-checklist) is what is left to confirm on the sites.
@@ -168,7 +174,7 @@ site's own cloud-drive picker.
    `/api/v1/scan` and says what came back.
 
 Settings: `tamgaUrl`, `tamgaKey`, `failMode` (`closed` or `open`),
-`autoRedact` (`false`), `sites` (all three), `timeoutMs` (2500, kept between
+`autoRedact` (`false`), `sites` (all of them, by the ids in [Sites](#sites)), `timeoutMs` (2500, kept between
 500 and 10000; policy only). A value set by policy
 (`chrome.storage.managed`, described by `managed_schema.json`) wins over one
 typed into the options page, field by field, and is shown there as locked.
@@ -177,6 +183,12 @@ enterprise policy ([docs/browser-extension.md](../docs/browser-extension.md#fire
 
 `allowedWorkspaces` (policy only) lists the organisation's ChatGPT workspace
 ids and Claude organisation ids; see "Workspace headers" below.
+
+A `sites` list set by policy is exact: a site missing from it is off,
+including a site a later version adds. A list saved on the options page is
+stored with the sites the page offered (`sitesKnown`), so a site a later
+version adds is on until it is unticked; a list saved before `sitesKnown`
+existed counts as chosen from claude.ai, chatgpt.com and gemini.google.com.
 
 ## Firefox
 
@@ -219,7 +231,7 @@ Add-on...", choose `dist/firefox/manifest.json`. It stays until Firefox is
 closed. Then open its options (`about:addons`, the extension, Preferences)
 and fill them in as above. In Firefox a Manifest V3 extension's access to
 sites can be withdrawn by the person: check under `about:addons`, the
-extension, Permissions, that the three sites are allowed, or the content
+extension, Permissions, that the sites are allowed, or the content
 script does not run there at all. To install it for an organisation (signing
 and enterprise policy): [docs/browser-extension.md](../docs/browser-extension.md#firefox).
 
@@ -233,10 +245,10 @@ policy.
 ## How it is put together
 
 ```
-manifest.json            permissions: storage, declarativeNetRequestWithHostAccess; hosts: the three sites
+manifest.json            permissions: storage, declarativeNetRequestWithHostAccess; hosts: the sites
 managed_schema.json      the settings an administrator can set by policy
 options/                 the settings page
-src/shared/              message shapes, the list of sites, browser.* or chrome.*
+src/shared/              message shapes, the one list of sites, browser.* or chrome.*
 src/background/          the service worker: settings, the key, the one fetch
 src/content/loader.js    the content script: listens from document_start
 src/content/controller.js   what happens on paste, send and attach
@@ -256,7 +268,7 @@ test/                    node --test; fixtures under test/fixtures/
   with `credentials: omit`, `redirect: error` and no referrer. There are no
   analytics, no remote code and no other request.
 - The worker answers only its own content scripts in the top frame of a tab
-  on one of the three sites, and its own options page. A message is rebuilt
+  on one of the sites (under `/chat` on huggingface.co), and its own options page. A message is rebuilt
   from its allowed fields; anything else is refused. A content script
   accepts a reply only in the expected shape.
 - Page content and API text are set as text nodes. There is no `innerHTML`.
@@ -291,6 +303,64 @@ verified: [`docs/enterprise-accounts.md`](../docs/enterprise-accounts.md).
 Not verified at all: that the vendors honour the header when the browser
 sets it, on a live site.
 
+## Sites
+
+The list is `src/shared/sites.js`; the manifest's `host_permissions`,
+`content_scripts` and `web_accessible_resources`, the options page,
+`managed_schema.json` and the adapters follow it, and `node --test` fails
+when one of them does not. Which sites and why, with the usage figures they
+were chosen by and the ones left out: [docs/browser-extension.md](../docs/browser-extension.md#sites).
+
+| Id | Site | Origins | Selectors | Enter |
+|---|---|---|---|---|
+| `claude` | Claude | `https://claude.ai` | compared with the live page signed in, 2026-10-11; extension run there | sends |
+| `chatgpt` | ChatGPT | `https://chatgpt.com` | the same | sends |
+| `gemini` | Gemini | `https://gemini.google.com` | the same | sends |
+| `deepseek` | DeepSeek | `https://chat.deepseek.com` | selectors not compared with the live page (sign-in first) | sends (per the sources) |
+| `copilot` | Microsoft Copilot | `https://copilot.microsoft.com`, `https://copilot.com` | selectors not compared with the live page (signed out: a sign-in page) | sends (per the sources) |
+| `m365copilot` | Microsoft 365 Copilot Chat | `https://m365.cloud.microsoft`, `https://copilot.cloud.microsoft` | signed-out box read from the live page, 2026-10-18; signed-in chat: selectors not compared with the live page | assumed to send |
+| `perplexity` | Perplexity | `https://www.perplexity.ai` | read from the live page signed out, 2026-10-18 | sends (per the sources) |
+| `mistral` | Mistral Le Chat | `https://chat.mistral.ai` | selectors not compared with the live page (sign-in first) | sends (per the sources) |
+| `grok` | Grok | `https://grok.com` | read from the live page signed out, 2026-10-18 | sends (per the sources) |
+| `metaai` | Meta AI | `https://www.meta.ai` | signed-out box read from the live page, 2026-10-18; signed-in box: selectors not compared with the live page | assumed to send |
+| `qwen` | Qwen Chat | `https://chat.qwen.ai` | read from the live page signed out, 2026-10-18 | assumed to send |
+| `kimi` | Kimi | `https://www.kimi.com` | read from the live page signed out, 2026-10-18 | sends (per the sources) |
+| `poe` | Poe | `https://poe.com` | selectors not compared with the live page (sign-in first) | assumed to send |
+| `huggingchat` | HuggingChat | `https://huggingface.co`, under `/chat` only | read from the live page signed out, 2026-10-18 | assumed to send |
+| `aistudio` | Google AI Studio | `https://aistudio.google.com` | selectors not compared with the live page (signed out: a welcome page) | see below |
+| `notebook` | Gemini Notebook, formerly NotebookLM | `https://notebook.google.com`, `https://notebooklm.google.com` | selectors not compared with the live page (signed out: a sign-in page) | sends (per the sources) |
+| `zai` | Z.ai | `https://chat.z.ai` | read from the live page signed out, 2026-10-18 | sends (per the sources) |
+
+"Read from the live page signed out" means: on 2026-10-18, in the
+Chromium-based browser pane of the Claude desktop app, the page was opened
+without the extension and its message box, send control and file input were
+read from the DOM. Nothing was sent; on chat.qwen.ai three letters were
+typed and removed to see the send button that replaces the voice control.
+The signed-in page of the same site may differ, and none of these sites was
+used with the extension loaded. "Per the sources" means an open-source
+project that drives the site sends with Enter; "assumed" means nothing was
+found either way. Each adapter's file names its sources and what was seen.
+
+On huggingface.co the content script runs under `/chat` only, and the worker
+answers only a page there. The browser's permission prompt still names
+huggingface.co as a whole: a host permission is granted for a host, whatever
+path the manifest gives.
+
+**Google AI Studio and Enter.** The sources disagree: one project sends with
+Ctrl+Enter or Cmd+Enter (2026-10-12), forum posts from 2026 say plain Enter
+sends. The extension holds Enter with or without Ctrl or Cmd, as on every
+site. If plain Enter makes a new line there, a held Enter is checked and then
+the Run button is pressed, which sends a prompt the person meant to go on
+writing. Check this first on that site.
+
+**Kimi's send control is a div.** The adapter finds it; the generic fallback
+looks at `button` elements only, so if Kimi's selectors stop matching, a
+click on it is not held. Enter still is.
+
+**Meta AI signed out has a one-line input.** A one-line `<input>` is never
+a message box for the generic fallback; it is one on www.meta.ai only
+because the adapter names it (`input[type="text"][placeholder]`, last).
+
 ## Site adapters
 
 An adapter answers: where is the message box, what text is in it, how is the
@@ -305,7 +375,7 @@ own selectors miss is still watched: the generic fallback takes every
 `input[type="file"]` on the page, since on these sites a file is picked to be
 sent.
 
-**The selectors were compared with the live pages once, on 2026-10-11** (Chrome, signed in, Turkish interface), by reading the page without the extension loaded: which selector finds the message box, and which finds the send button once the box holds text. Nothing was sent in that comparison; what was then run with the extension loaded, and what was not, is in the status paragraph at the top. Before that comparison every selector here was a guess: the message box was found on all three sites, the send button on one of three. The send button's label is translated with the interface, so a selector that names it in English fails for most people; the ones added from the live page do not depend on the label.
+**The selectors of claude.ai, chatgpt.com and gemini.google.com were compared with the live pages once, on 2026-10-11** (Chrome, signed in, Turkish interface), by reading the page without the extension loaded: which selector finds the message box, and which finds the send button once the box holds text. Nothing was sent in that comparison; what was then run with the extension loaded, and what was not, is in the status paragraph at the top. Before that comparison every selector here was a guess: the message box was found on all three sites, the send button on one of three. The send button's label is translated with the interface, so a selector that names it in English fails for most people; the ones added from the live page do not depend on the label.
 
 Each adapter has a fixture under `test/fixtures/` that reproduces the structure
 seen on that day; the tests prove the adapter matches its fixture, not the
@@ -325,7 +395,7 @@ below, and a wrapper that no longer carries `send` in its class, the button
 is found only once the fallback has seen the box empty and then with text;
 until then a send by Enter is held and a send by button is not.
 
-| Site | Role | Selector | Status (2026-10-11) |
+| Site | Role | Selector | Status (2026-10-11 unless dated) |
 |---|---|---|---|
 | claude.ai | message box | `div[data-testid="chat-input"][contenteditable="true"]` | added from the live page |
 | claude.ai | message box | `div.ProseMirror[contenteditable="true"]` | seen, 1 match |
@@ -370,6 +440,89 @@ until then a send by Enter is held and a send by button is not.
 | gemini.google.com | file input | `.upload-button-container input[type="file"]` | a guess, not compared with the live page (2026-10-18) |
 | gemini.google.com | file input | `input[type="file"][name="Filedata"]` | a guess, not compared with the live page (2026-10-18) |
 | generic fallback | file input | `input[type="file"]` | every file input on the page |
+
+The sites added on 2026-10-18. "Seen" is a selector that matched once on the
+live page signed out that day, read as described under [Sites](#sites);
+"selectors not compared with the live page" is one taken from the source the
+adapter's file names, or a guess where it says so. A site with no file-input
+row has none of its own: the generic fallback watches its file inputs.
+
+| Site | Role | Selector | Status (2026-10-18) |
+|---|---|---|---|
+| chat.deepseek.com | message box | `textarea#chat-input` | selectors not compared with the live page (ArcRift, promptmanager) |
+| chat.deepseek.com | message box | `textarea[placeholder*="DeepSeek"]` | selectors not compared with the live page (promptmanager, MCP-SuperAssistant) |
+| chat.deepseek.com | message box | `div[contenteditable="true"][role="textbox"]` | selectors not compared with the live page (AICompare) |
+| chat.deepseek.com | send | `button[aria-label="Send message"]` | selectors not compared with the live page (ArcRift; an English label) |
+| chat.deepseek.com | send | `button[data-testid="send-button"]` | selectors not compared with the live page (ArcRift, MCP-SuperAssistant) |
+| Microsoft Copilot | message box | `textarea#userInput` | selectors not compared with the live page (four projects agree) |
+| Microsoft Copilot | message box | `textarea[data-testid="composer-input"]` | selectors not compared with the live page (My-Prompt-Manager, ArcRift) |
+| Microsoft Copilot | message box | `textarea[placeholder*="Copilot"]` | selectors not compared with the live page (My-Prompt-Manager) |
+| Microsoft Copilot | send | `button[aria-label*="Submit"]` | selectors not compared with the live page (ArcRift; an English label) |
+| Microsoft Copilot | send | `button[title="Submit"]` | selectors not compared with the live page (AI-Prompt-Security-Guard; an English label) |
+| Microsoft 365 Copilot Chat | message box | `#m365-chat-editor-target-element` | selectors not compared with the live page (My-Prompt-Manager, chattycode) |
+| Microsoft 365 Copilot Chat | message box | `span[data-lexical-editor="true"][contenteditable="true"]` | selectors not compared with the live page (My-Prompt-Manager) |
+| Microsoft 365 Copilot Chat | message box | `span[role="combobox"][contenteditable="true"]` | selectors not compared with the live page (My-Prompt-Manager) |
+| Microsoft 365 Copilot Chat | message box | `textarea#unauth-prompt-input` | seen, 1 match, on copilot.cloud.microsoft signed out (leads to sign-in) |
+| Microsoft 365 Copilot Chat | send | `.fai-ChatInput__actions button[type="submit"]` | selectors not compared with the live page (a guess at the actions bar's button) |
+| Microsoft 365 Copilot Chat | send | `.fai-ChatInput__actions button[aria-label="Send"]` | selectors not compared with the live page (a guess; an English label) |
+| Microsoft 365 Copilot Chat | send | `div#unauth-prompt-submit` | seen, 1 match, on copilot.cloud.microsoft signed out (a div with role="button") |
+| www.perplexity.ai | message box | `div#ask-input[contenteditable="true"]` | seen, 1 match |
+| www.perplexity.ai | message box | `div[contenteditable="true"][data-lexical-editor="true"]` | seen, 1 match |
+| www.perplexity.ai | message box | `textarea#ask-input` | no match (an older form of the box) |
+| www.perplexity.ai | send | `button[aria-label="Submit"]` | no match (label is translated: "Gönder"); English label from MCP-SuperAssistant |
+| www.perplexity.ai | send | `button[aria-label="Send"]` | no match (label is translated: "Gönder") |
+| www.perplexity.ai | file input | `input[type="file"][multiple][accept]` | seen, 1 match |
+| chat.mistral.ai | message box | `div.ProseMirror[contenteditable="true"]` | selectors not compared with the live page (ArcRift, MCP-SuperAssistant) |
+| chat.mistral.ai | message box | `textarea[name="message.text"]` | selectors not compared with the live page (MCP-SuperAssistant) |
+| chat.mistral.ai | send | `form button[type="submit"]` | selectors not compared with the live page (MCP-SuperAssistant, ArcRift; that the box is in a form is assumed) |
+| chat.mistral.ai | send | `button[aria-label="Send"]` | selectors not compared with the live page (ArcRift; an English label) |
+| chat.mistral.ai | file input | `input[name="file-upload"]` | selectors not compared with the live page (MCP-SuperAssistant) |
+| chat.mistral.ai | file input | `form input[type="file"]` | selectors not compared with the live page (a guess) |
+| grok.com | message box | `div.query-bar div.tiptap[contenteditable="true"]` | seen, 1 match, once the page had loaded |
+| grok.com | message box | `form div.tiptap[contenteditable="true"]` | seen, 1 match, once the page had loaded (AICompare has it too) |
+| grok.com | message box | `div.query-bar textarea` | seen, 1 match, straight after navigation; 0 once loaded |
+| grok.com | message box | `form textarea` | seen, 1 match, straight after navigation; 0 once loaded |
+| grok.com | send | `button[data-testid="chat-submit"]` | seen, 1 match |
+| grok.com | send | `form button[type="submit"]` | seen, 1 match |
+| grok.com | file input | `form input[type="file"][name="files"]` | seen, 1 match |
+| www.meta.ai | message box | `div[contenteditable="true"][role="textbox"]` | no match signed out; a guess at the signed-in box |
+| www.meta.ai | message box | `textarea[placeholder]` | no match signed out; a guess at the signed-in box |
+| www.meta.ai | message box | `input[type="text"][placeholder]` | seen, 1 match (signed out) |
+| www.meta.ai | send | `button[aria-label="Send message"]` | no match (label is translated: "Gönder"); a guess at the English label |
+| www.meta.ai | send | `button[aria-label="Send"]` | no match (label is translated: "Gönder"); a guess at the English label |
+| chat.qwen.ai | message box | `textarea.message-input-textarea` | seen, 1 match |
+| chat.qwen.ai | message box | `textarea#chat-input` | no match; from MCP-SuperAssistant |
+| chat.qwen.ai | send | `div.chat-prompt-send-button button` | seen, 1 match, with text in the box |
+| chat.qwen.ai | send | `div.message-input-right-button-send button` | seen, 1 match, with text in the box; none while empty (the voice control is a div) |
+| chat.qwen.ai | send | `button#send-message-button` | no match; from MCP-SuperAssistant |
+| chat.qwen.ai | file input | `input#filesUpload` | seen, 1 match |
+| www.kimi.com | message box | `div.chat-input-editor[contenteditable="true"]` | seen, 1 match |
+| www.kimi.com | message box | `div[contenteditable="true"][data-lexical-editor="true"]` | seen, 1 match |
+| www.kimi.com | send | `div.send-button-container` | seen, 1 match (a div, with the class disabled while the box is empty) |
+| www.kimi.com | send | `.send-button` | no match; from MCP-SuperAssistant |
+| www.kimi.com | file input | `div.chat-editor-action input[type="file"]` | seen, 1 match |
+| poe.com | message box | `textarea[class*="GrowingTextArea_textArea"]` | selectors not compared with the live page (promptmanager, AICompare) |
+| poe.com | message box | `[class*="GrowingTextArea"] textarea` | selectors not compared with the live page (RTLY, AICompare) |
+| poe.com | send | `button[data-button-send="true"]` | selectors not compared with the live page (AICompare) |
+| poe.com | send | `button[class*="ChatMessageSendButton"]` | selectors not compared with the live page (GodMode, 2023) |
+| huggingface.co/chat | message box | `form textarea[placeholder]` | seen, 1 match |
+| huggingface.co/chat | message box | `form textarea` | seen, 1 match |
+| huggingface.co/chat | send | `form button[type="submit"][name="submit"]` | seen, 1 match (disabled while the box is empty) |
+| huggingface.co/chat | send | `button[aria-label="Send message"]` | seen, 1 match (English interface) |
+| huggingface.co/chat | file input | `form input[type="file"]` | seen, 1 match |
+| aistudio.google.com | message box | `textarea[formcontrolname="promptText"]` | selectors not compared with the live page (AICompare) |
+| aistudio.google.com | message box | `textarea[aria-label="Enter a prompt"]` | selectors not compared with the live page (MCP-SuperAssistant; an English label) |
+| aistudio.google.com | message box | `.prompt-box-container textarea` | selectors not compared with the live page (MCP-SuperAssistant) |
+| aistudio.google.com | send | `ms-run-button button` | selectors not compared with the live page (MCP-SuperAssistant) |
+| aistudio.google.com | send | `button[aria-label="Run"]` | selectors not compared with the live page (MCP-SuperAssistant; an English label) |
+| Gemini Notebook | message box | `textarea.query-box-input` | selectors not compared with the live page (notebooklm-mcp, promptmanager) |
+| Gemini Notebook | send | `button.submit-button` | selectors not compared with the live page (a guess) |
+| Gemini Notebook | send | `button[aria-label="Submit"]` | selectors not compared with the live page (a guess; an English label) |
+| chat.z.ai | message box | `textarea#chat-input` | seen, 1 match |
+| chat.z.ai | message box | `form textarea` | seen, 1 match |
+| chat.z.ai | send | `button#send-message-button` | seen, 1 match (disabled while the box is empty) |
+| chat.z.ai | send | `form button[type="submit"]` | seen, 1 match |
+| chat.z.ai | file input | `.messageInputContainer input[type="file"]` | seen, 1 match |
 
 **The generic fallback's send button, where no selector above matches.** This
 part is not a selector and so is not in the table. It applies only when the
@@ -477,11 +630,12 @@ input or build a `DataTransfer`.
 To look at a fixture in a browser, serve this directory
 (`python -m http.server` in `extension/`) and open
 `http://localhost:8000/test/fixtures/claude.html`. The extension does not
-run there: its content script matches the three sites only.
+run there: its content script matches the sites only.
 
 ## Live-test checklist
 
-For the owner, on each of claude.ai, chatgpt.com and gemini.google.com,
+For the owner, on each of claude.ai, chatgpt.com and gemini.google.com
+(the other sites follow at the end),
 with the extension loaded unpacked against a Tamga you can watch the log of.
 The Node tests already run each of these; the live run confirms that the
 site behaves as the fixtures assume. Note the browser, its version, the
@@ -527,6 +681,33 @@ file copied in the file manager):
 Firefox (`node tools/package.js firefox`, then `about:debugging`): lines 1,
 6, 8 and 9 on one site, and the options page's Save asking for the Tamga
 origin.
+
+The sites added on 2026-10-18 (none of this has been done on them yet).
+Signed in, on each of chat.deepseek.com, copilot.microsoft.com (and
+copilot.com if the chat opens there), m365.cloud.microsoft/chat with a work
+account, www.perplexity.ai, chat.mistral.ai, grok.com, www.meta.ai,
+chat.qwen.ai, www.kimi.com, poe.com, huggingface.co/chat,
+aistudio.google.com, notebook.google.com and chat.z.ai:
+
+14. Before loading the extension, in the developer tools: which selector of
+    the site's module finds the message box, and which the send button once
+    the box holds text, as was done for the first three on 2026-10-11. Put
+    the one that matches first, and change its row in the tables above from
+    "selectors not compared with the live page" or "seen" (signed out) to
+    the date and what matched.
+15. With the extension loaded: lines 1, 2, 5 and 9. On a page where no
+    badge says the fallback is in use, line 2 shows the site's own send
+    selector works.
+16. Enter: does it send, or does it make a new line? Above all on
+    aistudio.google.com ([Google AI Studio and Enter](#sites)), and with
+    Shift+Enter and Ctrl+Enter too. Note it in the Enter column of the
+    sites table.
+17. huggingface.co: a page outside `/chat` (a model page) shows no badge
+    and nothing is held there.
+18. Updating an installed copy from the previous version: the browser's
+    prompt for the new sites (or the extension turned off until it is
+    accepted), and, for a person who had saved the options page, that the
+    new sites are ticked and a site they had unticked is still unticked.
 
 ## Licence
 

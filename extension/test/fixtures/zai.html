@@ -1,0 +1,36 @@
+<!doctype html>
+<!--
+  The structure the zai adapter assumes. It is NOT a copy of chat.z.ai: a
+  form holding textarea#chat-input, a "More" button with the id
+  upload-file-button (type="button") and button#send-message-button
+  (type="submit", no label), with a hidden file input in
+  div.messageInputContainer outside the form. That much was read from the
+  live page signed out on 2026-10-18 (English interface); the nesting is
+  shortened. The "More" button is a negative. Written 2026-10-18.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Fixture: the structure assumed for chat.z.ai</title>
+  </head>
+  <body>
+    <main>
+      <p data-fixture="log"></p>
+      <div class="w-full messageInputContainer">
+        <div class="relative flex flex-col">
+          <input type="file" hidden multiple data-fixture="file">
+          <form>
+            <textarea id="chat-input" rows="2" placeholder="Send a Message" data-fixture="composer">Hello
+second line</textarea>
+            <button id="upload-file-button" type="button" aria-label="More" data-fixture="more"><span>+</span></button>
+            <button id="send-message-button" type="submit" class="sendMessageButton" data-fixture="send"><span data-fixture="send-icon">Go</span></button>
+          </form>
+        </div>
+      </div>
+    </main>
+    <script type="module">
+      import { attachFakeSite } from './fake-site.js';
+      attachFakeSite(document, { composer: '[data-fixture="composer"]', send: '[data-fixture="send"]' });
+    </script>
+  </body>
+</html>

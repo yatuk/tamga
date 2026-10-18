@@ -1,0 +1,40 @@
+<!doctype html>
+<!--
+  The structure the qwen adapter assumes. It is NOT a copy of chat.qwen.ai:
+  textarea.message-input-textarea in no form, the file input with the id
+  filesUpload, a mode selector, and the send slot
+  (div.message-input-right-button-send) holding button.send-button inside
+  div.chat-prompt-send-button, as it does once the box holds text. That much
+  was read from the live page signed out on 2026-10-18 (English interface);
+  the nesting is shortened. The mode selector is a negative; so is the
+  voice control the slot holds while the box is empty, tried in
+  test/adapters.test.js. Written 2026-10-18.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Fixture: the structure assumed for chat.qwen.ai</title>
+  </head>
+  <body>
+    <main>
+      <p data-fixture="log"></p>
+      <div class="message-input-container">
+        <div class="message-input-container-area">
+          <textarea class="message-input-textarea" rows="1" placeholder="How can I help you today?" data-fixture="composer">Hello
+second line</textarea>
+          <div class="mode-select">
+            <input id="filesUpload" type="file" multiple aria-label="Upload files" tabindex="-1" data-fixture="file">
+            <div class="mode-select-open" role="button" tabindex="0" aria-label="Select Mode" data-fixture="mode"><span>+</span></div>
+          </div>
+        </div>
+        <div class="message-input-right-button">
+          <div class="message-input-right-button-send"><div class="chat-prompt-send-button"><button class="send-button" aria-label="Send" data-fixture="send"><span data-fixture="send-icon">Send</span></button></div></div>
+        </div>
+      </div>
+    </main>
+    <script type="module">
+      import { attachFakeSite } from './fake-site.js';
+      attachFakeSite(document, { composer: '[data-fixture="composer"]', send: '[data-fixture="send"]' });
+    </script>
+  </body>
+</html>

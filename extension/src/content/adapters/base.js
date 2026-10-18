@@ -2,7 +2,7 @@
 // a page: where is the message box, what text is in it, how is that text
 // replaced, which element sends it, and which file inputs take attachments.
 //
-//   id                      'claude' | 'chatgpt' | 'gemini' | 'generic'
+//   id                      a site id from src/shared/sites.js, or 'generic'
 //   selectors               { composer: [...], sendButton: [...], fileInput: [...] }
 //   findComposer(doc, near) the message box, or null
 //   readText(el)            its text
@@ -50,10 +50,15 @@ function collect(node, out) {
   }
 }
 
-/** The text of a textarea or of a contenteditable element, a line per block. */
+// A one-line <input> is never taken for a message box by editableRoot or by
+// the generic fallback. A site's own selectors may name one: www.meta.ai,
+// signed out, has one as its box (seen 2026-10-18). Its text is its value.
+const VALUE_TAGS = new Set(['TEXTAREA', 'INPUT']);
+
+/** The text of a textarea, an input or a contenteditable element, a line per block. */
 export function readText(el) {
   if (!el) return '';
-  if (el.tagName === 'TEXTAREA') return String(el.value ?? '');
+  if (VALUE_TAGS.has(el.tagName)) return String(el.value ?? '');
   const out = [];
   collect(el, out);
   return out.join('').replace(/ /g, ' ').replace(/\n+$/, '');
@@ -82,12 +87,11 @@ export function replaceText(el, text) {
   if (!el) return false;
   const doc = el.ownerDocument;
   const win = doc?.defaultView;
-  if (el.tagName === 'TEXTAREA') {
+  if (VALUE_TAGS.has(el.tagName)) {
     // The prototype's setter, so that a framework watching the property
     // (React does) sees the change.
-    const setter = win?.HTMLTextAreaElement
-      ? Object.getOwnPropertyDescriptor(win.HTMLTextAreaElement.prototype, 'value')?.set
-      : null;
+    const proto = el.tagName === 'INPUT' ? win?.HTMLInputElement : win?.HTMLTextAreaElement;
+    const setter = proto ? Object.getOwnPropertyDescriptor(proto.prototype, 'value')?.set : null;
     if (setter) setter.call(el, text);
     else el.value = text;
     fireInput(el, text);

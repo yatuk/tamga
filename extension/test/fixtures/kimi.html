@@ -1,0 +1,36 @@
+<!doctype html>
+<!--
+  The structure the kimi adapter assumes. It is NOT a copy of www.kimi.com:
+  a Lexical editor (div.chat-input-editor, contenteditable) in no form, a
+  hidden file input in div.chat-editor-action beside a tools control that
+  opens the upload menu, and a send control that is a div
+  (div.send-button-container holding svg.send-icon), not a button. That
+  much was read from the live page signed out on 2026-10-18 (Chinese
+  interface); the nesting is shortened and the tools control is a span here
+  in place of the svg. The tools control is a negative. Written 2026-10-18.
+-->
+<html lang="zh">
+  <head>
+    <meta charset="utf-8">
+    <title>Fixture: the structure assumed for www.kimi.com</title>
+  </head>
+  <body>
+    <main>
+      <p data-fixture="log"></p>
+      <div class="chat-editor" data-testid="chat-editor">
+        <div class="chat-input-editor-container"><div class="chat-input-editor" contenteditable="true" role="textbox" data-lexical-editor="true" data-fixture="composer"><p>Hello</p><p>second line</p></div></div>
+        <div class="chat-editor-action">
+          <div class="left-area">
+            <div class="icon-button toolkit-trigger-btn" role="button" tabindex="0" data-testid="toolkit-trigger-btn" aria-label="上传文件和更多工具" data-fixture="tools"><span>+</span></div>
+            <div><input class="hidden-input" type="file" multiple data-fixture="file"></div>
+          </div>
+          <div class="right-area"><div class="send-button-container" data-fixture="send"><span class="send-icon" data-fixture="send-icon">Send</span></div></div>
+        </div>
+      </div>
+    </main>
+    <script type="module">
+      import { attachFakeSite } from './fake-site.js';
+      attachFakeSite(document, { composer: '[data-fixture="composer"]', send: '[data-fixture="send"]' });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,30 @@
+<!doctype html>
+<!--
+  The structure the mistral adapter assumes. It is NOT a copy of
+  chat.mistral.ai and was not checked against it (the site asks to sign in
+  first): a form holding a ProseMirror editor, a file input named
+  file-upload and a submit button, as the open-source projects named in
+  src/content/adapters/mistral.js describe it. The labels are assumed.
+  Written 2026-10-18.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Fixture: the structure assumed for chat.mistral.ai</title>
+  </head>
+  <body>
+    <main>
+      <p data-fixture="log"></p>
+      <form>
+        <div class="ProseMirror" contenteditable="true" data-placeholder="Ask Le Chat anything" data-fixture="composer"><p>Hello</p><p>second line</p></div>
+        <input type="file" name="file-upload" multiple hidden data-fixture="file">
+        <button type="button" aria-label="Add files" data-testid="attach-file-button" data-fixture="attach"><span>+</span></button>
+        <button type="submit" aria-label="Send question" data-fixture="send"><span data-fixture="send-icon">Send</span></button>
+      </form>
+    </main>
+    <script type="module">
+      import { attachFakeSite } from './fake-site.js';
+      attachFakeSite(document, { composer: '[data-fixture="composer"]', send: '[data-fixture="send"]' });
+    </script>
+  </body>
+</html>

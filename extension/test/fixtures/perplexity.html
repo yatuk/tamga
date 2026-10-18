@@ -1,0 +1,41 @@
+<!doctype html>
+<!--
+  The structure the perplexity adapter assumes. It is NOT a copy of
+  www.perplexity.ai: a Lexical editor, div#ask-input with contenteditable
+  and data-lexical-editor, in no form; the file input beside it; and the
+  attach, model and dictation buttons before a send button of
+  type="button". That much was read from the live page signed out on
+  2026-10-18 (Turkish interface). There the send button's only name was
+  "Gönder"; here it carries the English label the adapter looks for, and
+  test/adapters.test.js tries the Turkish one. The attach, model and
+  dictation buttons are negatives. Written 2026-10-18.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Fixture: the structure assumed for www.perplexity.ai</title>
+  </head>
+  <body>
+    <main>
+      <p data-fixture="log"></p>
+      <div class="composer">
+        <div class="grid">
+          <div class="input-wrap"><div id="ask-input" contenteditable="true" role="textbox" data-lexical-editor="true" aria-placeholder="Ask anything" data-fixture="composer"><p>Hello</p><p>second line</p></div></div>
+          <div class="left-tools">
+            <button type="button" aria-label="Add files or tools" data-fixture="attach"><span>+</span></button>
+            <input type="file" multiple accept=".csv,.txt,.md" data-fixture="file">
+          </div>
+          <div class="right-tools">
+            <button type="button" aria-label="Model" data-fixture="model"><span>Best</span></button>
+            <button type="button" aria-label="Dictation" data-fixture="dictation"><span>Mic</span></button>
+            <button type="button" aria-label="Submit" data-fixture="send"><span data-fixture="send-icon">Go</span></button>
+          </div>
+        </div>
+      </div>
+    </main>
+    <script type="module">
+      import { attachFakeSite } from './fake-site.js';
+      attachFakeSite(document, { composer: '[data-fixture="composer"]', send: '[data-fixture="send"]' });
+    </script>
+  </body>
+</html>

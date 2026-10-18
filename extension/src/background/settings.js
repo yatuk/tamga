@@ -61,17 +61,34 @@ function clean(raw, managed = false) {
   return out;
 }
 
+// The options page saves, beside the sites a person ticked, the sites it
+// offered (sitesKnown). A site added in a later version is in neither list
+// and is on until the person unticks it. A list saved before sitesKnown
+// existed was chosen from the first three sites. A list set by policy is
+// taken as it is: a site missing from it is off.
+export const LOCAL_ONLY_KEYS = Object.freeze(['sitesKnown']);
+const FIRST_SITES = Object.freeze(['claude', 'chatgpt', 'gemini']);
+
+function cleanLocal(raw) {
+  const out = clean(raw);
+  if (out.sites) {
+    const known = Array.isArray(raw.sitesKnown) ? raw.sitesKnown : FIRST_SITES;
+    out.sites = SITE_IDS.filter((id) => raw.sites.includes(id) || !known.includes(id));
+  }
+  return out;
+}
+
 /** Managed over local over defaults. `managedKeys` names what policy set. */
 export function mergeSettings(managedRaw, localRaw) {
   const managed = clean(managedRaw, true);
-  const settings = { ...DEFAULTS, ...clean(localRaw), ...managed };
+  const settings = { ...DEFAULTS, ...cleanLocal(localRaw), ...managed };
   return { settings, managedKeys: Object.keys(managed) };
 }
 
-async function readArea(area) {
+async function readArea(area, keys) {
   if (!area) return {};
   try {
-    return (await area.get([...SETTING_KEYS])) || {};
+    return (await area.get(keys)) || {};
   } catch {
     // No policy is set, or the area is not available: nothing from it.
     return {};
@@ -80,7 +97,10 @@ async function readArea(area) {
 
 /** Loads the settings from the two storage areas. */
 export async function loadSettings(storage) {
-  const [managed, local] = await Promise.all([readArea(storage.managed), readArea(storage.local)]);
+  const [managed, local] = await Promise.all([
+    readArea(storage.managed, [...SETTING_KEYS]),
+    readArea(storage.local, [...SETTING_KEYS, ...LOCAL_ONLY_KEYS]),
+  ]);
   return mergeSettings(managed, local);
 }
 

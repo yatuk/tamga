@@ -2,7 +2,7 @@
 // service-worker.js so that it can be run under Node with fakes for chrome.*.
 
 import { MSG_CONFIG, MSG_OPEN_OPTIONS, MSG_SCAN, MSG_TEST, parseRequest } from '../shared/protocol.js';
-import { siteForOrigin } from '../shared/sites.js';
+import { siteForUrl } from '../shared/sites.js';
 import { scanOrigin, scanText } from './scan-client.js';
 import { behaviourOf, loadSettings } from './settings.js';
 
@@ -11,18 +11,11 @@ import { behaviourOf, loadSettings } from './settings.js';
 // whole group shares. One tab gets this many scans a minute.
 export const TAB_SCANS_PER_MINUTE = 30;
 
-function originOf(url) {
-  try {
-    return new URL(url).origin;
-  } catch {
-    return null;
-  }
-}
-
 /**
  * Who sent a message: a content script in the top frame of a tab on one of
- * the three sites ('site'), one of the extension's own pages ('page'), or
- * nobody this worker answers (null).
+ * the sites in src/shared/sites.js, under its path where it has one
+ * ('site'), one of the extension's own pages ('page'), or nobody this worker
+ * answers (null).
  */
 export function classifySender(sender, runtimeId, extensionOrigin) {
   if (typeof sender !== 'object' || sender === null || sender.id !== runtimeId) return null;
@@ -30,9 +23,7 @@ export function classifySender(sender, runtimeId, extensionOrigin) {
   // By prefix, not by URL.origin: an extension URL has no origin a URL parser
   // is obliged to report.
   if (sender.url.startsWith(`${extensionOrigin}/`)) return { kind: 'page' };
-  const origin = originOf(sender.url);
-  if (!origin) return null;
-  const site = siteForOrigin(origin);
+  const site = siteForUrl(sender.url);
   if (site && sender.tab && Number.isInteger(sender.tab.id) && sender.frameId === 0) {
     return { kind: 'site', site, tabId: sender.tab.id };
   }

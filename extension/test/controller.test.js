@@ -7,10 +7,11 @@ import { test } from 'node:test';
 
 import { APPROVAL_MS, ATTACH_GRACE_POLLS, ATTACH_POLL_MS, RESEND_CHECK_MS, SLOW_CHECK_MS } from '../src/content/controller.js';
 import { makeAdapter } from '../src/content/adapters/base.js';
+import { ADAPTERS } from '../src/content/adapters/index.js';
 import { firePaste, pressEnter } from './helpers/dom.js';
 import { CLOSED, OPEN, finding, noVerdict, settle, setup, type, verdict } from './helpers/harness.js';
 
-const FIXTURES = ['claude', 'chatgpt', 'gemini', 'generic'];
+const FIXTURES = [...Object.keys(ADAPTERS), 'generic'];
 const TCKN = '10000000146'; // the repository's test identity number
 const SECRET_TEXT = `my number is ${TCKN}`;
 
@@ -74,7 +75,7 @@ for (const fixture of FIXTURES) {
     assert.equal(h.ui.shown.actions[0].id, 'replace');
 
     h.ui.press('replace');
-    assert.equal(h.box.tagName === 'TEXTAREA' ? h.box.value : h.box.textContent, redacted);
+    assert.equal(['TEXTAREA', 'INPUT'].includes(h.box.tagName) ? h.box.value : h.box.textContent, redacted);
     assert.deepEqual(h.sent, [], 'replacing does not send');
     assert.equal(h.ui.shown.tone, 'change', 'the person is told the text was changed');
 

@@ -1,0 +1,31 @@
+<!doctype html>
+<!--
+  The structure the poe adapter assumes. It is NOT a copy of poe.com and
+  was not checked against it (the site asks to sign in first): a textarea
+  whose CSS-module class starts GrowingTextArea_textArea inside its
+  GrowingTextArea wrapper, and a send button with data-button-send="true",
+  as the open-source projects named in src/content/adapters/poe.js describe
+  it. The class suffixes, the label and the file input are assumed.
+  Written 2026-10-18.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Fixture: the structure assumed for poe.com</title>
+  </head>
+  <body>
+    <main>
+      <p data-fixture="log"></p>
+      <div class="ChatMessageInputContainer_inputContainer__x1">
+        <div class="GrowingTextArea_growWrap__x2"><textarea class="GrowingTextArea_textArea__x3" rows="1" placeholder="Message" data-fixture="composer">Hello
+second line</textarea></div>
+        <input type="file" multiple hidden data-fixture="file">
+        <button class="ChatMessageSendButton_sendButton__x4" data-button-send="true" aria-label="Send message" data-fixture="send"><span data-fixture="send-icon">Send</span></button>
+      </div>
+    </main>
+    <script type="module">
+      import { attachFakeSite } from './fake-site.js';
+      attachFakeSite(document, { composer: '[data-fixture="composer"]', send: '[data-fixture="send"]' });
+    </script>
+  </body>
+</html>

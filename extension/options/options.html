@@ -10,7 +10,7 @@
     <main>
       <h1>Tamga for chat sites</h1>
       <p>
-        Text you paste or send on claude.ai, chatgpt.com and gemini.google.com, and text files you attach there, are
+        Text you paste or send on the AI chat sites listed below, and text files you attach there, are
         checked by your organisation's own Tamga server before they reach the site. It is sent to that server and nowhere else, and this extension does
         not keep it.
       </p>
@@ -38,9 +38,8 @@
 
         <fieldset>
           <legend>Sites <span class="managed" data-for="sites" hidden>set by your administrator</span></legend>
-          <label class="check"><input type="checkbox" name="sites" value="claude" /> claude.ai</label>
-          <label class="check"><input type="checkbox" name="sites" value="chatgpt" /> chatgpt.com</label>
-          <label class="check"><input type="checkbox" name="sites" value="gemini" /> gemini.google.com</label>
+          <!-- One checkbox for each site in src/shared/sites.js, added by options.js. -->
+          <div id="site-list"></div>
         </fieldset>
 
         <div class="row">

@@ -1,0 +1,30 @@
+<!doctype html>
+<!--
+  The structure the notebook adapter assumes. It is NOT a copy of
+  notebook.google.com and was not checked against it (signed out, the site
+  shows a sign-in page): textarea.query-box-input, as the open-source
+  projects named in src/content/adapters/notebook.js describe it, and a
+  submit button whose class and label are a guess. The file input is
+  assumed. Written 2026-10-18.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Fixture: the structure assumed for Gemini Notebook</title>
+  </head>
+  <body>
+    <main>
+      <p data-fixture="log"></p>
+      <div class="query-box">
+        <textarea class="query-box-input" aria-label="Query box" data-fixture="composer">Hello
+second line</textarea>
+        <input type="file" multiple hidden data-fixture="file">
+        <button type="submit" class="submit-button" aria-label="Submit" data-fixture="send"><span data-fixture="send-icon">Go</span></button>
+      </div>
+    </main>
+    <script type="module">
+      import { attachFakeSite } from './fake-site.js';
+      attachFakeSite(document, { composer: '[data-fixture="composer"]', send: '[data-fixture="send"]' });
+    </script>
+  </body>
+</html>
