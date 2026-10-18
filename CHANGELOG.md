@@ -1322,6 +1322,48 @@
   said (`docs/benchmarks/README.md`, "Requests to send data out"). Tool-call
   segments now carry the tool's name, and the stream guard learns it from
   the event that opens the call.
+- **Numbers and keys in a tool call's arguments are read.** Only strings
+  were: `{"id": 10000000146}` and `{"10000000146": "vip"}` went to the tool
+  unread. An integer of six digits or more and a key that is not made of
+  ASCII letters, `_` and `-` are now segments of their own
+  (`extract.Segment.Literal`), read by the scanners of values only (PII,
+  secrets, custom entities, competitor names, tool destinations); the
+  injection, jailbreak, language, classifier and topic checks do not see
+  them. This holds for answers, buffered and streamed, and for the tool
+  calls a request carries in its history. **Verdicts change: a tool call
+  with a TC identity number, a card number or another identifier written as
+  a number or a key is now blocked or masked in an answer, and a request
+  whose history has one is now blocked or masked by the request rules.
+  A masked number becomes a JSON string (`"id": "[tc_kimlik_REDACTED]"`), so
+  the document stays JSON but the type changes; a masked key keeps its
+  place, and two masked keys in one object become the same key.**
+- **More stream shapes are read.** Anthropic `citations_delta` (the quoted
+  text and the document title, read whole and masked in place); `content`
+  sent as a list of parts in an OpenAI-style chunk, as Mistral's reasoning
+  models do (a `text` part streams as the answer, the text parts of a
+  `thinking` part as reasoning); and Gemini's partial function-call
+  arguments (`streamFunctionCallArguments`): each string argument is put
+  together from its `partialArgs` pieces and read when the call ends, like
+  any other streamed tool call, and a number masked there goes out as
+  `stringValue`. A buffered answer's `thinking` part that is a list of text
+  parts is read too; its text was skipped. **Verdicts change: a value in
+  these shapes is now masked, or ends the stream, where it went through;
+  with Gemini's partial arguments on, a string argument reaches the agent
+  in one piece when the call ends instead of piece by piece.**
+- **The vault restores its placeholders in a streamed tool call's
+  arguments**, and in the values a stream carries whole (a Gemini function
+  call, the Responses API's closing events, which a client library takes
+  its result from). In a JSON document the original is written as a
+  string's content, so the arguments stay JSON. **An agent that used the
+  vault with streaming now gets the original values in tool-call arguments
+  where it got placeholders. With the vault on and `output_rules.streaming`
+  off, a piece of arguments that ends in what may be the start of a
+  placeholder (`[TAMGA_`, at most 64 characters) is held until the next
+  piece.**
+- A streamed tool call's arguments are still held until the call ends and
+  sent in one piece, on purpose: they are read as a document, as a buffered
+  answer's are, and the agent cannot run the tool before the call is
+  complete. `docs/agents.md` says so and a test pins it.
 - **Red-team set of tool results that are JSON.** `tooljson_tuning.csv` and
   `tooljson_locked.csv` (174 rows, split by a seeded hash, the locked part
   measured before the change) are scanned as tool results through
