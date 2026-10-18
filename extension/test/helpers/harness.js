@@ -116,7 +116,7 @@ export function setup(fixture, { site = ADAPTERS[fixture] || ADAPTERS.claude, an
       if (config === undefined) throw new Error('no answer');
       return config;
     }
-    if (message.type !== 'tamga/scan') return { ok: true };
+    if (message.type !== 'tamga/scan' && message.type !== 'tamga/scan-file') return { ok: true };
     const next = queue ? queue.shift() : answers(message);
     if (next === 'throw') throw new Error('no answer');
     return next;
@@ -140,6 +140,7 @@ export function setup(fixture, { site = ADAPTERS[fixture] || ADAPTERS.claude, an
     attached: page.attached,
     inputEvents: page.inputEvents,
     scans: () => asked.filter((m) => m.type === 'tamga/scan'),
+    fileScans: () => asked.filter((m) => m.type === 'tamga/scan-file'),
     box: doc.querySelector('[data-fixture="composer"]'),
     button: doc.querySelector('[data-fixture="send"]'),
     fileInput: doc.querySelector('[data-fixture="file"]'),

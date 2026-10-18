@@ -3,8 +3,10 @@
 //
 // A text file (by its name, or by its type when the name says nothing) of up
 // to FILE_MAX_BYTES is read in the content script and its text is checked
-// like a typed message. Every other file (PDF, images, office documents,
-// archives) is not read: the extension cannot get text out of it.
+// like a typed message. A PDF, a Word, Excel or PowerPoint file, or an image
+// is sent as it is to the scan API, which reads it when Tamga's policy says
+// so (sendKind); the worker sends it only then. Every other file (archives,
+// legacy office files, audio, video) is not read.
 
 // The scan API reads a body of at most 256 KB, and JSON escaping makes the
 // body larger than the file. 200 KB leaves room for that.
@@ -61,6 +63,59 @@ export function isTextFile(file) {
   if (ext === '' && TEXT_NAMES.includes(name.split(/[\\/]/).pop().toLowerCase())) return true;
   const type = String(file?.type ?? '').toLowerCase().split(';')[0].trim();
   return type.startsWith('text/') || TEXT_TYPES.includes(type);
+}
+
+// The files sent as they are, by extension, and what kind each is to Tamga.
+const SENT_KINDS = Object.freeze({
+  pdf: 'pdf',
+  docx: 'docx',
+  xlsx: 'xlsx',
+  pptx: 'pptx',
+  png: 'image',
+  jpg: 'image',
+  jpeg: 'image',
+  gif: 'image',
+  webp: 'image',
+  bmp: 'image',
+  tif: 'image',
+  tiff: 'image',
+});
+
+/**
+ * The kind a file that is not text is sent to Tamga as ('pdf', 'docx',
+ * 'xlsx', 'pptx', 'image'), or '' when it is not sent. By its extension;
+ * Tamga reads the file's own bytes and does not go by either.
+ */
+export function sendKind(file) {
+  if (isTextFile(file)) return '';
+  return SENT_KINDS[extensionOf(file?.name)] || '';
+}
+
+/**
+ * Reads a file as base64. Returns { ok: true, data } or { ok: false, reason }
+ * with reason 'file_too_large' (over maxBytes) or 'file_unreadable'. It
+ * does not throw.
+ */
+export async function readFileBase64(file, maxBytes) {
+  if (!file || typeof file.size !== 'number' || file.size > maxBytes) return { ok: false, reason: 'file_too_large' };
+  let bytes;
+  try {
+    bytes = new Uint8Array(await file.arrayBuffer());
+  } catch {
+    return { ok: false, reason: 'file_unreadable' };
+  }
+  if (bytes.length === 0) return { ok: false, reason: 'file_unreadable' };
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  return { ok: true, data: btoa(binary) };
+}
+
+/** The type a file says it is, when it is one the worker passes on. */
+export function mimeOf(file) {
+  const type = String(file?.type ?? '').toLowerCase().split(';')[0].trim();
+  return /^[a-z0-9][a-z0-9!#$&^_.+-]{0,63}\/[a-z0-9][a-z0-9!#$&^_.+-]{0,63}$/.test(type) ? type : '';
 }
 
 /**

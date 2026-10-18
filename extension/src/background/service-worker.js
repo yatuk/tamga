@@ -24,7 +24,7 @@ for (const area of [ext.storage.local, ext.storage.managed]) {
 }
 
 const handle = createHandler({
-  storage: { managed: ext.storage.managed, local: ext.storage.local },
+  storage: { managed: ext.storage.managed, local: ext.storage.local, session: ext.storage.session },
   permissions: ext.permissions,
   // Bound here and passed in: no other module calls fetch.
   fetchImpl: (url, init) => fetch(url, init),

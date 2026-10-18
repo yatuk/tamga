@@ -149,8 +149,22 @@ changes, and that the person can take those parts out of the file, or paste
 its text into the message box, where the redacted text is offered as for
 any typed text. `autoRedact` does not change this.
 
-**Not read: PDF, images, office documents, archives, and anything else that
-is not text.** The extension cannot get text out of them. Such a file is not
+**PDF, Word, Excel, PowerPoint and images: sent to Tamga when it reads
+them.** The extension cannot get text out of these, and Tamga can: with the
+`attachments` section in its policy, each scan answer says which kinds it
+reads (`files.kinds`: `pdf`, `docx`, `xlsx`, `pptx`, and `image` when OCR is
+on) and the largest file (`files.max_bytes`). The service worker keeps that
+in session storage, which the browser holds in memory, and tells the content
+script. A file of one of those kinds (by its extension) is then held like a
+text file, read, and sent as it is, base64, to the scan API; the verdict and
+the fail mode decide as for a text file, and a file larger than Tamga reads
+is not attached under `failMode: closed`. Until Tamga has said so (after a
+first scan or the connection test), and for every other kind, nothing
+changes: see below. A scan of a file may take up to 30 seconds, whatever
+`timeoutMs` says, since Tamga has to read it.
+
+**Not read: archives, legacy office files, and anything else that is not
+text.** The extension cannot get text out of them. Such a file is not
 held: it goes to the site as it is, and a quiet notice says, once for a page
 load, that it was not checked and which files Tamga reads. A paste that also
 carries text (cells copied from a spreadsheet come with a picture of them)

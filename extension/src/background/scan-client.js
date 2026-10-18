@@ -2,10 +2,14 @@
 // It runs in the service worker. The result it returns holds no key and no
 // URL, so it can be handed to a content script as it is.
 
-import { ACTIONS, SCAN_MAX_BODY_BYTES, safeLabel } from '../shared/protocol.js';
+import { ACTIONS, FILE_KINDS, FILE_SCAN_MAX_BYTES, SCAN_MAX_BODY_BYTES, safeLabel } from '../shared/protocol.js';
 import { parseTamgaUrl } from './settings.js';
 
 const RESPONSE_MAX_CHARS = 2 * 1024 * 1024;
+// Reading a file takes Tamga longer than reading a text: the analyzer has
+// up to attachments.extract.timeout_ms (10 s unless the policy says
+// otherwise) for it. The settings' timeout is for texts.
+export const FILE_TIMEOUT_MS = 30000;
 const UNAVAILABLE_CODES = ['tamga_scan_unavailable', 'tamga_scan_busy'];
 
 function fail(reason, extra) {
@@ -53,25 +57,52 @@ function verdictOf(body) {
 }
 
 /**
+ * What a scan answer says about files: { kinds, maxBytes } when Tamga's
+ * policy reads them, null when it says nothing (no attachments section, or a
+ * Tamga older than this).
+ */
+export function filesOf(body) {
+  const f = typeof body === 'object' && body !== null ? body.files : undefined;
+  if (typeof f !== 'object' || f === null || !Array.isArray(f.kinds) || !Number.isInteger(f.max_bytes) || f.max_bytes <= 0) {
+    return null;
+  }
+  return { kinds: FILE_KINDS.filter((k) => f.kinds.includes(k)), maxBytes: Math.min(f.max_bytes, FILE_SCAN_MAX_BYTES) };
+}
+
+/**
  * Asks Tamga for the verdict on a text.
  *
- * Returns { ok: true, verdict } or { ok: false, reason, retryAfterS? }. It
- * does not throw, and it does not log: an error object can carry the URL and
- * a log line could carry the text.
+ * Returns { ok: true, verdict, files? } or { ok: false, reason, retryAfterS? }.
+ * files, when present, is what the answer says about files (filesOf). It does not throw,
+ * and it does not log: an error object can carry the URL and a log line
+ * could carry the text.
  */
 export async function scanText({ settings, text, fetchImpl, timers = globalThis }) {
-  const target = parseTamgaUrl(settings.tamgaUrl);
-  if (!target || !settings.tamgaKey) return fail('not_configured');
-
   const body = JSON.stringify({ text, role: 'user' });
   if (new TextEncoder().encode(body).length > SCAN_MAX_BODY_BYTES) return fail('too_large');
+  return post({ settings, body, fetchImpl, timers });
+}
+
+/**
+ * Asks Tamga for the verdict on a file: { name, mime, data } with data in
+ * base64. Answers as scanText does; a 422, or a 400 from a Tamga that does
+ * not take files, is reason file_not_read.
+ */
+export async function scanFile({ settings, file, fetchImpl, timers = globalThis }) {
+  const body = JSON.stringify({ file: { name: file.name, mime: file.mime, data: file.data }, role: 'user' });
+  return post({ settings, body, fetchImpl, timers, file: true, timeoutMs: Math.max(settings.timeoutMs, FILE_TIMEOUT_MS) });
+}
+
+async function post({ settings, body, fetchImpl, timers, file = false, timeoutMs = settings.timeoutMs }) {
+  const target = parseTamgaUrl(settings.tamgaUrl);
+  if (!target || !settings.tamgaKey) return fail('not_configured');
 
   const controller = new AbortController();
   let timedOut = false;
   const timer = timers.setTimeout(() => {
     timedOut = true;
     controller.abort();
-  }, settings.timeoutMs);
+  }, timeoutMs);
 
   try {
     const response = await fetchImpl(target.scanUrl, {
@@ -95,10 +126,13 @@ export async function scanText({ settings, text, fetchImpl, timers = globalThis 
     if (status === 403) return fail('forbidden');
     if (status === 413) return fail('too_large');
     if (status === 429) return fail('rate_limited', retryAfter(response));
+    if (file && (status === 422 || status === 400)) return fail('file_not_read');
     if (status !== 200) return fail(status >= 400 && status < 500 ? 'rejected' : 'bad_response');
 
     const verdict = verdictOf(parsed);
-    return verdict ? { ok: true, verdict } : fail('bad_response');
+    if (!verdict) return fail('bad_response');
+    const files = filesOf(parsed);
+    return files ? { ok: true, verdict, files } : { ok: true, verdict };
   } catch {
     return fail(timedOut ? 'timeout' : 'network');
   } finally {
