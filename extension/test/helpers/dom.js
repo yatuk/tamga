@@ -128,6 +128,38 @@ class FakeKeyboardEvent extends FakeEvent {
   }
 }
 
+// A DataTransfer: the files of a drop or a paste, and its strings.
+class FakeDataTransfer {
+  constructor() {
+    this.files = [];
+    this.data = new Map();
+    this.items = { add: (item, type) => (typeof item === 'string' ? this.data.set(type, item) : this.files.push(item)) };
+  }
+  get types() {
+    return [...this.data.keys(), ...(this.files.length > 0 ? ['Files'] : [])];
+  }
+  getData(type) {
+    return this.data.get(type) ?? '';
+  }
+  setData(type, value) {
+    this.data.set(type, String(value));
+  }
+}
+
+class FakeDragEvent extends FakeEvent {
+  constructor(type, init = {}) {
+    super(type, init);
+    this.dataTransfer = init.dataTransfer ?? null;
+  }
+}
+
+class FakeClipboardEvent extends FakeEvent {
+  constructor(type, init = {}) {
+    super(type, init);
+    this.clipboardData = init.clipboardData ?? null;
+  }
+}
+
 class FakeInputEvent extends FakeEvent {
   constructor(type, init = {}) {
     super(type, init);
@@ -248,6 +280,21 @@ class Element extends Node {
     this.attributes = new Map();
     this.hidden = false;
     if (this.tagName === 'TEXTAREA') this.value = '';
+    if (this.tagName === 'INPUT') {
+      // A file input's files go when its value is set to '', as in a browser.
+      let value = '';
+      this.files = [];
+      Object.defineProperty(this, 'value', {
+        get: () => (this.type === 'file' && this.files.length > 0 ? 'C:\\fakepath\\' + this.files[0].name : value),
+        set: (v) => {
+          if (this.type === 'file') {
+            if (String(v) === '') this.files = [];
+            return;
+          }
+          value = String(v);
+        },
+      });
+    }
   }
   getAttribute(name) {
     return this.attributes.has(name) ? this.attributes.get(name) : null;
@@ -321,6 +368,9 @@ const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', nbsp: ' ' };
 const decode = (s) => s.replace(/&(amp|lt|gt|quot|nbsp);/g, (_, name) => ENTITIES[name]);
 
 function parseInto(doc, html) {
+  // A browser reads CR LF and CR as LF before it parses anything (a checkout
+  // with core.autocrlf on has CR LF in the fixtures).
+  html = html.replace(/\r\n?/g, '\n');
   const re = /<!--[\s\S]*?-->|<!doctype[^>]*>|<\/([\w-]+)\s*>|<([\w-]+)((?:\s+[\w:-]+(?:="[^"]*")?)*)\s*\/?>|([^<]+)/gi;
   let parent = doc;
   let m;
@@ -352,6 +402,9 @@ function fakeWindow(doc, url) {
   win.Event = FakeEvent;
   win.KeyboardEvent = FakeKeyboardEvent;
   win.InputEvent = FakeInputEvent;
+  win.DragEvent = FakeDragEvent;
+  win.ClipboardEvent = FakeClipboardEvent;
+  win.DataTransfer = FakeDataTransfer;
   win.parentNode = null;
   doc.defaultView = win;
   return win;
@@ -397,6 +450,36 @@ export function pressEnter(win, el, init = {}) {
 /** Fires a paste event on `el` (the text is put in the box by the caller). */
 export function firePaste(win, el) {
   const event = new win.Event('paste', { bubbles: true, cancelable: true });
+  el.dispatchEvent(event);
+  return event;
+}
+
+/** A DataTransfer holding `files` and, optionally, a text/plain string. */
+export function transfer(win, files, text) {
+  const dt = new win.DataTransfer();
+  for (const file of files) dt.items.add(file);
+  if (typeof text === 'string') dt.setData('text/plain', text);
+  return dt;
+}
+
+/** Picks `files` in a file input, as the browser's file dialog does: input, then change. */
+export function chooseFiles(win, input, files) {
+  input.files = [...files];
+  const events = ['input', 'change'].map((type) => new win.Event(type, { bubbles: true, cancelable: false }));
+  for (const event of events) input.dispatchEvent(event);
+  return events;
+}
+
+/** Drops `files` on `el`. Returns the event. */
+export function dropFiles(win, el, files) {
+  const event = new win.DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: transfer(win, files) });
+  el.dispatchEvent(event);
+  return event;
+}
+
+/** Pastes `files` (and, optionally, a text) on `el`. Returns the event. */
+export function pasteFiles(win, el, files, text) {
+  const event = new win.ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: transfer(win, files, text) });
   el.dispatchEvent(event);
   return event;
 }

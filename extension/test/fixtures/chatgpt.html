@@ -7,7 +7,8 @@
 
   The attach and voice buttons are here as negatives: neither the adapter nor
   the generic fallback may take one for the send button. Their labels, types
-  and data-testid values are assumed. Written 2026-10-11.
+  and data-testid values are assumed. Written 2026-10-11. The hidden file
+  input in the form is assumed too; added 2026-10-18.
 -->
 <html lang="en">
   <head>
@@ -18,6 +19,7 @@
     <main>
       <p data-fixture="log"></p>
       <form>
+        <input type="file" multiple hidden tabindex="-1" data-fixture="file">
         <button type="button" aria-label="Dosya ekle" data-testid="composer-plus-btn" data-fixture="attach"><span>+</span></button>
         <div class="ProseMirror" contenteditable="true" role="textbox" aria-label="ChatGPT'ye sor" data-fixture="composer"><p>Hello</p><p>second line</p></div>
         <button type="button" aria-label="Sesli modu kullan" data-testid="composer-speech-button" data-fixture="voice"><span>Voice</span></button>

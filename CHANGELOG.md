@@ -671,6 +671,36 @@
   where it used to go through.** The upload, dictation, model, attach and
   voice buttons of the fixtures are tested not to be taken for it. None of
   this was run on the live sites: the README of the extension says so.
+- **Attached text files are checked before the site has them.** A text file
+  (plain text, Markdown, CSV, JSON, YAML, XML, logs, source code; up to
+  200 KB, up to 10 at once) picked in a site's file input, dropped on the
+  page or pasted as a file is held, read in the browser and sent to
+  `/api/v1/scan` with `Attached file: <name>` as its first line; the page
+  gets the files only after the verdict. **What people with the extension
+  installed will see: a text file the policy blocks, strips or redacts is
+  no longer attached, and the notice names the file and the kind of
+  finding; under `failMode: closed` a text file is held while Tamga cannot
+  be asked, as a send is.** `REDACT` does not rewrite the file: it is not
+  attached, and the notice says to take those parts out or paste the text
+  into the box. PDF files, images and office documents are still not read
+  and still go to the site; a quiet notice now says so, once a page load.
+  **Each attached text file costs one scan against the key's limit.** None
+  of this was run on the live sites; the file-input selectors are guesses,
+  and every file input on the page is watched by the generic fallback.
+- **Firefox (140 or later) from the same sources.** `node tools/package.js`
+  in `extension/` writes a directory and a zip for Chromium and for Firefox;
+  the Firefox manifest is made from the Chromium one (an event page in place
+  of the service worker, an add-on ID, the data-consent key). The code calls
+  `browser.*` or `chrome.*`, whichever the browser has.
+  `docs/browser-extension.md` describes signing and force-installing it with
+  `policies.json`, and its settings through the `3rdparty` policy. None of
+  it was run in Firefox. The Chromium manifest is unchanged.
+- The flows the live run did not try (a clean text sent on, a held send
+  resumed, a paste, Tamga down or busy) are each tested end to end under
+  Node through the worker's handler to a fake Tamga, and
+  `extension/README.md` ends with a checklist for the live run. The test
+  DOM now reads a fixture with CR LF line endings as a browser does, which
+  made one test fail on a Windows checkout.
 
 ### Licences and packaging
 - `NOTICE` gives the attributions the bundled material asks for, and

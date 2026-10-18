@@ -3,7 +3,7 @@
 // the notice area and the service worker.
 
 import { ADAPTERS } from '../../src/content/adapters/index.js';
-import { createController } from '../../src/content/controller.js';
+import { EVENT_TYPES, createController } from '../../src/content/controller.js';
 import { attachFakeSite } from '../fixtures/fake-site.js';
 import { loadFixture } from './dom.js';
 
@@ -124,7 +124,7 @@ export function setup(fixture, { site = ADAPTERS[fixture] || ADAPTERS.claude, an
 
   const controller = createController({ doc, site, ui, ask, timers, now: timers.now });
   // As loader.js does: on window, in the capture phase, before the page.
-  for (const eventType of ['keydown', 'click', 'submit', 'paste']) {
+  for (const eventType of EVENT_TYPES) {
     win.addEventListener(eventType, (event) => controller.handle(event), true);
   }
   const page = attachFakeSite(doc, { composer: '[data-fixture="composer"]', send: '[data-fixture="send"]', deaf });
@@ -137,8 +137,11 @@ export function setup(fixture, { site = ADAPTERS[fixture] || ADAPTERS.claude, an
     asked,
     controller,
     sent: page.sent,
+    attached: page.attached,
+    inputEvents: page.inputEvents,
     scans: () => asked.filter((m) => m.type === 'tamga/scan'),
     box: doc.querySelector('[data-fixture="composer"]'),
     button: doc.querySelector('[data-fixture="send"]'),
+    fileInput: doc.querySelector('[data-fixture="file"]'),
   };
 }

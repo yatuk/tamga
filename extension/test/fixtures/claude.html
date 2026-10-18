@@ -3,7 +3,8 @@
   The structure the claude adapter assumes. It is NOT a copy of claude.ai and
   was not checked against it: a ProseMirror editor (a contenteditable div of
   paragraphs) inside a fieldset, and a send button named by aria-label that
-  is not a submit button. Written 2026-10-11.
+  is not a submit button. Written 2026-10-11. The hidden file input beside
+  them, and its data-testid, are assumed; added 2026-10-18.
 -->
 <html lang="en">
   <head>
@@ -15,6 +16,7 @@
       <p data-fixture="log"></p>
       <fieldset>
         <div class="tiptap ProseMirror" contenteditable="true" role="textbox" aria-label="Write your prompt to Claude" data-testid="chat-input" data-fixture="composer"><p>Hello</p><p>second line</p></div>
+        <input type="file" multiple hidden data-testid="file-upload" aria-label="Upload files" data-fixture="file">
         <button type="button" aria-label="Send message" data-testid="chat-input-send" data-fixture="send"><span data-fixture="send-icon">Send</span></button>
       </fieldset>
     </main>

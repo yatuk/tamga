@@ -17,7 +17,10 @@ acts on the answer before the site receives anything.
 > the live page, and which parts were written afterwards and have only been
 > run by the Node tests. Check it on each site yourself before you depend on
 > it. Those sites change their pages without notice, and when they do, an
-> adapter stops matching until someone updates it.
+> adapter stops matching until someone updates it. The check of attached
+> text files and the Firefox build were written on 2026-10-18 and have been
+> run only by the Node tests; the README ends with a checklist for the live
+> run.
 
 The project publishes nothing to the Chrome Web Store or to Edge Add-ons.
 There is no listing to install from. You load the directory unpacked, or you
@@ -42,6 +45,21 @@ straight away, so that a problem is shown before the person goes on writing.
 A send is always held until the text that is in the box at that moment has a
 verdict.
 
+An attached text file (plain text, Markdown, CSV, JSON, YAML, XML, logs,
+source code; up to 200 KB, up to 10 at a time) is held before the site has
+it, whether it is picked in the site's file dialog, dropped on the page or
+pasted as a file. Each is read in the browser and sent to the scan API with
+its name as the first line; the site gets the files only after the
+verdict. `PASS` hands them on, `WARN` asks, and `BLOCK`, `STRIP` and
+`REDACT` keep the whole attach from the site. A file is not rewritten for
+`REDACT`: the extension does not hand the site a changed copy of a person's
+file that they have not seen, so the notice says to take those parts out or
+paste the text into the box, where the redacted text is offered. With no
+verdict the fail mode decides, as for a send. PDF files, images, office
+documents and other files that are not text are not read; they go to the
+site as they are, and the person is told so once for a page load
+([details](../extension/README.md#attached-files)).
+
 When Tamga cannot be asked, the person is told before they try to send. If
 the extension has no address or key, a notice says "Tamga is not set up in
 this browser yet", with a button to its settings, as soon as the page loads.
@@ -53,8 +71,9 @@ page goes to the site unchecked.
 
 ## What it does not cover
 
-- **Other browsers.** Chromium only: Chrome and Edge, version 111 or later.
-  Not Firefox, not Safari.
+- **Other browsers.** Chrome and Edge from version 111, and Firefox from
+  140 through the package `node tools/package.js firefox` makes ([Firefox](#firefox);
+  not yet run in Firefox). Not Safari.
 - **Other sites.** Only `https://claude.ai`, `https://chatgpt.com` and
   `https://gemini.google.com`. Not any other chat site, not the same
   products under another address (an enterprise tenant on its own domain, a
@@ -66,8 +85,13 @@ page goes to the site unchecked.
   the person allows them there (private windows can be switched off by
   policy: `IncognitoModeAvailability` in Chrome, `InPrivateModeAvailability`
   in Edge).
-- **File uploads and images.** A file attached to a message, a pasted image,
-  a dragged document: none of it is read. Only text in the message box is.
+- **Files that are not text, and large ones.** A PDF, an image, an office
+  document or an archive is not read, nor is a text file over 200 KB under
+  `failMode: open` (under `closed` it is not attached). A file renamed to a
+  name the extension does not read is not read either. A file input the site
+  never puts in the page, a file the site reads some other way than the
+  input's events, a drop or a paste, and a file from the site's own
+  cloud-drive picker are not seen at all.
 - **Voice input**, and anything else that reaches the site without passing
   through the message box as text.
 - **The site's answers.** Only what the person sends is checked.
@@ -152,7 +176,8 @@ is the proxy path's limit as well; there is no separate one for scans). Over
 the limit the answer is 429, which the extension treats as no verdict: under
 `failMode: closed` everyone sharing that key is held until the minute
 passes. One message costs one scan, or two when a paste is edited before it
-is sent or when a text had to be redacted. So:
+is sent or when a text had to be redacted, and each attached text file one
+more. So:
 
 - **Use one key per group, not one for the organisation.** A group of about
   ten people writing at once fits in 60 a minute with room; a department of
@@ -231,9 +256,11 @@ chrome --pack-extension=/path/to/tamga/extension --pack-extension-key=/path/to/e
 
 The extension ID is derived from that key: 32 letters, shown on
 `chrome://extensions` when the `.crx` or the unpacked directory is loaded.
-Raise `version` in `manifest.json` for every release you pack. `test/`,
-`README.md` and `package.json` are not needed in the package and may be
-removed before packing.
+Raise `version` in `manifest.json` (and in `package.json`; a test keeps the
+two equal) for every release you pack. `test/`, `tools/`, `README.md` and
+`package.json` are not needed in the package: `node tools/package.js
+chromium` in `extension/` writes the extension without them to
+`dist/chromium/`, which you can pack in place of the source directory.
 
 ### 3. Host it
 
@@ -361,11 +388,95 @@ against Chromium's "Configuring Apps and Extensions by Policy".
 the extension's name. Give different groups different keys by applying a
 different `tamgaKey` to each group's machines or users.
 
+### Firefox
+
+None of this was run: no Firefox build was signed or installed by policy.
+It is written from Mozilla's documentation (the enterprise policy
+templates, the WebExtensions manifest reference, and the add-on signing and
+data-consent pages). Try it on one machine first.
+
+**1. The Tamga origin and the add-on ID.** Add your Tamga origin to
+`host_permissions` in `extension/manifest.json` as in step 1 above; the
+Firefox manifest is made from it. Firefox needs an add-on ID for managed
+storage and for policy, and an ID is unique across Mozilla's signing
+service, so choose one of your own:
+
+```bash
+cd extension
+node tools/package.js firefox --gecko-id tamga-chat-sites@corp.example
+# writes dist/firefox/ and dist/tamga-firefox-<version>.zip
+```
+
+**2. Sign it.** Release and ESR builds of Firefox install only extensions
+signed by Mozilla. Submit `dist/tamga-firefox-<version>.zip` for
+self-distribution ("on your own", unlisted) on addons.mozilla.org, by its
+web form or with Mozilla's `web-ext sign`; it is signed without being listed
+and you get the signed `.xpi` back. Raise `version` for every release; a
+signed version cannot be signed again. The manifest declares that the
+extension sends website content off the device (to your Tamga), which
+Firefox shows to a person who installs it by hand.
+
+**3. Force-install it and give it its settings**, in `policies.json`:
+
+```json
+{
+  "policies": {
+    "ExtensionSettings": {
+      "tamga-chat-sites@corp.example": {
+        "installation_mode": "force_installed",
+        "install_url": "file:///opt/tamga/tamga-chat-sites-0.9.0.xpi"
+      }
+    },
+    "3rdparty": {
+      "Extensions": {
+        "tamga-chat-sites@corp.example": {
+          "tamgaUrl": "https://tamga.internal",
+          "tamgaKey": "tk_your_key_here",
+          "failMode": "closed",
+          "autoRedact": false,
+          "sites": ["claude", "chatgpt", "gemini"]
+        }
+      }
+    }
+  }
+}
+```
+
+`install_url` is where Firefox fetches the signed `.xpi`: a `file:///` path
+is documented, and an https address on your own server is the usual
+alternative (not tried here). Firefox reinstalls when the version inside
+the `.xpi` changes. The `3rdparty` values are what the extension reads as
+managed storage, field by field as in Chrome; Firefox does not check them
+against `managed_schema.json`. A change to them takes effect after Firefox
+restarts.
+
+Where `policies.json` goes: in a `distribution` directory next to the
+Firefox executable on Windows, in `Firefox.app/Contents/Resources/distribution`
+on macOS, and in `/etc/firefox/policies/` (or `distribution` in the
+installation directory) on Linux. On Windows the same policies can be set by
+Group Policy with Mozilla's ADMX templates (`ExtensionSettings` takes the
+JSON above as one value); on macOS by a configuration profile for
+`org.mozilla.firefox`. `about:policies` shows what Firefox read.
+
+To keep private windows covered, either let the extension run in them
+(`"private_browsing": true` in its `ExtensionSettings` entry) or switch
+them off (`DisablePrivateBrowsing`).
+
+Known differences from Chrome, none tried: a person can withdraw a Manifest
+V3 extension's access to a site in `about:addons` (whether a force-installed
+one can was not checked; if access is withdrawn the content script does not
+run on that site and nothing is checked); Firefox runs the worker's code as
+an event page; and whether a site accepts the `drop` and `paste` events the
+extension dispatches after checking a file is a live-test item.
+
 ### Trying it without any of that
 
 `chrome://extensions`, Developer mode, "Load unpacked", choose the
 `extension/` directory, then fill in the options page. That is enough for
-one person or an evaluation, and it is how the extension was run here.
+one person or an evaluation, and it is how the extension was run here. In
+Firefox: `node tools/package.js firefox`, then `about:debugging`, "This
+Firefox", "Load Temporary Add-on...", and `dist/firefox/manifest.json`; it is
+gone when Firefox closes.
 
 ## What is recorded
 
@@ -406,9 +517,10 @@ none of it is built:
 For whoever has to approve it:
 
 - It runs on the three sites and nowhere else, in the top frame only.
-- It reads the text of the message box at paste and at send. It does not
-  read the conversation, the site's answers, cookies or anything else on
-  the page.
+- It reads the text of the message box at paste and at send, and the
+  content of a text file the person attaches, before the site has it. It
+  does not read the conversation, the site's answers, cookies or anything
+  else on the page.
 - That text goes to the Tamga URL you configured, over https, from the
   extension's service worker, and nowhere else. A redirect is treated as an
   error and not followed.

@@ -1,14 +1,16 @@
-// What every adapter is built from. An adapter answers four questions about
+// What every adapter is built from. An adapter answers five questions about
 // a page: where is the message box, what text is in it, how is that text
-// replaced, and which element sends it.
+// replaced, which element sends it, and which file inputs take attachments.
 //
 //   id                      'claude' | 'chatgpt' | 'gemini' | 'generic'
-//   selectors               { composer: [...], sendButton: [...] }
+//   selectors               { composer: [...], sendButton: [...], fileInput: [...] }
 //   findComposer(doc, near) the message box, or null
 //   readText(el)            its text
 //   replaceText(el, text)   true when the box now holds `text`
 //   matchSend(target)       the send button `target` is in, or null
 //   findSendButton(doc)     the send button, or null
+//   matchFileInput(el)      true when `el` is one of the site's file inputs
+//   findFileInputs(doc)     the site's file inputs on the page
 //
 // A site module holds selectors and nothing else, so that a site changing
 // its markup is a change to one short list.
@@ -132,17 +134,27 @@ function closest(target, selectors) {
   return null;
 }
 
-/** An adapter from two selector lists, tried in order. */
-export function makeAdapter({ id, composer, sendButton }) {
+function isFileInput(el) {
+  return Boolean(el) && el.nodeType === 1 && el.tagName === 'INPUT' && String(el.type).toLowerCase() === 'file';
+}
+
+/** An adapter from its selector lists, tried in order. */
+export function makeAdapter({ id, composer, sendButton, fileInput = [] }) {
   return Object.freeze({
     id,
-    selectors: Object.freeze({ composer: Object.freeze([...composer]), sendButton: Object.freeze([...sendButton]) }),
+    selectors: Object.freeze({
+      composer: Object.freeze([...composer]),
+      sendButton: Object.freeze([...sendButton]),
+      fileInput: Object.freeze([...fileInput]),
+    }),
     findComposer: (doc) => first(doc, composer),
     readText,
     replaceText,
     matchSend: (target) => closest(target, sendButton),
     findSendButton: (doc) => first(doc, sendButton),
+    matchFileInput: (el) => isFileInput(el) && fileInput.some((selector) => el.matches(selector)),
+    findFileInputs: (doc) => [...new Set(fileInput.flatMap((selector) => [...doc.querySelectorAll(selector)]))].filter(isFileInput),
   });
 }
 
-export { closest, first };
+export { closest, first, isFileInput };

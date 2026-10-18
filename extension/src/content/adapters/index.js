@@ -54,6 +54,17 @@ export function resolveSend(site, doc, target) {
   return { adapter: generic, button, composer: generic.findComposer(doc, button) };
 }
 
+/**
+ * The file input `target` is, as { adapter, input }, or null. The site's own
+ * selectors first; any other file input on the page is the generic
+ * fallback's, and is watched all the same.
+ */
+export function resolveFileInput(site, target) {
+  if (site.matchFileInput(target)) return { adapter: site, input: target };
+  if (generic.matchFileInput(target)) return { adapter: generic, input: target };
+  return null;
+}
+
 /** Lets the generic fallback look at the buttons beside the page's message box. */
 export function observePage(site, doc) {
   generic.observeSend(doc, site.findComposer(doc) || generic.findComposer(doc, null));

@@ -25,4 +25,8 @@ export const adapter = makeAdapter({
     'button[aria-label="Send prompt"]',
     'button[aria-label="Send message"]',
   ],
+  // Not compared with the live page: a guess at where the attach control's
+  // hidden file input is. Any other file input on the page is still watched
+  // through the generic fallback.
+  fileInput: ['form input[type="file"]'],
 });
