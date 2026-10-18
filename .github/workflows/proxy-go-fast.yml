@@ -1,0 +1,51 @@
+name: Go tests (fast)
+
+# The quick Go check for every pull request: go vet and the test suite without
+# the race detector, the E2E run or the Postgres tests. The full run (race
+# detector, E2E, store integration) stays in proxy-ci.yml on the weekly
+# schedule and in the release workflow. The detection floors in cmd/redteam
+# are part of this run, so a change that lowers detection fails here.
+on:
+  push:
+    branches: [main, development]
+    paths:
+      - "proxy/**"
+      - ".github/workflows/proxy-go-fast.yml"
+  pull_request:
+    branches: [main, development]
+    paths:
+      - "proxy/**"
+      - ".github/workflows/proxy-go-fast.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: proxy-go-fast-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: proxy
+
+jobs:
+  go-fast:
+    name: go vet + go test
+    runs-on: ubuntu-latest
+    # About two minutes on a developer machine; the limit makes a hang fail
+    # the job instead of holding it for six hours.
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: proxy/go.mod
+          cache: true
+          cache-dependency-path: proxy/go.sum
+      - name: go vet
+        run: go vet ./...
+      - name: Test all packages
+        env:
+          # TAMGA_INTEGRATION_DB is left unset, so the store's Postgres tests
+          # skip. The runner has docker, and the store package's TestMain
+          # would start a container; this keeps it from doing so.
+          TAMGA_STORE_NO_DOCKER: "1"
+        run: go test -count=1 -timeout 8m ./...

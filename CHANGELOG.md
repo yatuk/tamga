@@ -153,6 +153,17 @@
   rebuilt. Comments that still named LLM Guard or the removed toxicity
   scanner are corrected in the `.proto` sources and elsewhere; the generated
   gRPC stubs keep the old comments until they are next generated.
+- **A fast Go check runs on every pull request.** The full Go test job
+  (race detector, E2E, the Postgres tests) runs only weekly and by hand, so a
+  pull request that broke a Go test went unseen for up to a week. The new
+  `.github/workflows/proxy-go-fast.yml` runs `go vet ./...` and
+  `go test ./... -count=1 -timeout 8m` without `-race` on every pull request
+  and push to `main` or `development` that touches `proxy/`, and it includes
+  the red-team floors in `cmd/redteam`. It takes about two minutes on a
+  developer machine (132 s measured here). The store's Postgres tests skip, as
+  they do without `TAMGA_INTEGRATION_DB`; the new `TAMGA_STORE_NO_DOCKER=1`
+  makes the store package's `TestMain` start no container even when docker is
+  installed. The weekly job and the release gate are unchanged.
 
 ### Security
 - **A streamed tool call's arguments and streamed reasoning are scanned.**
