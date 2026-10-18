@@ -77,7 +77,8 @@ func classifySegments(ctx context.Context, guard *classifier.Guard, set policy.C
 	budget := set.MaxChars
 	for i := len(segs) - 1; i >= 0; i-- {
 		seg := segs[i]
-		if !set.CoversRole(string(seg.Role)) || flagged[i] {
+		// A number or a key in a tool call's arguments is not text.
+		if !set.CoversRole(string(seg.Role)) || flagged[i] || seg.Literal != "" {
 			continue
 		}
 		text := classifier.Prepare(seg.Text)

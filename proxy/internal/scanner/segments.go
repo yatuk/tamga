@@ -42,28 +42,126 @@ func (r *Registry) ScanSegments(ctx context.Context, segs []extract.Segment, cfg
 	for i := range fromJSON {
 		perSeg[i] = append(perSeg[i], fromJSON[i]...)
 	}
+	keepValues(segs, perSeg)
 	for i := range perSeg {
 		perSeg[i] = dedupeFindings(perSeg[i])
 		all = append(all, perSeg[i]...)
 	}
 
-	across, acrossErr := r.scanAcrossSegments(ctx, segs, perSeg)
-	all = append(all, across...)
+	// What reads text as text sees no number or key of a tool call's
+	// arguments.
+	text, at := textSegments(segs)
+	textPer := compactPerSeg(perSeg, at)
+	across, acrossErr := r.scanAcrossSegments(ctx, text, textPer)
+	all = append(all, reindex(across, at)...)
 	if firstErr == nil {
 		firstErr = acrossErr
 	}
 	// Verdicts on a whole segment with its role: the language check.
-	whole, wholeErr := r.scanWholeSegments(ctx, segs)
-	all = append(all, whole...)
+	whole, wholeErr := r.scanWholeSegments(ctx, text)
+	all = append(all, reindex(whole, at)...)
 	if firstErr == nil {
 		firstErr = wholeErr
 	}
 	// What only the place of a text in the conversation shows. It belongs
 	// to the jailbreak scanner's rules and is left out with it.
 	if r.has("jailbreak") {
-		all = append(all, ConversationFindings(segs, all)...)
+		all = append(all, reindex(ConversationFindings(text, toCompact(all, at)), at)...)
 	}
 	return all, firstErr
+}
+
+// A number or a key in a tool call's arguments (extract.Segment.Literal) is
+// a segment so that a value written that way is found: an identifier, a
+// secret, a custom entity. It is not text, and a verdict on text (an
+// instruction, a language, a topic) is not made on it: the findings of a
+// literal that are not of a value are dropped (keepValues), and the scans
+// that read text across segments or as a whole do not see literals
+// (textSegments).
+
+// keepValues drops the findings of literal segments that are not values.
+func keepValues(segs []extract.Segment, perSeg [][]Finding) {
+	for i := range perSeg {
+		if i >= len(segs) || segs[i].Literal == "" || len(perSeg[i]) == 0 {
+			continue
+		}
+		kept := perSeg[i][:0]
+		for _, f := range perSeg[i] {
+			if redactable(f) {
+				kept = append(kept, f)
+			}
+		}
+		perSeg[i] = kept
+	}
+}
+
+// textSegments returns the segments that are text, and for each its index
+// in segs. at is nil when every segment is text.
+func textSegments(segs []extract.Segment) (text []extract.Segment, at []int) {
+	literals := 0
+	for _, s := range segs {
+		if s.Literal != "" {
+			literals++
+		}
+	}
+	if literals == 0 {
+		return segs, nil
+	}
+	text = make([]extract.Segment, 0, len(segs)-literals)
+	at = make([]int, 0, len(segs)-literals)
+	for i, s := range segs {
+		if s.Literal == "" {
+			text = append(text, s)
+			at = append(at, i)
+		}
+	}
+	return text, at
+}
+
+// compactPerSeg keeps the entries of perSeg at the indexes at.
+func compactPerSeg(perSeg [][]Finding, at []int) [][]Finding {
+	if at == nil {
+		return perSeg
+	}
+	out := make([][]Finding, len(at))
+	for j, i := range at {
+		out[j] = perSeg[i]
+	}
+	return out
+}
+
+// reindex turns the segment indexes of findings made on textSegments back
+// into indexes into the segments it was given.
+func reindex(found []Finding, at []int) []Finding {
+	if at == nil {
+		return found
+	}
+	for k := range found {
+		if s := found[k].Seg; s >= 0 && s < len(at) {
+			found[k].Seg = at[s]
+		}
+	}
+	return found
+}
+
+// toCompact is reindex the other way, for findings passed to a scan of
+// textSegments; a finding of a literal is left out.
+func toCompact(found []Finding, at []int) []Finding {
+	if at == nil {
+		return found
+	}
+	pos := make(map[int]int, len(at))
+	for j, i := range at {
+		pos[i] = j
+	}
+	out := make([]Finding, 0, len(found))
+	for _, f := range found {
+		if j, ok := pos[f.Seg]; ok {
+			f.Seg = j
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 // remoteSegmentCalls is how many segments are with the remote scanner at a
@@ -147,6 +245,7 @@ func (r *Registry) ScanSegmentsRemote(ctx context.Context, segs []extract.Segmen
 		return nil, idErr
 	}
 	var all []Finding
+	keepValues(segs, perSeg)
 	for i := range segs {
 		if i < len(fromJSON) && len(fromJSON[i]) > 0 {
 			perSeg[i] = dedupeFindings(append(perSeg[i], fromJSON[i]...))
@@ -154,10 +253,11 @@ func (r *Registry) ScanSegmentsRemote(ctx context.Context, segs []extract.Segmen
 		all = append(all, perSeg[i]...)
 	}
 
-	across, err := r.scanAcrossSegments(ctx, segs, perSeg)
-	all = append(all, across...)
+	text, at := textSegments(segs)
+	across, err := r.scanAcrossSegments(ctx, text, compactPerSeg(perSeg, at))
+	all = append(all, reindex(across, at)...)
 	if r.has("jailbreak") {
-		all = append(all, ConversationFindings(segs, all)...)
+		all = append(all, reindex(ConversationFindings(text, toCompact(all, at)), at)...)
 	}
 	if err == nil {
 		err = jsonErr

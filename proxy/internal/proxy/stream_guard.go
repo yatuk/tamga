@@ -54,7 +54,12 @@ import (
 //     masked inside their strings, or not at all (takeArgs, completeArgs).
 //     The events that carried the pieces go out as they come, with an empty
 //     piece each, so the client sees the tool call start and everything
-//     else in those events is on time.
+//     else in those events is on time. The arguments are not let out
+//     through a window as text is: they are read as a document (strings
+//     decoded, numbers, keys), a mask on a number makes it a string, and
+//     the client runs the tool only once the call is complete. Vault
+//     placeholders in them are restored (restoreArgs), also when they are
+//     not kept back because nothing scans them.
 //   - values an event carries whole: a Gemini function call, the "done"
 //     events of the Responses API that repeat what the deltas carried, a
 //     content block that starts with its content. They are scanned when
@@ -159,6 +164,13 @@ type streamChannel struct {
 	// tool is the name of the tool the arguments are for, from the event
 	// that opened the call.
 	tool string
+	// name is the channel's own; plain says its arguments are a text and
+	// not a JSON document (extract.StreamDelta.Plain). argsTail is the end
+	// of arguments that are not kept back, held while it may be the start
+	// of a vault placeholder (restoreArgs).
+	name     string
+	plain    bool
+	argsTail string
 	// doc is the whole text of the channel, kept while a schema is to judge
 	// it. docOver says it grew past schemaMax and is not kept any more;
 	// judged that the schema has had its say. unheld is set when text held
@@ -194,10 +206,30 @@ func (ch *streamChannel) answer() bool {
 func (g *streamGuard) channel(name string) *streamChannel {
 	ch, ok := g.channels[name]
 	if !ok {
-		ch = &streamChannel{}
+		ch = &streamChannel{name: name}
 		g.channels[name] = ch
 	}
 	return ch
+}
+
+// toolOf returns the name of the tool a channel's arguments are for: its
+// own, or that of the channel it is part of. A Gemini call that streams its
+// arguments names the tool once for all of them ("g0.f"), and each string
+// in it is a channel of its own ("g0.f.$.to").
+func (g *streamGuard) toolOf(ch *streamChannel) string {
+	if ch.tool != "" {
+		return ch.tool
+	}
+	for name := ch.name; ; {
+		i := strings.LastIndexByte(name, '.')
+		if i < 0 {
+			return ""
+		}
+		name = name[:i]
+		if parent, ok := g.channels[name]; ok && parent.tool != "" {
+			return parent.tool
+		}
+	}
 }
 
 // splitEvent separates an SSE event into what precedes its data payload, the
@@ -299,10 +331,10 @@ func (g *streamGuard) event(raw []byte) (out []byte, stop bool) {
 	if ev.WholeChannel != "" {
 		// The values repeat a tool call's arguments without naming the
 		// tool; the channel knows it.
-		if ch, ok := g.channels[ev.WholeChannel]; ok && ch.tool != "" {
+		if ch, ok := g.channels[ev.WholeChannel]; ok && g.toolOf(ch) != "" {
 			for i := range ev.Whole {
 				if ev.Whole[i].Kind == extract.KindToolArgs && ev.Whole[i].Tool == "" {
-					ev.Whole[i].Tool = ch.tool
+					ev.Whole[i].Tool = g.toolOf(ch)
 				}
 			}
 		}
@@ -312,6 +344,7 @@ func (g *streamGuard) event(raw []byte) (out []byte, stop bool) {
 		if edits, stopped = g.judgeSegments(ev.Whole, ev.SealedThinking, true); stopped {
 			return g.termination(), true
 		}
+		edits = append(edits, g.restoreEdits(ev.Whole, ev.SealedThinking)...)
 	}
 	body, err := extract.RewriteStreamEvent(data, ev, texts, edits)
 	if err != nil {
@@ -432,8 +465,11 @@ func (g *streamGuard) flush(name string) ([]byte, bool) {
 // the arguments are kept back, and the whole of them, scanned, when final
 // says this event ends the tool call.
 func (g *streamGuard) takeArgs(ch *streamChannel, d extract.StreamDelta, final bool) (released string, stopped bool) {
+	ch.plain = d.Plain
 	if !g.scans() || ch.unread {
-		return d.Text, false
+		// Not read: the pieces go out as they come, with the vault's
+		// values in place of their placeholders.
+		return g.restoreArgs(ch, d.Text, final), false
 	}
 	if len(ch.args)+len(d.Text) > g.argsMax {
 		// More than is kept to be scanned as one document. fail_open
@@ -446,7 +482,7 @@ func (g *streamGuard) takeArgs(ch *streamChannel, d extract.StreamDelta, final b
 		}
 		released = string(ch.args) + d.Text
 		ch.args, ch.unread = nil, true
-		return released, false
+		return g.restoreArgs(ch, released, final), false
 	}
 	ch.args = append(ch.args, d.Text...)
 	ch.last = d
@@ -466,20 +502,24 @@ func (g *streamGuard) takeArgs(ch *streamChannel, d extract.StreamDelta, final b
 // cannot be done or shown, the stream ends (redact_tool_call): arguments
 // that were to be masked are not sent as they are.
 func (g *streamGuard) completeArgs(ch *streamChannel) (released string, stopped bool) {
+	if ch.argsTail != "" {
+		// Arguments that were not kept back: what is left of them.
+		return g.restoreArgs(ch, "", true), false
+	}
 	args := string(ch.args)
 	ch.args = nil
 	if args == "" {
 		return "", false
 	}
 	last := ch.last
-	last.Tool = ch.tool
+	last.Tool = g.toolOf(ch)
 	doc, segs := extract.ArgumentSegments(last, args)
 	edits, stopped := g.judgeSegments(segs, false, false)
 	if stopped {
 		return "", true
 	}
 	if len(edits) == 0 {
-		return args, false
+		return g.restoreArgs(ch, args, true), false
 	}
 	masked, err := extract.RewriteArguments(doc, segs, edits)
 	if err != nil || (json.Valid([]byte(args)) && !json.Valid([]byte(masked))) {
@@ -487,7 +527,85 @@ func (g *streamGuard) completeArgs(ch *streamChannel) (released string, stopped 
 		g.stopReason = "redact_tool_call"
 		return "", true
 	}
-	return masked, false
+	return g.restoreArgs(ch, masked, true), false
+}
+
+// maxPlaceholder bounds how long a vault placeholder is: "[TAMGA_", a name
+// and a number come to about 40 characters.
+const maxPlaceholder = 64
+
+// restoreArgs puts the vault's values in place of their placeholders in a
+// piece of a tool call's arguments and returns what can go out. Unless
+// final says the arguments are over, a piece that ends in what may be the
+// start of a placeholder keeps that end back for the next piece.
+//
+// The arguments of a function are a JSON document and a placeholder in
+// them stands in a string, so the value goes in written as a JSON string's
+// content is (a quote as \", a line break as \n); a plain text (a custom
+// tool's input, a Gemini string argument) takes the value as it is.
+func (g *streamGuard) restoreArgs(ch *streamChannel, text string, final bool) string {
+	if g.restore == nil {
+		return text
+	}
+	text, ch.argsTail = ch.argsTail+text, ""
+	if !final {
+		if open := strings.LastIndexByte(text, '['); open >= 0 {
+			tail := text[open:]
+			if len(tail) <= maxPlaceholder && !strings.Contains(tail, "]") &&
+				(strings.HasPrefix(tail, vaultPlaceholderOpen) || strings.HasPrefix(vaultPlaceholderOpen, tail)) {
+				text, ch.argsTail = text[:open], tail
+			}
+		}
+	}
+	for placeholder, original := range g.restore {
+		if !strings.Contains(text, placeholder) {
+			continue
+		}
+		if !ch.plain {
+			original = jsonStringContent(original)
+		}
+		text = strings.ReplaceAll(text, placeholder, original)
+	}
+	return text
+}
+
+// jsonStringContent returns s as it is written inside a JSON string.
+func jsonStringContent(s string) string {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	_ = enc.Encode(s) // a string always encodes
+	out := strings.TrimSuffix(buf.String(), "\n")
+	return out[1 : len(out)-1]
+}
+
+// restoreEdits returns the edits that put the vault's values in place of
+// their placeholders in values an event carries whole: the arguments of a
+// Gemini function call, the closing events of the Responses API that repeat
+// what the deltas carried. Reasoning the provider signs keeps its
+// placeholders, as it does when it streams.
+func (g *streamGuard) restoreEdits(segs []extract.Segment, sealedThinking bool) []extract.Edit {
+	if g.restore == nil {
+		return nil
+	}
+	var edits []extract.Edit
+	for i, s := range segs {
+		if sealedThinking && s.Kind == extract.KindThinking {
+			continue
+		}
+		for placeholder, original := range g.restore {
+			for from := 0; ; {
+				at := strings.Index(s.Text[from:], placeholder)
+				if at < 0 {
+					break
+				}
+				at += from
+				edits = append(edits, extract.Edit{Seg: i, From: at, To: at + len(placeholder), Replacement: original})
+				from = at + len(placeholder)
+			}
+		}
+	}
+	return edits
 }
 
 // maxJudgedBytes bounds what judgeSegments remembers of one stream.
@@ -633,6 +751,11 @@ func (g *streamGuard) scanSegments(segs []extract.Segment) ([]scanner.Finding, e
 			firstErr = err
 		}
 		for _, f := range found {
+			if s.Literal != "" && !scanner.MaskableType(f.Type) {
+				// A number or a key of the arguments is read for values
+				// only, as ScanSegments reads it.
+				continue
+			}
 			f.Seg, f.Role, f.Path = i, string(s.Role), s.Path
 			all = append(all, f)
 		}

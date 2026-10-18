@@ -83,7 +83,14 @@ func tokenReplacements(body []byte, segs []Segment, edits []Edit) ([]replacement
 			tok, err = rewriteNested(body[k.start:k.end], segs, idxs, newText)
 		case first.Encoding == "base64":
 			tok, err = rewriteBase64(body[k.start:k.end], newText[idxs[0]])
+		case first.Literal == LiteralNumberValue:
+			// The member holds a number only; the mask goes in the string
+			// member a partial argument can have instead.
+			tok = append([]byte(`"stringValue":`), encodeString(newText[idxs[0]])...)
 		default:
+			// A string, and also a number or a key in a tool call's
+			// arguments: a masked number is a string from here on, which
+			// keeps the document JSON.
 			tok = encodeString(newText[idxs[0]])
 		}
 		if err != nil {
@@ -220,6 +227,8 @@ func rewriteChecked(extractFn func(string, []byte) (*Result, bool), provider str
 		want[i] = applyEdits(segs[i].Text, list)
 	}
 
+	wantPath := keyEditPaths(segs, want)
+
 	after, ok := extractFn(provider, out)
 	if !ok {
 		return nil, fmt.Errorf("extract: rewritten body is no longer a recognised shape")
@@ -230,7 +239,7 @@ func rewriteChecked(extractFn func(string, []byte) (*Result, bool), provider str
 		if want[i] == "" {
 			continue
 		}
-		if j >= len(after.Segments) || after.Segments[j].Path != segs[i].Path || after.Segments[j].Text != want[i] {
+		if j >= len(after.Segments) || after.Segments[j].Path != wantPath[i] || after.Segments[j].Text != want[i] {
 			return nil, fmt.Errorf("extract: rewrite of %s could not be confirmed", segs[i].Path)
 		}
 		j++
@@ -239,6 +248,30 @@ func rewriteChecked(extractFn func(string, []byte) (*Result, bool), provider str
 		return nil, fmt.Errorf("extract: rewritten body has %d segments, expected %d", len(after.Segments), j)
 	}
 	return out, nil
+}
+
+// keyEditPaths returns the path each segment has once the texts are as want
+// says: a key in a tool call's arguments that was masked is the masked text
+// in the path of everything under it. Keys are taken in order, so a key
+// under a masked key has its object's new path.
+func keyEditPaths(segs []Segment, want []string) []string {
+	paths := make([]string, len(segs))
+	for i, s := range segs {
+		paths[i] = s.Path
+	}
+	for i, s := range segs {
+		if s.Literal != LiteralKey || want[i] == s.Text {
+			continue
+		}
+		from, to := MemberPath(paths[i], s.Text), MemberPath(paths[i], want[i])
+		for j := i + 1; j < len(segs); j++ {
+			p := paths[j]
+			if p == from || strings.HasPrefix(p, from) && (p[len(from)] == '.' || p[len(from)] == '[') {
+				paths[j] = to + p[len(from):]
+			}
+		}
+	}
+	return paths
 }
 
 // ApplyEdits applies edits to one text and returns the result. It is what

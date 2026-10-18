@@ -76,7 +76,24 @@ type Segment struct {
 	// of, when the body names it. It is the model's or the client's word
 	// for the tool, as written.
 	Tool string
+	// Literal is set for text in a tool call's arguments that is not a
+	// JSON string: LiteralNumber for a number, LiteralKey for an object's
+	// key (see payload). Only findings of a value (PII, secrets, custom
+	// entities) are kept for such a segment, and a mask on it is written as
+	// a string. Empty for a string.
+	Literal string
 }
+
+// Kinds of Literal.
+const (
+	LiteralNumber = "number"
+	LiteralKey    = "key"
+	// LiteralNumberValue is a number in a Gemini partial argument
+	// ({"jsonPath":…,"numberValue":N}). Start and End delimit the member
+	// "numberValue":N, and a mask turns it into "stringValue":"…": the
+	// field holds a number and nothing else.
+	LiteralNumberValue = "number_value"
+)
 
 // Skipped is a string under a content root that was deliberately not scanned.
 type Skipped struct {
@@ -171,6 +188,12 @@ func (x *extractor) unknown(blockType string) {
 // payload scans every string under n. It is for free-form data — tool
 // arguments, tool results, schemas — where no key has a protocol meaning, so
 // nothing may be skipped: a field called "type" or "data" there is content.
+//
+// In a tool call's arguments the model can write a value as a number
+// ({"id": 10000000146}) or as a key ({"10000000146": "..."}), and the tool
+// reads it there as it would in a string. So in arguments the numbers and
+// keys that can hold such a value are segments too (literalNumber,
+// literalKey).
 func (x *extractor) payload(n *node, role Role, kind, path string) {
 	if n == nil {
 		return
@@ -178,8 +201,15 @@ func (x *extractor) payload(n *node, role Role, kind, path string) {
 	switch n.kind {
 	case 's':
 		x.emit(n, role, kind, path)
+	case 'x':
+		if kind == KindToolArgs {
+			x.literalNumber(n, role, path)
+		}
 	case 'o':
 		for i, k := range n.keys {
+			if kind == KindToolArgs && i < len(n.keyNodes) {
+				x.literalKey(n.keyNodes[i], k, role, path)
+			}
 			x.payload(n.vals[i], role, kind, path+"."+k)
 		}
 	case 'a':
@@ -187,6 +217,70 @@ func (x *extractor) payload(n *node, role Role, kind, path string) {
 			x.payload(v, role, kind, index(path, i))
 		}
 	}
+}
+
+// minLiteralDigits is the fewest digits a number in a tool call's arguments
+// has to have to be read. Every identifier the scanners know that can be
+// written as a number has more (an SSN 9, a TC identity number 11, a card
+// 12 to 19). Counts, limits, page numbers and flags are most of the numbers
+// in arguments, and each segment is a call to every scanner.
+const minLiteralDigits = 6
+
+// literalNumber emits a number in a tool call's arguments that can be an
+// identifier: an integer of minLiteralDigits digits or more, as it is
+// written. A number with a fraction or an exponent is a measure and is not
+// read.
+func (x *extractor) literalNumber(n *node, role Role, path string) {
+	raw := string(x.src[n.start:n.end])
+	digits := strings.TrimPrefix(raw, "-")
+	if len(digits) < minLiteralDigits {
+		return
+	}
+	for i := 0; i < len(digits); i++ {
+		if digits[i] < '0' || digits[i] > '9' {
+			return
+		}
+	}
+	x.res.Segments = append(x.res.Segments, Segment{
+		Role: role, Kind: KindToolArgs, Path: path, Text: raw, Start: n.start, End: n.end, Literal: LiteralNumber,
+	})
+}
+
+// literalKey emits a key of an object in a tool call's arguments, unless it
+// is written the way a field name is: ASCII letters, "_" and "-" only, which
+// no identifier or secret the scanners know is. Its path is that of the
+// object it stands in, so that a finding in it does not carry the value in
+// its path; MemberPath gives the path of the value under it.
+func (x *extractor) literalKey(tok *node, key string, role Role, path string) {
+	if key == "" || fieldName(key) {
+		return
+	}
+	x.res.Segments = append(x.res.Segments, Segment{
+		Role: role, Kind: KindToolArgs, Path: path, Text: key, Start: tok.start, End: tok.end, Literal: LiteralKey,
+	})
+}
+
+// fieldName reports whether a key is written with ASCII letters, "_" and
+// "-" only.
+func fieldName(key string) bool {
+	for i := 0; i < len(key); i++ {
+		c := key[i]
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c == '_' || c == '-') {
+			return false
+		}
+	}
+	return true
+}
+
+// MemberPath is the path of the value under key in the object at path
+// object: what follows a key segment (Literal LiteralKey), whose own path is
+// the object's. Members are reached with a dot, or right after the "#" that
+// opens a document inside a string.
+func MemberPath(object, key string) string {
+	if strings.HasSuffix(object, "#") {
+		return object + key
+	}
+	return object + "." + key
 }
 
 // structural are protocol fields whose string value is never model input.
@@ -469,43 +563,47 @@ func (x *extractor) openAIContent(v *node, role Role, kind, path string) {
 		return
 	}
 	for j, part := range v.vals {
-		p := index(path, j)
-		if part.kind != 'o' {
-			x.payload(part, role, kind, p)
-			continue
-		}
-		t := part.get("type").text(x.src)
-		switch t {
-		case "text", "input_text", "output_text", "refusal", "summary_text", "reasoning_text":
-			done := map[string]bool{"text": true, "refusal": true}
-			x.emit(part.get("text"), role, kind, p+".text")
-			x.emit(part.get("refusal"), role, kind, p+".refusal")
-			x.rest(part, done, role, kind, p)
-		case "image_url", "input_image", "input_audio", "file", "input_file", "audio":
-			done := map[string]bool{}
-			for _, key := range []string{"image_url", "input_audio", "file", "audio"} {
-				if sub := part.get(key); sub != nil && sub.kind == 'o' {
-					done[key] = true
-					x.media(sub, role, kind, p+"."+key)
-				}
+		x.openAIPart(part, role, kind, index(path, j))
+	}
+}
+
+// openAIPart handles one part of a message's content.
+func (x *extractor) openAIPart(part *node, role Role, kind, p string) {
+	if part.kind != 'o' {
+		x.payload(part, role, kind, p)
+		return
+	}
+	t := part.get("type").text(x.src)
+	switch t {
+	case "text", "input_text", "output_text", "refusal", "summary_text", "reasoning_text":
+		done := map[string]bool{"text": true, "refusal": true}
+		x.emit(part.get("text"), role, kind, p+".text")
+		x.emit(part.get("refusal"), role, kind, p+".refusal")
+		x.rest(part, done, role, kind, p)
+	case "image_url", "input_image", "input_audio", "file", "input_file", "audio":
+		done := map[string]bool{}
+		for _, key := range []string{"image_url", "input_audio", "file", "audio"} {
+			if sub := part.get(key); sub != nil && sub.kind == 'o' {
+				done[key] = true
+				x.media(sub, role, kind, p+"."+key)
 			}
-			// The responses shape puts image_url, file_data and file_url on
-			// the part itself.
-			flat := &node{kind: 'o'}
-			for i, k := range part.keys {
-				if !done[k] && (k == "image_url" || k == "file_data" || k == "file_url") {
-					flat.keys = append(flat.keys, k)
-					flat.vals = append(flat.vals, part.vals[i])
-					done[k] = true
-				}
-			}
-			x.media(flat, role, kind, p)
-			x.rest(part, done, role, kind, p)
-		default:
-			// OpenAI-compatible gateways in front of other models pass their
-			// block types through; the Anthropic rules know several of them.
-			x.anthropicBlock(part, role, kind, p)
 		}
+		// The responses shape puts image_url, file_data and file_url on
+		// the part itself.
+		flat := &node{kind: 'o'}
+		for i, k := range part.keys {
+			if !done[k] && (k == "image_url" || k == "file_data" || k == "file_url") {
+				flat.keys = append(flat.keys, k)
+				flat.vals = append(flat.vals, part.vals[i])
+				done[k] = true
+			}
+		}
+		x.media(flat, role, kind, p)
+		x.rest(part, done, role, kind, p)
+	default:
+		// OpenAI-compatible gateways in front of other models pass their
+		// block types through; the Anthropic rules know several of them.
+		x.anthropicBlock(part, role, kind, p)
 	}
 }
 
@@ -659,6 +757,10 @@ func (x *extractor) anthropicBlock(b *node, role Role, kind, p string) {
 		}
 		x.rest(b, done, RoleTool, KindDocument, p)
 	case t == "thinking":
+		if th := b.get("thinking"); th != nil && th.kind == 'a' {
+			// Mistral writes reasoning as a list of text parts.
+			x.openAIContent(th, RoleAssistant, KindThinking, p+".thinking")
+		}
 		x.emit(b.get("thinking"), RoleAssistant, KindThinking, p+".thinking")
 		x.rest(b, map[string]bool{"thinking": true}, RoleAssistant, KindThinking, p)
 	case t == "redacted_thinking":

@@ -48,7 +48,8 @@ func topicSegments(ctx context.Context, guard *classifier.TopicGuard, set policy
 	budget := set.MaxChars
 	for i := len(segs) - 1; i >= 0 && budget > 0; i-- {
 		seg := segs[i]
-		if !set.CoversRole(string(seg.Role)) {
+		// A number or a key in a tool call's arguments is not text.
+		if !set.CoversRole(string(seg.Role)) || seg.Literal != "" {
 			continue
 		}
 		text := classifier.Prepare(seg.Text)
