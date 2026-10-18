@@ -51,7 +51,7 @@ jobs:
     # container is needed to use them.
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -59,7 +59,7 @@ jobs:
           python-version: "3.11"
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version-file: proxy/go.mod
           cache: true
@@ -110,7 +110,7 @@ jobs:
 
       - name: Upload results artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: stress-results-${{ github.run_id }}
           path: tests/stress/results/

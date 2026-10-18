@@ -24,8 +24,8 @@ jobs:
     name: Go Vulnerability Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: proxy/go.mod
           cache: true
@@ -39,7 +39,7 @@ jobs:
     name: Go Security Analysis
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: gosec
         uses: securego/gosec@master
         with:
@@ -55,8 +55,8 @@ jobs:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: proxy/go.mod
           cache: true
@@ -70,7 +70,7 @@ jobs:
           TAMGA_INTEGRATION_DB: "1"
         run: go test -race -count=1 -coverprofile=coverage.out -covermode=atomic ./...
       - name: Upload coverage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage
           path: proxy/coverage.out
@@ -79,7 +79,7 @@ jobs:
     name: Verify BIN Dataset Integrity
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Check BIN SHA256
         # The script and its default CSV path are relative to the repo root,
         # not to proxy/ (this workflow's default working directory).
@@ -92,8 +92,8 @@ jobs:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: proxy/go.mod
           cache: true
@@ -108,8 +108,8 @@ jobs:
     name: Benchmark Regression Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: proxy/go.mod
           cache: true
@@ -118,7 +118,7 @@ jobs:
         run: |
           go test -bench=. -benchmem -count=3 ./internal/scanner/ | tee bench_output.txt
       - name: Upload benchmark results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: benchmark-results
           path: proxy/bench_output.txt
@@ -131,7 +131,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: LiteLLM calls Tamga as a guardrail
         # The script and its compose file are relative to the repo root, not
         # to proxy/ (this workflow's default working directory).
