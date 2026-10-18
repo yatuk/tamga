@@ -456,12 +456,15 @@ seen (Copilot and Cursor completions, JetBrains' own models, Windsurf):
 
 - The [browser extension](browser-extension.md) does not help. It runs on
   three chat websites and does nothing in an editor.
-- Tamga has no network-level control. A check at the company's web proxy over
-  ICAP, so that traffic from an editor to a vendor is scanned by Tamga
-  without the editor knowing, is planned and **not built**. There is no ICAP
-  server in Tamga today, and traffic from these clients to their vendor is
-  not seen. Even when it exists, a request that is encrypted end to end to
-  the vendor can be read only if the web proxy terminates TLS.
+- A company web proxy that terminates TLS can ask Tamga about requests over
+  ICAP ([Tamga behind a company web proxy](icap.md)). That covers a client
+  that calls a vendor's public API directly (OpenAI, Anthropic, Gemini,
+  Mistral, Azure OpenAI), with no setting in the client. It does not cover
+  the vendors' own back-ends these clients mostly use (GitHub's for Copilot,
+  Cursor's and Windsurf's servers, JetBrains' AI service): their requests
+  pass through unread. A client that pins its certificate stops working
+  behind interception. None of the clients on this page was tried behind a
+  web proxy with Tamga.
 - What you can do today is a policy decision outside Tamga: allow in the
   editor only the clients and settings in this page, and block the vendor
   endpoints of the others at the firewall, so that the clients that remain

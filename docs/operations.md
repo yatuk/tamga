@@ -194,6 +194,9 @@ Access:
 | `TAMGA_GITHUB_OAUTH_CALLBACK_URL` | empty | Redirect URI registered with that app, ending in `/api/v1/auth/github/callback` |
 | `TAMGA_CLERK_SECRET_KEY` | empty | Clerk Backend API key. Used only to list names and email addresses on the Team page; nobody is signed in with it |
 | `TAMGA_IP_ALLOWLIST` | empty | Comma-separated CIDR ranges. When set, a proxy request from any other address gets 403 |
+| `TAMGA_ICAP_ADDR` | empty (off) | Address of the ICAP server for a company web proxy, e.g. `:1344`. See [ICAP](icap.md) |
+| `TAMGA_ICAP_ALLOWED_CLIENTS` | empty: loopback only | Comma-separated IPs and CIDR ranges of the web proxies that may connect to the ICAP server. An invalid entry stops startup |
+| `TAMGA_ICAP_MAX_CONNECTIONS` | `256` | ICAP connections served at once |
 | `TAMGA_CORS_ORIGINS` | empty | Comma-separated origins allowed to call the proxy from a browser, matched exactly. Empty: `Access-Control-Allow-Origin: *` |
 | `TAMGA_CORS_ORIGIN` | `*` | Deprecated single origin; use `TAMGA_CORS_ORIGINS` |
 | `TAMGA_CORS_ALLOWED_METHODS` | `GET,POST,PUT,PATCH,DELETE,OPTIONS` | Value of `Access-Control-Allow-Methods` |
