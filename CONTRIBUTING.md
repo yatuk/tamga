@@ -209,7 +209,7 @@ go test -race ./... -count=1         # Race detector
 go test ./internal/scanner/ -bench=. # Benchmarks
 ```
 
-CI runs the suite with the race detector and uploads a coverage profile; it does not enforce a coverage threshold.
+Every pull request into `main` or `development` that touches `proxy/` runs `go vet` and the suite without the race detector and without the Postgres tests (`.github/workflows/proxy-go-fast.yml`, about two minutes). The race detector, the E2E run and the Postgres tests run weekly, by hand and in the release workflow (`proxy-ci.yml`), which also uploads a coverage profile; CI does not enforce a coverage threshold.
 
 ### Python
 

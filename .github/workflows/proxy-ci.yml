@@ -50,6 +50,8 @@ jobs:
     # Not on pull requests or pushes, by the owner's decision (2026-10-11): it
     # takes about ten minutes. It runs on the weekly schedule or when started
     # by hand, and the release workflow runs the same tests before a release.
+    # proxy-go-fast.yml runs go vet and the tests without -race on every pull
+    # request.
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
