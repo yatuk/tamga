@@ -2183,14 +2183,14 @@ and dark text, every identifier fake), 4 threads on an Intel Core Ultra 7
 | Engine | CER | Turkish letters wrong | TCKN | IBAN | Card | E-mail | Latency per image |
 |---|---|---|---|---|---|---|---|
 | RapidOCR 3.10.0 | 1.9% | 21.9% of 155 | 13/13 | 13/13 | 13/13 | 11/13 | 766 ms median, 948 ms max |
-| Tesseract | not measured yet | | | | | | |
+| Tesseract 5.5.0 (`tur+eng`, in the image, Linux) | 15.8% | 15.5% of 155 | 10/13 | 8/13 | 9/13 | 6/13 | 554 ms median |
 
 **Recommendation: `rapidocr`.** It recovered every TC identity number, IBAN
 and card number, in the photo too, and needs nothing from the operating
 system. Its Turkish errors are mostly the capital İ and the dotless ı, read as
-I and i: names suffer, the identifiers do not. The method, the per-image table
-and the command that measures Tesseract in the image are in
-`analyzer/docs/ocr.md`.
+I and i: names suffer, the identifiers do not. Tesseract reads clean Turkish
+prose better but loses most of a photo and of 8 px text, and the identifiers
+in them. The method and the per-image tables are in `analyzer/docs/ocr.md`.
 
 The engine never downloads at run time. RapidOCR loads its three model files
 from `TAMGA_OCR_MODEL_DIR` (`/opt/ocr-models` in the image, filled at build
