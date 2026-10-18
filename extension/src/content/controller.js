@@ -6,11 +6,16 @@
 // Send: the event is stopped before the page sees it, the text in the box is
 // checked, and only a text that was checked is let through. Paste: the paste
 // lands, the box is checked straight away, and the person is told early.
+// Attach (a file input's change, a drop or a paste that carries files): the
+// event is stopped before the page sees it, each text file is read and
+// checked, and only then is the event given to the page again. A file that
+// is not text is not read: the attach goes on and the person is told once.
 
 import { MAX_TEXT_CHARS, MSG_CONFIG, MSG_OPEN_OPTIONS, MSG_SCAN, parseConfigReply, parseScanReply } from '../shared/protocol.js';
 import { first } from './adapters/base.js';
-import { attachState, generic, observePage, resolveBox, resolveSend } from './adapters/index.js';
-import { decide, needsSetup, reasonText } from './decide.js';
+import { attachState, generic, observePage, resolveBox, resolveFileInput, resolveSend } from './adapters/index.js';
+import { decide, isFileReason, needsSetup, reasonText } from './decide.js';
+import { FILE_MAX_BYTES, FILE_MAX_COUNT, filesOf, isTextFile, readTextFile, safeName, scanTextFor, signature } from './files.js';
 
 // A text that was checked may be sent for this long without a second check,
 // so that a paste followed by Enter is one scan and not two.
@@ -24,6 +29,10 @@ export const SLOW_CHECK_MS = 500;
 export const RESEND_CHECK_MS = 800;
 export const ATTACH_POLL_MS = 2000;
 export const ATTACH_GRACE_POLLS = 4;
+// The events loader.js listens for on window, in the capture phase. It cannot
+// import this list (a content script is not a module); a test keeps the two
+// the same.
+export const EVENT_TYPES = Object.freeze(['keydown', 'click', 'submit', 'paste', 'input', 'change', 'drop']);
 
 const CLOSED = Object.freeze({ failMode: 'closed', autoRedact: false });
 
@@ -54,6 +63,13 @@ export function createController({ doc, site, ui, ask, timers = globalThis, now 
   let seq = 0;
   let missing = 0;
   let told = null; // the reason for having no verdict the person was last told
+  let fileApproval = null; // { sigs, until }: files that were checked and given to the page
+  let fileHold = null; // { source, key }: the attach being checked, or held after its check
+  let fileSeq = 0;
+  let binaryTold = false;
+  // Events the extension dispatched itself, to give a checked attach to the
+  // page: they are not checked again.
+  const own = new WeakSet();
 
   const failOpen = () => behaviour.failMode === 'open';
 
@@ -337,6 +353,260 @@ export function createController({ doc, site, ui, ask, timers = globalThis, now 
     apply(outcome, text, ctx, intent);
   }
 
+  // ---------- attachments ----------
+  //
+  // An attach is { source, files, text, other, key, checking }: source is
+  // { kind: 'input', input } for a file input, { kind: 'drop' | 'paste',
+  // target, strings } for a drop or a paste, with hasText for a paste that
+  // also carries text. text and other are the files that are read and the
+  // ones that are not.
+
+  const plural = (n, one, many) => (n === 1 ? one : many);
+
+  function approveFiles(files) {
+    fileApproval = { sigs: new Set(files.map(signature)), until: now() + APPROVAL_MS };
+  }
+
+  const filesApproved = (files) =>
+    Boolean(fileApproval) && now() < fileApproval.until && files.every((f) => fileApproval.sigs.has(signature(f)));
+
+  /** Says, once for a page load, that a file that is not text was not read. */
+  function tellBinary(files) {
+    if (binaryTold || files.length === 0) return;
+    binaryTold = true;
+    show({
+      tone: 'note',
+      quiet: true,
+      title: 'Tamga does not read this kind of file',
+      body:
+        `${files.map((f) => safeName(f.name)).join(', ')} ${plural(files.length, 'was', 'were')} not checked. ` +
+        `Tamga reads text files (plain text, Markdown, CSV, JSON, YAML, XML, logs, source code) of up to ${FILE_MAX_BYTES / 1024} KB. ` +
+        'PDF files, images and office documents are not read, and go to the site as they are.',
+      actions: [{ id: 'ok', label: 'OK' }],
+    });
+  }
+
+  /**
+   * Gives a checked attach to the page: the same files, in an event of the
+   * same kind, which the extension lets through. Returns false when the
+   * browser would not build that event.
+   */
+  function release(attach) {
+    const { source, files } = attach;
+    approveFiles(files);
+    if (fileHold === attach) fileHold = null;
+    const win = doc.defaultView;
+    try {
+      if (source.kind === 'input') {
+        // The input still holds the files: the page reads them from it.
+        for (const type of ['input', 'change']) {
+          const event = new win.Event(type, { bubbles: true });
+          own.add(event);
+          source.input.dispatchEvent(event);
+        }
+        return true;
+      }
+      // A drop's or a paste's own data cannot be read once its event is
+      // over, so the page is handed a new one holding the same files.
+      const data = new win.DataTransfer();
+      for (const file of files) data.items.add(file);
+      for (const [type, value] of source.strings) data.setData(type, value);
+      const event =
+        source.kind === 'drop'
+          ? new win.DragEvent('drop', { bubbles: true, cancelable: true, composed: true, dataTransfer: data })
+          : new win.ClipboardEvent('paste', { bubbles: true, cancelable: true, composed: true, clipboardData: data });
+      if (!(event.dataTransfer || event.clipboardData)) throw new Error('the event carries no data');
+      own.add(event);
+      const target = source.target && source.target.isConnected !== false ? source.target : doc.body;
+      target.dispatchEvent(event);
+      return true;
+    } catch {
+      // The approval above lets the same files through when they are added again.
+      show({
+        tone: 'note',
+        title: 'Checked by Tamga: nothing found',
+        body: 'The page could not be handed the file. Add it again; it will not be checked a second time.',
+        actions: [{ id: 'ok', label: 'OK' }],
+      });
+      return false;
+    }
+  }
+
+  /** The attach does not reach the page. A file input is emptied. */
+  function discard(attach) {
+    if (fileHold === attach) fileHold = null;
+    if (attach.source.kind !== 'input') return;
+    try {
+      attach.source.input.value = '';
+    } catch {
+      // The page never saw the files either way.
+    }
+  }
+
+  const named = (r) => `${r.name} (${r.outcome.found || 'policy'})`;
+
+  function applyFiles(attach, results) {
+    const n = attach.files.length;
+    const notAttached = n === 1 ? 'It is not attached.' : `None of the ${n} files is attached.`;
+
+    // A file the policy stops, or would change: nothing of the attach goes.
+    // The extension does not write a changed copy of a person's file.
+    const stopped = results.find((r) => r.outcome.kind === 'block' || r.outcome.kind === 'redact');
+    if (stopped) {
+      discard(attach);
+      const { kind, why } = stopped.outcome;
+      let title;
+      let body;
+      if (kind === 'redact' || why === 'no_text') {
+        title = 'Tamga: this file has to change before it is sent';
+        body =
+          `Your organisation's policy changes text like this before it is sent: ${named(stopped)}. Tamga does not change files. ${notAttached} ` +
+          'Take those parts out of the file and attach it again, or paste its text into the message box, where Tamga can offer the changed text.';
+      } else if (why === 'strip') {
+        title = 'Tamga: the policy removes this whole file';
+        body = `Your organisation's policy removes a text entirely when it finds this in it: ${named(stopped)}. ${notAttached}`;
+      } else {
+        title = 'Tamga stopped this file';
+        body = `Your organisation's policy does not allow it: ${named(stopped)}. ${notAttached} Remove that part from the file to attach it.`;
+      }
+      show({ tone: 'stop', title, body, actions: [{ id: 'ok', label: 'OK' }] });
+      return;
+    }
+
+    const unchecked = results.find((r) => r.outcome.kind === 'unavailable');
+    if (unchecked) {
+      const { reason, failOpen: open, retryAfterS } = unchecked.outcome;
+      const local = isFileReason(reason);
+      if (!local) told = reason; // the notice below says it
+      const why = local ? `${unchecked.name}: ${reasonText(reason)}` : reasonText(reason);
+      if (open) {
+        release(attach);
+        show({
+          tone: 'note',
+          title: `Tamga did not check this ${plural(n, 'file', 'attachment')}`,
+          body: `${why} Your administrator allows sending without a check, so it was attached.`,
+          actions: [{ id: 'ok', label: 'OK' }],
+        });
+        return;
+      }
+      if (local) {
+        discard(attach);
+        show({ tone: 'stop', title: 'Tamga could not check this file', body: `${why} ${notAttached}`, actions: [{ id: 'ok', label: 'OK' }] });
+        return;
+      }
+      show(
+        {
+          tone: 'stop',
+          title: `Tamga is holding this ${plural(n, 'file', 'attachment')}`,
+          body:
+            `${why} ${n === 1 ? 'It is' : 'The files are'} not attached until checked.` +
+            (retryAfterS ? ` Try again in ${retryAfterS} s.` : ''),
+          actions: [
+            { id: 'retry', label: 'Try again' },
+            ...(needsSetup(reason) ? [{ id: 'setup', label: 'Open settings' }] : []),
+            { id: 'cancel', label: 'Do not attach' },
+          ],
+        },
+        (id) => {
+          if (id === 'retry' && fileHold === attach) {
+            checkFiles(attach);
+            return;
+          }
+          if (id === 'setup') openSettings();
+          discard(attach);
+        },
+      );
+      return;
+    }
+
+    const warned = results.filter((r) => r.outcome.kind === 'warn');
+    if (warned.length > 0) {
+      show(
+        {
+          tone: 'note',
+          title: 'Tamga: policy warning',
+          body: `${plural(warned.length, 'This file contains', 'These files contain')} something your organisation asks you to check: ${warned.map(named).join('; ')}. You may still attach ${plural(n, 'it', 'them')}.`,
+          actions: [
+            { id: 'attach', label: 'Attach anyway' },
+            { id: 'cancel', label: 'Do not attach' },
+          ],
+        },
+        (id) => {
+          if (id === 'attach' && fileHold === attach) {
+            if (release(attach) && !attach.source.hasText) tellBinary(attach.other);
+            return;
+          }
+          discard(attach);
+        },
+      );
+      return;
+    }
+
+    ui.hide(); // the "checking" notice, or a notice about an earlier attach
+    if (release(attach) && !attach.source.hasText) tellBinary(attach.other);
+  }
+
+  /** Reads and checks each text file of an attach, one at a time, and acts on the lot. */
+  async function checkFiles(attach) {
+    const mine = ++fileSeq;
+    attach.checking = true;
+    fileHold = attach;
+    const slow = timers.setTimeout(() => {
+      ui.show({ tone: 'note', title: `Tamga is checking the ${plural(attach.text.length, 'file', 'files')}`, body: '', actions: [] }, () => {});
+    }, SLOW_CHECK_MS);
+    const results = [];
+    if (attach.text.length > FILE_MAX_COUNT) {
+      results.push({ name: `${attach.text.length} files`, outcome: decide({ ok: false, behaviour, reason: 'too_many_files' }, behaviour) });
+    }
+    for (const file of attach.text.length > FILE_MAX_COUNT ? [] : attach.text) {
+      const name = safeName(file.name);
+      const read = await readTextFile(file);
+      let raw;
+      if (!read.ok) {
+        raw = { ok: false, behaviour, reason: read.reason };
+      } else if (read.text.trim() === '') {
+        raw = { ok: true, behaviour, verdict: { action: 'PASS', findings: [] } }; // nothing in it to check
+      } else {
+        try {
+          raw = await ask({ type: MSG_SCAN, text: scanTextFor(name, read.text), intent: 'file' });
+        } catch {
+          raw = undefined; // the worker did not answer: no verdict
+        }
+      }
+      const reply = parseScanReply(raw);
+      if (reply) behaviour = reply.behaviour;
+      const outcome = decide(raw, behaviour);
+      results.push({ name, outcome });
+      // One file stopped stops the attach: the rest need not cost a scan.
+      if (mine !== fileSeq || outcome.kind === 'block' || outcome.kind === 'redact') break;
+    }
+    timers.clearTimeout(slow);
+    if (mine !== fileSeq) return; // a newer attach has taken over
+    attach.checking = false;
+    applyFiles(attach, results);
+  }
+
+  /**
+   * An attach is about to reach the page. Returns true when its event was
+   * held for a check, false when it goes on: no text file in it, or the same
+   * files were checked a moment ago.
+   */
+  function onFiles(event, source, files) {
+    const text = files.filter(isTextFile);
+    const other = files.filter((f) => !isTextFile(f));
+    if (text.length === 0 || filesApproved(files)) {
+      if (!source.hasText) tellBinary(other);
+      return false;
+    }
+    hold(event);
+    const key = files.map(signature).join('\u0001');
+    // The change event after the input event of the same pick: the check
+    // has started already.
+    if (fileHold && fileHold.checking && fileHold.key === key && fileHold.source.kind === source.kind) return true;
+    checkFiles({ source, files, text, other, key, checking: false });
+    return true;
+  }
+
   function onSend(event, ctx) {
     if (!ctx.composer) {
       // A send control, and no box to read: the text cannot be checked.
@@ -383,9 +653,23 @@ export function createController({ doc, site, ui, ask, timers = globalThis, now 
     if (box) onSend(event, { adapter: generic, composer: box, button: null });
   }
 
-  /** Called for every keydown, click, submit and paste, in the capture phase. */
+  function clipboardStrings(data) {
+    const out = [];
+    for (const type of ['text/plain', 'text/html']) {
+      let value = '';
+      try {
+        value = data.getData(type);
+      } catch {
+        value = '';
+      }
+      if (value) out.push([type, value]);
+    }
+    return out;
+  }
+
+  /** Called for every keydown, click, submit, paste, input, change and drop, in the capture phase. */
   function handle(event) {
-    if (!enabled) return;
+    if (!enabled || own.has(event)) return;
     const target = targetOf(event);
     switch (event.type) {
       case 'keydown': {
@@ -402,7 +686,30 @@ export function createController({ doc, site, ui, ask, timers = globalThis, now 
       case 'submit':
         onSubmit(event);
         return;
+      case 'input':
+      case 'change': {
+        // A file input's input and change events are when the page reads
+        // the files picked in it. Typing in a text box is an input event
+        // too, and is not looked at here.
+        const found = resolveFileInput(site, target);
+        if (!found) return;
+        const files = filesOf(found.input.files);
+        if (files.length > 0) onFiles(event, { kind: 'input', input: found.input, hasText: false }, files);
+        return;
+      }
+      case 'drop': {
+        // The files can be read from the event only while it runs.
+        const files = filesOf(event.dataTransfer?.files);
+        if (files.length > 0) onFiles(event, { kind: 'drop', target, strings: [], hasText: false }, files);
+        return;
+      }
       case 'paste': {
+        const data = event.clipboardData;
+        const files = filesOf(data?.files);
+        if (files.length > 0) {
+          const strings = clipboardStrings(data);
+          if (onFiles(event, { kind: 'paste', target, strings, hasText: strings.length > 0 }, files)) return;
+        }
         const box = resolveBox(site, doc, target);
         if (!box) return;
         // After the paste has landed, so that the whole box is checked.

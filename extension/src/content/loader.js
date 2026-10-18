@@ -4,8 +4,12 @@
 // window in the capture phase: they see a key press or a click before any
 // listener of the page.
 (() => {
+  // browser.* in Firefox, chrome.* in Chrome and Edge (src/shared/api.js).
+  const ext = globalThis.browser ?? globalThis.chrome;
   const hooks = { handle: null };
-  for (const type of ['keydown', 'click', 'submit', 'paste']) {
+  // input and change for file inputs, drop and paste for files: an attach
+  // is held as a send is.
+  for (const type of ['keydown', 'click', 'submit', 'paste', 'input', 'change', 'drop']) {
     window.addEventListener(
       type,
       (event) => {
@@ -14,7 +18,7 @@
       true,
     );
   }
-  import(chrome.runtime.getURL('src/content/main.js'))
+  import(ext.runtime.getURL('src/content/main.js'))
     .then((main) => main.start(hooks))
     .catch(() => {
       // The extension is on the page and does nothing: say so.

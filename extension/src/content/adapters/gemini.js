@@ -25,4 +25,8 @@ export const adapter = makeAdapter({
     'button[aria-label="Send message"]',
     'button[aria-label="Send"]',
   ],
+  // Not compared with the live page: a guess at where the upload menu's
+  // file input is. Any other file input on the page is still watched
+  // through the generic fallback.
+  fileInput: ['.upload-button-container input[type="file"]', 'input[type="file"][name="Filedata"]'],
 });

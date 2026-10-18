@@ -10,7 +10,8 @@
   generic fallback must not take any of them for the send button. That the
   upload and dictation buttons are type="submit" was seen on the live page;
   where they sit in the tree, their labels and their wrappers' classes are
-  assumed. Written 2026-10-11.
+  assumed. Written 2026-10-11. The hidden file input beside the upload
+  button, and its name, are assumed; added 2026-10-18.
 -->
 <html lang="en">
   <head>
@@ -25,7 +26,7 @@
           <div class="ql-editor textarea" contenteditable="true" role="textbox" aria-label="Gemini için bir istem girin" data-fixture="composer"><p>Hello</p><p>second line</p></div>
         </rich-textarea>
         <div class="leading-actions-wrapper">
-          <div class="upload-button-container"><button type="submit" aria-label="Dosya yükle" data-fixture="upload"><span>+</span></button></div>
+          <div class="upload-button-container"><button type="submit" aria-label="Dosya yükle" data-fixture="upload"><span>+</span></button><input type="file" multiple hidden name="Filedata" data-fixture="file"></div>
           <div class="model-picker-container"><button type="button" aria-label="Mod seçici" data-fixture="model"><span>2.5 Flash</span></button></div>
         </div>
         <div class="mic-button-container"><button type="submit" aria-label="Mikrofonu kullan" data-fixture="dictation"><span>Mic</span></button></div>

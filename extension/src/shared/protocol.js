@@ -9,7 +9,9 @@ export const MSG_CONFIG = 'tamga/config';
 export const MSG_OPEN_OPTIONS = 'tamga/open-options';
 export const MSG_TEST = 'tamga/test';
 
-export const INTENTS = Object.freeze(['paste', 'send']);
+// 'file': the text of a file the person attached, with its name as the
+// first line (src/content/files.js).
+export const INTENTS = Object.freeze(['paste', 'send', 'file']);
 // ROUTE has to be here: an action that is not is read as no verdict at all,
 // and no verdict follows the fail mode, which can be open.
 export const ACTIONS = Object.freeze(['PASS', 'WARN', 'REDACT', 'STRIP', 'ROUTE', 'BLOCK']);
@@ -37,6 +39,10 @@ export const REASONS = Object.freeze([
   'bad_response', // a 200 that is not a verdict
   'local_rate_limit', // this tab asked too often
   'bad_message',
+  // Decided in the content script, before anything is asked of the worker:
+  'file_too_large', // an attached text file is larger than the extension reads
+  'file_unreadable', // an attached file could not be read, or is not text
+  'too_many_files', // more text files in one attach than are checked one by one
 ]);
 
 const FINDING_LIMIT = 100;

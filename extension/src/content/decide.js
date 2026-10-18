@@ -88,11 +88,19 @@ const REASON_TEXT = {
   bad_response: 'Your Tamga server answered with something that is not a verdict.',
   local_rate_limit: 'This tab asked for too many checks in the last minute.',
   bad_message: 'The extension could not complete the check.',
+  file_too_large: 'The file is larger than Tamga checks (200 KB).',
+  file_unreadable: 'The file could not be read as text.',
+  too_many_files: 'More files were added at once than Tamga checks one by one (10).',
 };
 
 /** One sentence for why there is no verdict. */
 export function reasonText(reason) {
   return REASON_TEXT[reason] || REASON_TEXT.bad_message;
+}
+
+/** Reasons that trying again cannot change: they are about the file, not about Tamga. */
+export function isFileReason(reason) {
+  return reason === 'file_too_large' || reason === 'file_unreadable' || reason === 'too_many_files';
 }
 
 /** Reasons a person can do something about in the options page. */

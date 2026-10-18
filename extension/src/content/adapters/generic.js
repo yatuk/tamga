@@ -2,7 +2,7 @@
 // contenteditable element that looks like the page's message box, and any
 // button that looks like it sends. It is a guess by construction.
 
-import { closest, editableRoot, first, readText, replaceText } from './base.js';
+import { closest, editableRoot, first, isFileInput, readText, replaceText } from './base.js';
 
 const composer = [
   'main form textarea',
@@ -25,6 +25,8 @@ const namedSend = [
 // button of a search or sign-in form is none of this extension's business.
 const submit = ['button[type="submit"]', 'input[type="submit"]'];
 const editable = ['textarea', '[contenteditable="true"]'];
+// Every file input on the page: on these sites a file is picked to be sent.
+const fileInput = ['input[type="file"]'];
 
 // Where the box is in no form and the button has no English name (as on
 // gemini.google.com on 2026-10-11), a button near the box is taken for the
@@ -142,7 +144,11 @@ function observedSend(doc, box) {
 
 export const adapter = Object.freeze({
   id: 'generic',
-  selectors: Object.freeze({ composer: Object.freeze(composer), sendButton: Object.freeze([...namedSend, ...submit]) }),
+  selectors: Object.freeze({
+    composer: Object.freeze(composer),
+    sendButton: Object.freeze([...namedSend, ...submit]),
+    fileInput: Object.freeze(fileInput),
+  }),
 
   /** `near` is the element the person acted on: a button, or the box itself. */
   findComposer(doc, near) {
@@ -180,6 +186,9 @@ export const adapter = Object.freeze({
     if (!button || !box || !buttonsNear(box).includes(button)) return null;
     return button === observedSend(doc, box) || namedInAnyLanguage(button, box) ? button : null;
   },
+
+  matchFileInput: (el) => isFileInput(el),
+  findFileInputs: (doc) => [...doc.querySelectorAll(fileInput[0])].filter(isFileInput),
 
   findSendButton(doc, box) {
     const form = formOf(box);

@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 
 import { SETTING_KEYS } from '../src/background/settings.js';
 import { ADAPTERS, generic } from '../src/content/adapters/index.js';
+import { EVENT_TYPES } from '../src/content/controller.js';
 import { SITES } from '../src/shared/sites.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -148,10 +149,16 @@ test('the README lists every selector, says none is verified, and carries the da
   assert.match(readme, /2026-10-11/);
   assert.match(readme, /not verified|unverified/i);
   for (const adapter of [...Object.values(ADAPTERS), generic]) {
-    for (const selector of [...adapter.selectors.composer, ...adapter.selectors.sendButton]) {
+    for (const selector of [...adapter.selectors.composer, ...adapter.selectors.sendButton, ...adapter.selectors.fileInput]) {
       assert.ok(readme.includes(`\`${selector}\``), `README.md does not list ${adapter.id}: ${selector}`);
     }
   }
+});
+
+test('the loader listens for every event the controller handles', () => {
+  const list = /for \(const type of (\[[^\]]*\])\)/.exec(read('src', 'content', 'loader.js'));
+  assert.ok(list, 'loader.js has no list of event types');
+  assert.deepEqual(JSON.parse(list[1].replace(/'/g, '"')), [...EVENT_TYPES]);
 });
 
 test('the versions agree', () => {
