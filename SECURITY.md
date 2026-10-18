@@ -27,19 +27,17 @@ described in
 
 ## Supported Versions
 
-No release has been tagged in the repository, and the project publishes no
-container image or package. `CHANGELOG.md` names v0.7.0 (2026-06-20) and
-v0.8.0-rc1 (2026-07-21) and lists v0.9.0 as unreleased. Security fixes are
-made on `main` only; nothing is backported.
-
-A release workflow that signs what it builds is in the repository and has
-not run yet. What a release will contain and how to check its signatures,
+v0.9.0 (2026-10-18) is the first release tagged in the repository, built,
+signed and published by the release workflow. Security fixes are made on
+`main` and go out in the next release; nothing is backported to an older
+one. What a release contains and how to check its signatures,
 provenance and SBOMs is in
 [Verifying a release](docs/verifying-a-release.md).
 
 | Version | Security fixes |
 |---------|-----------|
 | `main` | ✅ |
+| v0.9.0 | ✅ until the next release |
 | v0.8.0-rc1 and earlier (changelog entries; no tag or branch exists) | ❌ Update to `main` |
 
 ## Verifying a Release

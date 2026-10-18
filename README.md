@@ -13,7 +13,7 @@ agents call. It scans each request routed through it and blocks or redacts
 PII, secrets and prompt injection before the request is forwarded to the provider.
 
 [![Tests](https://img.shields.io/github/actions/workflow/status/yatuk/tamga/proxy-ci.yml?branch=main&label=tests&style=flat-square)](https://github.com/yatuk/tamga/actions/workflows/proxy-ci.yml)
-[![Version](https://img.shields.io/badge/version-v0.9.0%20unreleased-blue?style=flat-square)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v0.9.0-blue?style=flat-square)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-green?style=flat-square)](LICENSE)
 [![Go](https://img.shields.io/badge/go-1.26-00ADD8?logo=go&logoColor=white&style=flat-square)](proxy/go.mod)
 [![Stars](https://img.shields.io/github/stars/yatuk/tamga?style=flat-square)](https://github.com/yatuk/tamga/stargazers)

@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.9.0 (unreleased)
+## v0.9.0 (2026-10-18)
 
 ### Licence
 - **Tamga is open source only: AGPL-3.0, and nothing else.** There is no
