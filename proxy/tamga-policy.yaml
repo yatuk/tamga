@@ -407,6 +407,29 @@ scan:
 # written in".
 
 # ---------------------------------------------------------------------------
+# Files a request carries (off here)
+# ---------------------------------------------------------------------------
+# Without this section a PDF, an office document or an image in a request
+# goes to the provider unread. With it, an encrypted file gets a finding of
+# type attachment_unreadable (category encrypted); with extract on, PDF,
+# DOCX, XLSX and PPTX files are read by the analyzer and their text is
+# scanned like any other; what cannot be read gets the same finding with
+# the reason. A value to mask, or a text to strip, inside a file blocks the
+# request: files are not rewritten. See docs/operations.md, "Files a
+# request carries".
+#
+#   attachments:
+#     unreadable: WARN      # PASS, WARN or BLOCK (PASS when left out)
+#     encrypted: BLOCK      # PASS, WARN or BLOCK (PASS when left out)
+#     extract:
+#       enabled: true
+#       max_bytes: 10485760 # 1 KiB to 32 MiB
+#       max_pages: 200
+#       timeout_ms: 10000
+#     ocr:
+#       enabled: false      # images and scanned PDFs; needs the analyzer's OCR engine
+
+# ---------------------------------------------------------------------------
 # High-risk tool calls after untrusted tool content (off here)
 # ---------------------------------------------------------------------------
 # A request whose conversation holds a tool result with a finding the

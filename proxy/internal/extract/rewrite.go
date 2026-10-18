@@ -4,10 +4,17 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
 )
+
+// ErrExtracted is the error of a rewrite that would change the text of a
+// segment read out of an attached file (EncodingExtracted). The file is
+// sent as it came or not at all: the text cannot be written back into a
+// PDF or a spreadsheet, and the request is blocked instead.
+var ErrExtracted = errors.New("extract: the text was read out of an attached file and cannot be rewritten")
 
 // Edit replaces Text[From:To] of segment Seg (an index into the segments
 // Extract returned) with Replacement.
@@ -55,6 +62,9 @@ func tokenReplacements(body []byte, segs []Segment, edits []Edit) ([]replacement
 		}
 		if e.From < 0 || e.To > len(segs[e.Seg].Text) || e.From >= e.To {
 			return nil, fmt.Errorf("extract: edit [%d,%d) outside segment %s", e.From, e.To, segs[e.Seg].Path)
+		}
+		if segs[e.Seg].Encoding == EncodingExtracted {
+			return nil, ErrExtracted
 		}
 		bySeg[e.Seg] = append(bySeg[e.Seg], e)
 	}
@@ -233,10 +243,12 @@ func rewriteChecked(extractFn func(string, []byte) (*Result, bool), provider str
 	if !ok {
 		return nil, fmt.Errorf("extract: rewritten body is no longer a recognised shape")
 	}
-	// A segment edited down to nothing is no longer emitted.
+	// A segment edited down to nothing is no longer emitted. One read out
+	// of an attached file is not emitted by the extractor at all, and no
+	// edit reached it (tokenReplacements).
 	j := 0
 	for i := range segs {
-		if want[i] == "" {
+		if want[i] == "" || segs[i].Encoding == EncodingExtracted {
 			continue
 		}
 		if j >= len(after.Segments) || after.Segments[j].Path != wantPath[i] || after.Segments[j].Text != want[i] {

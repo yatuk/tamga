@@ -2061,6 +2061,15 @@ export interface paths {
          *       `[category_REDACTED]` markers.
          *     - The `operator_state` scanner is not run.
          *     - The IP allowlist covers the proxy routes, not `/api/v1`.
+         *
+         *     With the policy's `attachments` section the API also judges a file
+         *     (`file` in place of `text`), as the proxy path judges one attached
+         *     to a message, and every answer says in `files` which kinds it
+         *     reads. A finding in a file has no position, and a REDACT or a STRIP
+         *     that would change the file is a BLOCK
+         *     (`X-Tamga-Redact-Fallback: block:attachment`). The body may then be
+         *     as large as a file of `attachments.extract.max_bytes` in base64 and
+         *     64 KiB more; a text is still held to 262144 bytes.
          */
         post: {
             parameters: {
@@ -2084,7 +2093,7 @@ export interface paths {
                         "application/json": components["schemas"]["ScanResult"];
                     };
                 };
-                /** @description Body is not unambiguous UTF-8 JSON, text is missing or empty, or role is not one of the four */
+                /** @description Body is not unambiguous UTF-8 JSON, text is missing or empty, both text and file are sent, the file's data is not base64 or its name or type is not valid, or role is not one of the four */
                 400: {
                     headers: {
                         [name: string]: unknown;
@@ -2105,7 +2114,7 @@ export interface paths {
                     };
                     content?: never;
                 };
-                /** @description Body over 262144 bytes */
+                /** @description Body over 262144 bytes, or with the attachments section over the larger limit for a file */
                 413: {
                     headers: {
                         [name: string]: unknown;
@@ -2114,6 +2123,13 @@ export interface paths {
                 };
                 /** @description Content-Type is not application/json */
                 415: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description A file was sent and the policy has no attachments section */
+                422: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -5460,15 +5476,51 @@ export interface components {
             route_to?: string;
             findings?: components["schemas"]["PolicySimulateFinding"][];
         };
+        /**
+         * @description Exactly one of `text` and `file`. A file is taken only when the
+         *     policy has an `attachments` section; without one it is refused
+         *     with 422.
+         */
         ScanRequest: {
             /** @description Text to scan */
-            text: string;
+            text?: string;
+            file?: components["schemas"]["ScanFile"];
             /**
              * @description Who the text speaks for. Rules with applies_to are matched against it.
              * @default user
              * @enum {string}
              */
             role: "system" | "user" | "assistant" | "tool";
+        };
+        /**
+         * @description A file, judged as the proxy path judges one attached to a message
+         *     (policy `attachments`). Its own bytes decide how it is read; the
+         *     name is scanned as text.
+         */
+        ScanFile: {
+            /**
+             * Format: byte
+             * @description The file in standard base64
+             */
+            data: string;
+            /** @description The file's name, without control characters */
+            name?: string;
+            /** @description Its media type, such as application/pdf */
+            mime?: string;
+        };
+        /**
+         * @description Present when the policy has an `attachments` section: the scan API
+         *     then takes files.
+         */
+        ScanFiles: {
+            /**
+             * @description The kinds of file whose text is read: pdf, docx, xlsx, pptx, and
+             *     image when `attachments.ocr.enabled` is on. A file of another
+             *     kind is judged as one that could not be read.
+             */
+            kinds: ("pdf" | "docx" | "xlsx" | "pptx" | "image")[];
+            /** @description The largest file read (`attachments.extract.max_bytes`) */
+            max_bytes: number;
         };
         ScanFinding: {
             type: string;
@@ -5513,6 +5565,7 @@ export interface components {
             redacted_text?: string;
             /** @description The internal pool the proxy would send the request to. Present only when action is ROUTE. */
             route_to?: string;
+            files?: components["schemas"]["ScanFiles"];
             policy: {
                 name: string;
                 version: string;

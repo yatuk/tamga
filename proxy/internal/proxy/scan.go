@@ -6,6 +6,7 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"mime"
 	"net/http"
@@ -21,6 +22,7 @@ import (
 
 	"github.com/yatuk/tamga/internal/api"
 	"github.com/yatuk/tamga/internal/apikeys"
+	"github.com/yatuk/tamga/internal/attachment"
 	"github.com/yatuk/tamga/internal/classifier"
 	"github.com/yatuk/tamga/internal/errkind"
 	"github.com/yatuk/tamga/internal/events"
@@ -111,6 +113,8 @@ type ScanOptions struct {
 type scanRequest struct {
 	Text *string `json:"text"`
 	Role *string `json:"role"`
+	// File is a file to judge in place of a text (scan_file.go).
+	File *scanFileRequest `json:"file"`
 }
 
 // scanFinding is what the scan API says about a finding: what it is, where,
@@ -150,7 +154,10 @@ type scanResponse struct {
 	RedactedText *string `json:"redacted_text,omitempty"`
 	// RouteTo is set only when the action is ROUTE: the internal pool the
 	// proxy would send the request to. A scan sends nothing anywhere.
-	RouteTo       string        `json:"route_to,omitempty"`
+	RouteTo string `json:"route_to,omitempty"`
+	// Files is set when the policy has an attachments section: the scan
+	// API then takes files, and this says which kinds it reads.
+	Files         *scanFiles    `json:"files,omitempty"`
 	Policy        scanPolicyRef `json:"policy"`
 	ScanLatencyMs float64       `json:"scan_latency_ms"`
 }
@@ -466,6 +473,9 @@ type scanInput struct {
 	// callsWritable lets a value in the tool calls be masked. The MCP
 	// gateway sets it: it sends the arguments on itself (mcp_scan.go).
 	callsWritable bool
+	// files are the encoded files of the body (extract.Result.Attachments),
+	// read by the policy's attachments section as on the proxy path.
+	files []extract.Attachment
 }
 
 // shape is the request shape the body is read as.
@@ -615,6 +625,20 @@ func (h *scanHandler) evaluate(ctx context.Context, call *scanCall, requestID st
 // non-empty outcome means the scan did not run to the end and there is no
 // verdict.
 func (h *scanHandler) evaluateInput(ctx context.Context, call *scanCall, requestID string, who caller, pol *policy.Policy, in scanInput) (ev scanEval, outcome string) {
+	// The files, as on the proxy path (attachments.go): their texts are
+	// scanned after the request's own, what could not be read is judged
+	// with the findings.
+	var attFindings []scanner.Finding
+	if spec := pol.AttachmentSpec(); spec.Enabled {
+		out := attachment.Process(ctx, h.cfg.Attachments, attachmentSettings(spec), requestID, in.segs, in.files)
+		if len(out.Segments) > 0 {
+			in.segs = append(in.segs[:len(in.segs):len(in.segs)], out.Segments...)
+		}
+		attFindings = out.Findings
+		if len(in.files) > 0 || len(out.Findings) > 0 {
+			ev.headers = append(ev.headers, [2]string{attachmentsHeader, fmt.Sprintf("files=%d; read=%d; findings=%d", len(in.files), out.Read, len(out.Findings))})
+		}
+	}
 	body, segs := in.body, in.segs
 
 	// The proxy path's registry, by segment, as handleProxy scans a chat
@@ -623,6 +647,7 @@ func (h *scanHandler) evaluateInput(ctx context.Context, call *scanCall, request
 	// scanners, and a scan with scanners shed is not a verdict.
 	pipelineCfg, strictMode := h.pipeline()
 	findings, err := h.cfg.Registry.Without(scanExcluded...).ScanSegments(ctx, segs, pipelineCfg)
+	findings = append(findings, attFindings...)
 	if err != nil {
 		// Logged by kind only: a scanner's error can quote what it read.
 		call.logger.Error().Bool("degraded", errors.Is(err, scanner.ErrScanDegraded)).
@@ -719,7 +744,9 @@ func (h *scanHandler) evaluateInput(ctx context.Context, call *scanCall, request
 				reason = redactNothing
 			} else if reason = in.fixed(edited); reason != "" {
 				// Nothing is rewritten: see scanInput.fixed.
-			} else if masked, rwErr := extract.RewriteChecked(in.shape(), body, segs, edits); rwErr != nil {
+			} else if masked, rwErr := extract.RewriteChecked(in.shape(), body, segs, edits); errors.Is(rwErr, extract.ErrExtracted) {
+				reason = redactAttachment
+			} else if rwErr != nil {
 				reason = redactRewrite
 			} else if in.whole {
 				ev.body = masked
@@ -808,11 +835,14 @@ func (h *scanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		refuse(http.StatusServiceUnavailable, outcome, scanErrUnavailable)
 	}
 
+	// A request with a file is larger than one with a text; how much
+	// larger the policy's attachments section says.
+	maxBody, tooLarge := scanBodyLimit(h.cfg.GetPolicy())
 	who, pol, raw, ok := h.admit(w, r, call, scanAdmission{
 		bucket:   "scan:",
 		fallback: h.fallback,
-		maxBody:  scanMaxBodyBytes,
-		tooLarge: scanErrTooLarge,
+		maxBody:  maxBody,
+		tooLarge: tooLarge,
 	}, refuse)
 	if !ok {
 		return
@@ -823,7 +853,24 @@ func (h *scanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		refuse(http.StatusBadRequest, "invalid", scanErrJSON)
 		return
 	}
-	if req.Text == nil || *req.Text == "" {
+	switch {
+	case req.File != nil && req.Text != nil:
+		refuse(http.StatusBadRequest, "invalid", scanErrTextOrFile)
+		return
+	case req.File != nil:
+		msg := checkScanFile(req.File)
+		if msg == "" && pol != nil && !pol.AttachmentSpec().Enabled {
+			msg = scanErrFilesOff
+		}
+		if msg != "" {
+			refuse(scanFileStatus(msg), "invalid", msg)
+			return
+		}
+	case len(raw) > scanMaxBodyBytes:
+		// The limit was raised for a file; a text is held to its own.
+		refuse(http.StatusRequestEntityTooLarge, "too_large", scanErrTooLarge)
+		return
+	case req.Text == nil || *req.Text == "":
 		refuse(http.StatusBadRequest, "invalid", scanErrText)
 		return
 	}
@@ -838,7 +885,10 @@ func (h *scanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		refuse(http.StatusBadRequest, "invalid", scanErrRole)
 		return
 	}
-	text := *req.Text
+	text := ""
+	if req.Text != nil {
+		text = *req.Text
+	}
 	call.textRole = role
 
 	select {
@@ -855,7 +905,13 @@ func (h *scanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ev, outcome := h.evaluate(r.Context(), call, requestID, who, pol, []scanMessage{{role: role, text: text}})
+	var ev scanEval
+	var outcome string
+	if req.File != nil {
+		ev, outcome = h.evaluateFile(r.Context(), call, requestID, who, pol, role, req.File)
+	} else {
+		ev, outcome = h.evaluate(r.Context(), call, requestID, who, pol, []scanMessage{{role: role, text: text}})
+	}
 	if outcome != "" {
 		unavailable(outcome)
 		return
@@ -867,6 +923,7 @@ func (h *scanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	out := scanResponse{
 		Action:        scanVerdict(ev.action),
 		Findings:      make([]scanFinding, 0, len(ev.findings)),
+		Files:         scanFilesOf(pol),
 		Policy:        scanPolicyRef{Name: pol.Name, Version: pol.Version},
 		ScanLatencyMs: float64(time.Since(call.start).Microseconds()) / 1000,
 	}
@@ -892,7 +949,9 @@ func (h *scanHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			Position: api.PositionNone,
 			Action:   scanVerdict(ev.actionOf(f)),
 		}
-		if !scanUnplacedTypes[f.Type] && !scanUnplacedTypes[f.Category] {
+		// A file's findings have no place the caller could use: they are in
+		// the text read out of it, or about the file as a whole.
+		if req.File == nil && !scanUnplacedTypes[f.Type] && !scanUnplacedTypes[f.Category] {
 			// One text was scanned, as one segment: the finding's offsets
 			// are into it.
 			span := api.FindingSpan(text, f)

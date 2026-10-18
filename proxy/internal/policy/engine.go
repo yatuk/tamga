@@ -427,6 +427,9 @@ type Policy struct {
 	// Agents is described in agents.go. Left out of the JSON form when
 	// unset, for the same reason.
 	Agents *AgentsConfig `yaml:"agents" json:"agents,omitempty"`
+	// Attachments is described in attachments.go. Left out of the JSON
+	// form when unset, for the same reason.
+	Attachments *AttachmentsConfig `yaml:"attachments" json:"attachments,omitempty"`
 }
 
 // Values of scan.on_malformed.

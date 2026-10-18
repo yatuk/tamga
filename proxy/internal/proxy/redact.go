@@ -43,6 +43,10 @@ const (
 	redactUnmaskable = "unmaskable"     // a finding to mask is a verdict on the text, not a span in it
 	redactNothing    = "nothing_masked" // REDACT was the verdict and nothing was there to mask
 	redactRewrite    = "rewrite_failed" // the rewritten body could not be confirmed
+	// redactAttachment: a value to mask, or a text to strip, was read out of
+	// an attached file (policy attachments.extract). The text cannot be
+	// written back into the file, and the file is not sent changed.
+	redactAttachment = "attachment"
 )
 
 // redactTargets returns the findings a REDACT masks: see above.
@@ -168,6 +172,8 @@ func redactRequest(provider string, body []byte, segs []extract.Segment, finding
 	switch {
 	case errors.Is(err, errNothingMasked):
 		return nil, nil, targets, redactNothing, nil
+	case errors.Is(err, extract.ErrExtracted):
+		return nil, nil, targets, redactAttachment, nil
 	case err != nil:
 		return nil, nil, targets, redactRewrite, err
 	}

@@ -23,6 +23,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/yatuk/tamga/internal/api"
+	"github.com/yatuk/tamga/internal/attachment"
 	"github.com/yatuk/tamga/internal/budget"
 	"github.com/yatuk/tamga/internal/cache"
 	"github.com/yatuk/tamga/internal/apikeys"
@@ -184,6 +185,11 @@ type HandlerConfig struct {
 	// keeps the mapping in a request-scoped variable, so same-process
 	// round-trips work even when this is nil.
 	VaultStore *vault.Store
+	// Attachments reads the text of the files a request carries (the
+	// analyzer's Extract call), when the policy's attachments section asks
+	// for it. Nil, or an analyzer that is not reachable, makes every such
+	// file an attachment_unreadable finding of category extract_failed.
+	Attachments attachment.Extractor
 }
 
 // RegisterRoutes registers proxy routes on mux (health + provider prefixes).
@@ -477,6 +483,9 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 	// scanners then read the decoded text of each message, with its role,
 	// instead of the JSON bytes. Anything else is scanned raw, as before.
 	var segs []extract.Segment
+	// attFindings are what the policy's attachments section found about
+	// the files of the request (attachments.go); judged with the scanners'.
+	var attFindings []scanner.Finding
 	if isJSONBody(r, body) {
 		if strictErr := extract.CheckStrict(body); strictErr != nil {
 			extract.RecordMalformed(strictErr.Reason)
@@ -489,10 +498,15 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 				writeInvalidJSON(w, requestID, strictErr)
 				return
 			}
-		} else if res, ok := extract.Extract(provider, body); ok && len(res.Segments) > 0 {
+		} else if res, ok := extract.Extract(provider, body); ok && (len(res.Segments) > 0 || len(res.Attachments) > 0) {
 			segs = res.Segments
 			for _, blockType := range res.Unknown {
 				extract.RecordUnknownBlock(blockType)
+			}
+			segs, attFindings = readAttachments(ctx, w, cfg.Attachments, pol, requestID, segs, res.Attachments)
+			if len(segs) == 0 {
+				// Files and nothing else to read: scanned raw, as before.
+				segs = nil
 			}
 		}
 	}
@@ -556,6 +570,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 	} else {
 		findings, err = scanWith(cfg.Registry)
 	}
+	findings = append(findings, attFindings...)
 	scanSpan.SetAttributes(attribute.Int("scanner.findings_count", len(findings)))
 	scanSpan.End()
 	// scanIncomplete names why the scan did not cover the whole request, and
