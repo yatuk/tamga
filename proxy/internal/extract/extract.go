@@ -114,7 +114,36 @@ type Result struct {
 	// ToolCalls are the calls of tools the client runs, in the order the
 	// body holds them, whether their arguments hold any text or none.
 	ToolCalls []ToolCall
+	// Attachments are the encoded files that were not decoded as text
+	// (images, PDFs, office documents, archives), in the order the body
+	// holds them. Each is also in Skipped with the reason "binary";
+	// internal/attachment reads what it can of them when the policy asks.
+	Attachments []Attachment
 }
+
+// Attachment is an encoded file in a request body: base64, bare or as a
+// data URI.
+type Attachment struct {
+	Role Role
+	// Kind is the kind of segment the file's text would be: KindDocument
+	// for a document block, otherwise that of the message it is in.
+	Kind string
+	Path string
+	// MIME is the type the body declares for the file, from the data URI
+	// or the media type field next to it, and Filename the name it gives.
+	// Both are the caller's words.
+	MIME     string
+	Filename string
+	// Data is the base64 payload, the data URI's prefix removed.
+	Data string
+	// Start and End delimit the JSON string token that holds the file.
+	Start, End int
+}
+
+// EncodingExtracted marks a segment whose text was read out of an encoded
+// file (internal/attachment), not decoded from the body: the token holds
+// the file, which a rewrite cannot put changed text back into.
+const EncodingExtracted = "extracted"
 
 // ToolCall is a call of a tool that the client runs: an OpenAI tool call or
 // function call, an Anthropic tool_use block, a Gemini functionCall. Tools
@@ -370,6 +399,7 @@ func (x *extractor) media(obj *node, role Role, kind, path string) {
 	}
 	mime := obj.get("media_type").text(x.src) + obj.get("mimeType").text(x.src) + obj.get("mime_type").text(x.src)
 	isText := strings.HasPrefix(mime, "text/") || obj.get("type").text(x.src) == "text"
+	filename := obj.get("filename").text(x.src)
 	done := map[string]bool{}
 	for i, k := range obj.keys {
 		v := obj.vals[i]
@@ -384,14 +414,14 @@ func (x *extractor) media(obj *node, role Role, kind, path string) {
 				// Anthropic's plain-text source carries the text as it is.
 				x.emit(v, role, kind, p)
 			default:
-				x.attachment(v, isText, role, kind, p)
+				x.attachment(v, isText, mime, filename, role, kind, p)
 			}
 		case "url", "image_url", "file_url", "fileUri", "file_uri":
 			done[k] = true
 			if v.kind != 's' {
 				x.media(v, role, kind, p)
 			} else if isDataURI(v.text(x.src)) {
-				x.attachment(v, false, role, kind, p)
+				x.attachment(v, false, mime, filename, role, kind, p)
 			} else {
 				x.emit(v, role, KindURL, p)
 			}
@@ -403,18 +433,23 @@ func (x *extractor) media(obj *node, role Role, kind, path string) {
 // attachment handles an encoded file: base64, bare or as a data URI. The
 // model reads a text file's contents, so those are decoded and scanned.
 // Images, audio and PDFs are recorded as binary: what they say to the model
-// is not visible here, and that is a limit of this proxy, not a judgement
-// that they are safe.
-func (x *extractor) attachment(v *node, textMime bool, role Role, kind, path string) {
+// is not visible here. They are listed in Result.Attachments, and
+// internal/attachment reads the kinds it can when the policy asks it to.
+func (x *extractor) attachment(v *node, textMime bool, mime, filename string, role Role, kind, path string) {
 	raw := v.text(x.src)
 	payload := raw
 	if isDataURI(raw) {
 		head, rest, _ := strings.Cut(raw, ";base64,")
 		payload = rest
 		textMime = strings.HasPrefix(head, "data:text/")
+		mime = strings.TrimPrefix(head, "data:")
 	}
 	if !textMime {
 		x.skip(path, "binary")
+		x.res.Attachments = append(x.res.Attachments, Attachment{
+			Role: role, Kind: kind, Path: path, MIME: mime, Filename: filename,
+			Data: payload, Start: v.start, End: v.end,
+		})
 		return
 	}
 	decoded, err := base64.StdEncoding.DecodeString(payload)
@@ -611,7 +646,9 @@ func (x *extractor) openAIPart(part *node, role Role, kind, p string) {
 		// the part itself.
 		flat := &node{kind: 'o'}
 		for i, k := range part.keys {
-			if !done[k] && (k == "image_url" || k == "file_data" || k == "file_url") {
+			// The file's name goes with it, for the attachment's record;
+			// it is scanned there as it would be on the part.
+			if !done[k] && (k == "image_url" || k == "file_data" || k == "file_url" || k == "filename") {
 				flat.keys = append(flat.keys, k)
 				flat.vals = append(flat.vals, part.vals[i])
 				done[k] = true

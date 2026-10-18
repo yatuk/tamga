@@ -85,6 +85,10 @@ func (p *Policy) entryAction(f scanner.Finding) (Action, bool) {
 	case "topic":
 		// A banned topic's action is the section's (topics.go).
 		return p.topicEntryAction(f.Category)
+	case scanner.AttachmentFindingType:
+		// A file that could not be read: the attachments section's action
+		// for the reason (attachments.go).
+		return p.attachmentAction(f.Category)
 	}
 	return best, found
 }
@@ -116,11 +120,12 @@ func entryActionIssues(p *Policy) []ValidationIssue {
 // asked of, with the reason given to whoever wrote the rule. The types are
 // those scanner.MaskableType says no to.
 var unmaskableKinds = map[string]string{
-	"injection":          "an injection finding is a verdict on a piece of text, not a value with a place in it",
-	"content_moderation": "a content moderation finding is a verdict on a piece of text, not a value with a place in it",
-	"operator_state":     "an operator-state finding is a verdict on the request, not a value with a place in it",
-	"language":           "a language finding is a verdict on a whole message, not a value with a place in it",
-	"topic":              "a topic finding is a verdict on a whole text, not a value with a place in it",
+	"injection":             "an injection finding is a verdict on a piece of text, not a value with a place in it",
+	"content_moderation":    "a content moderation finding is a verdict on a piece of text, not a value with a place in it",
+	"operator_state":        "an operator-state finding is a verdict on the request, not a value with a place in it",
+	"language":              "a language finding is a verdict on a whole message, not a value with a place in it",
+	"topic":                 "a topic finding is a verdict on a whole text, not a value with a place in it",
+	"attachment_unreadable": "an unreadable attachment is a file the scanners could not read, not a value with a place in it",
 }
 
 // unmaskableOutputKeys are the names output_rules.redact_on cannot hold:

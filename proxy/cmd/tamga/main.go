@@ -817,6 +817,11 @@ func main() {
 		ProxyBoundRegistry: proxyBoundRegistry,
 		VaultStore:         vaultStore,
 	}
+	// The policy's attachments section reads files through the analyzer.
+	// Without one, every file it would read is extract_failed.
+	if analyzerClient != nil {
+		proxyCfg.Attachments = analyzerClient
+	}
 
 	// The scan API and the route LiteLLM calls as a guardrail: one scan path,
 	// two request shapes.

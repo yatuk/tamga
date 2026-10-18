@@ -377,7 +377,7 @@ func icapInput(rt *icapRoute, body []byte) (in scanInput, malformed *extract.Str
 			for _, blockType := range res.Unknown {
 				extract.RecordUnknownBlock(blockType)
 			}
-			return scanInput{body: body, segs: res.Segments, provider: rt.provider, whole: true}, nil
+			return scanInput{body: body, segs: res.Segments, provider: rt.provider, whole: true, files: res.Attachments}, nil
 		}
 	}
 	in = scanInput{body: body, provider: rt.provider, locked: "unverified_format"}

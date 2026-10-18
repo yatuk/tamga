@@ -25,6 +25,8 @@ var knownScannerTypes = map[string]struct{}{
 	"custom":             {},
 	"operator_state":     {},
 	"language":           {},
+	// attachments.go: a file a request carries that could not be read.
+	"attachment_unreadable": {},
 }
 
 // isValidSeverity returns true for the four canonical severity levels.

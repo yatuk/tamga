@@ -1423,6 +1423,15 @@ paths:
           `[category_REDACTED]` markers.
         - The `operator_state` scanner is not run.
         - The IP allowlist covers the proxy routes, not `/api/v1`.
+
+        With the policy's `attachments` section the API also judges a file
+        (`file` in place of `text`), as the proxy path judges one attached
+        to a message, and every answer says in `files` which kinds it
+        reads. A finding in a file has no position, and a REDACT or a STRIP
+        that would change the file is a BLOCK
+        (`X-Tamga-Redact-Fallback: block:attachment`). The body may then be
+        as large as a file of `attachments.extract.max_bytes` in base64 and
+        64 KiB more; a text is still held to 262144 bytes.
       security:
         - TamgaKey: []
         - AdminKey: []
@@ -1440,13 +1449,15 @@ paths:
               schema:
                 $ref: "#/components/schemas/ScanResult"
         "400":
-          description: Body is not unambiguous UTF-8 JSON, text is missing or empty, or role is not one of the four
+          description: Body is not unambiguous UTF-8 JSON, text is missing or empty, both text and file are sent, the file's data is not base64 or its name or type is not valid, or role is not one of the four
         "401":
           description: No valid key
         "403":
           description: Request came from a web page whose origin is not on the CORS allowlist
         "413":
-          description: Body over 262144 bytes
+          description: Body over 262144 bytes, or with the attachments section over the larger limit for a file
+        "422":
+          description: A file was sent and the policy has no attachments section
         "415":
           description: Content-Type is not application/json
         "429":
@@ -3892,17 +3903,62 @@ components:
 
     ScanRequest:
       type: object
-      required: [text]
+      description: |
+        Exactly one of `text` and `file`. A file is taken only when the
+        policy has an `attachments` section; without one it is refused
+        with 422.
       properties:
         text:
           type: string
           minLength: 1
           description: Text to scan
+        file:
+          $ref: "#/components/schemas/ScanFile"
         role:
           type: string
           enum: [system, user, assistant, tool]
           default: user
           description: Who the text speaks for. Rules with applies_to are matched against it.
+
+    ScanFile:
+      type: object
+      required: [data]
+      description: |
+        A file, judged as the proxy path judges one attached to a message
+        (policy `attachments`). Its own bytes decide how it is read; the
+        name is scanned as text.
+      properties:
+        data:
+          type: string
+          format: byte
+          description: The file in standard base64
+        name:
+          type: string
+          maxLength: 255
+          description: The file's name, without control characters
+        mime:
+          type: string
+          description: Its media type, such as application/pdf
+
+    ScanFiles:
+      type: object
+      required: [kinds, max_bytes]
+      description: |
+        Present when the policy has an `attachments` section: the scan API
+        then takes files.
+      properties:
+        kinds:
+          type: array
+          description: |
+            The kinds of file whose text is read: pdf, docx, xlsx, pptx, and
+            image when `attachments.ocr.enabled` is on. A file of another
+            kind is judged as one that could not be read.
+          items:
+            type: string
+            enum: [pdf, docx, xlsx, pptx, image]
+        max_bytes:
+          type: integer
+          description: The largest file read (`attachments.extract.max_bytes`)
 
     ScanFinding:
       type: object
@@ -3961,6 +4017,8 @@ components:
         route_to:
           type: string
           description: The internal pool the proxy would send the request to. Present only when action is ROUTE.
+        files:
+          $ref: "#/components/schemas/ScanFiles"
         policy:
           type: object
           required: [name, version]

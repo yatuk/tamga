@@ -40,6 +40,9 @@ var (
 // stripFailure names why a STRIP could not be carried out, for the
 // X-Tamga-Strip-Fallback header and the degraded counter.
 func stripFailure(err error) string {
+	if errors.Is(err, extract.ErrExtracted) {
+		return redactAttachment
+	}
 	for _, known := range []error{errStripRaw, errStripUnplaced, errStripUnmaskable, errStripUnlocated} {
 		if errors.Is(err, known) {
 			return known.Error()

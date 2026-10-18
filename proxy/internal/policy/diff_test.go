@@ -50,6 +50,10 @@ var ownerPrivileged = []string{
 	// an agent that read a warned-about tool result; switched off, the
 	// control is gone. Proposed as privileged, pending the owner's word.
 	"agents",
+	// attachments.unreadable: BLOCK refuses every request that carries a
+	// file, and attachments.extract decides whether files are sent to the
+	// analyzer. Proposed as privileged, pending the owner's word.
+	"attachments",
 }
 
 func TestEverySectionIsClassified(t *testing.T) {

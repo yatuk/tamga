@@ -93,6 +93,31 @@ func (c *GRPCClient) Analyze(ctx context.Context, req *pb.AnalyzeRequest) (*pb.A
 	return resp, nil
 }
 
+// Bounds of an Extract call's messages: a file of up to 32 MiB goes out
+// (the bound of attachments.extract.max_bytes), up to 4 million characters
+// of text come back. The analyzer's server is set to the same.
+const (
+	extractMaxSendBytes = 33 << 20
+	extractMaxRecvBytes = 17 << 20
+)
+
+// Extract calls the analyzer's Extract RPC: the text of an attached file.
+// ctx carries the deadline; the caller sets it from the policy's
+// attachments.extract.timeout_ms. A file that cannot be read is a status in
+// the answer, not an error; an error means the analyzer did not answer.
+func (c *GRPCClient) Extract(ctx context.Context, req *pb.ExtractRequest) (*pb.ExtractResponse, error) {
+	if !c.Enabled() {
+		return nil, fmt.Errorf("gRPC Extract: analyzer not connected")
+	}
+	resp, err := c.stub.Extract(ctx, req,
+		grpc.MaxCallSendMsgSize(extractMaxSendBytes),
+		grpc.MaxCallRecvMsgSize(extractMaxRecvBytes))
+	if err != nil {
+		return nil, fmt.Errorf("gRPC Extract: %w", err)
+	}
+	return resp, nil
+}
+
 // HealthCheck calls the analyzer's HealthCheck RPC (used for observability).
 func (c *GRPCClient) HealthCheck(ctx context.Context) (*pb.HealthCheckResponse, error) {
 	if !c.Enabled() {
