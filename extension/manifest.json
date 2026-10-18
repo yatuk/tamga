@@ -19,7 +19,7 @@
       "32": "icons/icon-32.png"
     }
   },
-  "permissions": ["storage"],
+  "permissions": ["storage", "declarativeNetRequestWithHostAccess"],
   "host_permissions": [
     "https://claude.ai/*",
     "https://chatgpt.com/*",

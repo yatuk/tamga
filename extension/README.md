@@ -175,6 +175,9 @@ typed into the options page, field by field, and is shown there as locked.
 In Firefox the same values come from the `3rdparty` section of its
 enterprise policy ([docs/browser-extension.md](../docs/browser-extension.md#firefox)).
 
+`allowedWorkspaces` (policy only) lists the organisation's ChatGPT workspace
+ids and Claude organisation ids; see "Workspace headers" below.
+
 ## Firefox
 
 None of this was run in Firefox. It is written from Mozilla's documentation
@@ -230,7 +233,7 @@ policy.
 ## How it is put together
 
 ```
-manifest.json            permissions: storage; hosts: the three sites
+manifest.json            permissions: storage, declarativeNetRequestWithHostAccess; hosts: the three sites
 managed_schema.json      the settings an administrator can set by policy
 options/                 the settings page
 src/shared/              message shapes, the list of sites, browser.* or chrome.*
@@ -265,6 +268,28 @@ test/                    node --test; fixtures under test/fixtures/
   so that pressing Enter again shows the notice without a new scan.
 - One tab can ask for at most 30 scans a minute, so that a page scripting
   pastes cannot spend the key's limit at Tamga.
+
+## Workspace headers
+
+With `allowedWorkspaces` set by policy, for example
+`{"chatgpt": ["<workspace id>"], "claude": ["<organisation id>"]}`, the
+worker installs one `declarativeNetRequest` rule per site
+(`src/background/tenant-rules.js`). It sets the header the vendor documents
+for a corporate proxy on every request to that site:
+`ChatGPT-Allowed-Workspace-Id` on chatgpt.com, `anthropic-allowed-org-ids`
+(with its continuation lines) on claude.ai. The vendor then refuses any other
+account, a personal one included. The rule is replaced when the policy
+changes and removed when it lists nothing. Ids that are not UUIDs are
+dropped. The permission acts only on the three sites and shows no warning
+at install.
+
+There is no adapter that reads the current workspace from the page: no
+vendor documents a way to, and what the page shows changes without notice.
+Gemini is not covered here; set the Chrome policy `AllowedDomainsForApps`,
+and the browser adds Google's header itself. Sources, dates and what is not
+verified: [`docs/enterprise-accounts.md`](../docs/enterprise-accounts.md).
+Not verified at all: that the vendors honour the header when the browser
+sets it, on a live site.
 
 ## Site adapters
 

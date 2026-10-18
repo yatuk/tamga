@@ -35,6 +35,15 @@
       "title": "Timeout in milliseconds",
       "description": "How long to wait for Tamga before the check counts as failed. 2500 when left out; kept between 500 and 10000.",
       "type": "integer"
+    },
+    "allowedWorkspaces": {
+      "title": "Allowed workspaces",
+      "description": "The organisation's workspaces, by site. chatgpt: ChatGPT workspace ids; claude: Claude organisation ids (UUIDs, at most 500 each). For a site listed here the extension sets the vendor's tenant-restriction header on every request to it, and the vendor refuses any other account, personal ones included. Settable by policy only.",
+      "type": "object",
+      "properties": {
+        "chatgpt": { "type": "array", "items": { "type": "string" } },
+        "claude": { "type": "array", "items": { "type": "string" } }
+      }
     }
   }
 }

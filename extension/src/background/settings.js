@@ -5,8 +5,9 @@
 
 import { FAIL_MODES } from '../shared/protocol.js';
 import { SITE_IDS } from '../shared/sites.js';
+import { parseAllowedWorkspaces } from './tenant-rules.js';
 
-export const SETTING_KEYS = Object.freeze(['tamgaUrl', 'tamgaKey', 'failMode', 'autoRedact', 'sites', 'timeoutMs']);
+export const SETTING_KEYS = Object.freeze(['tamgaUrl', 'tamgaKey', 'failMode', 'autoRedact', 'sites', 'timeoutMs', 'allowedWorkspaces']);
 
 export const DEFAULTS = Object.freeze({
   tamgaUrl: '',
@@ -15,6 +16,7 @@ export const DEFAULTS = Object.freeze({
   autoRedact: false,
   sites: SITE_IDS,
   timeoutMs: 2500,
+  allowedWorkspaces: {},
 });
 
 export const TIMEOUT_MIN_MS = 500;
@@ -44,7 +46,7 @@ export function parseTamgaUrl(value) {
   return { origin: url.origin, scanUrl: base + '/api/v1/scan' };
 }
 
-function clean(raw) {
+function clean(raw, managed = false) {
   const out = {};
   if (typeof raw !== 'object' || raw === null) return out;
   if (typeof raw.tamgaUrl === 'string' && raw.tamgaUrl.trim() !== '') out.tamgaUrl = raw.tamgaUrl.trim();
@@ -53,12 +55,15 @@ function clean(raw) {
   if (typeof raw.autoRedact === 'boolean') out.autoRedact = raw.autoRedact;
   if (Array.isArray(raw.sites)) out.sites = SITE_IDS.filter((id) => raw.sites.includes(id));
   if (Number.isInteger(raw.timeoutMs)) out.timeoutMs = Math.min(TIMEOUT_MAX_MS, Math.max(TIMEOUT_MIN_MS, raw.timeoutMs));
+  // Policy only: the person at the browser does not choose the company's
+  // workspaces (tenant-rules.js).
+  if (managed && raw.allowedWorkspaces !== undefined) out.allowedWorkspaces = parseAllowedWorkspaces(raw.allowedWorkspaces);
   return out;
 }
 
 /** Managed over local over defaults. `managedKeys` names what policy set. */
 export function mergeSettings(managedRaw, localRaw) {
-  const managed = clean(managedRaw);
+  const managed = clean(managedRaw, true);
   const settings = { ...DEFAULTS, ...clean(localRaw), ...managed };
   return { settings, managedKeys: Object.keys(managed) };
 }
