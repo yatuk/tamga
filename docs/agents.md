@@ -349,10 +349,12 @@ can do for the agent.
   `output_rules.tool_destinations`. Then ask a person to approve the tools
   that can do harm (shell, writing outside the project, sending mail,
   network calls). That approval is a setting of the agent, not of Tamga.
-- **MCP servers.** The agent's traffic to them does not pass through Tamga.
-  Run only servers you trust, give each the least access it needs, and
-  remember that what they return reaches Tamga only in the next request, as
-  a tool result.
+- **MCP servers.** The agent's traffic to them does not pass through Tamga
+  unless you put them behind the [MCP gateway](mcp.md), which reads tool
+  lists, tool results, resources and prompts on their way to the agent and
+  tool-call arguments on their way to the server. Without it, what they
+  return reaches Tamga only in the next request, as a tool result. Either
+  way, run only servers you trust and give each the least access it needs.
 
 A checklist before an agent runs unattended:
 
@@ -365,7 +367,8 @@ A checklist before an agent runs unattended:
 - [ ] The tool-result rule is `STRIP`, `scan.on_error` is `block`, and
       `output_rules.tool_destinations` lists where its tools may send data.
 - [ ] High-risk tools need a person's approval in the agent.
-- [ ] Its MCP servers are ones you chose, with the least access.
+- [ ] Its MCP servers are ones you chose, with the least access, and
+      behind the [MCP gateway](mcp.md) where you want their traffic read.
 
 ## Speed
 
@@ -402,5 +405,8 @@ read that file, and the turns after it are not.
   that is not made of field names and indexes (`$.notes['10000000146']`) is
   read piece by piece where it stands, so a value split between two of its
   pieces is not found. Strings under other paths are put together first.
-- Traffic between the agent and its **MCP servers** does not pass through
-  Tamga. What a tool returns does, in the next request, as a tool result.
+- Traffic between the agent and its **MCP servers** passes through Tamga
+  only for the servers behind the [MCP gateway](mcp.md). For any other,
+  what a tool returns reaches Tamga in the next request, as a tool result.
+  Local stdio servers can be put behind it with `tamga mcp-wrap`; what the
+  gateway does not read is listed [there](mcp.md#what-is-not-covered).

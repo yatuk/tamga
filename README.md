@@ -201,7 +201,8 @@ schema are in [docs/architecture](docs/architecture/README.md).
 Also in the box: reversible PII tokenization (vault), per-key rate limits, a
 daily budget per organisation, provider allowlists, a response cache, and a SOC dashboard with
 an incident queue. See [docs/operations.md](docs/operations.md), and
-[docs/agents.md](docs/agents.md) for running Claude Code and other agents through it.
+[docs/agents.md](docs/agents.md) for running Claude Code and other agents through it, and
+[docs/mcp.md](docs/mcp.md) for putting their MCP servers behind it.
 
 Six pages of the dashboard, on made-up data
 ([how the pictures are taken](dashboard/e2e/screenshots.spec.ts)):
@@ -463,6 +464,7 @@ default. Prompt and response bodies are not written to the database.
 | [Development](docs/development.md) | Repository layout, local commands, tech stack |
 | [Writing a scanner](docs/scanner-development.md) | Stateful scanners with request context |
 | [Migrating from LLM Guard](docs/migrating-from-llm-guard.md) | Scanner by scanner: what Tamga replaces, in part or not at all |
+| [MCP gateway](docs/mcp.md) | Tamga in front of an agent's MCP servers: tool lists, tool results, resources and tool-call arguments judged by the policy, per-server tool lists, changed tool definitions flagged |
 | [LiteLLM guardrail](docs/litellm.md) | Adding Tamga to a LiteLLM proxy as a guardrail, without its proxy in the path |
 | [Behind a company web proxy (ICAP)](docs/icap.md) | Letting Squid or a secure web gateway that intercepts TLS ask Tamga about requests to AI services. Not run against a real web proxy |
 | [Coding assistants in editors](docs/ide.md) | Which of Claude Code, Continue, Cline, Roo Code, Aider, Copilot, Cursor, JetBrains AI Assistant, Zed and Windsurf can be pointed at Tamga, the setting for each, and what Tamga then sees |
@@ -486,7 +488,8 @@ scanning of tool results, and `STRIP` · the optional inline classifier ·
 per-key rate limits · a daily token and cost cap per organisation · response
 cache · the Postgres request
 log · `POST /api/v1/scan` · the endpoint a LiteLLM proxy calls as a
-guardrail ([LiteLLM](docs/litellm.md)) · Docker Compose.
+guardrail ([LiteLLM](docs/litellm.md)) · the MCP gateway, against a fake
+MCP server ([MCP](docs/mcp.md)) · Docker Compose.
 
 None of it has been run against a real provider or a real third-party service
 as part of the tests: the other side is always a stand-in. The one

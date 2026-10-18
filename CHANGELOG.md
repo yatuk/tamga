@@ -1273,6 +1273,27 @@
     with a threshold above 1 or a cooldown.
 
 ### Agents
+- **An MCP gateway: Tamga in front of an agent's MCP servers.** The
+  servers listed in the file `TAMGA_MCP_CONFIG` names are served at
+  `/mcp/<name>` over Streamable HTTP, following the MCP specification
+  revision 2026-07-28 and the session, GET stream and resumption of the
+  2025 revisions. On the way to the agent, tool lists are read as tool
+  definitions (tool poisoning), and tool results, resource contents, prompt
+  messages and a server's instructions as tool results, with the JSON
+  decoding of tool results; STRIP replaces the text with the placeholder
+  inside a valid JSON-RPC response, REDACT masks it, BLOCK answers a
+  JSON-RPC error with a fixed code (`-32010`) and message. On the way to
+  the server, a `tools/call`'s arguments are read for secrets and personal
+  data and held to `output_rules.tool_destinations`. Per server: a list of
+  the tools the agent may see and call, the server's credential from the
+  environment, and `tool_changes` (`off`, `warn` by default, `block`) for a
+  tool whose definition changes during a session. Each `tools/call` is
+  recorded as an event with the provider `mcp`, and no text. `tamga
+  mcp-wrap` serves a local stdio server over HTTP so the gateway can stand
+  in front of it. Tested against a fake MCP server; see
+  [docs/mcp.md](docs/mcp.md) for setup with Claude Code, Claude Desktop and
+  the MCP Python SDK, and for what is not covered. Nothing changes for a
+  deployment that does not set `TAMGA_MCP_CONFIG`.
 - **A tool result that is JSON is read decoded as well as as written.**
   MCP tools and function results return JSON, and an instruction in a
   string value could be put out of the scanners' reach by writing it in
