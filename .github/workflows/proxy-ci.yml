@@ -24,7 +24,7 @@ jobs:
     name: Go Vulnerability Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v5
         with:
           go-version-file: proxy/go.mod
@@ -39,7 +39,7 @@ jobs:
     name: Go Security Analysis
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: gosec
         uses: securego/gosec@master
         with:
@@ -55,7 +55,7 @@ jobs:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v5
         with:
           go-version-file: proxy/go.mod
@@ -79,7 +79,7 @@ jobs:
     name: Verify BIN Dataset Integrity
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Check BIN SHA256
         # The script and its default CSV path are relative to the repo root,
         # not to proxy/ (this workflow's default working directory).
@@ -92,7 +92,7 @@ jobs:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v5
         with:
           go-version-file: proxy/go.mod
@@ -108,7 +108,7 @@ jobs:
     name: Benchmark Regression Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v5
         with:
           go-version-file: proxy/go.mod
@@ -131,7 +131,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: LiteLLM calls Tamga as a guardrail
         # The script and its compose file are relative to the repo root, not
         # to proxy/ (this workflow's default working directory).
