@@ -8,7 +8,7 @@
 # candidate injection model to score in shadow at
 # TAMGA_CLASSIFIER_SHADOW_MODEL_DIR.
 # TODO: pin by digest (image:tag@sha256:...): docs/operations.md, "Image pins".
-FROM python:3.11-slim AS builder
+FROM python:3.14-slim AS builder
 
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
@@ -17,7 +17,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # TODO: pin by digest (image:tag@sha256:...): docs/operations.md, "Image pins".
-FROM python:3.11-slim
+FROM python:3.14-slim
 
 LABEL org.opencontainers.image.title="Tamga classifier" \
       org.opencontainers.image.description="Inline prompt-injection classifier service of the Tamga LLM security proxy (no model included)" \

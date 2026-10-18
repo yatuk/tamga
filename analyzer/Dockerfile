@@ -1,6 +1,6 @@
 # ── Build stage: compilers and wheels stay here ─────────────────────────────
 # TODO: pin by digest (image:tag@sha256:...): docs/operations.md, "Image pins".
-FROM python:3.11-slim AS builder
+FROM python:3.14-slim AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
@@ -35,7 +35,7 @@ RUN mkdir -p /opt/ocr-models && \
 
 # ── Runtime stage ───────────────────────────────────────────────────────────
 # TODO: pin by digest (image:tag@sha256:...): docs/operations.md, "Image pins".
-FROM python:3.11-slim
+FROM python:3.14-slim
 
 LABEL org.opencontainers.image.title="Tamga analyzer" \
       org.opencontainers.image.description="Asynchronous deep analysis and PDF reports for the Tamga LLM security proxy" \
