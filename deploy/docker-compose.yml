@@ -1,24 +1,77 @@
 # Tamga — production Docker Compose stack.
 #
 # SECURITY NOTES:
-# - Only proxy (8443) and dashboard (3000) are exposed to the host.
-#   All other services live on an internal bridge network.
+# - In the full profile only the TLS edge (Caddy) is published: HTTPS on
+#   8443 for the proxy and 3000 for the console. All other services live on
+#   internal bridge networks. Plain HTTP only when TAMGA_PROXY_SITE and
+#   TAMGA_CONSOLE_SITE say http:// (docs/operations.md, "TLS").
+# - The proxy authenticates to the analyzer, classifier and scanner service
+#   with a token per service; with TAMGA_REQUIRE_SERVICE_TOKENS on (the
+#   default here) nothing starts without them.
 # - Postgres and Redis credentials are read from env vars — never hardcoded.
 # - Redis requires AUTH (requirepass).
 # - OTLP sample rate is set to 5% for production.
+# - Every service has CPU and memory limits; each can be changed in .env
+#   (docs/operations.md, "Resource limits").
+#
+# IMAGES: third-party images are pinned by tag. TODO: add the digest to each
+# (name:tag@sha256:...); no digest was recorded in the repository when the
+# tags were written. `docker buildx imagetools inspect <name:tag>` prints it.
+# Dependabot (.github/dependabot.yml) keeps tags and digests current.
 #
 # PROFILES: every service belongs to a profile, so a command must name one.
-# - full: proxy, analyzer, scanner service, console, PostgreSQL, Redis, NATS
-#   and Jaeger. .env.example sets COMPOSE_PROFILES=full, so with
-#   `--env-file .env` and no --profile flag this is what starts.
+# - full: TLS edge, proxy, analyzer, scanner service, console, PostgreSQL,
+#   Redis, NATS and Jaeger. .env.example sets COMPOSE_PROFILES=full, so
+#   with `--env-file .env` and no --profile flag this is what starts.
 # - minimal: the proxy alone (service proxy-minimal), with no database. A
 #   --profile flag replaces COMPOSE_PROFILES, so `--profile minimal` starts
 #   only this one container. What it does without the other services is in
-#   docs/operations.md, "Proxy only".
+#   docs/operations.md, "Proxy only". It serves plain HTTP unless the proxy
+#   is given a certificate (TAMGA_TLS_CERT, TAMGA_TLS_KEY).
 # - classifier: the optional inline classifier, added to full.
 # Do not start minimal and full together: both publish port 8443.
 
 services:
+  # The TLS edge: Caddy in front of the proxy and the console. With the
+  # default site addresses it serves https://localhost:8443 and
+  # https://localhost:3000 with certificates from its own local CA, kept in
+  # the edgedata volume. A public name in TAMGA_PROXY_SITE and
+  # TAMGA_CONSOLE_SITE gets a certificate from Let's Encrypt (port 80 must
+  # reach the edge: docker-compose.public.yml). http:// addresses serve plain
+  # HTTP. The site addresses keep the container ports 8443 and 3000;
+  # TAMGA_PROXY_PORT and TAMGA_DASHBOARD_PORT choose the host ports.
+  edge:
+    profiles: ["full"]
+    image: caddy:2.10.2-alpine  # TODO: pin by digest (see IMAGES above)
+    ports:
+      - "${TAMGA_PROXY_BIND:-0.0.0.0}:${TAMGA_PROXY_PORT:-8443}:8443"
+      - "${TAMGA_DASHBOARD_BIND:-0.0.0.0}:${TAMGA_DASHBOARD_PORT:-3000}:3000"
+    environment:
+      - TAMGA_PROXY_SITE=${TAMGA_PROXY_SITE:-https://localhost:8443}
+      - TAMGA_CONSOLE_SITE=${TAMGA_CONSOLE_SITE:-https://localhost:3000}
+      - TAMGA_PROXY_UPSTREAM=proxy:${TAMGA_PROXY_PORT:-8443}
+    volumes:
+      - ./edge/Caddyfile:/etc/caddy/Caddyfile:ro
+      - edgedata:/data
+      - edgeconfig:/config
+    depends_on:
+      proxy:
+        condition: service_healthy
+      dashboard:
+        condition: service_started
+    networks:
+      edge:
+        # Fixed, so the proxy can trust it for X-Forwarded-For.
+        ipv4_address: ${TAMGA_EDGE_ADDR:-10.213.98.2}
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "${TAMGA_EDGE_CPUS:-1}"
+          memory: ${TAMGA_EDGE_MEMORY:-256m}
+        reservations:
+          memory: 32m
+
   # Standalone scanner service — optional. By default the proxy scans in-process
   # and this service sits idle. Set TAMGA_SCANNER_SERVICE_ADDR=scanner-service:50052
   # in .env to delegate the stateless scanners (PII, secrets, injection,
@@ -37,6 +90,10 @@ services:
       - SCANNER_PIPELINE_MODE=${SCANNER_PIPELINE_MODE:-adaptive}
       - SCANNER_WORKER_POOL_SIZE=${SCANNER_WORKER_POOL_SIZE:-4}
       - SCANNER_WORKER_QUEUE_SIZE=${SCANNER_WORKER_QUEUE_SIZE:-0}
+      # The proxy's token for this service. Required: the service does not
+      # start without it while TAMGA_REQUIRE_SERVICE_TOKENS is on.
+      - TAMGA_SCANNER_SERVICE_TOKEN=${TAMGA_SCANNER_SERVICE_TOKEN:-}
+      - TAMGA_REQUIRE_SERVICE_TOKENS=${TAMGA_REQUIRE_SERVICE_TOKENS:-true}
     networks:
       - internal
     restart: unless-stopped
@@ -46,14 +103,22 @@ services:
       timeout: 5s
       start_period: 5s
       retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "${TAMGA_SCANNER_SERVICE_CPUS:-2}"
+          memory: ${TAMGA_SCANNER_SERVICE_MEMORY:-512m}
+        reservations:
+          memory: 64m
 
   proxy:
     profiles: ["full"]
     build:
       context: ../proxy
       dockerfile: Dockerfile
-    ports:
-      - "${TAMGA_PROXY_BIND:-0.0.0.0}:${TAMGA_PROXY_PORT:-8443}:${TAMGA_PROXY_PORT:-8443}"
+    # Not published: the edge is. Reach it through https://localhost:8443.
+    expose:
+      - "${TAMGA_PROXY_PORT:-8443}"
     # Load the operator's proxy settings as service environment, not only as
     # Compose interpolation inputs. Paths are relative to this Compose file.
     # Set TAMGA_PROXY_ENV_FILE when --env-file names another file. Without
@@ -75,6 +140,19 @@ services:
       # Inline prompt-injection classifier. Empty unless the classifier
       # profile is in use: set TAMGA_CLASSIFIER_ADDR=classifier:50052 in .env.
       - TAMGA_CLASSIFIER_ADDR=${TAMGA_CLASSIFIER_ADDR:-}
+      # One token per internal service, the same value the service is given
+      # (openssl rand -hex 32). With TAMGA_REQUIRE_SERVICE_TOKENS on, the
+      # proxy does not start when a service it has an address for has no
+      # token: the analyzer always, the classifier and the scanner service
+      # when their addresses are set.
+      - TAMGA_ANALYZER_TOKEN=${TAMGA_ANALYZER_TOKEN:-}
+      - TAMGA_CLASSIFIER_TOKEN=${TAMGA_CLASSIFIER_TOKEN:-}
+      - TAMGA_SCANNER_SERVICE_TOKEN=${TAMGA_SCANNER_SERVICE_TOKEN:-}
+      - TAMGA_REQUIRE_SERVICE_TOKENS=${TAMGA_REQUIRE_SERVICE_TOKENS:-true}
+      # Every caller reaches the proxy through the edge: trust its address
+      # for X-Forwarded-For, or every caller without a key shares one
+      # rate-limit bucket and TAMGA_IP_ALLOWLIST sees only the edge.
+      - TAMGA_TRUSTED_PROXIES=${TAMGA_TRUSTED_PROXIES:-${TAMGA_EDGE_ADDR:-10.213.98.2}}
       - TAMGA_DB_URL=${TAMGA_DB_URL:-postgresql://${POSTGRES_USER:-tamga}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-tamga}}
       - REDIS_URL=${REDIS_URL:-redis://:${REDIS_PASSWORD}@redis:6379}
       - TAMGA_NATS_URL=${TAMGA_NATS_URL:-nats://nats:4222}
@@ -101,10 +179,10 @@ services:
       # Empty refuses a signed-in account nobody gave a role; "viewer" lets
       # it in as a viewer. The proxy does not start on any other value.
       - TAMGA_SSO_DEFAULT_ROLE=${TAMGA_SSO_DEFAULT_ROLE:-}
-      - TAMGA_CORS_ORIGIN=${TAMGA_CORS_ORIGIN:-http://localhost:3000}
-      # Exact-match allowlist. Browsers treat localhost and 127.0.0.1 as
-      # different origins, so the dashboard default covers both.
-      - TAMGA_CORS_ORIGINS=${TAMGA_CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      - TAMGA_CORS_ORIGIN=${TAMGA_CORS_ORIGIN:-https://localhost:3000}
+      # Exact-match allowlist: the console's address as the browser sees it,
+      # through the edge.
+      - TAMGA_CORS_ORIGINS=${TAMGA_CORS_ORIGINS:-https://localhost:3000}
       - TAMGA_OTLP_ENDPOINT=${TAMGA_OTLP_ENDPOINT:-http://jaeger:4318}
       - TAMGA_OTEL_SAMPLE_RATE=${TAMGA_OTEL_SAMPLE_RATE:-0.05}
       - TAMGA_TRACE_UI_URL=${TAMGA_TRACE_UI_URL:-http://localhost:16686}
@@ -121,6 +199,7 @@ services:
       - ../proxy/tamga-policy.yaml:/app/tamga-policy.yaml:${TAMGA_POLICY_MOUNT:-ro}
     networks:
       - internal
+      - edge
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:${TAMGA_PROXY_PORT:-8443}/health || exit 1"]
@@ -128,13 +207,25 @@ services:
       timeout: 3s
       start_period: 5s
       retries: 3
+    # The language check holds 53 MiB once a policy turns it on; the rest is
+    # request bodies in flight (up to TAMGA_MAX_BODY_BYTES each) and the
+    # caches. The latency figures in the README were measured without limits.
+    deploy:
+      resources:
+        limits:
+          cpus: "${TAMGA_PROXY_CPUS:-2}"
+          memory: ${TAMGA_PROXY_MEMORY:-1g}
+        reservations:
+          memory: 256m
 
   # The proxy on its own: no database, Redis, NATS, analyzer, Jaeger or
   # console, and none of their passwords are needed. Start it with
   #   docker compose --env-file .env -f deploy/docker-compose.yml --profile minimal up -d
   # Scanning, policy and blocking work as in the full stack. The request log,
   # the console, keys kept across restarts and the PDF reports do not; see
-  # docs/operations.md, "Proxy only".
+  # docs/operations.md, "Proxy only". There is no edge: the port is the
+  # proxy's own, plain HTTP unless TAMGA_TLS_CERT and TAMGA_TLS_KEY name a
+  # certificate mounted into the container.
   proxy-minimal:
     profiles: ["minimal"]
     build:
@@ -158,6 +249,8 @@ services:
       - REDIS_URL=
       - TAMGA_NATS_URL=
       - TAMGA_SCANNER_SERVICE_ADDR=
+      # No internal service to authenticate to.
+      - TAMGA_REQUIRE_SERVICE_TOKENS=false
       - TAMGA_OTEL_ENABLED=false
       - TAMGA_OTEL_ENDPOINT=
       - TAMGA_OTLP_ENDPOINT=
@@ -176,6 +269,13 @@ services:
       timeout: 3s
       start_period: 5s
       retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "${TAMGA_PROXY_CPUS:-2}"
+          memory: ${TAMGA_PROXY_MEMORY:-1g}
+        reservations:
+          memory: 256m
 
   analyzer:
     profiles: ["full"]
@@ -198,6 +298,10 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - DATABASE_URL=postgresql://${POSTGRES_USER:-tamga}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-tamga}
       - TAMGA_CUSTOM_SCANNERS_DIR=${TAMGA_CUSTOM_SCANNERS_DIR:-/custom_scanners}
+      # The proxy's token, for the gRPC port and the HTTP API (every path
+      # but /health). Required while TAMGA_REQUIRE_SERVICE_TOKENS is on.
+      - TAMGA_ANALYZER_TOKEN=${TAMGA_ANALYZER_TOKEN:-}
+      - TAMGA_REQUIRE_SERVICE_TOKENS=${TAMGA_REQUIRE_SERVICE_TOKENS:-true}
     depends_on:
       postgres:
         condition: service_healthy
@@ -210,6 +314,15 @@ services:
       timeout: 5s
       start_period: 60s
       retries: 3
+    # spaCy and Presidio in each of the TAMGA_ANALYZER_WORKERS processes;
+    # one CPU per worker.
+    deploy:
+      resources:
+        limits:
+          cpus: "${TAMGA_ANALYZER_CPUS:-2}"
+          memory: ${TAMGA_ANALYZER_MEMORY:-2g}
+        reservations:
+          memory: 512m
 
   # Optional: the inline prompt-injection classifier. Start it with the full
   # stack:
@@ -245,6 +358,10 @@ services:
       - TAMGA_CLASSIFIER_SHADOW_MODEL_NAME=${TAMGA_CLASSIFIER_SHADOW_MODEL_NAME:-}
       - TAMGA_CLASSIFIER_SHADOW_THREADS=${TAMGA_CLASSIFIER_SHADOW_THREADS:-0}
       - TAMGA_CLASSIFIER_SHADOW_WAIT_MS=${TAMGA_CLASSIFIER_SHADOW_WAIT_MS:-20}
+      # The proxy's token for this service; the container's health probe
+      # sends it too. Required while TAMGA_REQUIRE_SERVICE_TOKENS is on.
+      - TAMGA_CLASSIFIER_TOKEN=${TAMGA_CLASSIFIER_TOKEN:-}
+      - TAMGA_REQUIRE_SERVICE_TOKENS=${TAMGA_REQUIRE_SERVICE_TOKENS:-true}
     volumes:
       - ${TAMGA_CLASSIFIER_MODEL_PATH:-../models/prompt-injection-guard-small}:/models/classifier:ro
       - ${TAMGA_TOPICS_MODEL_PATH:-../models/mdeberta-nli}:/models/topics:ro
@@ -252,6 +369,17 @@ services:
     networks:
       - internal
     restart: unless-stopped
+    # The three int8 models are 268 MB (injection), 339 MB (topics) and as
+    # much again for a shadow. With a CPU limit, keep TAMGA_CLASSIFIER_THREADS
+    # plus TAMGA_CLASSIFIER_SHADOW_THREADS at or under TAMGA_CLASSIFIER_CPUS:
+    # 0 lets onnxruntime start a thread per host core.
+    deploy:
+      resources:
+        limits:
+          cpus: "${TAMGA_CLASSIFIER_CPUS:-2}"
+          memory: ${TAMGA_CLASSIFIER_MEMORY:-3g}
+        reservations:
+          memory: 1g
 
   dashboard:
     profiles: ["full"]
@@ -262,20 +390,30 @@ services:
       # at, not the proxy's name on the compose network. Changing either
       # needs a rebuild (docker compose build dashboard).
       args:
-        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8443}
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-https://localhost:8443}
         - NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL:-https://tamgaproxy.com}
         - NEXT_PUBLIC_MARKETING_URL=${NEXT_PUBLIC_MARKETING_URL:-https://tamgaproxy.com}
-    ports:
-      - "${TAMGA_DASHBOARD_BIND:-0.0.0.0}:${TAMGA_DASHBOARD_PORT:-3000}:3000"
+    # Not published: the edge is. Reach it through https://localhost:3000.
+    expose:
+      - "3000"
     depends_on:
       - proxy
+    # The console's server needs nothing on the internal network: the
+    # browser calls the proxy itself, at NEXT_PUBLIC_API_URL.
     networks:
-      - internal
+      - edge
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "${TAMGA_DASHBOARD_CPUS:-1}"
+          memory: ${TAMGA_DASHBOARD_MEMORY:-512m}
+        reservations:
+          memory: 128m
 
   postgres:
     profiles: ["full"]
-    image: postgres:16-alpine
+    image: postgres:16-alpine  # TODO: pin by digest (see IMAGES above)
     expose:
       - "5432"
     environment:
@@ -313,10 +451,17 @@ services:
     networks:
       - internal
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "${TAMGA_POSTGRES_CPUS:-2}"
+          memory: ${TAMGA_POSTGRES_MEMORY:-1g}
+        reservations:
+          memory: 256m
 
   redis:
     profiles: ["full"]
-    image: redis:7-alpine
+    image: redis:7-alpine  # TODO: pin by digest (see IMAGES above)
     command: redis-server --requirepass ${REDIS_PASSWORD} --save 60 1 --loglevel warning
     expose:
       - "6379"
@@ -330,23 +475,40 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "${TAMGA_REDIS_CPUS:-1}"
+          memory: ${TAMGA_REDIS_MEMORY:-512m}
+        reservations:
+          memory: 64m
 
   jaeger:
     profiles: ["full"]
-    image: jaegertracing/all-in-one:1.54
+    image: jaegertracing/all-in-one:1.54  # TODO: pin by digest (see IMAGES above)
     expose:
       - "4318"
     ports:
       - "${TAMGA_OBSERVABILITY_BIND:-127.0.0.1}:16686:16686"
     environment:
       COLLECTOR_OTLP_ENABLED: "true"
+      # Traces are kept in memory. Without a bound they grow until the
+      # memory limit stops the container.
+      MEMORY_MAX_TRACES: "${TAMGA_JAEGER_MAX_TRACES:-50000}"
     networks:
       - internal
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "${TAMGA_JAEGER_CPUS:-1}"
+          memory: ${TAMGA_JAEGER_MEMORY:-1g}
+        reservations:
+          memory: 128m
 
   nats:
     profiles: ["full"]
-    image: nats:2.10-alpine
+    image: nats:2.10-alpine  # TODO: pin by digest (see IMAGES above)
     command: ["-js", "-m", "8222"]
     expose:
       - "4222"
@@ -356,11 +518,32 @@ services:
     networks:
       - internal
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "${TAMGA_NATS_CPUS:-1}"
+          memory: ${TAMGA_NATS_MEMORY:-512m}
+        reservations:
+          memory: 64m
 
 volumes:
   pgdata:
   redisdata:
+  # The edge's certificates and its local CA. Keep it: a new CA means every
+  # client has to trust a new root.
+  edgedata:
+  edgeconfig:
 
 networks:
   internal:
     driver: bridge
+  # The edge and the two services behind it. The subnet is fixed so the
+  # edge's address is known (TAMGA_EDGE_ADDR, trusted by the proxy); the
+  # other two take addresses from ip_range. Change all three together if
+  # the subnet collides with one of the host's.
+  edge:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: ${TAMGA_EDGE_SUBNET:-10.213.98.0/28}
+          ip_range: ${TAMGA_EDGE_IP_RANGE:-10.213.98.8/29}

@@ -6,13 +6,33 @@
 #   - operator_state vectors need the scanner enabled (audit-log fixtures) and
 #     an authorization allowlist in the policy;
 #   - the baseline is defined for in-process scanning, so delegation to
-#     scanner-service is switched off here even if .env turns it on.
+#     scanner-service is switched off here even if .env turns it on;
+#   - the suite talks plain HTTP to localhost:8443, so the edge serves HTTP
+#     rather than HTTPS with a certificate nothing here trusts;
+#   - the internal services require their tokens; without values in .env,
+#     these throwaway ones are used.
 #
 # STRESS_POLICY_DIR is a directory holding tamga-policy.yaml, generated from the
 # shipped default by scripts/make_stress_policy.py so the two cannot drift.
 services:
+  edge:
+    environment:
+      - TAMGA_PROXY_SITE=http://:8443
+      - TAMGA_CONSOLE_SITE=http://:3000
+  analyzer:
+    environment:
+      - TAMGA_ANALYZER_TOKEN=${TAMGA_ANALYZER_TOKEN:-stress-suite-analyzer-token}
+  scanner-service:
+    environment:
+      - TAMGA_SCANNER_SERVICE_TOKEN=${TAMGA_SCANNER_SERVICE_TOKEN:-stress-suite-scanner-token}
+  classifier:
+    environment:
+      - TAMGA_CLASSIFIER_TOKEN=${TAMGA_CLASSIFIER_TOKEN:-stress-suite-classifier-token}
   proxy:
     environment:
+      - TAMGA_ANALYZER_TOKEN=${TAMGA_ANALYZER_TOKEN:-stress-suite-analyzer-token}
+      - TAMGA_SCANNER_SERVICE_TOKEN=${TAMGA_SCANNER_SERVICE_TOKEN:-stress-suite-scanner-token}
+      - TAMGA_CLASSIFIER_TOKEN=${TAMGA_CLASSIFIER_TOKEN:-stress-suite-classifier-token}
       - TAMGA_SCANNER_SERVICE_ADDR=
       - TAMGA_POLICY_PATH=/app/stress/tamga-policy.yaml
       - TAMGA_OPERATOR_STATE_DECISIONS_PATH=/app/testdata/operator_state/decisions.jsonl

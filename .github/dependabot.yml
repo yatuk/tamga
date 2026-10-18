@@ -1,0 +1,81 @@
+# Dependabot: pull requests that move pinned versions forward, once a week.
+# Base images and Compose images are pinned by tag and, once the digests are
+# filled in (docs/operations.md, "Image pins"), by digest too; Dependabot
+# updates both. Minor and patch updates of one ecosystem come as one pull
+# request; a major update comes alone.
+version: 2
+
+updates:
+  - package-ecosystem: docker
+    directories:
+      - /proxy
+      - /proxy/cmd/scanner-service
+      - /analyzer
+      - /classifier
+      - /dashboard
+    schedule:
+      interval: weekly
+    groups:
+      base-images:
+        update-types: [minor, patch]
+
+  - package-ecosystem: docker-compose
+    directories:
+      - /deploy
+      - /deploy/e2e/litellm
+    schedule:
+      interval: weekly
+    groups:
+      compose-images:
+        update-types: [minor, patch]
+    ignore:
+      # A new PostgreSQL major version does not read the old data volume:
+      # it needs a dump and restore (deploy/backup), not a tag change.
+      - dependency-name: postgres
+        update-types: [version-update:semver-major]
+      # Redis releases have changed licence terms (7.4, 8.0); moving to a
+      # new major is the maintainer's decision, not a routine update.
+      - dependency-name: redis
+        update-types: [version-update:semver-major]
+      # The LiteLLM bridge was written against one release (docs/litellm.md).
+      - dependency-name: ghcr.io/berriai/litellm
+        update-types: [version-update:semver-major, version-update:semver-minor]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        update-types: [minor, patch]
+
+  - package-ecosystem: gomod
+    directory: /proxy
+    schedule:
+      interval: weekly
+    groups:
+      go:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directories:
+      - /dashboard
+      - /extension
+      - /sdk/typescript/tamga-client
+    schedule:
+      interval: weekly
+    groups:
+      npm:
+        update-types: [minor, patch]
+
+  - package-ecosystem: pip
+    directories:
+      - /analyzer
+      - /classifier
+      - /classifier/finetune
+      - /sdk/python
+    schedule:
+      interval: weekly
+    groups:
+      pip:
+        update-types: [minor, patch]

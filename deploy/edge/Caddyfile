@@ -1,0 +1,41 @@
+# The TLS edge of the Compose stack (service "edge" in ../docker-compose.yml).
+#
+# Two sites, each named by an environment variable that Compose sets:
+#
+#   TAMGA_PROXY_SITE    default https://localhost:8443, to the proxy
+#   TAMGA_CONSOLE_SITE  default https://localhost:3000, to the console
+#
+# localhost and other internal names get certificates from Caddy's own local
+# CA (its root is in the edgedata volume, /data/caddy/pki/authorities/local/
+# root.crt). A public DNS name gets one from Let's Encrypt, which needs port
+# 80 of that name to reach this container (../docker-compose.public.yml). An
+# address that starts with http:// is served as plain HTTP, with no
+# certificate: for CI, or a host whose own load balancer ends TLS.
+#
+# Keep the ports 8443 and 3000 in the addresses: they are the container's.
+# The host's are TAMGA_PROXY_PORT and TAMGA_DASHBOARD_PORT.
+#
+# Docs: docs/operations.md, "TLS".
+
+{
+	# The root is not installed into a trust store: the container has none
+	# that matters. Give clients the root from the volume instead.
+	skip_install_trust
+	# No admin endpoint; a changed Caddyfile takes a restart of the edge.
+	admin off
+	# HTTP/3 runs over UDP, and only TCP ports are published.
+	servers {
+		protocols h1 h2
+	}
+}
+
+{$TAMGA_PROXY_SITE:https://localhost:8443} {
+	reverse_proxy {$TAMGA_PROXY_UPSTREAM:proxy:8443} {
+		# Pass streamed answers (server-sent events) on as they arrive.
+		flush_interval -1
+	}
+}
+
+{$TAMGA_CONSOLE_SITE:https://localhost:3000} {
+	reverse_proxy dashboard:3000
+}
