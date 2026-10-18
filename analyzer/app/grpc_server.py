@@ -20,6 +20,9 @@ from grpc.aio import ServicerContext
 from analyzer.v1.tamga_pb2 import (  # type: ignore[import-untyped]
     AnalyzeRequest,
     AnalyzeResponse,
+    ExtractedPart,
+    ExtractRequest,
+    ExtractResponse,
     Finding,
     HealthCheckRequest,
     HealthCheckResponse,
@@ -31,6 +34,7 @@ from analyzer.v1.tamga_pb2_grpc import (  # type: ignore[import-untyped]
 )
 
 from app import service_auth
+from app.extract import STATUS_EXTRACT_FAILED, Extractor, Limits
 from app.scanners.base import BaseScanner, Finding as AppFinding
 from app.scanners.base import ScanResult
 from app.scanners.egress import content_is_blocked
@@ -39,6 +43,10 @@ from app.scanners.injection_llm import LLMInjectionScanner
 from app.removed import report_removed_scan_types
 
 logger = structlog.get_logger()
+
+# gRPC message bounds of the server (the default is 4 MiB either way).
+_MAX_RECEIVE_BYTES = 33 << 20
+_MAX_SEND_BYTES = 17 << 20
 
 
 def _app_finding_to_pb(f: AppFinding) -> Finding:
@@ -74,10 +82,12 @@ class AnalyzerServicer(AnalyzerServiceServicer):
         pii_scanner: DeepPIIScanner,
         injection_scanner: LLMInjectionScanner,
         custom_scanners: list[BaseScanner] | None = None,
+        extractor: Extractor | None = None,
     ) -> None:
         self._pii = pii_scanner
         self._injection = injection_scanner
         self._custom = custom_scanners or []
+        self._extractor = extractor if extractor is not None else Extractor()
 
     async def Analyze(  # type: ignore[override]
         self,
@@ -149,6 +159,57 @@ class AnalyzerServicer(AnalyzerServiceServicer):
             scanner_results=scanner_results,
         )
 
+    async def Extract(  # type: ignore[override]
+        self,
+        request: ExtractRequest,
+        context: ServicerContext,
+    ) -> ExtractResponse:
+        """Text of an attached file (gRPC entry point). A file that cannot be
+        read is a status in the answer, never an error of the call: the
+        proxy maps it to its attachment_unreadable finding."""
+        start = time.monotonic()
+        lim = request.limits
+        limits = Limits.of(
+            max_bytes=lim.max_bytes,
+            max_pages=lim.max_pages,
+            max_chars=lim.max_chars,
+            timeout_ms=lim.timeout_ms,
+        )
+        try:
+            result = await self._extractor.extract(
+                bytes(request.data), limits, ocr=request.ocr, ocr_lang=request.ocr_lang
+            )
+            status = result.status
+            parts = [
+                ExtractedPart(kind=p.kind, index=p.index, name=p.name, text=p.text, ocr=p.ocr)
+                for p in result.parts
+            ]
+            truncated, detected = result.truncated, result.detected_type
+        except Exception as exc:  # noqa: BLE001 - the service must not fall over on a file
+            logger.warning("gRPC Extract failed: %s", type(exc).__name__)
+            status, parts, truncated, detected = STATUS_EXTRACT_FAILED, [], False, ""
+        duration = (time.monotonic() - start) * 1000
+        # Sizes and counts only: the declared name and type are the caller's
+        # words and can carry anything.
+        logger.info(
+            "gRPC Extract: request=%s bytes=%d status=%s type=%s parts=%d truncated=%s duration=%.1fms",
+            request.request_id,
+            len(request.data),
+            status,
+            detected,
+            len(parts),
+            truncated,
+            duration,
+        )
+        return ExtractResponse(
+            request_id=request.request_id,
+            status=status,
+            parts=parts,
+            truncated=truncated,
+            detected_type=detected,
+            duration_ms=round(duration, 2),
+        )
+
     async def HealthCheck(  # type: ignore[override]
         self,
         request: HealthCheckRequest,
@@ -179,6 +240,11 @@ async def serve_grpc(
             ("grpc.keepalive_timeout_ms", 5000),
             ("grpc.keepalive_permit_without_calls", True),
             ("grpc.http2.max_pings_without_data", 0),
+            # Extract receives a whole file: up to 32 MiB (the hard bound of
+            # app.extract.limits) and the rest of the message. Its answer
+            # is up to 4 million characters of text.
+            ("grpc.max_receive_message_length", _MAX_RECEIVE_BYTES),
+            ("grpc.max_send_message_length", _MAX_SEND_BYTES),
         ],
     )
 

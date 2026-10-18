@@ -27,7 +27,7 @@ type AnalyzeRequest struct {
 	RequestId string `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
 	// The text content to analyze (prompt or response body).
 	Content string `protobuf:"bytes,2,opt,name=content,proto3" json:"content,omitempty"`
-	// Which scanner types to run: "pii", "injection", "toxicity".
+	// Which scanner types to run: "pii", "injection".
 	// The Go proxy selects these based on input risk score.
 	ScanTypes []string `protobuf:"bytes,3,rep,name=scan_types,json=scanTypes,proto3" json:"scan_types,omitempty"`
 	// LLM provider and model (e.g. "openai", "gpt-4o-mini").
@@ -194,9 +194,9 @@ func (x *AnalyzeResponse) GetScannerResults() []*ScannerResult {
 
 type Finding struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Finding type: "pii", "injection", "toxicity".
+	// Finding type: "pii", "injection".
 	Type string `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"`
-	// Entity/technique category (e.g. "PERSON", "ignore_prev", "toxicity").
+	// Entity/technique category (e.g. "PERSON", "ignore_prev").
 	Category string `protobuf:"bytes,2,opt,name=category,proto3" json:"category,omitempty"`
 	// Severity level: "critical", "high", "medium", "low".
 	Severity string `protobuf:"bytes,3,opt,name=severity,proto3" json:"severity,omitempty"`
@@ -275,7 +275,7 @@ func (x *Finding) GetConfidence() float64 {
 
 type ScannerResult struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Scanner name (e.g. "pii_deep", "injection_llm", "toxicity").
+	// Scanner name (e.g. "pii_deep", "injection_llm").
 	Scanner string `protobuf:"bytes,1,opt,name=scanner,proto3" json:"scanner,omitempty"`
 	// Findings produced by this scanner.
 	Findings []*Finding `protobuf:"bytes,2,rep,name=findings,proto3" json:"findings,omitempty"`
@@ -336,6 +336,348 @@ func (x *ScannerResult) GetDurationMs() float64 {
 	return 0
 }
 
+type ExtractRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Unique request identifier propagated from the proxy (UUID).
+	RequestId string `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	// The file as it was attached, decoded from base64.
+	Data []byte `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
+	// What the request says the file is. Neither is trusted: the file's own
+	// signature decides how it is read.
+	MimeType string         `protobuf:"bytes,3,opt,name=mime_type,json=mimeType,proto3" json:"mime_type,omitempty"`
+	Filename string         `protobuf:"bytes,4,opt,name=filename,proto3" json:"filename,omitempty"`
+	Limits   *ExtractLimits `protobuf:"bytes,5,opt,name=limits,proto3" json:"limits,omitempty"`
+	// Read images, and PDF pages without a text layer, by OCR. Without it
+	// such a file answers "ocr_unavailable".
+	Ocr bool `protobuf:"varint,6,opt,name=ocr,proto3" json:"ocr,omitempty"`
+	// OCR language hint (e.g. "tur+eng"); empty for the engine's default.
+	OcrLang       string `protobuf:"bytes,7,opt,name=ocr_lang,json=ocrLang,proto3" json:"ocr_lang,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExtractRequest) Reset() {
+	*x = ExtractRequest{}
+	mi := &file_analyzer_v1_tamga_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExtractRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExtractRequest) ProtoMessage() {}
+
+func (x *ExtractRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_analyzer_v1_tamga_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExtractRequest.ProtoReflect.Descriptor instead.
+func (*ExtractRequest) Descriptor() ([]byte, []int) {
+	return file_analyzer_v1_tamga_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *ExtractRequest) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+func (x *ExtractRequest) GetData() []byte {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
+func (x *ExtractRequest) GetMimeType() string {
+	if x != nil {
+		return x.MimeType
+	}
+	return ""
+}
+
+func (x *ExtractRequest) GetFilename() string {
+	if x != nil {
+		return x.Filename
+	}
+	return ""
+}
+
+func (x *ExtractRequest) GetLimits() *ExtractLimits {
+	if x != nil {
+		return x.Limits
+	}
+	return nil
+}
+
+func (x *ExtractRequest) GetOcr() bool {
+	if x != nil {
+		return x.Ocr
+	}
+	return false
+}
+
+func (x *ExtractRequest) GetOcrLang() string {
+	if x != nil {
+		return x.OcrLang
+	}
+	return ""
+}
+
+type ExtractLimits struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The largest file read, in bytes.
+	MaxBytes int64 `protobuf:"varint,1,opt,name=max_bytes,json=maxBytes,proto3" json:"max_bytes,omitempty"`
+	// The most pages, sheets or slides read; the rest is left out and the
+	// answer is marked truncated.
+	MaxPages uint32 `protobuf:"varint,2,opt,name=max_pages,json=maxPages,proto3" json:"max_pages,omitempty"`
+	// The most characters of text returned, over all parts.
+	MaxChars uint32 `protobuf:"varint,3,opt,name=max_chars,json=maxChars,proto3" json:"max_chars,omitempty"`
+	// How long the analyzer may take.
+	TimeoutMs     uint32 `protobuf:"varint,4,opt,name=timeout_ms,json=timeoutMs,proto3" json:"timeout_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExtractLimits) Reset() {
+	*x = ExtractLimits{}
+	mi := &file_analyzer_v1_tamga_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExtractLimits) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExtractLimits) ProtoMessage() {}
+
+func (x *ExtractLimits) ProtoReflect() protoreflect.Message {
+	mi := &file_analyzer_v1_tamga_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExtractLimits.ProtoReflect.Descriptor instead.
+func (*ExtractLimits) Descriptor() ([]byte, []int) {
+	return file_analyzer_v1_tamga_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *ExtractLimits) GetMaxBytes() int64 {
+	if x != nil {
+		return x.MaxBytes
+	}
+	return 0
+}
+
+func (x *ExtractLimits) GetMaxPages() uint32 {
+	if x != nil {
+		return x.MaxPages
+	}
+	return 0
+}
+
+func (x *ExtractLimits) GetMaxChars() uint32 {
+	if x != nil {
+		return x.MaxChars
+	}
+	return 0
+}
+
+func (x *ExtractLimits) GetTimeoutMs() uint32 {
+	if x != nil {
+		return x.TimeoutMs
+	}
+	return 0
+}
+
+type ExtractResponse struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	RequestId string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	// "ok" when text was read, or why the file could not be read:
+	// "encrypted", "unsupported_type", "too_large", "extract_failed",
+	// "ocr_unavailable".
+	Status string `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	// The text, one part per page, sheet or slide (or one for an image).
+	Parts []*ExtractedPart `protobuf:"bytes,3,rep,name=parts,proto3" json:"parts,omitempty"`
+	// A limit (pages, characters) cut the text short.
+	Truncated bool `protobuf:"varint,4,opt,name=truncated,proto3" json:"truncated,omitempty"`
+	// What the file was read as: "pdf", "docx", "xlsx", "pptx", "image", …
+	DetectedType  string  `protobuf:"bytes,5,opt,name=detected_type,json=detectedType,proto3" json:"detected_type,omitempty"`
+	DurationMs    float64 `protobuf:"fixed64,6,opt,name=duration_ms,json=durationMs,proto3" json:"duration_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExtractResponse) Reset() {
+	*x = ExtractResponse{}
+	mi := &file_analyzer_v1_tamga_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExtractResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExtractResponse) ProtoMessage() {}
+
+func (x *ExtractResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_analyzer_v1_tamga_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExtractResponse.ProtoReflect.Descriptor instead.
+func (*ExtractResponse) Descriptor() ([]byte, []int) {
+	return file_analyzer_v1_tamga_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *ExtractResponse) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+func (x *ExtractResponse) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *ExtractResponse) GetParts() []*ExtractedPart {
+	if x != nil {
+		return x.Parts
+	}
+	return nil
+}
+
+func (x *ExtractResponse) GetTruncated() bool {
+	if x != nil {
+		return x.Truncated
+	}
+	return false
+}
+
+func (x *ExtractResponse) GetDetectedType() string {
+	if x != nil {
+		return x.DetectedType
+	}
+	return ""
+}
+
+func (x *ExtractResponse) GetDurationMs() float64 {
+	if x != nil {
+		return x.DurationMs
+	}
+	return 0
+}
+
+type ExtractedPart struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// "page", "sheet", "slide" or "image".
+	Kind string `protobuf:"bytes,1,opt,name=kind,proto3" json:"kind,omitempty"`
+	// 1-based position of the part in the file.
+	Index uint32 `protobuf:"varint,2,opt,name=index,proto3" json:"index,omitempty"`
+	// The sheet's name; empty for the other kinds.
+	Name string `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	Text string `protobuf:"bytes,4,opt,name=text,proto3" json:"text,omitempty"`
+	// The text was read by OCR.
+	Ocr           bool `protobuf:"varint,5,opt,name=ocr,proto3" json:"ocr,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExtractedPart) Reset() {
+	*x = ExtractedPart{}
+	mi := &file_analyzer_v1_tamga_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExtractedPart) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExtractedPart) ProtoMessage() {}
+
+func (x *ExtractedPart) ProtoReflect() protoreflect.Message {
+	mi := &file_analyzer_v1_tamga_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExtractedPart.ProtoReflect.Descriptor instead.
+func (*ExtractedPart) Descriptor() ([]byte, []int) {
+	return file_analyzer_v1_tamga_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *ExtractedPart) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *ExtractedPart) GetIndex() uint32 {
+	if x != nil {
+		return x.Index
+	}
+	return 0
+}
+
+func (x *ExtractedPart) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *ExtractedPart) GetText() string {
+	if x != nil {
+		return x.Text
+	}
+	return ""
+}
+
+func (x *ExtractedPart) GetOcr() bool {
+	if x != nil {
+		return x.Ocr
+	}
+	return false
+}
+
 type HealthCheckRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -344,7 +686,7 @@ type HealthCheckRequest struct {
 
 func (x *HealthCheckRequest) Reset() {
 	*x = HealthCheckRequest{}
-	mi := &file_analyzer_v1_tamga_proto_msgTypes[4]
+	mi := &file_analyzer_v1_tamga_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -356,7 +698,7 @@ func (x *HealthCheckRequest) String() string {
 func (*HealthCheckRequest) ProtoMessage() {}
 
 func (x *HealthCheckRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_analyzer_v1_tamga_proto_msgTypes[4]
+	mi := &file_analyzer_v1_tamga_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -369,7 +711,7 @@ func (x *HealthCheckRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthCheckRequest.ProtoReflect.Descriptor instead.
 func (*HealthCheckRequest) Descriptor() ([]byte, []int) {
-	return file_analyzer_v1_tamga_proto_rawDescGZIP(), []int{4}
+	return file_analyzer_v1_tamga_proto_rawDescGZIP(), []int{8}
 }
 
 type HealthCheckResponse struct {
@@ -382,7 +724,7 @@ type HealthCheckResponse struct {
 
 func (x *HealthCheckResponse) Reset() {
 	*x = HealthCheckResponse{}
-	mi := &file_analyzer_v1_tamga_proto_msgTypes[5]
+	mi := &file_analyzer_v1_tamga_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -394,7 +736,7 @@ func (x *HealthCheckResponse) String() string {
 func (*HealthCheckResponse) ProtoMessage() {}
 
 func (x *HealthCheckResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_analyzer_v1_tamga_proto_msgTypes[5]
+	mi := &file_analyzer_v1_tamga_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -407,7 +749,7 @@ func (x *HealthCheckResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthCheckResponse.ProtoReflect.Descriptor instead.
 func (*HealthCheckResponse) Descriptor() ([]byte, []int) {
-	return file_analyzer_v1_tamga_proto_rawDescGZIP(), []int{5}
+	return file_analyzer_v1_tamga_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *HealthCheckResponse) GetStatus() string {
@@ -462,13 +804,44 @@ const file_analyzer_v1_tamga_proto_rawDesc = "" +
 	"\ascanner\x18\x01 \x01(\tR\ascanner\x126\n" +
 	"\bfindings\x18\x02 \x03(\v2\x1a.proto.analyzer.v1.FindingR\bfindings\x12\x1f\n" +
 	"\vduration_ms\x18\x03 \x01(\x01R\n" +
-	"durationMs\"\x14\n" +
+	"durationMs\"\xe3\x01\n" +
+	"\x0eExtractRequest\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x01 \x01(\tR\trequestId\x12\x12\n" +
+	"\x04data\x18\x02 \x01(\fR\x04data\x12\x1b\n" +
+	"\tmime_type\x18\x03 \x01(\tR\bmimeType\x12\x1a\n" +
+	"\bfilename\x18\x04 \x01(\tR\bfilename\x128\n" +
+	"\x06limits\x18\x05 \x01(\v2 .proto.analyzer.v1.ExtractLimitsR\x06limits\x12\x10\n" +
+	"\x03ocr\x18\x06 \x01(\bR\x03ocr\x12\x19\n" +
+	"\bocr_lang\x18\a \x01(\tR\aocrLang\"\x85\x01\n" +
+	"\rExtractLimits\x12\x1b\n" +
+	"\tmax_bytes\x18\x01 \x01(\x03R\bmaxBytes\x12\x1b\n" +
+	"\tmax_pages\x18\x02 \x01(\rR\bmaxPages\x12\x1b\n" +
+	"\tmax_chars\x18\x03 \x01(\rR\bmaxChars\x12\x1d\n" +
+	"\n" +
+	"timeout_ms\x18\x04 \x01(\rR\ttimeoutMs\"\xe4\x01\n" +
+	"\x0fExtractResponse\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x01 \x01(\tR\trequestId\x12\x16\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\x126\n" +
+	"\x05parts\x18\x03 \x03(\v2 .proto.analyzer.v1.ExtractedPartR\x05parts\x12\x1c\n" +
+	"\ttruncated\x18\x04 \x01(\bR\ttruncated\x12#\n" +
+	"\rdetected_type\x18\x05 \x01(\tR\fdetectedType\x12\x1f\n" +
+	"\vduration_ms\x18\x06 \x01(\x01R\n" +
+	"durationMs\"s\n" +
+	"\rExtractedPart\x12\x12\n" +
+	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x14\n" +
+	"\x05index\x18\x02 \x01(\rR\x05index\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\x12\x12\n" +
+	"\x04text\x18\x04 \x01(\tR\x04text\x12\x10\n" +
+	"\x03ocr\x18\x05 \x01(\bR\x03ocr\"\x14\n" +
 	"\x12HealthCheckRequest\"G\n" +
 	"\x13HealthCheckResponse\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\tR\x06status\x12\x18\n" +
-	"\aservice\x18\x02 \x01(\tR\aservice2\xc1\x01\n" +
+	"\aservice\x18\x02 \x01(\tR\aservice2\x93\x02\n" +
 	"\x0fAnalyzerService\x12P\n" +
-	"\aAnalyze\x12!.proto.analyzer.v1.AnalyzeRequest\x1a\".proto.analyzer.v1.AnalyzeResponse\x12\\\n" +
+	"\aAnalyze\x12!.proto.analyzer.v1.AnalyzeRequest\x1a\".proto.analyzer.v1.AnalyzeResponse\x12P\n" +
+	"\aExtract\x12!.proto.analyzer.v1.ExtractRequest\x1a\".proto.analyzer.v1.ExtractResponse\x12\\\n" +
 	"\vHealthCheck\x12%.proto.analyzer.v1.HealthCheckRequest\x1a&.proto.analyzer.v1.HealthCheckResponseB5Z3github.com/yatuk/tamga/proto/analyzer/v1;analyzerv1b\x06proto3"
 
 var (
@@ -483,30 +856,38 @@ func file_analyzer_v1_tamga_proto_rawDescGZIP() []byte {
 	return file_analyzer_v1_tamga_proto_rawDescData
 }
 
-var file_analyzer_v1_tamga_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_analyzer_v1_tamga_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_analyzer_v1_tamga_proto_goTypes = []any{
 	(*AnalyzeRequest)(nil),      // 0: proto.analyzer.v1.AnalyzeRequest
 	(*AnalyzeResponse)(nil),     // 1: proto.analyzer.v1.AnalyzeResponse
 	(*Finding)(nil),             // 2: proto.analyzer.v1.Finding
 	(*ScannerResult)(nil),       // 3: proto.analyzer.v1.ScannerResult
-	(*HealthCheckRequest)(nil),  // 4: proto.analyzer.v1.HealthCheckRequest
-	(*HealthCheckResponse)(nil), // 5: proto.analyzer.v1.HealthCheckResponse
-	nil,                         // 6: proto.analyzer.v1.AnalyzeRequest.MetadataEntry
+	(*ExtractRequest)(nil),      // 4: proto.analyzer.v1.ExtractRequest
+	(*ExtractLimits)(nil),       // 5: proto.analyzer.v1.ExtractLimits
+	(*ExtractResponse)(nil),     // 6: proto.analyzer.v1.ExtractResponse
+	(*ExtractedPart)(nil),       // 7: proto.analyzer.v1.ExtractedPart
+	(*HealthCheckRequest)(nil),  // 8: proto.analyzer.v1.HealthCheckRequest
+	(*HealthCheckResponse)(nil), // 9: proto.analyzer.v1.HealthCheckResponse
+	nil,                         // 10: proto.analyzer.v1.AnalyzeRequest.MetadataEntry
 }
 var file_analyzer_v1_tamga_proto_depIdxs = []int32{
-	6, // 0: proto.analyzer.v1.AnalyzeRequest.metadata:type_name -> proto.analyzer.v1.AnalyzeRequest.MetadataEntry
-	2, // 1: proto.analyzer.v1.AnalyzeResponse.findings:type_name -> proto.analyzer.v1.Finding
-	3, // 2: proto.analyzer.v1.AnalyzeResponse.scanner_results:type_name -> proto.analyzer.v1.ScannerResult
-	2, // 3: proto.analyzer.v1.ScannerResult.findings:type_name -> proto.analyzer.v1.Finding
-	0, // 4: proto.analyzer.v1.AnalyzerService.Analyze:input_type -> proto.analyzer.v1.AnalyzeRequest
-	4, // 5: proto.analyzer.v1.AnalyzerService.HealthCheck:input_type -> proto.analyzer.v1.HealthCheckRequest
-	1, // 6: proto.analyzer.v1.AnalyzerService.Analyze:output_type -> proto.analyzer.v1.AnalyzeResponse
-	5, // 7: proto.analyzer.v1.AnalyzerService.HealthCheck:output_type -> proto.analyzer.v1.HealthCheckResponse
-	6, // [6:8] is the sub-list for method output_type
-	4, // [4:6] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	10, // 0: proto.analyzer.v1.AnalyzeRequest.metadata:type_name -> proto.analyzer.v1.AnalyzeRequest.MetadataEntry
+	2,  // 1: proto.analyzer.v1.AnalyzeResponse.findings:type_name -> proto.analyzer.v1.Finding
+	3,  // 2: proto.analyzer.v1.AnalyzeResponse.scanner_results:type_name -> proto.analyzer.v1.ScannerResult
+	2,  // 3: proto.analyzer.v1.ScannerResult.findings:type_name -> proto.analyzer.v1.Finding
+	5,  // 4: proto.analyzer.v1.ExtractRequest.limits:type_name -> proto.analyzer.v1.ExtractLimits
+	7,  // 5: proto.analyzer.v1.ExtractResponse.parts:type_name -> proto.analyzer.v1.ExtractedPart
+	0,  // 6: proto.analyzer.v1.AnalyzerService.Analyze:input_type -> proto.analyzer.v1.AnalyzeRequest
+	4,  // 7: proto.analyzer.v1.AnalyzerService.Extract:input_type -> proto.analyzer.v1.ExtractRequest
+	8,  // 8: proto.analyzer.v1.AnalyzerService.HealthCheck:input_type -> proto.analyzer.v1.HealthCheckRequest
+	1,  // 9: proto.analyzer.v1.AnalyzerService.Analyze:output_type -> proto.analyzer.v1.AnalyzeResponse
+	6,  // 10: proto.analyzer.v1.AnalyzerService.Extract:output_type -> proto.analyzer.v1.ExtractResponse
+	9,  // 11: proto.analyzer.v1.AnalyzerService.HealthCheck:output_type -> proto.analyzer.v1.HealthCheckResponse
+	9,  // [9:12] is the sub-list for method output_type
+	6,  // [6:9] is the sub-list for method input_type
+	6,  // [6:6] is the sub-list for extension type_name
+	6,  // [6:6] is the sub-list for extension extendee
+	0,  // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_analyzer_v1_tamga_proto_init() }
@@ -520,7 +901,7 @@ func file_analyzer_v1_tamga_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_analyzer_v1_tamga_proto_rawDesc), len(file_analyzer_v1_tamga_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   7,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

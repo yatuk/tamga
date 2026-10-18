@@ -20,6 +20,7 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	AnalyzerService_Analyze_FullMethodName     = "/proto.analyzer.v1.AnalyzerService/Analyze"
+	AnalyzerService_Extract_FullMethodName     = "/proto.analyzer.v1.AnalyzerService/Extract"
 	AnalyzerService_HealthCheck_FullMethodName = "/proto.analyzer.v1.AnalyzerService/HealthCheck"
 )
 
@@ -30,6 +31,12 @@ type AnalyzerServiceClient interface {
 	// Analyze runs deep semantic analysis on content that has already passed
 	// the Go proxy's static regex scanners. Returns only NLP/ML findings.
 	Analyze(ctx context.Context, in *AnalyzeRequest, opts ...grpc.CallOption) (*AnalyzeResponse, error)
+	// Extract returns the text of an attached file (PDF, DOCX, XLSX, PPTX,
+	// and images or scanned PDFs by OCR when asked and installed), so that
+	// the proxy can scan it like any other text. It never fails the call for
+	// a file it cannot read: the status says why, and no part of the file is
+	// in an error message.
+	Extract(ctx context.Context, in *ExtractRequest, opts ...grpc.CallOption) (*ExtractResponse, error)
 	// HealthCheck returns service health status (standard gRPC health probe).
 	HealthCheck(ctx context.Context, in *HealthCheckRequest, opts ...grpc.CallOption) (*HealthCheckResponse, error)
 }
@@ -46,6 +53,16 @@ func (c *analyzerServiceClient) Analyze(ctx context.Context, in *AnalyzeRequest,
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(AnalyzeResponse)
 	err := c.cc.Invoke(ctx, AnalyzerService_Analyze_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *analyzerServiceClient) Extract(ctx context.Context, in *ExtractRequest, opts ...grpc.CallOption) (*ExtractResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ExtractResponse)
+	err := c.cc.Invoke(ctx, AnalyzerService_Extract_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -69,6 +86,12 @@ type AnalyzerServiceServer interface {
 	// Analyze runs deep semantic analysis on content that has already passed
 	// the Go proxy's static regex scanners. Returns only NLP/ML findings.
 	Analyze(context.Context, *AnalyzeRequest) (*AnalyzeResponse, error)
+	// Extract returns the text of an attached file (PDF, DOCX, XLSX, PPTX,
+	// and images or scanned PDFs by OCR when asked and installed), so that
+	// the proxy can scan it like any other text. It never fails the call for
+	// a file it cannot read: the status says why, and no part of the file is
+	// in an error message.
+	Extract(context.Context, *ExtractRequest) (*ExtractResponse, error)
 	// HealthCheck returns service health status (standard gRPC health probe).
 	HealthCheck(context.Context, *HealthCheckRequest) (*HealthCheckResponse, error)
 	mustEmbedUnimplementedAnalyzerServiceServer()
@@ -83,6 +106,9 @@ type UnimplementedAnalyzerServiceServer struct{}
 
 func (UnimplementedAnalyzerServiceServer) Analyze(context.Context, *AnalyzeRequest) (*AnalyzeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Analyze not implemented")
+}
+func (UnimplementedAnalyzerServiceServer) Extract(context.Context, *ExtractRequest) (*ExtractResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Extract not implemented")
 }
 func (UnimplementedAnalyzerServiceServer) HealthCheck(context.Context, *HealthCheckRequest) (*HealthCheckResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method HealthCheck not implemented")
@@ -126,6 +152,24 @@ func _AnalyzerService_Analyze_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AnalyzerService_Extract_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ExtractRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AnalyzerServiceServer).Extract(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AnalyzerService_Extract_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AnalyzerServiceServer).Extract(ctx, req.(*ExtractRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AnalyzerService_HealthCheck_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(HealthCheckRequest)
 	if err := dec(in); err != nil {
@@ -154,6 +198,10 @@ var AnalyzerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Analyze",
 			Handler:    _AnalyzerService_Analyze_Handler,
+		},
+		{
+			MethodName: "Extract",
+			Handler:    _AnalyzerService_Extract_Handler,
 		},
 		{
 			MethodName: "HealthCheck",

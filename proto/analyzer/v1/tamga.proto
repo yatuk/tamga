@@ -17,6 +17,13 @@ service AnalyzerService {
   // the Go proxy's static regex scanners. Returns only NLP/ML findings.
   rpc Analyze(AnalyzeRequest) returns (AnalyzeResponse);
 
+  // Extract returns the text of an attached file (PDF, DOCX, XLSX, PPTX,
+  // and images or scanned PDFs by OCR when asked and installed), so that
+  // the proxy can scan it like any other text. It never fails the call for
+  // a file it cannot read: the status says why, and no part of the file is
+  // in an error message.
+  rpc Extract(ExtractRequest) returns (ExtractResponse);
+
   // HealthCheck returns service health status (standard gRPC health probe).
   rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
 }
@@ -89,6 +96,74 @@ message ScannerResult {
 
   // Scanner execution time in milliseconds.
   double duration_ms = 3;
+}
+
+// ── Extract ──────────────────────────────────────────────────────────────────
+
+message ExtractRequest {
+  // Unique request identifier propagated from the proxy (UUID).
+  string request_id = 1;
+
+  // The file as it was attached, decoded from base64.
+  bytes data = 2;
+
+  // What the request says the file is. Neither is trusted: the file's own
+  // signature decides how it is read.
+  string mime_type = 3;
+  string filename = 4;
+
+  ExtractLimits limits = 5;
+
+  // Read images, and PDF pages without a text layer, by OCR. Without it
+  // such a file answers "ocr_unavailable".
+  bool ocr = 6;
+
+  // OCR language hint (e.g. "tur+eng"); empty for the engine's default.
+  string ocr_lang = 7;
+}
+
+message ExtractLimits {
+  // The largest file read, in bytes.
+  int64 max_bytes = 1;
+  // The most pages, sheets or slides read; the rest is left out and the
+  // answer is marked truncated.
+  uint32 max_pages = 2;
+  // The most characters of text returned, over all parts.
+  uint32 max_chars = 3;
+  // How long the analyzer may take.
+  uint32 timeout_ms = 4;
+}
+
+message ExtractResponse {
+  string request_id = 1;
+
+  // "ok" when text was read, or why the file could not be read:
+  // "encrypted", "unsupported_type", "too_large", "extract_failed",
+  // "ocr_unavailable".
+  string status = 2;
+
+  // The text, one part per page, sheet or slide (or one for an image).
+  repeated ExtractedPart parts = 3;
+
+  // A limit (pages, characters) cut the text short.
+  bool truncated = 4;
+
+  // What the file was read as: "pdf", "docx", "xlsx", "pptx", "image", …
+  string detected_type = 5;
+
+  double duration_ms = 6;
+}
+
+message ExtractedPart {
+  // "page", "sheet", "slide" or "image".
+  string kind = 1;
+  // 1-based position of the part in the file.
+  uint32 index = 2;
+  // The sheet's name; empty for the other kinds.
+  string name = 3;
+  string text = 4;
+  // The text was read by OCR.
+  bool ocr = 5;
 }
 
 // ── Health ───────────────────────────────────────────────────────────────────

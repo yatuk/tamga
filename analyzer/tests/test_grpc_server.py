@@ -256,11 +256,12 @@ class TestAnalyzeRPC:
         inj.scan.assert_not_awaited()
 
     def test_servicer_takes_no_toxicity_scanner(self):
-        """The servicer is built from the PII scanner, the judge and custom scanners."""
+        """The servicer is built from the PII scanner, the judge, custom scanners
+        and the attachment extractor."""
         import inspect
 
         params = list(inspect.signature(AnalyzerServicer.__init__).parameters)
-        assert params == ["self", "pii_scanner", "injection_scanner", "custom_scanners"]
+        assert params == ["self", "pii_scanner", "injection_scanner", "custom_scanners", "extractor"]
 
     def test_analyze_invalid_scan_type(self):
         """Unknown scan_types are ignored — no crash."""
