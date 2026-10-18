@@ -38,7 +38,7 @@ Things to know:
 
 - Images are `linux/amd64` only.
 - There is no `latest` tag. Use the version, or better the digest.
-- The console image is built with `NEXT_PUBLIC_API_URL=http://localhost:8443`
+- The console image is built with `NEXT_PUBLIC_API_URL=https://localhost:8443`
   compiled in. A console that reaches the proxy at another address has to be
   built from `dashboard/Dockerfile` with that address.
 - The SDK packages are attached to the release and are not published to PyPI

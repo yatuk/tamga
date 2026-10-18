@@ -12,7 +12,7 @@ Compose starts only the services of the profiles it is given:
 | Profile | Starts |
 |---|---|
 | `minimal` | `proxy-minimal`: the proxy alone, see [Proxy only](#proxy-only) |
-| `full` | `proxy`, `analyzer`, `scanner-service`, `dashboard`, `postgres`, `redis`, `nats`, `jaeger` |
+| `full` | `edge` (TLS, see [TLS](#tls)), `proxy`, `analyzer`, `scanner-service`, `dashboard`, `postgres`, `redis`, `nats`, `jaeger` |
 | `classifier` | `classifier`, the [inline classifier](#inline-classifier); use it with `full` |
 
 `.env.example` sets `COMPOSE_PROFILES=full`, so the full stack is what
@@ -35,9 +35,12 @@ from one to the other, stop the first, for example:
 docker compose --env-file .env -f deploy/docker-compose.yml --profile minimal down
 ```
 
-Only the proxy and console bind to all host interfaces by default. PostgreSQL,
+In the full profile only the TLS edge binds to all host interfaces by
+default, with HTTPS on 8443 (the proxy) and 3000 (the console); the proxy
+and the console themselves are reached only through it. PostgreSQL,
 Redis, NATS client traffic, the analyzer, classifier and scanner service stay
-on the Compose network. The Jaeger UI (`16686`) and NATS monitoring endpoint
+on the Compose network, and the proxy authenticates to the last three with a
+token each ([Internal service tokens](#internal-service-tokens)). The Jaeger UI (`16686`) and NATS monitoring endpoint
 (`8222`) are development conveniences bound to `127.0.0.1`; use a tunnel or
 a local browser to reach them. Set `TAMGA_OBSERVABILITY_BIND=0.0.0.0` only
 when network-wide, unauthenticated access is intentional and filtered by the
@@ -95,6 +98,210 @@ What is not there:
 
 The minimal profile suits a trial, a CI job, or a host where only the
 scanning and blocking are needed. For an audit trail, use the full stack.
+
+**TLS in the minimal profile.** There is no edge: port 8443 is the proxy's
+own and serves plain HTTP. To serve HTTPS from the proxy, mount a
+certificate and its key into the container in a Compose override and set
+`TAMGA_TLS_CERT` and `TAMGA_TLS_KEY` in `.env` to their paths inside the
+container; `TAMGA_MTLS_STRICT_VERIFY` and `TAMGA_MTLS_CLIENT_CA_FILE` add
+client certificates ([Configuration](#configuration), TLS). The healthcheck
+in `deploy/docker-compose.yml` asks `http://127.0.0.1:8443/health` and then
+fails: change it to `wget --no-check-certificate -qO- https://127.0.0.1:8443/health`
+in the same override.
+
+### TLS
+
+The full profile puts Caddy (service `edge`, `caddy:2.10.2-alpine`) in front
+of the proxy and the console. It is the only service with ports on the host:
+
+| Host port | Default address | Behind it |
+|---|---|---|
+| `TAMGA_PROXY_PORT` (8443) | `https://localhost:8443` | the proxy |
+| `TAMGA_DASHBOARD_PORT` (3000) | `https://localhost:3000` | the console |
+
+The addresses are `TAMGA_PROXY_SITE` and `TAMGA_CONSOLE_SITE`, read by
+`deploy/edge/Caddyfile`. Keep the ports `8443` and `3000` in them: they are
+the edge container's; the host ports are set with `TAMGA_PROXY_PORT` and
+`TAMGA_DASHBOARD_PORT` as before.
+
+**localhost or another internal name** (the default). The edge issues the
+certificate from a CA of its own, created on first start and kept in the
+`edgedata` volume. Clients have to trust its root once:
+
+```bash
+docker compose --env-file .env -f deploy/docker-compose.yml cp \
+  edge:/data/caddy/pki/authorities/local/root.crt ./tamga-edge-root.crt
+curl --cacert tamga-edge-root.crt https://localhost:8443/health
+```
+
+Add the file to the operating system's or the browser's trust store for the
+console, `NODE_EXTRA_CA_CERTS` for Node clients, and `SSL_CERT_FILE` (or the
+client's `verify=` option) for Python ones. Removing the volume makes a new
+CA, which every client then has to trust again. An address such as
+`https://127.0.0.1:8443` is not served by the default site: open the
+console as `https://localhost:3000`.
+
+**A public DNS name**, for example `TAMGA_PROXY_SITE=https://tamga.example.com:8443`
+and `TAMGA_CONSOLE_SITE=https://tamga.example.com:3000`. The edge gets a
+certificate from Let's Encrypt and renews it. Let's Encrypt checks the name
+on port 80, so the name must resolve to the host and port 80 must reach the
+edge; `deploy/docker-compose.public.yml` publishes it:
+
+```bash
+docker compose --env-file .env -f deploy/docker-compose.yml \
+  -f deploy/docker-compose.public.yml up -d
+```
+
+**A certificate of your own.** Mount it into the edge in a Compose override
+and add `tls /certs/cert.pem /certs/key.pem` to both site blocks of
+`deploy/edge/Caddyfile`.
+
+**Plain HTTP**, only when you choose it: `TAMGA_PROXY_SITE=http://:8443` and
+`TAMGA_CONSOLE_SITE=http://:3000`. Then set `NEXT_PUBLIC_API_URL` and
+`TAMGA_CORS_ORIGINS` to `http://` addresses too and rebuild the console. Use
+it where something in front of the host already ends TLS, or in CI (the
+stress suite's overlay does this).
+
+What else follows from the edge:
+
+- **The console's address changed to HTTPS.** `NEXT_PUBLIC_API_URL`
+  defaults to `https://localhost:8443` and `TAMGA_CORS_ORIGINS` to
+  `https://localhost:3000`. A browser does not let an HTTPS page call an
+  HTTP API, so the two change together; with another name, set both to it
+  and rebuild the console (`docker compose build dashboard`).
+- **Client addresses.** The proxy sees every connection come from the edge.
+  Compose gives the edge a fixed address on its own network
+  (`TAMGA_EDGE_ADDR`, `10.213.98.2` in `TAMGA_EDGE_SUBNET`, `10.213.98.0/28`)
+  and sets `TAMGA_TRUSTED_PROXIES` to it, so the client address comes from
+  the `X-Forwarded-For` the edge writes. The edge does not pass on an
+  `X-Forwarded-For` it was sent. If you set `TAMGA_TRUSTED_PROXIES`
+  yourself, include `TAMGA_EDGE_ADDR`. If the subnet collides with one of
+  the host's networks, set `TAMGA_EDGE_SUBNET`, `TAMGA_EDGE_IP_RANGE` and
+  `TAMGA_EDGE_ADDR` together (the address inside the subnet, outside the
+  range).
+- **Streaming** passes through unbuffered (`flush_interval -1`). Request
+  size is still limited by the proxy (`TAMGA_MAX_BODY_BYTES`).
+- **GitHub sign-in** sets its cookies with `Secure`, which a browser keeps
+  only over HTTPS (or on `localhost`); behind the edge it works on any name.
+- Leave `TAMGA_TLS_CERT` and `TAMGA_TLS_KEY` empty in the full profile: the
+  edge talks plain HTTP to the proxy on the Compose network.
+- Only HTTP/1.1 and HTTP/2 are served; the edge has no admin endpoint, so a
+  changed Caddyfile takes `docker compose restart edge`.
+
+### Internal service tokens
+
+The proxy calls the analyzer, the classifier and the scanner service over
+gRPC (and the analyzer's HTTP API for the PDF reports). Each of the three
+has a token: a shared secret you generate, given to the service and to the
+proxy.
+
+| Variable | Given to | Needed |
+|---|---|---|
+| `TAMGA_ANALYZER_TOKEN` | analyzer, proxy | full profile |
+| `TAMGA_SCANNER_SERVICE_TOKEN` | scanner service, proxy | full profile (the service runs even when the proxy does not use it) |
+| `TAMGA_CLASSIFIER_TOKEN` | classifier, proxy | classifier profile |
+
+```bash
+for v in TAMGA_ANALYZER_TOKEN TAMGA_SCANNER_SERVICE_TOKEN TAMGA_CLASSIFIER_TOKEN; do
+  echo "$v=$(openssl rand -hex 32)" >> .env
+done
+```
+
+`.env.example` has the three names with empty values; fill those lines, or
+remove them before running the loop. Compose passes each value to both
+sides. The proxy sends it with every call as `authorization: Bearer
+<token>`. A service that has a token refuses a call without the same one:
+gRPC answers `UNAUTHENTICATED`, the analyzer's HTTP API 401 (every path
+except `/health`). The comparison is of SHA-256 hashes in constant time. The
+standard gRPC health service (`grpc.health.v1.Health`, which the scanner
+service's container probe asks) needs no token; the classifier's own
+`Health` call does, and its probe sends the token.
+
+`TAMGA_REQUIRE_SERVICE_TOKENS` decides whether a token may be missing.
+Compose sets it to `true`: the analyzer, the scanner service and the
+classifier do not start without theirs, and the proxy does not start when
+it has an address for a service but no token for it (the analyzer always has
+one). Each says which variable is missing. Outside Compose it is off unless
+set: a service without a token accepts every call, as before, and the proxy
+sends none. Set `TAMGA_REQUIRE_SERVICE_TOKENS=false` in `.env` to run the
+Compose stack without tokens.
+
+To change a token, set the new value in `.env` and recreate the service and
+the proxy together (`docker compose up -d`); calls made between the two
+restarts are refused, which the proxy treats as the service being down (it
+scans in-process, or `scan.on_error` decides for the classifier).
+
+**TLS between the proxy and the services** is optional, and is set in a
+Compose override because it needs certificate files in the containers:
+
+| Where | Variables |
+|---|---|
+| Each service | `TAMGA_GRPC_TLS_CERT`, `TAMGA_GRPC_TLS_KEY`: its certificate, which must name the host the proxy dials (`analyzer`, `classifier`, `scanner-service`). `TAMGA_GRPC_TLS_CLIENT_CA`: require a client certificate signed by this CA |
+| Proxy | `TAMGA_SERVICE_TLS_CA`: the CA the services' certificates are checked against. `TAMGA_SERVICE_TLS_CERT`, `TAMGA_SERVICE_TLS_KEY`: its client certificate |
+
+The proxy uses one TLS setting for all three, so turn TLS on for all three
+services at once. Tokens are still checked over TLS. The analyzer's HTTP
+API stays plain HTTP. The scanner service's container probe speaks plain
+gRPC: with TLS on its port, override its healthcheck (`grpc_health_probe`
+has `-tls` options); the classifier's probe then checks only that the port
+accepts connections.
+
+### Resource limits
+
+Every service has a CPU and a memory limit, and a memory reservation:
+
+| Service | CPUs | Memory | Reserved | Variables | Basis |
+|---|---|---|---|---|---|
+| `edge` | 1 | 256m | 32m | `TAMGA_EDGE_CPUS`, `TAMGA_EDGE_MEMORY` | A TLS proxy for two sites |
+| `proxy`, `proxy-minimal` | 2 | 1g | 256m | `TAMGA_PROXY_CPUS`, `TAMGA_PROXY_MEMORY` | 53 MiB for the language check when a policy turns it on, request bodies in flight (up to `TAMGA_MAX_BODY_BYTES` each), the caches |
+| `scanner-service` | 2 | 512m | 64m | `TAMGA_SCANNER_SERVICE_CPUS`, `TAMGA_SCANNER_SERVICE_MEMORY` | The stateless scanners and a pool of four workers |
+| `analyzer` | 2 | 2g | 512m | `TAMGA_ANALYZER_CPUS`, `TAMGA_ANALYZER_MEMORY` | spaCy and Presidio in each of the two worker processes (`TAMGA_ANALYZER_WORKERS`) |
+| `classifier` | 2 | 3g | 1g | `TAMGA_CLASSIFIER_CPUS`, `TAMGA_CLASSIFIER_MEMORY` | The int8 models: 268 MB for injection, 339 MB for topics, about as much again for a shadow, each with its tokenizer and onnxruntime's buffers |
+| `dashboard` | 1 | 512m | 128m | `TAMGA_DASHBOARD_CPUS`, `TAMGA_DASHBOARD_MEMORY` | The console's Node server; the browser does the rest |
+| `postgres` | 2 | 1g | 256m | `TAMGA_POSTGRES_CPUS`, `TAMGA_POSTGRES_MEMORY` | The request log and the stores |
+| `redis` | 1 | 512m | 64m | `TAMGA_REDIS_CPUS`, `TAMGA_REDIS_MEMORY` | Rate limits, the response cache, vault tokens |
+| `nats` | 1 | 512m | 64m | `TAMGA_NATS_CPUS`, `TAMGA_NATS_MEMORY` | The event stream |
+| `jaeger` | 1 | 1g | 128m | `TAMGA_JAEGER_CPUS`, `TAMGA_JAEGER_MEMORY` | Traces in memory, at most `TAMGA_JAEGER_MAX_TRACES` (50000) |
+
+These are starting points, not measurements: the documented figures are the
+model sizes and the language detector's memory, and the end-to-end latency
+in the README was measured without limits. Watch `docker stats` under your
+own traffic and change them in `.env`, for example `TAMGA_PROXY_CPUS=4` and
+`TAMGA_PROXY_MEMORY=2g`, then `docker compose up -d`.
+
+- A CPU limit above the host's core count stops that container from
+  starting ("range of CPUs is from 0.01 to N"). The defaults need two
+  cores; on a one-core host set each `*_CPUS` of 2 to `1`.
+- A memory limit must stay above the reservation. A service that reaches
+  its limit is stopped by the kernel and restarted by Compose.
+- With a CPU limit on the classifier, keep `TAMGA_CLASSIFIER_THREADS` plus
+  `TAMGA_CLASSIFIER_SHADOW_THREADS` (and `TAMGA_TOPICS_THREADS`) at or under
+  `TAMGA_CLASSIFIER_CPUS`. `0` starts a thread per host core, which a limit
+  of two then throttles.
+- Docker Compose applies the memory reservation and both limits. A CPU
+  reservation is a Swarm setting that plain Docker ignores, so none is set.
+
+### Image pins
+
+The third-party images (in Compose: `caddy`, `postgres`, `redis`, `nats`,
+`jaegertracing/all-in-one`; in the Dockerfiles: `golang`, `alpine`,
+`python`, `node`; in `deploy/e2e/litellm`: `python`, `ghcr.io/berriai/litellm`)
+are pinned by tag. The digest that should follow each tag
+(`name:tag@sha256:...`) is still to be added: none was recorded in the
+repository, and each is marked `TODO` where it is used. To fill one in:
+
+```bash
+docker buildx imagetools inspect postgres:16-alpine --format '{{json .Manifest.Digest}}'
+```
+
+and write the result after the tag. `.github/dependabot.yml` opens pull
+requests for new tags and digests of the images, the GitHub Actions, the Go
+module, the npm packages and the pip requirements every week; it does not
+propose a new major version of PostgreSQL or Redis, or a new minor or major
+LiteLLM release.
+
+The scanner service's image downloads `grpc_health_probe` from GitHub at
+build time without checking its checksum.
 
 ## Production deployment (Kubernetes)
 
@@ -212,6 +419,17 @@ TLS:
 | `TAMGA_MTLS_STRICT_VERIFY` | `false` | Require a client certificate on the HTTPS listener |
 | `TAMGA_MTLS_CLIENT_CA_FILE` | empty | CA bundle that client certificates are checked against. Required when strict verify is on |
 
+Internal services (see [Internal service tokens](#internal-service-tokens)):
+
+| Variable | Default | Description |
+|---|---|---|
+| `TAMGA_ANALYZER_TOKEN` | empty | Sent to the analyzer, over gRPC and to its HTTP API, as `Bearer` authorization. Must be the analyzer's own value |
+| `TAMGA_CLASSIFIER_TOKEN` | empty | The same for the classifier |
+| `TAMGA_SCANNER_SERVICE_TOKEN` | empty | The same for the scanner service |
+| `TAMGA_REQUIRE_SERVICE_TOKENS` | `false` (`true` in Compose) | Refuse to start when a service has an address and no token. The analyzer's address is never empty, so its token is then always needed |
+| `TAMGA_SERVICE_TLS_CA` | empty | TLS to the services, checking their certificates against this CA. Empty with the two below empty: plain gRPC |
+| `TAMGA_SERVICE_TLS_CERT`, `TAMGA_SERVICE_TLS_KEY` | empty | The proxy's client certificate, for services that require one |
+
 Upstreams:
 
 | Variable | Default | Description |
@@ -262,6 +480,9 @@ Other service inputs and Compose-only settings:
 | Scanner service | `SCANNER_PIPELINE_MODE` | `adaptive` | Passed |
 | Scanner service | `SCANNER_WORKER_POOL_SIZE` | empty (no pool) | Passed; Compose uses `4` to bound scanner work on the shared host |
 | Scanner service | `SCANNER_WORKER_QUEUE_SIZE` | twice the worker count | Passed; `0` selects that computed default |
+| Analyzer, classifier, scanner service | `TAMGA_ANALYZER_TOKEN`, `TAMGA_CLASSIFIER_TOKEN`, `TAMGA_SCANNER_SERVICE_TOKEN` | empty (every call accepted) | Passed, the same value as the proxy's. See [Internal service tokens](#internal-service-tokens) |
+| Analyzer, classifier, scanner service | `TAMGA_REQUIRE_SERVICE_TOKENS` | `false` | `true`: the service does not start without its token |
+| Analyzer, classifier, scanner service | `TAMGA_GRPC_TLS_CERT`, `TAMGA_GRPC_TLS_KEY`, `TAMGA_GRPC_TLS_CLIENT_CA` | empty (plain gRPC) | Not passed; set in an override together with the certificate files |
 | Classifier | `TAMGA_CLASSIFIER_PORT` | `50052` | Passed and exposed only on the Compose network |
 | Classifier | `TAMGA_CLASSIFIER_MODEL_DIR` | empty | Fixed to `/models/classifier`; `TAMGA_CLASSIFIER_MODEL_PATH` selects the host directory mounted there |
 | Classifier | `TAMGA_CLASSIFIER_MODEL_NAME` | mounted directory name | Passed |
@@ -273,13 +494,18 @@ Other service inputs and Compose-only settings:
 | Classifier | `TAMGA_CLASSIFIER_SHADOW_MODEL_NAME` | mounted directory name | Passed |
 | Classifier | `TAMGA_CLASSIFIER_SHADOW_THREADS` | `TAMGA_CLASSIFIER_THREADS` | Passed |
 | Classifier | `TAMGA_CLASSIFIER_SHADOW_WAIT_MS` | `20` | Passed |
-| Console | `NEXT_PUBLIC_API_URL` | `http://localhost:8443` | Build argument; rebuild the console after changing it |
+| Console | `NEXT_PUBLIC_API_URL` | `https://localhost:8443` | Build argument; rebuild the console after changing it. `http://localhost:8443` under `next dev` |
 | Console | `NEXT_PUBLIC_SITE_URL` | `https://tamgaproxy.com` | Build argument for metadata; rebuild after changing it |
 | Console | `NEXT_PUBLIC_MARKETING_URL` | `https://tamgaproxy.com` | Build argument for public-site links; rebuild after changing it |
 | Console | `NEXT_PUBLIC_ADMIN_KEY` | empty | Development-only convenience. A production build refuses it; Compose never passes it |
 | Console | `PORT`, `HOSTNAME` | framework defaults | The image fixes them to `3000` and `0.0.0.0`; `TAMGA_DASHBOARD_PORT` and `TAMGA_DASHBOARD_BIND` control host publication |
-| Compose | `TAMGA_PROXY_BIND`, `TAMGA_PROXY_PORT` | `0.0.0.0`, `8443` | Host bind and host/container proxy port |
-| Compose | `TAMGA_DASHBOARD_BIND`, `TAMGA_DASHBOARD_PORT` | `0.0.0.0`, `3000` | Host bind and host console port |
+| Compose | `TAMGA_PROXY_BIND`, `TAMGA_PROXY_PORT` | `0.0.0.0`, `8443` | Host bind and host port of the proxy's address (the edge's in the full profile), and the proxy's container port |
+| Compose | `TAMGA_DASHBOARD_BIND`, `TAMGA_DASHBOARD_PORT` | `0.0.0.0`, `3000` | Host bind and host port of the console's address, on the edge |
+| Compose | `TAMGA_PROXY_SITE`, `TAMGA_CONSOLE_SITE` | `https://localhost:8443`, `https://localhost:3000` | The edge's two site addresses. See [TLS](#tls) |
+| Compose | `TAMGA_EDGE_SUBNET`, `TAMGA_EDGE_IP_RANGE`, `TAMGA_EDGE_ADDR` | `10.213.98.0/28`, `10.213.98.8/29`, `10.213.98.2` | The edge network, and the edge's address in it, which the proxy trusts for `X-Forwarded-For` |
+| Compose | `TAMGA_EDGE_HTTP_BIND` | `0.0.0.0` | Host bind of port 80 in `docker-compose.public.yml` |
+| Compose | `TAMGA_<SERVICE>_CPUS`, `TAMGA_<SERVICE>_MEMORY` | see [Resource limits](#resource-limits) | CPU and memory limit of each service |
+| Compose | `TAMGA_JAEGER_MAX_TRACES` | `50000` | Traces Jaeger keeps in memory |
 | Compose | `TAMGA_OBSERVABILITY_BIND` | `127.0.0.1` | Host bind for Jaeger UI 16686 and NATS monitoring 8222. Set `0.0.0.0` only to restore network-wide access |
 | Compose | `TAMGA_POLICY_MOUNT` | `ro` | Policy bind-mount mode (`ro` or `rw`) |
 | Compose | `TAMGA_PROXY_ENV_FILE` | `../.env`; skipped when the file does not exist | Proxy service env file, relative to the Compose file |
@@ -1278,7 +1504,9 @@ sequence-classification model exported to ONNX with its `tokenizer.json` and
 `config.json`; the numbers in this repository were measured with
 [`Horizon-Labs/prompt-injection-guard-small`](https://huggingface.co/Horizon-Labs/prompt-injection-guard-small)
 (Apache-2.0, 268 MB quantized). Put `config.json`, `tokenizer.json` and
-`onnx/model_quantized.onnx` in `models/prompt-injection-guard-small/`, then:
+`onnx/model_quantized.onnx` in `models/prompt-injection-guard-small/`, then
+set `TAMGA_CLASSIFIER_TOKEN` in `.env` if it is still empty
+([Internal service tokens](#internal-service-tokens)) and:
 
 ```bash
 echo 'TAMGA_CLASSIFIER_ADDR=classifier:50052' >> .env
@@ -2643,6 +2871,8 @@ Things that follow from this:
 | `POST` | `/api/v1/beta/litellm_basic_guardrail_api` | Any Tamga key, or admin | The same verdict, in the shape LiteLLM calls as a guardrail, recorded as a request ([LiteLLM](litellm.md)) |
 
 ```bash
+# The proxy alone (minimal profile) is plain HTTP. Through the full
+# profile's edge use https://localhost:8443 and --cacert (see TLS).
 # Health check. Without a key the answer says only whether the proxy is up.
 curl -s http://localhost:8443/api/v1/health/detailed | jq .
 

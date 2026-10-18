@@ -120,10 +120,14 @@ docker compose --env-file .env -f deploy/docker-compose.yml up -d
 ```
 
 `.env.example` sets `COMPOSE_PROFILES=full`, so this starts the full stack;
-`--profile full` does the same. Proxy on `http://localhost:8443`, dashboard on
-`http://localhost:3000`. The dashboard holds no key: on first use it asks for
-the admin key (`TAMGA_ADMIN_KEY` from `.env`) under Settings and keeps it in
-that browser.
+`--profile full` does the same. It needs the three passwords and the three
+internal service tokens in `.env` (`openssl rand -hex 32` each). Proxy on
+`https://localhost:8443`, dashboard on `https://localhost:3000`, both behind
+a TLS edge whose certificate comes from its own local CA: trust that CA's
+root once, or give the edge a public name
+([TLS](docs/operations.md#tls)). The dashboard holds no key: on first use it
+asks for the admin key (`TAMGA_ADMIN_KEY` from `.env`) under Settings and
+keeps it in that browser.
 
 The other services are not published to the host. Jaeger's UI on `16686` and
 NATS monitoring on `8222` are local diagnostics bound to `127.0.0.1`; set

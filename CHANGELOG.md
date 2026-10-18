@@ -17,6 +17,65 @@
   before.
 
 ### Deployment and operations
+- **The full Compose stack serves HTTPS.** A TLS edge (Caddy, service
+  `edge`, `deploy/edge/Caddyfile`) now owns ports 8443 and 3000 and passes
+  requests to the proxy and the console, which are no longer published.
+  **`http://localhost:8443` and `http://localhost:3000` stop answering;
+  use `https://localhost:8443` and `https://localhost:3000`, and give every
+  client the edge's local CA root (it is in the new `edgedata` volume).** A
+  public name in `TAMGA_PROXY_SITE` and `TAMGA_CONSOLE_SITE` gets a
+  Let's Encrypt certificate (with `deploy/docker-compose.public.yml` for
+  port 80); `http://` site addresses serve plain HTTP for those who choose
+  it. **The Compose defaults of `NEXT_PUBLIC_API_URL`, `TAMGA_CORS_ORIGIN`
+  and `TAMGA_CORS_ORIGINS` (and the console image's build default) move to
+  the `https://localhost` addresses, and `http://127.0.0.1:3000` is no
+  longer an allowed origin; an `.env` that sets them to `http://` keeps
+  them, and with the edge on HTTPS the console then cannot call the
+  proxy.** **The proxy now trusts the edge's fixed address
+  (`TAMGA_EDGE_ADDR`, `10.213.98.2` on a new `10.213.98.0/28` network) in
+  `TAMGA_TRUSTED_PROXIES` unless that is set**, so client addresses still
+  reach rate limits, `TAMGA_IP_ALLOWLIST` and the audit log; an `.env`
+  that sets `TAMGA_TRUSTED_PROXIES` must add the edge's address. The
+  console's container is only on the edge network. The minimal profile is
+  unchanged and stays plain HTTP unless the proxy is given a certificate.
+  See docs/operations.md, "TLS".
+- **The proxy authenticates to the analyzer, the classifier and the scanner
+  service.** Each has a token (`TAMGA_ANALYZER_TOKEN`,
+  `TAMGA_CLASSIFIER_TOKEN`, `TAMGA_SCANNER_SERVICE_TOKEN`) given to the
+  service and to the proxy, sent as `authorization: Bearer` gRPC metadata
+  and, for the analyzer, on its HTTP API too. A service with a token answers
+  a call without it with `UNAUTHENTICATED` (the analyzer's HTTP API with
+  401, except `/health`); the standard gRPC health service needs none.
+  `TAMGA_REQUIRE_SERVICE_TOKENS=true` makes the services refuse to start
+  without their token and the proxy refuse to start when a service it has
+  an address for has none. **Compose turns it on: after this upgrade the
+  full stack does not start until `.env` has the analyzer and scanner
+  service tokens (and the classifier's with that profile); set
+  `TAMGA_REQUIRE_SERVICE_TOKENS=false` to run without them.** Outside
+  Compose nothing changes until a token is set. Optional TLS and client
+  certificates on those gRPC links: `TAMGA_GRPC_TLS_*` on the services,
+  `TAMGA_SERVICE_TLS_*` on the proxy. `go run ./cmd/redteam -classifier`
+  sends `TAMGA_CLASSIFIER_TOKEN` when it is set. See docs/operations.md,
+  "Internal service tokens".
+- **Every Compose service has a CPU and a memory limit and a memory
+  reservation**, each limit changeable in `.env` (`TAMGA_PROXY_CPUS`,
+  `TAMGA_PROXY_MEMORY`, and so on). **The defaults cap the proxy at 2 CPUs
+  and 1 GiB and the classifier at 2 CPUs and 3 GiB; a host with fewer than
+  two cores must lower the `*_CPUS` values or those containers do not
+  start, and a service that reaches its memory limit is restarted.**
+  **Jaeger now keeps at most 50000 traces in memory**
+  (`TAMGA_JAEGER_MAX_TRACES`). See docs/operations.md, "Resource limits".
+- **The console image no longer contains sharp or libvips.** The console
+  does not use `next/image`; `next.config.js` sets `images.unoptimized` and
+  leaves `sharp` and `@img/*` out of the standalone output, and the
+  Dockerfile deletes any left in the build stage, so no layer holds the
+  LGPL-3.0 libvips builds (about 33 MB). The licence policy's two decisions
+  stay, with notes saying so.
+- Third-party images in Compose and the Dockerfiles are marked for digest
+  pinning (`TODO` at each; the digests were not recorded and are still to be
+  added), and `.github/dependabot.yml` keeps Docker, Compose, GitHub Actions,
+  Go, npm and pip versions current, without proposing a new PostgreSQL or
+  Redis major version.
 - **Compose no longer publishes Jaeger or NATS monitoring on every host
   interface.** Their unauthenticated ports, 16686 and 8222, now bind to
   `127.0.0.1`; set `TAMGA_OBSERVABILITY_BIND=0.0.0.0` to restore the old

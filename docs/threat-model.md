@@ -22,8 +22,8 @@ The review behind this page is the maintainer's own.
     user input, documents,               ├─► PostgreSQL  request log, audit log, keys, roles
     tool results)                        ├─► Redis       rate limits, cache, vault tokens
                                          ├─► NATS        event stream (7 days)
-                                         ├─► analyzer    gRPC + HTTP (reports; text only if enabled)
-                                         ├─► classifier  gRPC, no authentication (optional)
+                                         ├─► analyzer    gRPC + HTTP, token (reports; text only if enabled)
+                                         ├─► classifier  gRPC, token (optional)
                                          └─► alert destinations (webhooks, SIEM)
 ```
 
@@ -33,7 +33,7 @@ The review behind this page is the maintainer's own.
 | Text inside a request | Whoever wrote the user input, the retrieved document or the tool result. Never trusted | Instructions and data aimed at the model |
 | Operator → management API and console (`/api/v1`) | Admin key, API keys (read, write, admin), signed-in users with a role | Policy, keys, roles, alert destinations, stored events |
 | Policy file | Whoever can write the file on the host, and the API roles above | Every decision the proxy makes |
-| Proxy → PostgreSQL, Redis, NATS, analyzer, classifier | The operator's own network. Plain connections in the Compose stack | Request metadata, masked findings, vault tokens, events; request text to the analyzer or classifier only when enabled |
+| Proxy → PostgreSQL, Redis, NATS, analyzer, classifier, scanner service | The operator's own network. Plain connections in the Compose stack; the analyzer, classifier and scanner service take calls only with a token of their own, and TLS to them is optional | Request metadata, masked findings, vault tokens, events; request text to the analyzer, classifier or scanner service only when enabled |
 | Proxy → model provider | A third party | Every request that is not blocked, masked where the policy masks |
 | Proxy → alert destinations | Third-party services or internal receivers | The kind of finding and the request id, not the text |
 | Browser extension → proxy | A browser on a staff machine, holding a `proxy`-scope key | The text of a message box, for a verdict |
@@ -113,18 +113,27 @@ Redis, limits are per replica.
 | Control | Where |
 |---|---|
 | TLS 1.2+ on the listener when `TAMGA_TLS_CERT` and `TAMGA_TLS_KEY` are set; optional client certificates | `proxy/cmd/tamga/main.go`, `proxy/internal/config/config.go` |
+| In the Compose full profile the published ports are HTTPS, through a TLS edge (Caddy); plain HTTP only with `http://` site addresses | `deploy/docker-compose.yml`, `deploy/edge/Caddyfile` |
+| A token per internal service (analyzer, classifier, scanner service), compared as hashes in constant time; required at start under `TAMGA_REQUIRE_SERVICE_TOKENS`, which Compose turns on; optional mTLS on those gRPC links | `proxy/internal/grpcauth/grpcauth_test.go`, `proxy/internal/config/service_tokens_test.go`, `analyzer/tests/test_service_auth.py`, `classifier/tests/test_service_auth.py` |
 | Credentials are read from headers only, never from the URL | `proxy/internal/api/authz_test.go` (`TestKeyInQueryIsNotACredential`) |
 | `X-Forwarded-For` is ignored unless the peer is in `TAMGA_TRUSTED_PROXIES`; CORS is an exact-match list | `proxy/internal/config/trusted_proxies.go`, `proxy/internal/api/router.go` |
 | Alerts and provider pools cannot be pointed at internal addresses (SSRF): resolved addresses are judged at connect time, redirects are checked, rebinding is covered | `proxy/internal/egress/guard.go`, `guard_test.go` (`TestGuard_Rebinding`, `TestGuard_RedirectToBlockedIsRefused`); `proxy/internal/api/webhooks_guard_test.go`, `policy_pool_guard_test.go` |
 | Without a credential every management path answers 401, existing or not | `authz_test.go` (`TestUnauthenticatedCallerCannotMapRoutes`) |
 
-**Remains.** The Compose stack serves plain HTTP on 8443 and 3000: TLS is the
-operator's to add, on the proxy or in front of it. Connections from the
-proxy to PostgreSQL, Redis, NATS, the analyzer and the classifier are not
-encrypted in that stack, NATS has no authentication, and the classifier
-accepts prompt text from anyone who can reach it. The Compose file also
-publishes the Jaeger UI (16686) and the NATS monitor (8222) on the host. mTLS
-as the proxy sets it up has no test. The Helm chart has no NetworkPolicy.
+**Remains.** The Compose minimal profile serves plain HTTP on 8443 unless the
+proxy is given a certificate. The full profile's edge uses a local CA by
+default, which each client has to be told to trust; an operator who skips
+that and turns off verification has no protection against interception. The
+edge talks plain HTTP to the proxy and the console on the Compose network.
+Connections from the proxy to PostgreSQL, Redis and NATS are not encrypted
+in that stack, and NATS has no authentication. The service tokens cross the
+Compose network in clear unless gRPC TLS is configured, and the analyzer's
+HTTP API has no TLS option; anyone who can read that network's traffic can
+take a token. Outside Compose the services accept every call unless they are
+given a token. The Jaeger UI (16686) and the NATS monitor (8222) are bound to
+`127.0.0.1` and unauthenticated. mTLS on the proxy's own listener has no
+test. The Helm chart has no NetworkPolicy and no secret key for the
+analyzer token.
 
 ### 5. A compromised dependency, image or build
 
@@ -136,7 +145,9 @@ as the proxy sets it up has no test. The Helm chart has no NetworkPolicy.
 | The bundled BIN dataset is checked against a recorded SHA-256 | `scripts/verify-bin-data.sh` |
 | Containers run as a non-root user; the chart runs with a read-only root filesystem and no capabilities | the Dockerfiles; `deploy/helm/tamga-proxy/templates/deployment.yaml` |
 
-**Remains.** Base images are referenced by tag, not digest. Python and npm
+**Remains.** Base images and the Compose images are referenced by tag, not
+digest: the digests are still to be filled in (each place is marked `TODO`),
+after which Dependabot keeps them current. Python and npm
 dependencies below the direct ones are not pinned by hash, and the Go
 toolchain and modules are trusted as fetched. The scanner-service image
 downloads `grpc_health_probe` at build time without checking a checksum. The
