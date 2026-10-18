@@ -43,9 +43,16 @@ jobs:
           # The release calls this workflow, and a release reads no cache an
           # earlier run wrote.
           cache: false
+      # `go mod download` fetches the modules go.mod requires, which holds
+      # every module the binaries link. `go list -m all` also needs the
+      # go.mod file of every module in the graph (test-only dependencies of
+      # dependencies too), and without them the gate's offline `go list`
+      # fails and reads no Go module at all.
       - name: Download Go modules
         working-directory: proxy
-        run: go mod download
+        run: |
+          go mod download
+          go list -m all > /dev/null
 
       # npm: the inventory reads the `license` field of each production
       # package under node_modules. No install script is run.
