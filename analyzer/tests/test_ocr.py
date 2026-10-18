@@ -193,6 +193,10 @@ def test_supported_images_decode_to_rgb():
                 Image.new(mode, (30, 12), color).save(buf, fmt)
             except (OSError, KeyError, ValueError):
                 continue  # this Pillow cannot write the combination
+            try:
+                Image.open(io.BytesIO(buf.getvalue())).load()
+            except Exception:
+                continue  # this Pillow cannot read back what it wrote (Pillow 12.2, 8-bit BMP)
             result = engine.read(buf.getvalue())
             assert (result.width, result.height) == (30, 12)
     assert engine.calls > 10
