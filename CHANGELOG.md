@@ -1385,6 +1385,26 @@
   sent in one piece, on purpose: they are read as a document, as a buffered
   answer's are, and the agent cannot run the tool before the call is
   complete. `docs/agents.md` says so and a test pins it.
+- **`agents.provenance` holds high-risk tool calls to what the conversation
+  has read.** A request whose conversation carries tool content with a
+  finding the policy let through (one that `taint_on` names: by default an
+  injection under a `WARN` or `STRIP` rule, a `quoted_injection`, hidden
+  text; optionally a classifier score at or above `classifier_score`) is
+  tainted, worked out from the request alone with no state kept between
+  requests. A call in its answer to a tool `high_risk_tools` names is a
+  `tool_provenance` finding (category `tainted_tool_call`) whose metadata
+  names the tainting tool content by path and finding type, never by text.
+  `BLOCK` (the default) replaces a buffered answer with a 403
+  (`reason: tool_call_provenance`) and ends a stream at the event that
+  opens the call; `WARN` records it. OpenAI chat, Responses, Anthropic and
+  Gemini, buffered and server-sent streams, with `output_rules` on or off.
+  Off unless `enabled` is true; `agents` is a privileged section. With it
+  on, **the response to a tainted request carries `X-Tamga-Provenance:
+  tainted` (and `X-Tamga-Tool-Provenance` on a buffered answer with a held
+  call), is read and, for a stream, passed through the stream guard even
+  when `output_rules` is off, and bypasses the response cache.** A
+  buffered OpenAI chat `custom` tool call now names its tool for
+  `output_rules.tool_destinations` as a streamed one already did.
 - **Red-team set of tool results that are JSON.** `tooljson_tuning.csv` and
   `tooljson_locked.csv` (174 rows, split by a seeded hash, the locked part
   measured before the change) are scanned as tool results through

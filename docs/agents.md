@@ -317,6 +317,103 @@ Things to know:
   `tool_destination` (the findings are then only recorded) and when
   `output_rules.streaming` is off.
 
+## Hold high-risk tool calls after untrusted content
+
+The rules judge a tool result when it arrives. Much of what they find they
+let through: a finding under a `WARN` rule, a quoted injection, a
+classifier score under the threshold, a tool result that `STRIP` replaced.
+The model then takes its next step, and if that step runs a command,
+writes a file or sends a message, the instruction for it may be the one in
+the tool result. `agents.provenance` holds those steps to what the
+conversation has read.
+
+```yaml
+agents:
+  provenance:
+    enabled: true
+    high_risk_tools: [bash, run_shell, write_file, delete_file, send_email,
+                      "mcp__fs__write*", "http_*", "*payment*"]
+    taint_on: [injection, quoted_injection, hidden_text]   # the default
+    min_severity: low          # the default
+    classifier_score: 0.5      # optional, needs scan.classifier
+    action: BLOCK              # or WARN
+```
+
+A request is **tainted** when the conversation it carries holds tool
+content (tool results, attached documents, search results: role `tool`)
+with a finding that `taint_on` names, or that the inline classifier scored
+at or above `classifier_score`. `taint_on` is written as
+`output_rules.block_on` is: a type covers its categories, except the
+signals, which are named by category (`quoted_injection`,
+`unreadable_block`). A finding under `min_severity` does not taint; a
+signal named in `taint_on` taints at any severity. A finding without a
+role, from a body that was not read by message, counts as if it were in a
+tool result.
+
+The answer to a tainted request is read for tool calls. One whose tool
+name matches `high_risk_tools` (`*` stands for any run of characters; a
+call whose name the answer does not give matches only `"*"`) is a
+`tool_provenance` finding, category `tainted_tool_call`, with the tool's
+name as its match:
+
+- **`BLOCK`**: a buffered answer is replaced by a 403 with
+  `"type":"output_policy_block","reason":"tool_call_provenance"`. A stream
+  ends at the event that opens the call, before the agent has any of it:
+  its name, its id, its arguments. The model's text before the call goes
+  out first; other tool calls whose arguments were still kept back by
+  `output_rules.streaming` do not. The last event is an `error` event with
+  `"reason":"tool_call_provenance"`.
+- **`WARN`**: the call goes through and the finding is recorded with the
+  action `WARN`. One finding per tool name and answer.
+
+Tamga cannot hold a call for a person to approve: it can withhold it, and
+the agent's own approval setting is what asks someone. With `BLOCK`, a
+session that read a poisoned page can still read, search and answer; it
+cannot run the shell until the tool result is out of the conversation.
+
+The response to a tainted request carries `X-Tamga-Provenance: tainted`,
+streamed or not; a buffered answer with a held call also
+`X-Tamga-Tool-Provenance: block` (or `warn`). The finding's metadata says
+which tool content tainted the request, never its text: `source_path`
+(where it stands in the request, as `messages[2].content`), `source_role`,
+`source_type` and `source_category` of its finding (or `classifier_score`
+and `source_score`), and `sources`, how many pieces of tool content
+tainted it. When several did, the newest is named.
+
+Things to know:
+
+- **Taint is worked out from the request alone.** An agent sends the whole
+  conversation every time, so a tool result read twenty turns ago is
+  scanned again with every request and taints each of them while it is in
+  the history. Nothing is kept between requests, which also means nothing
+  to share between proxy replicas. The exception is a conversation the
+  provider keeps for the client (the Responses API's
+  `previous_response_id`, a Gemini cached context): tool results the
+  request does not carry are not seen. Remembering a tainted response id
+  would need state shared across replicas; it is not done.
+- **A tainted session stays tainted.** With `BLOCK`, every later high-risk
+  call is withheld until the tool result leaves the conversation (a new
+  session, or the agent's own compaction). Start with `WARN` and read the
+  `tool_provenance` findings to see how often your agents would stop.
+- It works whether `output_rules` is on or off: the answer to a tainted
+  request is read for its tool calls only. A buffered answer is read up to
+  8 MiB; a larger one goes out unread with
+  `X-Tamga-Output-Scan: skipped-too-large`. Streams are read when they are
+  server-sent events; an NDJSON stream or a Gemini stream without
+  `alt=sse` is not.
+- A tainted request is not answered from the response cache, and its
+  answer is not stored.
+- Tools the provider runs itself (Anthropic `server_tool_use` and
+  `mcp_tool_use`, the Responses API's `mcp_call`, Gemini's code execution)
+  have run before the answer reaches Tamga and are not held.
+- An instruction no rule finds does not taint. The rules miss most
+  requests to send data out
+  ([numbers](benchmarks/README.md#requests-to-send-data-out)); with the
+  classifier on, `classifier_score` is the way to catch more of them, at
+  the cost of tainting on scores that mean nothing. Pair this with
+  `output_rules.tool_destinations`, which does not depend on the wording.
+- `agents` is a privileged section: only the admin role can change it.
+
 ## The agent's own environment
 
 Tamga sees the requests an agent sends to a model and the answers that come
@@ -346,9 +443,11 @@ can do for the agent.
   path: tool-result scanning with `STRIP` (and `scan.strip_scope: field`
   where tool results are JSON with data you need), `scan.on_error: block` so
   that a failed scan cannot let a tool result through, and
-  `output_rules.tool_destinations`. Then ask a person to approve the tools
-  that can do harm (shell, writing outside the project, sending mail,
-  network calls). That approval is a setting of the agent, not of Tamga.
+  `output_rules.tool_destinations`, and `agents.provenance`
+  ([above](#hold-high-risk-tool-calls-after-untrusted-content)) for the
+  tools that can do harm. Then ask a person to approve those tools (shell,
+  writing outside the project, sending mail, network calls). That approval
+  is a setting of the agent, not of Tamga.
 - **MCP servers.** The agent's traffic to them does not pass through Tamga
   unless you put them behind the [MCP gateway](mcp.md), which reads tool
   lists, tool results, resources and prompts on their way to the agent and
@@ -366,7 +465,8 @@ A checklist before an agent runs unattended:
 - [ ] Egress is limited to the model route (Tamga) and the hosts it needs.
 - [ ] The tool-result rule is `STRIP`, `scan.on_error` is `block`, and
       `output_rules.tool_destinations` lists where its tools may send data.
-- [ ] High-risk tools need a person's approval in the agent.
+- [ ] High-risk tools need a person's approval in the agent, and
+      `agents.provenance` lists them.
 - [ ] Its MCP servers are ones you chose, with the least access, and
       behind the [MCP gateway](mcp.md) where you want their traffic read.
 
