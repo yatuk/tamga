@@ -32,7 +32,9 @@ No network is used. This is a check of declared licences against a list. It
 is not legal advice.
 
 Exit codes: 0 nothing refused, or report mode; 1 enforce mode and something
-refused; 2 the policy file or the inventory could not be read.
+refused; 2 the policy file or the inventory could not be read, including, in
+enforce mode, an ecosystem of which nothing could be read (the proxy's Go
+modules, a console or SDK lockfile, a Python component's environment).
 """
 
 from __future__ import annotations
@@ -164,14 +166,23 @@ class Policy:
         return None
 
 
-def collect(inv, pip_envs: dict[str, dict], policy: Policy) -> tuple[list[dict], list[str]]:
-    """Every dependency to judge, and notes about what could not be collected."""
+def collect(inv, pip_envs: dict[str, dict], policy: Policy) -> tuple[list[dict], list[str], list[str]]:
+    """Every dependency to judge, notes about what was left out, and the
+    ecosystems or components that could not be read at all.
+
+    A package that cannot be read is a NOT-INSPECTED row and is judged. An
+    ecosystem that cannot be read gives no rows to judge, so it is returned
+    separately and fails the gate on its own (see render).
+    """
     rows: list[dict] = []
     notes: list[str] = []
+    unread: list[str] = []
 
     go_rows, go_info = inv.go_modules()
     if not go_rows:
-        notes.append(f"go: no modules read ({go_info})")
+        unread.append(f"go proxy: no modules read ({go_info})")
+    elif not any(r["linked"] for r in go_rows):
+        unread.append("go proxy: no module is linked into the binaries, so `go list -deps ./cmd/...` read nothing")
     outside = 0
     for r in go_rows:
         shipped = r["linked"]
@@ -186,7 +197,7 @@ def collect(inv, pip_envs: dict[str, dict], policy: Policy) -> tuple[list[dict],
     for component, rel in (("dashboard", "dashboard"), ("sdk-typescript", "sdk/typescript/tamga-client")):
         project = ROOT / rel
         if not (project / "package-lock.json").is_file():
-            notes.append(f"npm {component}: no package-lock.json")
+            unread.append(f"npm {component}: no package-lock.json in {rel}")
             continue
         npm_rows, info = inv.npm_packages(project)
         seen = set()
@@ -209,10 +220,16 @@ def collect(inv, pip_envs: dict[str, dict], policy: Policy) -> tuple[list[dict],
     for component, load in components:
         if component in pip_envs:
             env = pip_envs[component]
+            if not env.get("distributions"):
+                unread.append(f"python {component}: the --pip file lists no distributions")
+                continue
         else:
             if local_env is None:
                 local_env = inv.dump_pip()
             env = local_env
+            if not env.get("distributions"):
+                unread.append(f"python {component}: the interpreter running this script lists no distributions")
+                continue
             notes.append(f"python {component}: licences read from the interpreter running this script, not from "
                          f"an environment built for it (pass --pip {component}=FILE)")
         direct, trans, missing = inv.python_component(load(), env,
@@ -236,7 +253,7 @@ def collect(inv, pip_envs: dict[str, dict], policy: Policy) -> tuple[list[dict],
                 rows.append({"ecosystem": "python", "component": component, "name": name,
                              "version": "", "licence": "NOT-INSPECTED",
                              "source": "required by an installed distribution but not installed"})
-    return rows, notes
+    return rows, notes, unread
 
 
 def judge(rows: list[dict], policy: Policy) -> list[dict]:
@@ -276,7 +293,9 @@ def explain(item: dict) -> str:
             "unreadable": "licence could not be read", "allow": "allowed"}[item["category"]]
 
 
-def render(items: list[dict], notes: list[str], policy: Policy, mode: str) -> tuple[str, int]:
+def render(items: list[dict], notes: list[str], policy: Policy, mode: str,
+           unread: list[str] | None = None) -> tuple[str, int]:
+    unread = unread or []
     failing = [i for i in items if i["outcome"] == "fail"]
     warning = [i for i in items if i["outcome"] == "warn"]
     decided = [i for i in items if i["category"] == "review" and i["outcome"] == "pass"]
@@ -298,6 +317,9 @@ def render(items: list[dict], notes: list[str], policy: Policy, mode: str) -> tu
         policy_notes = sorted({i["note"] for i in group if i.get("note")})
         if policy_notes:
             lines += ["", "  Notes recorded with the pending decisions:"] + [f"    {n}" for n in policy_notes]
+    if unread:
+        # Nothing of these was judged, so a pass would say nothing about them.
+        lines += ["", "Not read at all, so not judged:"] + [f"  {u}" for u in unread]
     stale = unused_decisions(items, policy)
     if stale:
         lines += ["", "Decisions in the policy that match no dependency any more (remove them):"]
@@ -305,8 +327,11 @@ def render(items: list[dict], notes: list[str], policy: Policy, mode: str) -> tu
     lines.append("")
     if mode == "report":
         lines.append("Report mode: exit 0. Set `mode: enforce` in the policy file to refuse the above."
-                     if failing else "Report mode: nothing would be refused.")
+                     if failing or unread else "Report mode: nothing would be refused.")
         return "\n".join(lines), 0
+    if unread:
+        lines.append(f"Enforce mode: failing; {len(unread)} part(s) of the inventory could not be read (listed above).")
+        return "\n".join(lines), 2
     lines.append("Enforce mode: failing." if failing else "Enforce mode: nothing refused.")
     return "\n".join(lines), 1 if failing else 0
 
@@ -322,10 +347,12 @@ def unused_decisions(items: list[dict], policy: Policy) -> list[dict]:
     return out
 
 
-def summary_markdown(items: list[dict], mode: str) -> str:
+def summary_markdown(items: list[dict], mode: str, unread: list[str] | None = None) -> str:
     rows = [i for i in items if i["outcome"] != "pass"]
     out = [f"### Dependency licences ({mode} mode)", "",
            f"{len(items)} dependencies judged, {len(rows)} not passing.", ""]
+    if unread:
+        out += ["Not read at all, so not judged:", ""] + [f"- {u}" for u in unread] + [""]
     if rows:
         out += ["| Dependency | Licence | Finding |", "|---|---|---|"]
         for i in sorted(rows, key=lambda i: (ORDER.index(i["category"]), label(i).lower())):
@@ -427,11 +454,15 @@ def main() -> int:
         if name not in ("analyzer", "classifier", "sdk-python") or not file:
             print(f"licence-gate: --pip {item}: expected analyzer|classifier|sdk-python=FILE", file=sys.stderr)
             return 2
-        envs[name] = json.loads(Path(file).read_text(encoding="utf-8-sig"))
+        try:
+            envs[name] = json.loads(Path(file).read_text(encoding="utf-8-sig"))
+        except (OSError, ValueError) as exc:
+            print(f"licence-gate: --pip {item}: {exc}", file=sys.stderr)
+            return 2
 
     try:
         inv = load_inventory()
-        rows, notes = collect(inv, envs, policy)
+        rows, notes, unread = collect(inv, envs, policy)
     except Exception as exc:  # the inventory reads files and runs `go list`
         print(f"licence-gate: could not read the dependency inventory: {exc}", file=sys.stderr)
         return 2
@@ -440,7 +471,7 @@ def main() -> int:
         return 2
 
     items = judge(rows, policy)
-    text, code = render(items, notes, policy, mode)
+    text, code = render(items, notes, policy, mode, unread)
     print(text)
     if args.json:
         args.json.write_text(json.dumps(items, indent=1, sort_keys=True), encoding="utf-8")
@@ -449,7 +480,7 @@ def main() -> int:
     step_summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if step_summary:
         with open(step_summary, "a", encoding="utf-8") as fh:
-            fh.write(summary_markdown(items, mode))
+            fh.write(summary_markdown(items, mode, unread))
     return code
 
 

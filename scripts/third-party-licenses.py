@@ -202,8 +202,20 @@ def go_modules() -> tuple[list[dict], str]:
                 ["go", "list", "-deps", "-f", "{{with .Module}}{{.Path}}{{end}}", "./cmd/..."],
                 cwd=proxy, env=env, capture_output=True, text=True, check=True).stdout
         goversion = subprocess.run(["go", "version"], capture_output=True, text=True).stdout.strip()
-    except (OSError, subprocess.CalledProcessError) as exc:
+    except OSError as exc:
         return [], f"go list failed: {exc}"
+    except subprocess.CalledProcessError as exc:
+        # The exit status alone does not say which module was missing; go
+        # prints that on stderr. Repeated lines are kept once.
+        lines = list(dict.fromkeys(line.strip() for line in (exc.stderr or "").splitlines() if line.strip()))
+        detail = "; ".join(lines[:10]) + (f"; and {len(lines) - 10} more lines" if len(lines) > 10 else "")
+        hint = ""
+        if "GOPROXY=off" in detail:
+            # go does not name the module it could not look up.
+            hint = (" (the module cache lacks a module or a go.mod file of the module graph: run"
+                    " `go mod download` and `go list -m all` in proxy/ with network access first)")
+        return [], (f"go list failed: `{' '.join(exc.cmd)}` exited {exc.returncode}: "
+                    f"{detail or 'no output on stderr'}{hint}")
     linked = {line.strip() for line in linked_raw.splitlines() if line.strip()}
 
     mods = []
