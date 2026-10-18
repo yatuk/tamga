@@ -166,6 +166,17 @@
   installed. The weekly job and the release gate are unchanged.
 
 ### Security
+- **A Tamga key can be sent in the base URL**, for editor clients that take a
+  base URL and an API key but no header (Cline, Roo Code, JetBrains AI
+  Assistant, Zed): `https://tamga.example/k/<key>/v1` or `.../k/<key>/anthropic`.
+  Tamga strips `/k/<key>` before routing and before anything logs, traces,
+  caches or stores the path, verifies the key like the header, and refuses a
+  request whose header and path keys differ (401 `tamga_key_conflict`). Off by
+  default behind `TAMGA_KEY_IN_PATH=true`; **with it off `/k/...` stays a 404,
+  so an existing deployment sees no change.** A key in a URL is visible to
+  every intermediary's access log; `docs/operations.md` ("Keys in the path")
+  lists the cost. The combined `tamga:<key>:<provider-key>` form is not
+  accepted.
 - **A streamed tool call's arguments and streamed reasoning are scanned.**
   With `output_rules.streaming` on, the stream guard read the model's prose
   and nothing else: a customer's identity number, a secret or an

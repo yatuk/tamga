@@ -150,6 +150,7 @@ Essential environment variables:
 | `TAMGA_SSO_DEFAULT_ROLE` | empty | The role of a signed-in account nobody gave one. Empty refuses it. `viewer` is the only other value |
 | `TAMGA_TRUST_ROLE_HEADER` | `false` | Honour `X-Tamga-Role` for policy exceptions. Enable only behind an authenticating gateway that sets the header itself |
 | `TAMGA_REQUIRE_KEY` | `false` | Answer 401 to any proxy request without a valid `X-Tamga-Key`. Leave off until every application has a key |
+| `TAMGA_KEY_IN_PATH` | `false` | Accept a Tamga key as the first path segment: `/k/<key>/v1/...`, `/k/<key>/anthropic/...`. For editor clients that set a base URL but no header. Keys in URLs end up in the logs of every intermediary; see [Keys in the path](#keys-in-the-path). When off, `/k/...` is a 404 |
 | `TAMGA_UPSTREAM_ALLOW` | — | Hosts, addresses and CIDR ranges a policy's provider pool may point at beyond the vendors' own. See [Provider pools](#provider-pools) |
 | `TAMGA_UPSTREAM_KEY_ENVS` | — | Further environment variable names a pool's `api_key_env` may name |
 | `TAMGA_NOTIFY_URL_ENVS` | — | Further environment variable names a rule's `notify:` may refer to |
@@ -1001,7 +1002,8 @@ client = OpenAI(
 ```
 
 Once every application has a key, set `TAMGA_REQUIRE_KEY=true` and requests
-without one get 401. Keys need the database: without `TAMGA_DB_URL` they are
+without one get 401. Clients that cannot set a header can use the key in the
+path, below. Keys need the database: without `TAMGA_DB_URL` they are
 kept in memory and lost on restart.
 
 A key is 192 random bits and is stored as its SHA-256 hash; a presented key
@@ -1014,6 +1016,53 @@ row; that is 20 of the 192 bits and appears nowhere else. A key created
 before ids were drawn at random keeps its old id, which is 12 hex characters
 from the start of the key itself: it goes on working, and revoking it and
 creating another gets an id of the new kind.
+
+### Keys in the path
+
+Some editor clients (Cline, Roo Code, JetBrains AI Assistant, Zed) take a
+base URL and an API key but no header, so they cannot send `X-Tamga-Key`.
+With `TAMGA_KEY_IN_PATH=true` the key can be the first path segment of the
+base URL:
+
+```text
+https://tamga.internal/k/tk_your_key_here/v1            OpenAI-style clients
+https://tamga.internal/k/tk_your_key_here/anthropic     Anthropic clients
+```
+
+Tamga takes `/k/<key>` off the path before anything else reads it and moves
+the key to where the header would have been. After that the request is the
+one the unkeyed route would have been: same checks, same events, and the
+provider's own key in `Authorization` or `x-api-key` goes through as sent.
+Only the provider routes (`/v1`, `/openai`, `/anthropic`, `/gemini`,
+`/azure`, `/bedrock`, `/mistral`, `/local`) can follow `/k/<key>`; the
+management API and `/api/v1/scan` cannot. With the setting off, every
+`/k/...` path is a 404.
+
+- A request that carries the key in both the path and `X-Tamga-Key` is
+  accepted when they are equal and answered 401 `tamga_key_conflict` when
+  they differ (compared in constant time). A wrong key in the path is 401
+  `tamga_key_invalid`, as for the header.
+- Tamga does not log the path it received. The request is rewritten first,
+  so the access path in the request log and events, the trace attributes
+  (`http.path`, `http.route`), the cache key and the upstream URL all hold
+  the route without the key. Refusals log the request id and client address,
+  not the URL.
+
+**The cost is outside Tamga.** A key in a URL is written to the settings and
+logs of the client, to the access log of every load balancer, CDN, ingress
+and reverse proxy in front of Tamga, to proxy and inspection logs on the
+developer's network, and to anything that records a URL. Tamga cannot mask
+those. Configure your own front end not to log the path or to mask `/k/`,
+keep TLS on, give these keys scope `proxy`, one key per developer, an
+expiry, and revoke one when it may have leaked. Prefer the header wherever
+the client can set it.
+
+A combined form in the provider key slot (`tamga:<key>:<provider-key>`) is
+not accepted. It would keep the key out of URLs, but that slot is
+`Authorization`, `x-api-key`, `x-goog-api-key` or `api-key` depending on the
+provider and is a SigV4 signature for Bedrock, clients validate or prefix
+what they send there, and rewriting it means touching the provider's
+credential. The path form needs none of that.
 
 ## Checking a text without sending it
 
