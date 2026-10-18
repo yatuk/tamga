@@ -111,6 +111,21 @@ type Result struct {
 	// Unknown lists block types the extractor has no rule for. Their text is
 	// still in Segments: an unknown block is scanned generically, not skipped.
 	Unknown []string
+	// ToolCalls are the calls of tools the client runs, in the order the
+	// body holds them, whether their arguments hold any text or none.
+	ToolCalls []ToolCall
+}
+
+// ToolCall is a call of a tool that the client runs: an OpenAI tool call or
+// function call, an Anthropic tool_use block, a Gemini functionCall. Tools
+// the provider runs itself (server_tool_use, mcp_tool_use, the Responses
+// API's mcp_call, Gemini's executableCode) have run before the body reaches
+// anyone and are not listed.
+type ToolCall struct {
+	// Name is the tool's name as written; empty when the body gives none.
+	Name string
+	// Path locates the call in the body: "choices[0].message.tool_calls[1]".
+	Path string
 }
 
 // Extract returns the text segments of an LLM request body, or false when the
@@ -535,13 +550,17 @@ func (x *extractor) openAIMessage(m *node, path string) {
 // flattened {name, arguments} of the legacy and responses shapes.
 func (x *extractor) openAIToolCall(tc *node, path string) {
 	if tc.kind != 'o' {
+		x.res.ToolCalls = append(x.res.ToolCalls, ToolCall{Path: path})
 		x.payload(tc, RoleAssistant, KindToolArgs, path)
 		return
 	}
 	name := tc.get("name").text(x.src)
-	if fn := tc.get("function"); fn != nil && fn.kind == 'o' && name == "" {
-		name = fn.get("name").text(x.src)
+	for _, key := range []string{"function", "custom"} {
+		if fn := tc.get(key); fn != nil && fn.kind == 'o' && name == "" {
+			name = fn.get("name").text(x.src)
+		}
 	}
+	x.res.ToolCalls = append(x.res.ToolCalls, ToolCall{Name: name, Path: path})
 	defer x.nameTool(len(x.res.Segments), name)
 	done := map[string]bool{}
 	if fn := tc.get("function"); fn != nil && fn.kind == 'o' {
@@ -725,6 +744,9 @@ func (x *extractor) anthropicBlock(b *node, role Role, kind, p string) {
 		x.emit(b.get("text"), role, kind, p+".text")
 		x.rest(b, map[string]bool{"text": true}, role, kind, p)
 	case t == "tool_use" || t == "server_tool_use" || t == "mcp_tool_use":
+		if t == "tool_use" {
+			x.res.ToolCalls = append(x.res.ToolCalls, ToolCall{Name: b.get("name").text(x.src), Path: p})
+		}
 		defer x.nameTool(len(x.res.Segments), b.get("name").text(x.src))
 		x.payload(b.get("input"), RoleAssistant, KindToolArgs, p+".input")
 		x.rest(b, map[string]bool{"input": true}, RoleAssistant, KindToolArgs, p)
@@ -847,9 +869,12 @@ func (x *extractor) geminiPart(part *node, role Role, path string) {
 			done[k] = true
 			from := len(x.res.Segments)
 			x.payloadOf(v, "args", RoleAssistant, KindToolArgs, p)
+			call := ToolCall{Path: p}
 			if v.kind == 'o' {
-				x.nameTool(from, v.get("name").text(x.src))
+				call.Name = v.get("name").text(x.src)
+				x.nameTool(from, call.Name)
 			}
+			x.res.ToolCalls = append(x.res.ToolCalls, call)
 		case "functionResponse", "function_response":
 			done[k] = true
 			x.payloadOf(v, "response", RoleTool, KindToolResult, p)

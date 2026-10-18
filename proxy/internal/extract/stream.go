@@ -89,6 +89,11 @@ type StreamEvent struct {
 	// values of Whole repeat, for an event that closes a call without
 	// naming its tool (the Responses API's ".done" events).
 	WholeChannel string
+	// Calls are the calls of tools the client runs that the event opens or
+	// carries whole, as Result.ToolCalls lists them for a body. A call can
+	// be named again by a later event that repeats it (the Responses API's
+	// ".done" and "completed" events).
+	Calls []ToolCall
 }
 
 // ToolName says which tool the arguments of a channel are for.
@@ -121,6 +126,7 @@ func ParseStreamEvent(data []byte) (StreamEvent, bool) {
 	}
 	if p.x != nil {
 		p.ev.Whole = p.whole().res.Segments
+		p.ev.Calls = append(p.ev.Calls, p.x.res.ToolCalls...)
 	}
 	if len(p.ev.Deltas) > 1 {
 		sort.SliceStable(p.ev.Deltas, func(i, j int) bool { return p.ev.Deltas[i].start < p.ev.Deltas[j].start })
@@ -227,10 +233,19 @@ func (p *streamParser) openAIChat(choices *node) {
 					call := StreamDelta{Channel: ch + ".t" + ti, Kind: KindToolArgs}
 					path := msg + ".tool_calls[" + ti + "]"
 					open := `"tool_calls":[{"index":` + ti + `,`
+					name := ""
 					for _, key := range []string{"function", "custom"} {
 						if fn := tc.get(key); fn != nil && fn.kind == 'o' {
 							p.name(call.Channel, fn.get("name"))
+							if name == "" {
+								name = p.str(fn.get("name"))
+							}
 						}
+					}
+					// The chunk that opens a call gives its id and, as a
+					// rule, the tool's name.
+					if name != "" || p.str(tc.get("id")) != "" {
+						p.ev.Calls = append(p.ev.Calls, ToolCall{Name: name, Path: path})
 					}
 					if fn := tc.get("function"); fn != nil && fn.kind == 'o' {
 						call.Path = path + ".function.arguments"
@@ -249,6 +264,9 @@ func (p *streamParser) openAIChat(choices *node) {
 			if fc := d.get("function_call"); fc != nil && fc.kind == 'o' {
 				call := StreamDelta{Channel: ch + ".fc", Kind: KindToolArgs, Path: msg + ".function_call.arguments"}
 				p.name(call.Channel, fc.get("name"))
+				if name := p.str(fc.get("name")); name != "" {
+					p.ev.Calls = append(p.ev.Calls, ToolCall{Name: name, Path: msg + ".function_call"})
+				}
 				p.add(fc.get("arguments"), alone(call, `"function_call":{"arguments":`, `}`))
 			}
 		}

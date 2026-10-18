@@ -407,6 +407,24 @@ scan:
 # written in".
 
 # ---------------------------------------------------------------------------
+# High-risk tool calls after untrusted tool content (off here)
+# ---------------------------------------------------------------------------
+# A request whose conversation holds a tool result with a finding the
+# policy let through (a warning, a quoted injection, a stripped result) is
+# tainted. A call in its answer to a tool listed here is withheld (BLOCK)
+# or recorded (WARN): the instruction for it may have come from the tool
+# result. Works on buffered and streamed answers, with output_rules on or
+# off. See docs/agents.md, "Hold high-risk tool calls after untrusted
+# content".
+#
+#   agents:
+#     provenance:
+#       enabled: true
+#       high_risk_tools: [bash, run_shell, write_file, delete_file, send_email, "http_*"]
+#       taint_on: [injection, quoted_injection, hidden_text]   # the default
+#       action: BLOCK           # or WARN
+
+# ---------------------------------------------------------------------------
 # RBAC exception framework (opt-in)
 # ---------------------------------------------------------------------------
 # Exceptions allow specific admin/security roles to bypass policy rules with

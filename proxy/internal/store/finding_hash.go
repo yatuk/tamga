@@ -209,6 +209,15 @@ var findingMetadataKept = map[string]bool{
 	// finding's metadata is "kind" and "chars", listed above.)
 	"keyword":     true,
 	"schema_path": true,
+	// tool_provenance: which tool content of the request made it untrusted,
+	// by where it stands in the request and what was found in it, and how
+	// many pieces did. The finding is made without the text of any of them.
+	"source_role":     true,
+	"source_path":     true,
+	"source_type":     true,
+	"source_category": true,
+	"source_score":    true,
+	"sources":         true,
 }
 
 // findingMetadataHashed lists the metadata keys that name a person and are

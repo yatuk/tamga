@@ -145,6 +145,14 @@ type streamGuard struct {
 	judged      map[string][]scanner.Finding
 	judgedBytes int
 
+	// taint is set when the request was tainted (agents.provenance): a call
+	// of a high-risk tool ends the stream at the event that opens it, before
+	// the client has any of it, or is recorded (heldCalls). warned says a
+	// call was recorded and let through.
+	taint     *provenanceTaint
+	heldCalls map[string]bool
+	warned    bool
+
 	// What happened, for the event record.
 	findings   []scanner.Finding
 	leaked     bool
@@ -294,6 +302,13 @@ func (g *streamGuard) event(raw []byte) (out []byte, stop bool) {
 	ev, ok := extract.ParseStreamEvent(data)
 	for _, tn := range ev.Tools {
 		g.channel(tn.Channel).tool = tn.Name
+	}
+	if g.taint != nil && len(ev.Calls) > 0 && g.holdCalls(ev.Calls) {
+		return g.endBeforeCall(), true
+	}
+	if g.taint != nil && !g.scans() && g.restore == nil && g.canary == "" {
+		// Nothing else reads this stream: its text goes as it comes.
+		return raw, false
 	}
 	if !ok || (len(ev.Deltas) == 0 && len(ev.Ends) == 0 && !ev.EndsAll && len(ev.Whole) == 0) {
 		return raw, false
@@ -625,6 +640,53 @@ func (g *streamGuard) restoreEdits(segs []extract.Segment, sealedThinking bool) 
 		}
 	}
 	return edits
+}
+
+// holdCalls holds the tool calls an event opens to the request's taint.
+// stopped means the stream must end here: a high-risk tool is called and
+// the policy withholds such a call. The event that names the tool is the
+// first the client would have of the call, so none of it goes out; what
+// the stream sent before it (the model's text, other tool calls) has.
+func (g *streamGuard) holdCalls(calls []extract.ToolCall) (stopped bool) {
+	if g.heldCalls == nil {
+		g.heldCalls = make(map[string]bool)
+	}
+	found := g.taint.callFindings(calls, g.heldCalls)
+	if len(found) == 0 {
+		return false
+	}
+	g.findings = append(g.findings, found...)
+	if g.taint.blocks() {
+		g.stopReason = "tool_call_provenance"
+		return true
+	}
+	g.warned = true
+	return false
+}
+
+// endBeforeCall is what goes out when a held call ends the stream: the
+// text the model wrote before the call, which is still kept back and is
+// scanned as the end of its channel, then the error event. The arguments
+// of other tool calls that are kept back are not sent: the answer stops
+// where the call begins. If what is let out of the text ends the stream
+// for a reason of its own, that is the end.
+func (g *streamGuard) endBeforeCall() []byte {
+	names := make([]string, 0, len(g.channels))
+	for name, ch := range g.channels {
+		if ch.kind != extract.KindToolArgs && ch.tool == "" {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	var out []byte
+	for _, name := range names {
+		part, stopped := g.flush(name)
+		if stopped {
+			return part
+		}
+		out = append(out, part...)
+	}
+	return append(out, g.termination()...)
 }
 
 // maxJudgedBytes bounds what judgeSegments remembers of one stream.

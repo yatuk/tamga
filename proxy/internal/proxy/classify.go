@@ -27,6 +27,10 @@ type classifyOutcome struct {
 	// when the service runs a shadow model; nil otherwise. It goes on the
 	// request's event and into the request log.
 	record *events.ClassifierRecord
+	// scores are the scores of the texts the classifier answered for, by
+	// segment, flagged or not: agents.provenance.classifier_score reads the
+	// ones under the threshold.
+	scores map[int]float64
 }
 
 // errClassifierNotConfigured is the failure when the policy turns the
@@ -123,6 +127,10 @@ func classifySegments(ctx context.Context, guard *classifier.Guard, set policy.C
 			threshold = set.SignalThreshold
 		}
 		recordShadow(&out, set, segs[segIdx[j]], segIdx[j], res, threshold)
+		if out.scores == nil {
+			out.scores = make(map[int]float64, len(results))
+		}
+		out.scores[segIdx[j]] = res.Score
 		if res.Score < threshold {
 			continue
 		}
