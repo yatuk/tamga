@@ -8,6 +8,13 @@ const withBundleAnalyzer = process.env.ANALYZE === "true"
 
 const nextConfig = {
   output: "standalone",
+  // No page uses next/image, so nothing is resized on the server, and sharp
+  // and its libvips builds (@img/*, LGPL-3.0) stay out of the standalone
+  // output and the image. The Dockerfile removes any that are traced anyway.
+  images: { unoptimized: true },
+  outputFileTracingExcludes: {
+    "*": ["node_modules/sharp/**/*", "node_modules/@img/**/*"],
+  },
   // Next 15 client router cache — keep dynamic RSC payloads warm for
   // 30s and static ones for 3 minutes so repeat navs inside the same
   // session render instantly without refetching the tree.

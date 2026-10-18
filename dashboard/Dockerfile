@@ -1,3 +1,4 @@
+# TODO: pin by digest (image:tag@sha256:...): docs/operations.md, "Image pins".
 FROM node:22-alpine AS builder
 
 WORKDIR /app
@@ -8,14 +9,21 @@ COPY . .
 # A NEXT_PUBLIC_ value is written into the JavaScript at build time; setting
 # it on the running container changes nothing. So the address the browser
 # calls the proxy at is a build argument.
-ARG NEXT_PUBLIC_API_URL=http://localhost:8443
+ARG NEXT_PUBLIC_API_URL=https://localhost:8443
 ARG NEXT_PUBLIC_SITE_URL=https://tamgaproxy.com
 ARG NEXT_PUBLIC_MARKETING_URL=https://tamgaproxy.com
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
 ENV NEXT_PUBLIC_MARKETING_URL=$NEXT_PUBLIC_MARKETING_URL
 RUN npm run build
+# The console does not use next/image (images.unoptimized in
+# next.config.js), so sharp and the libvips builds it brings (@img/*,
+# LGPL-3.0) are not shipped. next.config.js keeps them out of the trace; this
+# removes whatever is left before the runtime stage copies the output, so no
+# layer of the image holds them.
+RUN rm -rf .next/standalone/node_modules/sharp .next/standalone/node_modules/@img
 
+# TODO: pin by digest (image:tag@sha256:...): docs/operations.md, "Image pins".
 FROM node:22-alpine
 
 LABEL org.opencontainers.image.title="Tamga console" \
