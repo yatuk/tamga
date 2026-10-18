@@ -70,12 +70,15 @@ def load_ocr_engine() -> Any | None:
     """The OCR engine of app.ocr, or None when that module is not part of
     this install or its engine is not available (no model, no binary)."""
     try:
-        from app.ocr import OcrEngine  # type: ignore[import-not-found]
+        from app.ocr import get_engine  # type: ignore[import-not-found]
     except Exception:  # noqa: BLE001 - ImportError, or a module that fails to load
         return None
     try:
-        engine = OcrEngine()
-        if not engine.available():
+        # The engine TAMGA_OCR_ENGINE names; available() answers
+        # (ok, reason) and never raises.
+        engine = get_engine()
+        ok, _reason = engine.available()
+        if not ok:
             return None
     except Exception as exc:  # noqa: BLE001
         logger.warning("OCR engine unavailable: %s", type(exc).__name__)
@@ -136,7 +139,9 @@ class Extractor:
             if engine is not None:
 
                 def read_image(image: bytes, _engine: Any = engine) -> str:
-                    return readers.ocr_text(_engine.read(image, ocr_lang))
+                    if ocr_lang:
+                        return readers.ocr_text(_engine.read(image, ocr_lang))
+                    return readers.ocr_text(_engine.read(image))
 
         with self._lock:
             if self._busy >= self._workers:
