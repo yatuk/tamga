@@ -1,10 +1,11 @@
 # Browser extension for chat sites
 
 Tamga sees the requests that are sent to it. Text typed into claude.ai,
-chatgpt.com or gemini.google.com goes from the browser to that site and never
-reaches the proxy. The extension in [`extension/`](../extension/README.md)
-is for that gap: when someone pastes into the message box or sends on one of
-those three sites, it asks your own Tamga what the policy says about the text
+chatgpt.com, gemini.google.com or another AI chat site goes from the browser
+to that site and never reaches the proxy. The extension in
+[`extension/`](../extension/README.md) is for that gap: when someone pastes
+into the message box or sends on one of the [sites it knows](#sites), it
+asks your own Tamga what the policy says about the text
 ([`POST /api/v1/scan`](operations.md#checking-a-text-without-sending-it)) and
 acts on the answer before the site receives anything.
 
@@ -20,7 +21,9 @@ acts on the answer before the site receives anything.
 > adapter stops matching until someone updates it. The check of attached
 > text files and the Firefox build were written on 2026-10-18 and have been
 > run only by the Node tests; the README ends with a checklist for the live
-> run.
+> run. So were the fourteen sites after the first three ([Sites](#sites)):
+> on six of them the selectors were not compared with the live page at all,
+> and the extension has been loaded on none of them.
 
 The project publishes nothing to the Chrome Web Store or to Edge Add-ons.
 There is no listing to install from. You load the directory unpacked, or you
@@ -69,15 +72,70 @@ hold nothing. Each reason is said once for a page load, not once for a
 paste. Under `failMode: open` the notice says that what is sent from the
 page goes to the site unchecked.
 
+## Sites
+
+The extension acts on these origins and no others. Chosen on 2026-10-18 from
+the chat web apps in wide use, worldwide and in Turkey:
+
+- Similarweb's estimate of web visits for May 2026, as summarised by
+  [Momentic](https://momenticmarketing.com/blog/top-ai-chatbots) (published
+  2026-08-18), shares of the visits to seven chatbots: ChatGPT 53.9%, Gemini
+  27.9%, Claude 9.2%, DeepSeek 4.1%, Grok 2.4%, Perplexity 1.3%, Microsoft
+  Copilot 1.3%.
+- [Statcounter, AI chatbot market share](https://gs.statcounter.com/ai-chatbot-market-share)
+  for September 2026, which counts referrals from the chatbots to other
+  sites rather than visits: worldwide ChatGPT 80.48%, Gemini 10.91%,
+  Perplexity 5.85%, Copilot 1.79%, Claude 0.95%; [in
+  Turkey](https://gs.statcounter.com/ai-chatbot-market-share/all/turkey)
+  ChatGPT 75.75%, Gemini 21.56%, Copilot 1.09%, Perplexity 0.84%, Claude
+  0.76%.
+- Sites with smaller but comparable use that those two lists do not break
+  out (Mistral, Meta AI, Qwen, Kimi, Poe, HuggingChat, AI Studio,
+  NotebookLM, Z.ai) were added where a web chat exists at an origin of its
+  own, so that the extension does not have to ask for a larger site.
+
+"Status" says how the adapter's selectors were established; the extension
+itself has been run on the first three only. Each adapter's file under
+`extension/src/content/adapters/` names its sources, and
+[`extension/README.md`](../extension/README.md#sites) lists every selector
+with its status.
+
+| Site | Origin | Adapter | Status |
+|---|---|---|---|
+| Claude | `https://claude.ai` | added (2026-10-11) | compared with the live page signed in; extension run there |
+| ChatGPT | `https://chatgpt.com` | added (2026-10-11) | the same |
+| Gemini | `https://gemini.google.com` | added (2026-10-11) | the same |
+| DeepSeek | `https://chat.deepseek.com` | added | selectors not compared with the live page |
+| Microsoft Copilot | `https://copilot.microsoft.com`, `https://copilot.com` | added | selectors not compared with the live page |
+| Microsoft 365 Copilot Chat | `https://m365.cloud.microsoft` (chat under `/chat`), `https://copilot.cloud.microsoft` | added | signed-out box read from the live page; signed-in chat not compared |
+| Perplexity | `https://www.perplexity.ai` (`perplexity.ai` redirects there) | added | read from the live page signed out |
+| Mistral Le Chat | `https://chat.mistral.ai` | added | selectors not compared with the live page |
+| Grok | `https://grok.com` | added | read from the live page signed out |
+| Meta AI | `https://www.meta.ai` | added | signed-out box read from the live page; signed-in box not compared |
+| Qwen Chat | `https://chat.qwen.ai` | added | read from the live page signed out |
+| Kimi | `https://www.kimi.com` (`kimi.com` redirects there) | added | read from the live page signed out |
+| Poe | `https://poe.com` | added | selectors not compared with the live page |
+| HuggingChat | `https://huggingface.co`, under `/chat` only | added | read from the live page signed out |
+| Google AI Studio | `https://aistudio.google.com` | added | selectors not compared with the live page |
+| Gemini Notebook, formerly NotebookLM | `https://notebook.google.com` (`notebooklm.google.com` redirected there on 2026-10-18; both are listed) | added | selectors not compared with the live page |
+| Z.ai | `https://chat.z.ai` | added | read from the live page signed out |
+| Grok inside X | `https://x.com/i/grok` | not added | a browser grants a host permission for the whole of x.com whatever path is named, and X moves between pages without loading them, so a content script matched on `/i/grok` would miss a visit that starts elsewhere and stay on the page after one that leaves; covering it means acting on all of x.com |
+| GitHub Copilot chat | `https://github.com/copilot` | not added | the same: it would take all of github.com |
+| You.com | `https://you.com` | not added | its home page is now an API product; the chat (`/chat`) is behind sign-in and nothing could be read from it, and its use is not in the lists above |
+| Character.AI | `https://character.ai` | not added | a role-play product rather than a work tool; its pages refused a scripted request and nothing was read |
+| Doubao | `https://www.doubao.com` | not added | used mainly in China, with a Chinese interface; nothing was read from it |
+
 ## What it does not cover
 
 - **Other browsers.** Chrome and Edge from version 111, and Firefox from
   140 through the package `node tools/package.js firefox` makes ([Firefox](#firefox);
   not yet run in Firefox). Not Safari.
-- **Other sites.** Only `https://claude.ai`, `https://chatgpt.com` and
-  `https://gemini.google.com`. Not any other chat site, not the same
-  products under another address (an enterprise tenant on its own domain, a
-  model inside another product such as an office suite or a search page).
+- **Other sites.** Only the origins under [Sites](#sites). Not any other
+  chat site, not the same products under another address (an enterprise
+  tenant on its own domain, a model inside another product such as an
+  office suite, a social network or a search page: Grok inside x.com,
+  Copilot inside Word or Edge's sidebar, Meta AI inside WhatsApp, Google's
+  AI Mode in search).
 - **The sites' mobile and desktop apps.** They are not browsers.
 - **A person who removes it or turns it off**, unless it is force-installed
   by policy. A person who uses another browser or another device is not
@@ -197,13 +255,13 @@ more. So:
 | `tamgaKey` | `tk_...` | none | A `proxy` key |
 | `failMode` | `closed`, `open` | `closed` | What happens to a send when there is no verdict |
 | `autoRedact` | `true`, `false` | `false` | Replace the text without asking. The person is told either way |
-| `sites` | list of `claude`, `chatgpt`, `gemini` | all three | Sites the extension acts on |
+| `sites` | list of site ids ([Sites](#sites)) | all of them | Sites the extension acts on. A list set by policy is exact: a site a later version adds is off until you add its id |
 | `timeoutMs` | 500 to 10000 | 2500 | How long to wait for Tamga |
 
 A setting made by policy wins over one typed into the options page and is
 shown there as locked. With no URL and no key the extension is not
 configured, which under `failMode: closed` means nothing can be sent on the
-three sites until it is.
+sites until it is.
 
 The first check after the browser starts was slower than the rest in the
 runs made here: about one second against a local stand-in, once more than
@@ -230,7 +288,8 @@ put the origin in the manifest before you pack, in `extension/manifest.json`:
 "host_permissions": [
   "https://claude.ai/*",
   "https://chatgpt.com/*",
-  "https://gemini.google.com/*",
+  "...the other sites, as they are...",
+  "https://chat.z.ai/*",
   "https://tamga.internal/*"
 ],
 ```
@@ -238,7 +297,14 @@ put the origin in the manifest before you pack, in `extension/manifest.json`:
 and, to hold the extension to that one address, narrow `connect-src` in
 `content_security_policy` from `https:` to `https://tamga.internal`.
 `node --test` will then fail the test that pins `host_permissions` to the
-three sites; that test describes the repository's copy, not yours.
+sites; that test describes the repository's copy, not yours.
+
+To leave a site out altogether (so that the browser never grants the
+extension that host), remove its entry from `src/shared/sites.js` and its
+patterns from the manifest's `host_permissions`, `content_scripts` and
+`web_accessible_resources`, and its id from `managed_schema.json`; the tests
+say what else still names it. Turning a site off with the `sites` setting
+keeps the permission and stops the extension acting there.
 
 If you would rather not edit the manifest, each person has to open the
 extension's options once and press Save, which makes the browser ask for
@@ -333,6 +399,11 @@ The settings are described by `extension/managed_schema.json`. The values:
 }
 ```
 
+The `sites` list in these examples limits the extension to the first three
+sites. Leave `sites` out to cover all of them, including sites a later
+version adds; set it to limit them. A site whose id is not in a list set by
+policy is off.
+
 **Linux**, as a file in the managed policy directory:
 
 ```json
@@ -353,7 +424,7 @@ The settings are described by `extension/managed_schema.json`. The values:
 
 **Windows**, in the registry (Chrome shown; for Edge the path starts
 `HKLM\Software\Policies\Microsoft\Edge`). `sites` is left out here, which
-keeps all three:
+keeps all of them:
 
 ```
 Windows Registry Editor Version 5.00
@@ -516,7 +587,8 @@ none of it is built:
 
 For whoever has to approve it:
 
-- It runs on the three sites and nowhere else, in the top frame only.
+- It runs on the [sites](#sites) and nowhere else, in the top frame only;
+  on huggingface.co, under `/chat` only.
 - It reads the text of the message box at paste and at send, and the
   content of a text file the person attaches, before the site has it. It
   does not read the conversation, the site's answers, cookies or anything
@@ -530,16 +602,17 @@ For whoever has to approve it:
   stored key.
 - It loads no code from the network. Its content security policy allows
   scripts from the package only.
-- Its permissions are `storage` and the three sites, plus the one Tamga
-  origin.
+- Its permissions are `storage` and the hosts of the sites (20 origins;
+  huggingface.co as a whole, since a browser grants a host and not a path),
+  plus the one Tamga origin. It does not ask for every site.
 - The sites can tell that it is installed: the files of its content script
-  are readable by those three origins, as an extension that imports its own
+  are readable by those origins, as an extension that imports its own
   modules into a page has to allow.
 
 ## When a site changes its page
 
 The badge "the claude adapter did not match this page. Using the generic
-fallback" means the site's own selectors stopped matching and the extension
+fallback" (with the id of whichever site's adapter it is) means the site's own selectors stopped matching and the extension
 is working from a guess. "Tamga could not attach to this page" means it
 found no message box at all. In both cases the fix is in one file under
 `extension/src/content/adapters/`; see
