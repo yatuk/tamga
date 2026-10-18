@@ -1,0 +1,36 @@
+<!doctype html>
+<!--
+  The structure the metaai adapter assumes for the signed-in page. It is
+  NOT a copy of www.meta.ai and was not checked against it: a
+  contenteditable box with role="textbox", in no form. Signed out, on
+  2026-10-18 (Turkish interface), the box was a one-line input instead, and
+  an attach button (data-testid="composer-add-attachment-button") and a send
+  button named only by its aria-label ("Gönder") were beside it. Here the
+  attach button is as seen and the send button carries the English label
+  the adapter looks for; the box and the file input are assumed. The
+  signed-out input and the Turkish label are tried in test/adapters.test.js.
+  The attach button is a negative. Written 2026-10-18.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Fixture: the structure assumed for www.meta.ai</title>
+  </head>
+  <body>
+    <main>
+      <p data-fixture="log"></p>
+      <div class="composer">
+        <div class="field"><div contenteditable="true" role="textbox" aria-label="Ask Meta AI" data-fixture="composer"><p>Hello</p><p>second line</p></div></div>
+        <div class="actions">
+          <button aria-label="Add attachment" data-slot="button" data-testid="composer-add-attachment-button" data-fixture="attach"><span>+</span></button>
+          <input type="file" hidden data-fixture="file">
+          <button aria-label="Send message" data-slot="button" data-fixture="send"><span data-fixture="send-icon">Send</span></button>
+        </div>
+      </div>
+    </main>
+    <script type="module">
+      import { attachFakeSite } from './fake-site.js';
+      attachFakeSite(document, { composer: '[data-fixture="composer"]', send: '[data-fixture="send"]' });
+    </script>
+  </body>
+</html>

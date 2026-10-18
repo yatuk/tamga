@@ -1,0 +1,35 @@
+<!doctype html>
+<!--
+  The structure the grok adapter assumes. It is NOT a copy of grok.com: a
+  form holding div.query-bar with a tiptap editor in it (contenteditable,
+  role="combobox"; a textarea before the page has loaded), a hidden file input
+  named files, an attach button (data-testid="attach-button"), a model
+  selector and a submit button with data-testid="chat-submit" whose label is
+  translated ("Gönder"). That much was read from the live page signed out
+  on 2026-10-18 (Turkish interface); the nesting is shortened. The attach
+  and model buttons are negatives. Written 2026-10-18.
+-->
+<html lang="tr">
+  <head>
+    <meta charset="utf-8">
+    <title>Fixture: the structure assumed for grok.com</title>
+  </head>
+  <body>
+    <main>
+      <p data-fixture="log"></p>
+      <form>
+        <input class="hidden" type="file" multiple name="files" data-fixture="file">
+        <div class="query-bar">
+          <div class="tiptap ProseMirror query-bar-editor" contenteditable="true" role="combobox" aria-label="Grok'a her şeyi sor" translate="no" data-fixture="composer"><p>Hello</p><p>second line</p></div>
+          <button type="button" aria-label="Ekle" data-testid="attach-button" data-fixture="attach"><span>+</span></button>
+          <button type="button" id="model-select-trigger" aria-label="Model: Hızlı" data-fixture="model"><span>Hızlı</span></button>
+          <button type="submit" aria-label="Gönder" data-testid="chat-submit" data-fixture="send"><span data-fixture="send-icon">Send</span></button>
+        </div>
+      </form>
+    </main>
+    <script type="module">
+      import { attachFakeSite } from './fake-site.js';
+      attachFakeSite(document, { composer: '[data-fixture="composer"]', send: '[data-fixture="send"]' });
+    </script>
+  </body>
+</html>

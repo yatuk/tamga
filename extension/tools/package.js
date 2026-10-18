@@ -62,7 +62,7 @@ export function manifestFor(source, browser, { geckoId = GECKO_ID } = {}) {
     gecko: {
       id: geckoId,
       strict_min_version: GECKO_MIN_VERSION,
-      // The text of what is pasted, sent or attached on the three sites goes
+      // The text of what is pasted, sent or attached on the chat sites goes
       // to the organisation's own Tamga server, which is off the device.
       data_collection_permissions: { required: ['websiteContent'] },
     },

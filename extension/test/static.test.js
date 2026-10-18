@@ -11,12 +11,11 @@ import { fileURLToPath } from 'node:url';
 import { SETTING_KEYS } from '../src/background/settings.js';
 import { ADAPTERS, generic } from '../src/content/adapters/index.js';
 import { EVENT_TYPES } from '../src/content/controller.js';
-import { SITES } from '../src/shared/sites.js';
+import { SITES, SITE_IDS, SITE_ORIGINS, hostMatches, siteMatches } from '../src/shared/sites.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (...parts) => readFileSync(join(root, ...parts), 'utf8');
 const manifest = JSON.parse(read('manifest.json'));
-const siteMatches = Object.values(SITES).map((origin) => `${origin}/*`);
 
 function files(dir, out = []) {
   for (const name of readdirSync(dir)) {
@@ -29,17 +28,24 @@ function files(dir, out = []) {
 const shipped = [...files(join(root, 'src')), ...files(join(root, 'options'))];
 const rel = (path) => relative(root, path).replace(/\\/g, '/');
 
-test('manifest: version 3, the three sites and nothing wider', () => {
+test('manifest: version 3, the sites of src/shared/sites.js and nothing wider', () => {
   assert.equal(manifest.manifest_version, 3);
-  assert.deepEqual(manifest.host_permissions, siteMatches);
+  assert.deepEqual(manifest.host_permissions, hostMatches());
   // The second sets the vendors' workspace headers (tenant-rules.js). It
-  // acts only where host access is granted, the three sites, and warns of
-  // nothing at install.
+  // acts only where host access is granted and warns of nothing at install.
   assert.deepEqual(manifest.permissions, ['storage', 'declarativeNetRequestWithHostAccess']);
   assert.equal(manifest.content_scripts.length, 1);
-  assert.deepEqual(manifest.content_scripts[0].matches, siteMatches);
+  assert.deepEqual(manifest.content_scripts[0].matches, siteMatches());
   assert.equal(manifest.content_scripts[0].all_frames, false);
-  assert.deepEqual(manifest.web_accessible_resources.map((r) => r.matches), [siteMatches]);
+  assert.deepEqual(manifest.web_accessible_resources.map((r) => r.matches), [hostMatches()]);
+  // Each pattern names one https host: no wildcard host, no <all_urls>.
+  for (const pattern of [...manifest.host_permissions, ...manifest.content_scripts[0].matches]) {
+    assert.match(pattern, /^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)+\/[a-z/]*\*?$/, pattern);
+  }
+  // HuggingChat is a part of huggingface.co: the content script runs there
+  // only, though the host permission is for the host.
+  assert.ok(siteMatches().includes('https://huggingface.co/chat/*'));
+  assert.ok(!siteMatches().includes('https://huggingface.co/*'));
   // The Tamga origin is asked for at configuration time, not granted up front.
   assert.deepEqual(manifest.optional_host_permissions, ['https://*/*', 'http://localhost/*', 'http://127.0.0.1/*']);
   for (const key of ['externally_connectable', 'optional_permissions', 'update_url', 'oauth2', 'key']) {
@@ -68,8 +74,18 @@ test('manifest: every file it names exists, and the worker is a module', () => {
   ];
   for (const file of named) assert.ok(existsSync(join(root, file)), file);
   assert.equal(manifest.background.type, 'module');
-  // What the loader imports has to be reachable from the three sites.
+  // What the loader imports has to be reachable from the sites.
   assert.deepEqual(manifest.web_accessible_resources[0].resources, ['src/content/*', 'src/shared/*']);
+});
+
+test('one adapter for each site, in the order of the one list of sites', () => {
+  assert.deepEqual(Object.keys(ADAPTERS), [...SITE_IDS]);
+  for (const id of SITE_IDS) {
+    assert.equal(ADAPTERS[id].id, id);
+    assert.ok(SITES[id].origins.length > 0, id);
+    for (const origin of SITES[id].origins) assert.equal(new URL(origin).origin, origin, `${id}: ${origin} is an origin`);
+  }
+  assert.equal(new Set(SITE_ORIGINS).size, SITE_ORIGINS.length, 'no origin belongs to two sites');
 });
 
 test('managed_schema.json describes exactly the settings the code reads', () => {
@@ -118,8 +134,8 @@ test('fetch is called in one file, the service worker, and nowhere in a content 
   }
 });
 
-test('the only addresses written into the sources are the three sites', () => {
-  const allowed = new Set(Object.values(SITES));
+test('the only addresses written into the sources are the sites\' own', () => {
+  const allowed = new Set(SITE_ORIGINS);
   for (const path of shipped.filter((p) => p.endsWith('.js'))) {
     const code = read(rel(path)).replace(/^\s*\/\/.*$/gm, '');
     for (const [url] of code.matchAll(/https?:\/\/[^\s'"`)]+/g)) {

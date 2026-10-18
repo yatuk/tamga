@@ -1,0 +1,30 @@
+<!doctype html>
+<!--
+  The structure the copilot adapter assumes. It is NOT a copy of
+  copilot.microsoft.com and was not checked against it (signed out, the
+  site showed a sign-in page): textarea#userInput in no form and a send
+  button whose aria-label holds "Submit", as the open-source projects named
+  in src/content/adapters/copilot.js describe it. The file input is
+  assumed. Written 2026-10-18.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Fixture: the structure assumed for copilot.microsoft.com</title>
+  </head>
+  <body>
+    <main>
+      <p data-fixture="log"></p>
+      <div class="composer">
+        <textarea id="userInput" data-testid="composer-input" placeholder="Message Copilot" data-fixture="composer">Hello
+second line</textarea>
+        <input type="file" hidden data-fixture="file">
+        <button type="button" aria-label="Submit message" data-fixture="send"><span data-fixture="send-icon">Go</span></button>
+      </div>
+    </main>
+    <script type="module">
+      import { attachFakeSite } from './fake-site.js';
+      attachFakeSite(document, { composer: '[data-fixture="composer"]', send: '[data-fixture="send"]' });
+    </script>
+  </body>
+</html>

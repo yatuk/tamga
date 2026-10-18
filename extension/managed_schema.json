@@ -24,11 +24,11 @@
     },
     "sites": {
       "title": "Sites",
-      "description": "The sites the extension acts on. All three when left out.",
+      "description": "The sites the extension acts on, by id (the list is src/shared/sites.js). All of them when left out. A site missing from a list that is set is not checked, including a site a later version adds.",
       "type": "array",
       "items": {
         "type": "string",
-        "enum": ["claude", "chatgpt", "gemini"]
+        "enum": ["claude", "chatgpt", "gemini", "deepseek", "copilot", "m365copilot", "perplexity", "mistral", "grok", "metaai", "qwen", "kimi", "poe", "huggingchat", "aistudio", "notebook", "zai"]
       }
     },
     "timeoutMs": {

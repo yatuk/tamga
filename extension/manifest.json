@@ -3,7 +3,7 @@
   "name": "Tamga for chat sites",
   "short_name": "Tamga",
   "version": "0.9.0",
-  "description": "Checks what you paste or send on claude.ai, chatgpt.com and gemini.google.com against your organisation's own Tamga policy.",
+  "description": "Checks what you paste, send or attach on AI chat sites against your organisation's own Tamga policy.",
   "homepage_url": "https://tamgaproxy.com",
   "minimum_chrome_version": "111",
   "icons": {
@@ -23,7 +23,24 @@
   "host_permissions": [
     "https://claude.ai/*",
     "https://chatgpt.com/*",
-    "https://gemini.google.com/*"
+    "https://gemini.google.com/*",
+    "https://chat.deepseek.com/*",
+    "https://copilot.microsoft.com/*",
+    "https://copilot.com/*",
+    "https://m365.cloud.microsoft/*",
+    "https://copilot.cloud.microsoft/*",
+    "https://www.perplexity.ai/*",
+    "https://chat.mistral.ai/*",
+    "https://grok.com/*",
+    "https://www.meta.ai/*",
+    "https://chat.qwen.ai/*",
+    "https://www.kimi.com/*",
+    "https://poe.com/*",
+    "https://huggingface.co/*",
+    "https://aistudio.google.com/*",
+    "https://notebook.google.com/*",
+    "https://notebooklm.google.com/*",
+    "https://chat.z.ai/*"
   ],
   "optional_host_permissions": [
     "https://*/*",
@@ -39,7 +56,25 @@
       "matches": [
         "https://claude.ai/*",
         "https://chatgpt.com/*",
-        "https://gemini.google.com/*"
+        "https://gemini.google.com/*",
+        "https://chat.deepseek.com/*",
+        "https://copilot.microsoft.com/*",
+        "https://copilot.com/*",
+        "https://m365.cloud.microsoft/*",
+        "https://copilot.cloud.microsoft/*",
+        "https://www.perplexity.ai/*",
+        "https://chat.mistral.ai/*",
+        "https://grok.com/*",
+        "https://www.meta.ai/*",
+        "https://chat.qwen.ai/*",
+        "https://www.kimi.com/*",
+        "https://poe.com/*",
+        "https://huggingface.co/chat",
+        "https://huggingface.co/chat/*",
+        "https://aistudio.google.com/*",
+        "https://notebook.google.com/*",
+        "https://notebooklm.google.com/*",
+        "https://chat.z.ai/*"
       ],
       "js": ["src/content/loader.js"],
       "run_at": "document_start",
@@ -52,7 +87,24 @@
       "matches": [
         "https://claude.ai/*",
         "https://chatgpt.com/*",
-        "https://gemini.google.com/*"
+        "https://gemini.google.com/*",
+        "https://chat.deepseek.com/*",
+        "https://copilot.microsoft.com/*",
+        "https://copilot.com/*",
+        "https://m365.cloud.microsoft/*",
+        "https://copilot.cloud.microsoft/*",
+        "https://www.perplexity.ai/*",
+        "https://chat.mistral.ai/*",
+        "https://grok.com/*",
+        "https://www.meta.ai/*",
+        "https://chat.qwen.ai/*",
+        "https://www.kimi.com/*",
+        "https://poe.com/*",
+        "https://huggingface.co/*",
+        "https://aistudio.google.com/*",
+        "https://notebook.google.com/*",
+        "https://notebooklm.google.com/*",
+        "https://chat.z.ai/*"
       ]
     }
   ],

@@ -781,6 +781,31 @@
   `extension/README.md` ends with a checklist for the live run. The test
   DOM now reads a fixture with CR LF line endings as a browser does, which
   made one test fail on a Windows checkout.
+- **Fourteen more chat sites: DeepSeek, Microsoft Copilot, Microsoft 365
+  Copilot Chat, Perplexity, Mistral Le Chat, Grok, Meta AI, Qwen, Kimi,
+  Poe, HuggingChat (huggingface.co under `/chat` only), Google AI Studio,
+  Gemini Notebook (formerly NotebookLM) and Z.ai**, each with its own
+  adapter, fixture and tests; the list, with origins and the usage figures
+  it was chosen by, is in `docs/browser-extension.md#sites`. The sites are
+  listed once, in `src/shared/sites.js`; the options page draws its
+  checkboxes from it and the tests hold the manifest and the policy schema
+  to it. On seven of the sites the selectors were read from the live page
+  signed out on 2026-10-18; on the other seven they are taken from
+  open-source projects or guessed, and the README marks them "selectors not
+  compared with the live page". The extension has not been run on any of
+  them. Not covered, and why: Grok inside x.com, GitHub Copilot, You.com,
+  Character.AI, Doubao. **What an existing installation notices: the
+  extension asks for 17 more host permissions (20 origins in all,
+  huggingface.co as a whole). Where an update reaches a copy the person
+  installed, Chrome and Edge turn it off until the person accepts the new
+  permissions, and Firefox asks; a force-installed copy gets them without
+  a prompt. Not tried. A `sites` list set by
+  policy is exact, so the new sites stay off where policy lists the first
+  three, as the examples in the docs did; a list saved on the options page
+  keeps a site the person unticked off and turns the new sites on.** A
+  site's own adapter may now name a one-line `<input>` as the message box
+  (www.meta.ai signed out has one); the generic fallback still never takes
+  one for it.
 
 ### Licences and packaging
 - `NOTICE` gives the attributions the bundled material asks for, and

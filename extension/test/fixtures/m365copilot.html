@@ -1,0 +1,32 @@
+<!doctype html>
+<!--
+  The structure the m365copilot adapter assumes for the signed-in chat. It
+  is NOT a copy of m365.cloud.microsoft and was not checked against it: a
+  Lexical editor on a span with the id m365-chat-editor-target-element, and
+  a submit button in .fai-ChatInput__actions, in no form. The id and the
+  class are from the open-source projects named in
+  src/content/adapters/m365copilot.js; the button, its label and the file
+  input are assumed. Written 2026-10-18.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Fixture: the structure assumed for Microsoft 365 Copilot Chat</title>
+  </head>
+  <body>
+    <main>
+      <p data-fixture="log"></p>
+      <div class="fai-ChatInput">
+        <span id="m365-chat-editor-target-element" contenteditable="true" role="combobox" data-lexical-editor="true" aria-label="Message Copilot" data-fixture="composer"><p>Hello</p><p>second line</p></span>
+        <div class="fai-ChatInput__actions">
+          <input type="file" hidden data-fixture="file">
+          <button type="submit" aria-label="Send" data-fixture="send"><span data-fixture="send-icon">Send</span></button>
+        </div>
+      </div>
+    </main>
+    <script type="module">
+      import { attachFakeSite } from './fake-site.js';
+      attachFakeSite(document, { composer: '[data-fixture="composer"]', send: '[data-fixture="send"]' });
+    </script>
+  </body>
+</html>

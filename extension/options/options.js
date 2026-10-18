@@ -6,12 +6,25 @@
 import { loadSettings, parseTamgaUrl } from '../src/background/settings.js';
 import { ext } from '../src/shared/api.js';
 import { MSG_TEST } from '../src/shared/protocol.js';
+import { SITES, SITE_IDS } from '../src/shared/sites.js';
 import { reasonText } from '../src/content/decide.js';
 
 const form = document.getElementById('settings');
 const status = document.getElementById('status');
 const field = (name) => form.elements.namedItem(name);
 const siteBoxes = () => [...form.querySelectorAll('input[name="sites"]')];
+
+// A checkbox for each site, from the one list of them.
+for (const id of SITE_IDS) {
+  const label = document.createElement('label');
+  label.className = 'check';
+  const box = document.createElement('input');
+  box.type = 'checkbox';
+  box.name = 'sites';
+  box.value = id;
+  label.append(box, ` ${SITES[id].label}`);
+  document.getElementById('site-list').append(label);
+}
 
 let managedKeys = [];
 // The origin of a Tamga URL set by policy, read when the page is drawn: Save
@@ -67,7 +80,12 @@ async function save(event) {
   if (free('tamgaKey') && field('tamgaKey').value.trim() !== '') next.tamgaKey = field('tamgaKey').value.trim();
   if (free('failMode')) next.failMode = field('failMode').value;
   if (free('autoRedact')) next.autoRedact = field('autoRedact').checked;
-  if (free('sites')) next.sites = siteBoxes().filter((box) => box.checked).map((box) => box.value);
+  if (free('sites')) {
+    next.sites = siteBoxes().filter((box) => box.checked).map((box) => box.value);
+    // So that a site a later version adds is on until it is unticked
+    // (settings.js).
+    next.sitesKnown = [...SITE_IDS];
+  }
 
   // Asked from the click on Save: the browser shows its own prompt naming
   // the one origin. Nothing above waits: Firefox takes the request as the

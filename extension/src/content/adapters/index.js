@@ -2,22 +2,54 @@
 // are found for one event: the site's own selectors first, the generic
 // fallback second.
 
-import { SITES } from '../../shared/sites.js';
+import { siteForUrl } from '../../shared/sites.js';
+import { adapter as aistudio } from './aistudio.js';
 import { editableRoot } from './base.js';
 import { adapter as chatgpt } from './chatgpt.js';
 import { adapter as claude } from './claude.js';
+import { adapter as copilot } from './copilot.js';
+import { adapter as deepseek } from './deepseek.js';
 import { adapter as gemini } from './gemini.js';
 import { adapter as generic } from './generic.js';
+import { adapter as grok } from './grok.js';
+import { adapter as huggingchat } from './huggingchat.js';
+import { adapter as kimi } from './kimi.js';
+import { adapter as m365copilot } from './m365copilot.js';
+import { adapter as metaai } from './metaai.js';
+import { adapter as mistral } from './mistral.js';
+import { adapter as notebook } from './notebook.js';
+import { adapter as perplexity } from './perplexity.js';
+import { adapter as poe } from './poe.js';
+import { adapter as qwen } from './qwen.js';
+import { adapter as zai } from './zai.js';
 
-export const ADAPTERS = Object.freeze({ claude, chatgpt, gemini });
+// One adapter for each site in src/shared/sites.js, in the same order;
+// test/static.test.js keeps the two in step.
+export const ADAPTERS = Object.freeze({
+  claude,
+  chatgpt,
+  gemini,
+  deepseek,
+  copilot,
+  m365copilot,
+  perplexity,
+  mistral,
+  grok,
+  metaai,
+  qwen,
+  kimi,
+  poe,
+  huggingchat,
+  aistudio,
+  notebook,
+  zai,
+});
 export { generic };
 
-/** The adapter for a page's origin, or null on any other origin. */
-export function adapterForOrigin(origin) {
-  for (const id of Object.keys(ADAPTERS)) {
-    if (SITES[id] === origin) return ADAPTERS[id];
-  }
-  return null;
+/** The adapter for a page's URL, or null anywhere else. */
+export function adapterForUrl(url) {
+  const id = siteForUrl(url);
+  return id ? ADAPTERS[id] : null;
 }
 
 function contains(box, el) {

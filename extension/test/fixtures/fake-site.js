@@ -5,12 +5,14 @@
 // loads it too. Its listeners are on document in the capture phase, ahead of
 // anything on the elements, so a send that reaches them was not stopped.
 
+const hasValue = (el) => el.tagName === 'TEXTAREA' || el.tagName === 'INPUT';
+
 function textOf(el) {
-  return el.tagName === 'TEXTAREA' ? el.value : el.textContent;
+  return hasValue(el) ? el.value : el.textContent;
 }
 
 function empty(el) {
-  if (el.tagName === 'TEXTAREA') el.value = '';
+  if (hasValue(el)) el.value = '';
   else el.textContent = '';
 }
 
