@@ -1,5 +1,5 @@
 # TODO: pin by digest (image:tag@sha256:...): docs/operations.md, "Image pins".
-FROM node:22-alpine AS builder
+FROM node:26-alpine AS builder
 
 WORKDIR /app
 COPY package.json package-lock.json* ./
@@ -24,7 +24,7 @@ RUN npm run build
 RUN rm -rf .next/standalone/node_modules/sharp .next/standalone/node_modules/@img
 
 # TODO: pin by digest (image:tag@sha256:...): docs/operations.md, "Image pins".
-FROM node:22-alpine
+FROM node:26-alpine
 
 LABEL org.opencontainers.image.title="Tamga console" \
       org.opencontainers.image.description="Web console of the Tamga LLM security proxy" \
