@@ -145,6 +145,8 @@ var unmaskableOutputKeys = map[string]string{
 	"output_schema":           "a schema mismatch is a verdict on the answer as a document, not a part of it",
 	"schema_mismatch":         "a schema mismatch is a verdict on the answer as a document, not a part of it",
 	"not_json":                "an answer that is not JSON has no part that could be masked to make it JSON",
+	"tool_provenance":         "a tool call after untrusted tool content is a verdict on the call, acted on by agents.provenance.action",
+	"tainted_tool_call":       "a tool call after untrusted tool content is a verdict on the call, acted on by agents.provenance.action",
 }
 
 // ruleBaseType is the finding type a rule key decides about: "pii" for both

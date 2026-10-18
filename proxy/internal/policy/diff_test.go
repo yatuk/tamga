@@ -46,6 +46,10 @@ var ownerPrivileged = []string{
 	// Names the variable the organisation's provider key is read from, and
 	// can refuse every request on a route.
 	"provider_accounts",
+	// agents.provenance with BLOCK withholds every high-risk tool call of
+	// an agent that read a warned-about tool result; switched off, the
+	// control is gone. Proposed as privileged, pending the owner's word.
+	"agents",
 }
 
 func TestEverySectionIsClassified(t *testing.T) {

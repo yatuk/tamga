@@ -424,6 +424,9 @@ type Policy struct {
 	// (provider_accounts.go). Left out of the JSON form when unset, for the
 	// same reason.
 	ProviderAccounts *ProviderAccountsConfig `yaml:"provider_accounts" json:"provider_accounts,omitempty"`
+	// Agents is described in agents.go. Left out of the JSON form when
+	// unset, for the same reason.
+	Agents *AgentsConfig `yaml:"agents" json:"agents,omitempty"`
 }
 
 // Values of scan.on_malformed.

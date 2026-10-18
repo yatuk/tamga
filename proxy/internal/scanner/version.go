@@ -68,6 +68,7 @@ var ScannerVersions = map[string]string{
 	"malicious_link":     "1.1.0", // look-alikes of protected names written in Latin letters only
 	"output_schema":      "1.0.0", // answers only: output_rules.json_schema
 	"tool_destination":   "1.0.0", // answers only: output_rules.tool_destinations
+	"tool_provenance":    "1.0.0", // answers only: agents.provenance
 }
 
 // BINDatasetVersion identifies the embedded binlist.csv snapshot.

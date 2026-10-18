@@ -628,6 +628,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 	// The scores of a shadow model, when the service runs one; recorded with
 	// the request, never part of its verdict.
 	var classifierRecord *events.ClassifierRecord
+	var classifierScores map[int]float64
 	if set, on := pol.ClassifierSettings(); on && segs != nil && action != policy.ActionBlock {
 		var res classifyOutcome
 		if cfg.Classifier == nil {
@@ -639,6 +640,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 			clsSpan.End()
 		}
 		classifierRecord = res.record
+		classifierScores = res.scores
 		switch {
 		case res.err != nil:
 			// The policy asked for a second opinion and did not get one.
@@ -1007,6 +1009,16 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 	// output_rules.prompt_leak compares the answer with the system prompt as
 	// the provider gets it, before the canary below is added to it.
 	leak := newPromptLeak(pol, provider, body)
+	// agents.provenance (provenance.go): a request whose conversation holds
+	// tool content the policy does not trust has the high-risk tool calls of
+	// its answer withheld or recorded. The client is told the request is
+	// tainted before the answer comes, streamed or not.
+	var taint *provenanceTaint
+	if set, on := pol.ProvenanceSettings(); on {
+		if taint = requestTaint(set, segs, findings, classifierScores); taint != nil {
+			w.Header().Set("X-Tamga-Provenance", "tainted")
+		}
+	}
 
 	// Canary: inject a unique token into the outgoing system prompt so a later
 	// appearance in the response reveals a system-prompt leak. Must happen
@@ -1091,7 +1103,9 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 	cacheEnabled := cfg.Cache != nil && pol != nil && pol.Cache != nil && pol.Cache.Enabled
 	cacheKey := ""
 	cacheScan := ""
-	if cacheEnabled && r.Method == http.MethodPost && !vaultActive {
+	// A tainted request is not answered from the cache, nor is its answer
+	// stored: a hit is served without the answer being read again.
+	if cacheEnabled && r.Method == http.MethodPost && !vaultActive && taint == nil {
 		proxySigns := false
 		if provider == "bedrock" {
 			_, proxySigns = bedrockCredentials()
@@ -1219,18 +1233,29 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 			streamScan := pol != nil && pol.OutputRules != nil && pol.OutputRules.Enabled &&
 				pol.OutputRules.Streaming != nil && pol.OutputRules.Streaming.Enabled
 			guardStream := containsCI(ct, "text/event-stream") && resp.StatusCode < 300 &&
-				(streamScan || vaultActive || canaryToken != "")
+				(streamScan || vaultActive || canaryToken != "" || taint != nil)
+			outputOn := pol != nil && pol.OutputRules != nil && pol.OutputRules.Enabled
 			// An answer that arrives encoded anyway (the provider was not
 			// asked to) cannot be read. When something is set to read it,
 			// it is not forwarded unread.
 			if enc := strings.TrimSpace(resp.Header.Get("Content-Encoding")); enc != "" && !strings.EqualFold(enc, "identity") {
-				if (pol != nil && pol.OutputRules != nil && pol.OutputRules.Enabled) || vaultActive || canaryToken != "" {
+				if outputOn || vaultActive || canaryToken != "" || taint != nil {
 					return errUnreadableResponse
 				}
 			}
-			respBody, respBuffered, errWrap := wrapResponseForOutputScan(resp, pol, vaultActive && !guardStream)
+			// The answer to a tainted request is read for its tool calls
+			// even when output_rules does not read answers; only for them.
+			forceBuffer := vaultActive && !guardStream
+			provenanceOnly := taint != nil && !outputOn && !forceBuffer && !isStreamContentType(ct)
+			respBody, respBuffered, errWrap := wrapResponseForOutputScan(resp, pol, forceBuffer || provenanceOnly)
 			if errWrap != nil {
 				return errWrap
+			}
+			if provenanceOnly && !respBuffered {
+				// Larger than an answer is read whole: it goes out unread,
+				// and says so, as an answer past output_rules.buffer_bytes does.
+				resp.Header.Set("X-Tamga-Output-Scan", "skipped-too-large")
+				scanner.RecordDegraded("provenance_answer_too_large")
 			}
 			// outputClean stays true only while nothing was found in the
 			// response; it gates the cache write further down.
@@ -1323,6 +1348,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 				if vaultActive {
 					g.restore = vaultMapping
 				}
+				g.taint = taint
 				if canaryToken != "" {
 					g.canary = canaryToken
 					g.canaryBlocks = pol.Canary != nil && pol.Canary.BlockOnLeak
@@ -1356,14 +1382,18 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 						return
 					}
 					// What is recorded is what was acted on: a stream that was
-					// ended, or text that was masked. The one finding recorded
-					// without either is a schema mismatch the policy lets through.
+					// ended, text that was masked, a high-risk tool call that
+					// agents.provenance only warns about. The one finding
+					// recorded without any of them is a schema mismatch the
+					// policy lets through.
 					act := policy.ActionPass
 					switch {
 					case g.stopReason != "" || g.leaked:
 						act = policy.ActionBlock
 					case g.redacted > 0:
 						act = policy.ActionRedact
+					case g.warned:
+						act = policy.ActionWarn
 					}
 					recordOutput(ctx, g.findings, act, streamScan)
 					publishOutputEvent(ctx, cfg, requestID, provider, g.findings, act, time.Since(streamStart))
@@ -1410,7 +1440,17 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 			// outputWithheld is set when the answer was replaced by a refusal
 			// that is not the 403 of an output block.
 			outputWithheld := false
-			if respBuffered && len(respBody) > 0 {
+			// The high-risk tool calls of the answer to a tainted request
+			// (agents.provenance), with the action the policy gives them.
+			var provFindings []scanner.Finding
+			provAction := policy.ActionPass
+			if taint != nil && respBuffered && resp.StatusCode < 300 {
+				if provFindings = answerProvenance(taint, provider, respBody); len(provFindings) > 0 {
+					provAction = taint.set.Action
+					resp.Header.Set("X-Tamga-Tool-Provenance", strings.ToLower(string(provAction)))
+				}
+			}
+			if respBuffered && len(respBody) > 0 && !provenanceOnly {
 				winMs := 0
 				if pol.OutputRules != nil {
 					winMs = pol.OutputRules.ScanWindowMs
@@ -1425,6 +1465,12 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 					LoadShed: cfg.Config.ScannerLoadShed,
 				}
 				res, err := scanResponseBody(withPromptLeak(withAnswerSchema(ctx, pol, body), leak), cfg.Registry, cfg.OutputOnlyRegistry, pol, prov, respBody, winMs, outPipeCfg)
+				if len(provFindings) > 0 {
+					res.findings = append(res.findings, provFindings...)
+					if outputActionRank(string(provAction)) > outputActionRank(string(res.action)) {
+						res.action = provAction
+					}
+				}
 				if err == nil && len(res.findings) == 0 {
 					recordOutput(ctx, nil, policy.ActionPass, true)
 				}
@@ -1478,6 +1524,9 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 						// Replace body with a block JSON; keep status 200→403.
 						resp.StatusCode = http.StatusForbidden
 						blockBody := []byte(`{"error":{"message":"Response blocked by Tamga output policy","type":"output_policy_block","request_id":"` + requestID + `"}}`)
+						if provAction == policy.ActionBlock {
+							blockBody = provenanceBlockBody(requestID)
+						}
 						resp.Body = io.NopCloser(bytes.NewReader(blockBody))
 						resp.ContentLength = int64(len(blockBody))
 						resp.Header.Set("Content-Type", "application/json")
@@ -1495,6 +1544,23 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 					recordOutput(ctx, res.findings, res.action, true)
 					go publishOutputEvent(ctx, cfg, requestID, provider, res.findings, res.action, res.elapsed)
 				}
+			}
+			if provenanceOnly && len(provFindings) > 0 {
+				// output_rules does not read answers: the tool calls were the
+				// one thing read in this one.
+				outputClean = false
+				resp.Header.Set("X-Tamga-Output-Findings", strconv.Itoa(len(provFindings)))
+				resp.Header.Set("X-Tamga-Output-Action", string(provAction))
+				if provAction == policy.ActionBlock {
+					resp.StatusCode = http.StatusForbidden
+					blockBody := provenanceBlockBody(requestID)
+					resp.Body = io.NopCloser(bytes.NewReader(blockBody))
+					resp.ContentLength = int64(len(blockBody))
+					resp.Header.Set("Content-Type", "application/json")
+					resp.Header.Set("Content-Length", strconv.Itoa(len(blockBody)))
+				}
+				recordOutput(ctx, provFindings, provAction, false)
+				go publishOutputEvent(ctx, cfg, requestID, provider, provFindings, provAction, 0)
 			}
 			// Phase 3C — cache successful responses for later exact-match hits.
 			// This runs after the output scan on purpose: a cache hit is served
