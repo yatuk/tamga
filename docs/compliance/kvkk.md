@@ -89,8 +89,9 @@ does nothing about it. That is most of what the document describes. Closing
 that gap needs things Tamga does not provide: an approved tool that staff
 actually prefer, network controls (a secure web gateway, DNS or firewall
 rules), managed devices and browsers, a written policy and training. A
-browser extension that asks a local Tamga before a paste is planned and is
-not in the repository. What Tamga can be is part of the approved route: the
+[browser extension](../browser-extension.md) that asks your Tamga before a
+paste or a send is in the repository as an MVP, run once on the live sites
+and in no store. What Tamga can be is part of the approved route: the
 internal assistant or integration that the organisation offers instead, with
 its traffic sent through the proxy.
 
