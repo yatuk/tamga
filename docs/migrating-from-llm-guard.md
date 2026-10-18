@@ -589,9 +589,12 @@ anything. Do it against a staging copy of your application first.
    docker compose --env-file .env -f deploy/docker-compose.yml up -d
    ```
 
-   In `.env`, set `TAMGA_ADMIN_KEY`. To try it with no
+   In `.env`, set `TAMGA_ADMIN_KEY`, `POSTGRES_PASSWORD`, `REDIS_PASSWORD`
+   and the internal service tokens. To try it with no
    provider at all, set `TAMGA_MOCK_UPSTREAM=true`. The proxy listens on
-   `http://localhost:8443`, the console on `http://localhost:3000`.
+   `https://localhost:8443`, the console on `https://localhost:3000`, with a
+   certificate from the stack's own CA; give your clients its root
+   ([TLS](operations.md#tls)).
 
 2. **Make the policy observe only.** The Compose stack mounts
    `proxy/tamga-policy.yaml`. Keep a copy of the shipped file and replace its
@@ -629,7 +632,7 @@ anything. Do it against a staging copy of your application first.
 
    ```bash
    curl -s -X POST -H "X-Tamga-Admin-Key: $TAMGA_ADMIN_KEY" \
-     http://localhost:8443/api/v1/policies/reload
+     https://localhost:8443/api/v1/policies/reload
    ```
 
    This policy changes nothing in a request, so LLM Guard in your code still
@@ -643,13 +646,13 @@ anything. Do it against a staging copy of your application first.
 
    ```python
    client = OpenAI(
-       base_url="http://localhost:8443/v1",   # was https://api.openai.com/v1
+       base_url="https://localhost:8443/v1",   # was https://api.openai.com/v1
        api_key=os.environ["OPENAI_API_KEY"],
    )
    ```
 
 4. **Compare.** Open the console's **Event explorer**
-   (`http://localhost:3000/dashboard/events`) and read what Tamga found for
+   (`https://localhost:3000/dashboard/events`) and read what Tamga found for
    the same requests your LLM Guard scanners judged. Look for three things:
    what LLM Guard rejected and Tamga did not notice (expect names, topics,
    toxicity without a listed phrase, injections in unusual wording); what

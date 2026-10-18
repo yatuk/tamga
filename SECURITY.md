@@ -119,10 +119,16 @@ applications can reach it. Note:
   in `TAMGA_TRUSTED_PROXIES`. The IP allowlist and the per-address rate limit
   use the connecting address otherwise. List only proxies that append to the
   header; a proxy that passes it through unchanged makes it forgeable again.
-- The optional classifier service receives prompt text over plain gRPC and
-  has no authentication. Run it on the internal network only. Its model is
+- The optional classifier service receives prompt text over gRPC, plain
+  unless TLS is configured. Like the analyzer and the scanner service it
+  refuses calls without its token once one is set (`TAMGA_CLASSIFIER_TOKEN`;
+  Compose requires all three), and without a token it accepts any caller.
+  Run it on the internal network only. Its model is
   a file you download and mount; Tamga does not fetch or verify it, so pin
   the revision you measured.
+- The Compose full stack publishes HTTPS through a TLS edge whose default
+  certificate comes from a local CA. Give clients that CA's root rather
+  than turning certificate checks off.
 - When a scanner errors, panics or is shed under load, `scan.on_error` decides:
   `block` (the shipped policy) answers 503, `pass` forwards the
   request. With no setting, a request that carries tool results or tool
