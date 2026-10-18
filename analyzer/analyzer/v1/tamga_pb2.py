@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x17\x61nalyzer/v1/tamga.proto\x12\x11proto.analyzer.v1\"\xf3\x01\n\x0e\x41nalyzeRequest\x12\x12\n\nrequest_id\x18\x01 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x02 \x01(\t\x12\x12\n\nscan_types\x18\x03 \x03(\t\x12\x10\n\x08provider\x18\x04 \x01(\t\x12\r\n\x05model\x18\x05 \x01(\t\x12\x41\n\x08metadata\x18\x06 \x03(\x0b\x32/.proto.analyzer.v1.AnalyzeRequest.MetadataEntry\x12\x13\n\x0bpre_scanned\x18\x07 \x01(\x08\x1a/\n\rMetadataEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\xa3\x01\n\x0f\x41nalyzeResponse\x12\x12\n\nrequest_id\x18\x01 \x01(\t\x12,\n\x08\x66indings\x18\x02 \x03(\x0b\x32\x1a.proto.analyzer.v1.Finding\x12\x13\n\x0b\x64uration_ms\x18\x03 \x01(\x01\x12\x39\n\x0fscanner_results\x18\x04 \x03(\x0b\x32 .proto.analyzer.v1.ScannerResult\"^\n\x07\x46inding\x12\x0c\n\x04type\x18\x01 \x01(\t\x12\x10\n\x08\x63\x61tegory\x18\x02 \x01(\t\x12\x10\n\x08severity\x18\x03 \x01(\t\x12\r\n\x05match\x18\x04 \x01(\t\x12\x12\n\nconfidence\x18\x05 \x01(\x01\"c\n\rScannerResult\x12\x0f\n\x07scanner\x18\x01 \x01(\t\x12,\n\x08\x66indings\x18\x02 \x03(\x0b\x32\x1a.proto.analyzer.v1.Finding\x12\x13\n\x0b\x64uration_ms\x18\x03 \x01(\x01\"\x14\n\x12HealthCheckRequest\"6\n\x13HealthCheckResponse\x12\x0e\n\x06status\x18\x01 \x01(\t\x12\x0f\n\x07service\x18\x02 \x01(\t2\xc1\x01\n\x0f\x41nalyzerService\x12P\n\x07\x41nalyze\x12!.proto.analyzer.v1.AnalyzeRequest\x1a\".proto.analyzer.v1.AnalyzeResponse\x12\\\n\x0bHealthCheck\x12%.proto.analyzer.v1.HealthCheckRequest\x1a&.proto.analyzer.v1.HealthCheckResponseB5Z3github.com/yatuk/tamga/proto/analyzer/v1;analyzerv1b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x17\x61nalyzer/v1/tamga.proto\x12\x11proto.analyzer.v1\"\xf3\x01\n\x0e\x41nalyzeRequest\x12\x12\n\nrequest_id\x18\x01 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x02 \x01(\t\x12\x12\n\nscan_types\x18\x03 \x03(\t\x12\x10\n\x08provider\x18\x04 \x01(\t\x12\r\n\x05model\x18\x05 \x01(\t\x12\x41\n\x08metadata\x18\x06 \x03(\x0b\x32/.proto.analyzer.v1.AnalyzeRequest.MetadataEntry\x12\x13\n\x0bpre_scanned\x18\x07 \x01(\x08\x1a/\n\rMetadataEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\xa3\x01\n\x0f\x41nalyzeResponse\x12\x12\n\nrequest_id\x18\x01 \x01(\t\x12,\n\x08\x66indings\x18\x02 \x03(\x0b\x32\x1a.proto.analyzer.v1.Finding\x12\x13\n\x0b\x64uration_ms\x18\x03 \x01(\x01\x12\x39\n\x0fscanner_results\x18\x04 \x03(\x0b\x32 .proto.analyzer.v1.ScannerResult\"^\n\x07\x46inding\x12\x0c\n\x04type\x18\x01 \x01(\t\x12\x10\n\x08\x63\x61tegory\x18\x02 \x01(\t\x12\x10\n\x08severity\x18\x03 \x01(\t\x12\r\n\x05match\x18\x04 \x01(\t\x12\x12\n\nconfidence\x18\x05 \x01(\x01\"c\n\rScannerResult\x12\x0f\n\x07scanner\x18\x01 \x01(\t\x12,\n\x08\x66indings\x18\x02 \x03(\x0b\x32\x1a.proto.analyzer.v1.Finding\x12\x13\n\x0b\x64uration_ms\x18\x03 \x01(\x01\"\xa8\x01\n\x0e\x45xtractRequest\x12\x12\n\nrequest_id\x18\x01 \x01(\t\x12\x0c\n\x04\x64\x61ta\x18\x02 \x01(\x0c\x12\x11\n\tmime_type\x18\x03 \x01(\t\x12\x10\n\x08\x66ilename\x18\x04 \x01(\t\x12\x30\n\x06limits\x18\x05 \x01(\x0b\x32 .proto.analyzer.v1.ExtractLimits\x12\x0b\n\x03ocr\x18\x06 \x01(\x08\x12\x10\n\x08ocr_lang\x18\x07 \x01(\t\"\\\n\rExtractLimits\x12\x11\n\tmax_bytes\x18\x01 \x01(\x03\x12\x11\n\tmax_pages\x18\x02 \x01(\r\x12\x11\n\tmax_chars\x18\x03 \x01(\r\x12\x12\n\ntimeout_ms\x18\x04 \x01(\r\"\xa5\x01\n\x0f\x45xtractResponse\x12\x12\n\nrequest_id\x18\x01 \x01(\t\x12\x0e\n\x06status\x18\x02 \x01(\t\x12/\n\x05parts\x18\x03 \x03(\x0b\x32 .proto.analyzer.v1.ExtractedPart\x12\x11\n\ttruncated\x18\x04 \x01(\x08\x12\x15\n\rdetected_type\x18\x05 \x01(\t\x12\x13\n\x0b\x64uration_ms\x18\x06 \x01(\x01\"U\n\rExtractedPart\x12\x0c\n\x04kind\x18\x01 \x01(\t\x12\r\n\x05index\x18\x02 \x01(\r\x12\x0c\n\x04name\x18\x03 \x01(\t\x12\x0c\n\x04text\x18\x04 \x01(\t\x12\x0b\n\x03ocr\x18\x05 \x01(\x08\"\x14\n\x12HealthCheckRequest\"6\n\x13HealthCheckResponse\x12\x0e\n\x06status\x18\x01 \x01(\t\x12\x0f\n\x07service\x18\x02 \x01(\t2\x93\x02\n\x0f\x41nalyzerService\x12P\n\x07\x41nalyze\x12!.proto.analyzer.v1.AnalyzeRequest\x1a\".proto.analyzer.v1.AnalyzeResponse\x12P\n\x07\x45xtract\x12!.proto.analyzer.v1.ExtractRequest\x1a\".proto.analyzer.v1.ExtractResponse\x12\\\n\x0bHealthCheck\x12%.proto.analyzer.v1.HealthCheckRequest\x1a&.proto.analyzer.v1.HealthCheckResponseB5Z3github.com/yatuk/tamga/proto/analyzer/v1;analyzerv1b\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -44,10 +44,18 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_FINDING']._serialized_end=552
   _globals['_SCANNERRESULT']._serialized_start=554
   _globals['_SCANNERRESULT']._serialized_end=653
-  _globals['_HEALTHCHECKREQUEST']._serialized_start=655
-  _globals['_HEALTHCHECKREQUEST']._serialized_end=675
-  _globals['_HEALTHCHECKRESPONSE']._serialized_start=677
-  _globals['_HEALTHCHECKRESPONSE']._serialized_end=731
-  _globals['_ANALYZERSERVICE']._serialized_start=734
-  _globals['_ANALYZERSERVICE']._serialized_end=927
+  _globals['_EXTRACTREQUEST']._serialized_start=656
+  _globals['_EXTRACTREQUEST']._serialized_end=824
+  _globals['_EXTRACTLIMITS']._serialized_start=826
+  _globals['_EXTRACTLIMITS']._serialized_end=918
+  _globals['_EXTRACTRESPONSE']._serialized_start=921
+  _globals['_EXTRACTRESPONSE']._serialized_end=1086
+  _globals['_EXTRACTEDPART']._serialized_start=1088
+  _globals['_EXTRACTEDPART']._serialized_end=1173
+  _globals['_HEALTHCHECKREQUEST']._serialized_start=1175
+  _globals['_HEALTHCHECKREQUEST']._serialized_end=1195
+  _globals['_HEALTHCHECKRESPONSE']._serialized_start=1197
+  _globals['_HEALTHCHECKRESPONSE']._serialized_end=1251
+  _globals['_ANALYZERSERVICE']._serialized_start=1254
+  _globals['_ANALYZERSERVICE']._serialized_end=1529
 # @@protoc_insertion_point(module_scope)

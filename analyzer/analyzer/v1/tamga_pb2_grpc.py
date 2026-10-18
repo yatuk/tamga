@@ -28,11 +28,11 @@ if _version_not_supported:
 class AnalyzerServiceStub:
     """── AnalyzerService ─────────────────────────────────────────────────────────
     Deep semantic NLP analysis for LLM security scanning.
-    
+
     Called by the Go proxy AFTER static regex scanning completes. The Go proxy
     has already detected and redacted/blocked based on regex patterns. This
-    service provides the ML/NLP layer: Presidio spaCy NER, Claude Haiku judge,
-    and LLM Guard ML classifiers.
+    service provides the ML/NLP layer: Presidio spaCy NER and the Claude Haiku
+    judge.
 
     """
 
@@ -47,6 +47,11 @@ class AnalyzerServiceStub:
                 request_serializer=analyzer_dot_v1_dot_tamga__pb2.AnalyzeRequest.SerializeToString,
                 response_deserializer=analyzer_dot_v1_dot_tamga__pb2.AnalyzeResponse.FromString,
                 _registered_method=True)
+        self.Extract = channel.unary_unary(
+                '/proto.analyzer.v1.AnalyzerService/Extract',
+                request_serializer=analyzer_dot_v1_dot_tamga__pb2.ExtractRequest.SerializeToString,
+                response_deserializer=analyzer_dot_v1_dot_tamga__pb2.ExtractResponse.FromString,
+                _registered_method=True)
         self.HealthCheck = channel.unary_unary(
                 '/proto.analyzer.v1.AnalyzerService/HealthCheck',
                 request_serializer=analyzer_dot_v1_dot_tamga__pb2.HealthCheckRequest.SerializeToString,
@@ -57,17 +62,28 @@ class AnalyzerServiceStub:
 class AnalyzerServiceServicer:
     """── AnalyzerService ─────────────────────────────────────────────────────────
     Deep semantic NLP analysis for LLM security scanning.
-    
+
     Called by the Go proxy AFTER static regex scanning completes. The Go proxy
     has already detected and redacted/blocked based on regex patterns. This
-    service provides the ML/NLP layer: Presidio spaCy NER, Claude Haiku judge,
-    and LLM Guard ML classifiers.
+    service provides the ML/NLP layer: Presidio spaCy NER and the Claude Haiku
+    judge.
 
     """
 
     def Analyze(self, request, context):
         """Analyze runs deep semantic analysis on content that has already passed
         the Go proxy's static regex scanners. Returns only NLP/ML findings.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def Extract(self, request, context):
+        """Extract returns the text of an attached file (PDF, DOCX, XLSX, PPTX,
+        and images or scanned PDFs by OCR when asked and installed), so that
+        the proxy can scan it like any other text. It never fails the call for
+        a file it cannot read: the status says why, and no part of the file is
+        in an error message.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -88,6 +104,11 @@ def add_AnalyzerServiceServicer_to_server(servicer, server):
                     request_deserializer=analyzer_dot_v1_dot_tamga__pb2.AnalyzeRequest.FromString,
                     response_serializer=analyzer_dot_v1_dot_tamga__pb2.AnalyzeResponse.SerializeToString,
             ),
+            'Extract': grpc.unary_unary_rpc_method_handler(
+                    servicer.Extract,
+                    request_deserializer=analyzer_dot_v1_dot_tamga__pb2.ExtractRequest.FromString,
+                    response_serializer=analyzer_dot_v1_dot_tamga__pb2.ExtractResponse.SerializeToString,
+            ),
             'HealthCheck': grpc.unary_unary_rpc_method_handler(
                     servicer.HealthCheck,
                     request_deserializer=analyzer_dot_v1_dot_tamga__pb2.HealthCheckRequest.FromString,
@@ -104,11 +125,11 @@ def add_AnalyzerServiceServicer_to_server(servicer, server):
 class AnalyzerService:
     """── AnalyzerService ─────────────────────────────────────────────────────────
     Deep semantic NLP analysis for LLM security scanning.
-    
+
     Called by the Go proxy AFTER static regex scanning completes. The Go proxy
     has already detected and redacted/blocked based on regex patterns. This
-    service provides the ML/NLP layer: Presidio spaCy NER, Claude Haiku judge,
-    and LLM Guard ML classifiers.
+    service provides the ML/NLP layer: Presidio spaCy NER and the Claude Haiku
+    judge.
 
     """
 
@@ -129,6 +150,33 @@ class AnalyzerService:
             '/proto.analyzer.v1.AnalyzerService/Analyze',
             analyzer_dot_v1_dot_tamga__pb2.AnalyzeRequest.SerializeToString,
             analyzer_dot_v1_dot_tamga__pb2.AnalyzeResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def Extract(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/proto.analyzer.v1.AnalyzerService/Extract',
+            analyzer_dot_v1_dot_tamga__pb2.ExtractRequest.SerializeToString,
+            analyzer_dot_v1_dot_tamga__pb2.ExtractResponse.FromString,
             options,
             channel_credentials,
             insecure,

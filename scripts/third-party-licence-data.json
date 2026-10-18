@@ -8,7 +8,10 @@
     "distribution (Requires-Dist entries for extras left out).",
     "classifier: onnxruntime, tokenizers and everything their base install",
     "requires, read on 2026-10-17 from a Python 3.14 venv where",
-    "classifier/requirements.txt was installed (win_amd64 wheels)."
+    "classifier/requirements.txt was installed (win_amd64 wheels).",
+    "analyzer: openpyxl, pdfminer.six, python-pptx and what their base install",
+    "requires beyond the generator's interpreter, read on 2026-10-18 from a",
+    "Python 3.14 venv where they were installed (win_amd64 wheels)."
   ],
   "python": {
     "classifier": {
@@ -185,6 +188,53 @@
         "requires": [],
         "source": "License-Expression (recorded wheel metadata)",
         "version": "4.16.0"
+      }
+    },
+    "analyzer": {
+      "et-xmlfile": {
+        "license": "MIT",
+        "name": "et_xmlfile",
+        "requires": [],
+        "source": "License field (recorded wheel metadata)",
+        "version": "2.0.0"
+      },
+      "openpyxl": {
+        "license": "MIT",
+        "name": "openpyxl",
+        "requires": [
+          "et-xmlfile"
+        ],
+        "source": "License field (recorded wheel metadata)",
+        "version": "3.1.5"
+      },
+      "pdfminer-six": {
+        "license": "MIT",
+        "name": "pdfminer.six",
+        "requires": [
+          "charset-normalizer>=2.0.0",
+          "cryptography>=36.0.0"
+        ],
+        "source": "License-Expression (recorded wheel metadata)",
+        "version": "20260107"
+      },
+      "python-pptx": {
+        "license": "MIT",
+        "name": "python-pptx",
+        "requires": [
+          "Pillow >=3.3.2",
+          "XlsxWriter >=0.5.7",
+          "lxml >=3.1.0",
+          "typing-extensions >=4.9.0"
+        ],
+        "source": "License field (recorded wheel metadata)",
+        "version": "1.0.2"
+      },
+      "xlsxwriter": {
+        "license": "BSD-2-Clause",
+        "name": "xlsxwriter",
+        "requires": [],
+        "source": "License field (recorded wheel metadata)",
+        "version": "3.2.9"
       }
     }
   }

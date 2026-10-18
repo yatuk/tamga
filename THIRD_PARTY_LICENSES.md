@@ -269,22 +269,29 @@ packages that are not installed are marked NOT-INSPECTED unless
 | httpx | ==0.27.2 | 0.28.1 (differs from the pin) | BSD-3-Clause | License field |
 | structlog | ==24.4.0 | 26.1.0 (differs from the pin) | MIT OR Apache-2.0 | License-Expression |
 | jinja2 | ==3.1.4 | 3.1.6 (differs from the pin) | BSD-3-Clause | licence file in dist-info (detected; metadata says only "BSD (unspecified)") |
+| pypdf | ==6.21.1 | 6.19.0 (differs from the pin) | BSD-3-Clause | License-Expression |
+| pdfminer.six | ==20260107 | 20260107 | MIT | License-Expression (recorded wheel metadata) |
+| python-docx | ==1.2.0 | 1.2.0 | MIT | License field |
+| openpyxl | ==3.1.5 | 3.1.5 | MIT | License field (recorded wheel metadata) |
+| python-pptx | ==1.0.2 | 1.0.2 | MIT | License field (recorded wheel metadata) |
 
 ### Transitive
 
-Distributions reached through Requires-Dist: 54.
+Distributions reached through Requires-Dist: 60.
 
 | Licence | Count |
 |---|---|
-| MIT | 30 |
-| BSD-3-Clause | 9 |
+| MIT | 31 |
+| BSD-3-Clause | 11 |
 | Apache-2.0 | 4 |
-| BSD-2-Clause | 2 |
+| BSD-2-Clause | 3 |
 | Apache-2.0 AND CNRI-Python | 1 |
 | Apache-2.0 OR BSD-2-Clause | 1 |
+| Apache-2.0 OR BSD-3-Clause | 1 |
 | BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0 | 1 |
 | ISC | 1 |
 | MIT OR Apache-2.0 | 1 |
+| MIT-0 | 1 |
 | MIT-CMU | 1 |
 | MPL-2.0 | 1 |
 | MPL-2.0 AND MIT | 1 |

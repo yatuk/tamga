@@ -20,6 +20,9 @@ _SKIP_DIRS = {"__pycache__", ".venv", "venv", ".pytest_cache", ".ruff_cache", ".
 _MODULE_OF = {
     "grpcio": "grpc",
     "grpcio-tools": "grpc_tools",
+    "pdfminer-six": "pdfminer",
+    "python-docx": "docx",
+    "python-pptx": "pptx",
 }
 
 # Requirements no file imports, and why each is installed. An entry that
