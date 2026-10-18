@@ -156,6 +156,12 @@ type Config struct {
 	// every application has a key. Set via TAMGA_REQUIRE_KEY=true.
 	RequireKey bool
 
+	// KeyInPath accepts a Tamga key as the first segment of the path:
+	// /k/<key>/v1/... and /k/<key>/anthropic/.... For editor clients that
+	// can set a base URL but no header. Off by default: a key in a URL ends up
+	// in the logs of every intermediary. Set via TAMGA_KEY_IN_PATH=true.
+	KeyInPath bool
+
 	// mTLS/client-cert verification (KVKK/BDDK compliance for Turkish banks).
 	// MTLSClientCAFile is the path to a CA bundle PEM for validating client certificates.
 	// Set via TAMGA_MTLS_CLIENT_CA_FILE. Required when MTLSStrictVerify is true.
@@ -298,6 +304,7 @@ func Load() (*Config, error) {
 		StrictMode:               envOrDefaultBool("TAMGA_STRICT_MODE", false),
 		TrustRoleHeader:          envOrDefaultBool("TAMGA_TRUST_ROLE_HEADER", false),
 		RequireKey:               envOrDefaultBool("TAMGA_REQUIRE_KEY", false),
+		KeyInPath:                envOrDefaultBool("TAMGA_KEY_IN_PATH", false),
 		ClassifierAddr:           envOrDefault("TAMGA_CLASSIFIER_ADDR", ""),
 		MTLSClientCAFile:         envOrDefault("TAMGA_MTLS_CLIENT_CA_FILE", ""),
 		MTLSStrictVerify:         envOrDefaultBool("TAMGA_MTLS_STRICT_VERIFY", false),

@@ -206,6 +206,12 @@ func RegisterRoutes(mux *http.ServeMux, cfg HandlerConfig) {
 		wrap = func(h http.HandlerFunc) http.HandlerFunc { return h }
 	}
 
+	if cfg.Config != nil && cfg.Config.KeyInPath {
+		mux.HandleFunc("/k/", wrap(func(w http.ResponseWriter, r *http.Request) {
+			handleKeyInPath(w, r, cfg)
+		}))
+	}
+
 	mux.HandleFunc("/v1/", wrap(func(w http.ResponseWriter, r *http.Request) {
 		handleProxy(w, r, "openai", "", cfg)
 	}))
