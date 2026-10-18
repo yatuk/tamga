@@ -21,6 +21,12 @@ func TestMain(m *testing.M) {
 		os.Exit(m.Run())
 	}
 
+	// TAMGA_STORE_NO_DOCKER=1 runs the package without a container even when
+	// docker is installed (the fast CI job: the Postgres tests then skip).
+	if os.Getenv("TAMGA_STORE_NO_DOCKER") == "1" {
+		os.Exit(m.Run())
+	}
+
 	// No env var — try Docker auto-start for local development.
 	if _, err := exec.LookPath("docker"); err != nil {
 		// Docker not available, run tests anyway (PG tests will skip gracefully).
