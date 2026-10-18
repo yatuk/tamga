@@ -198,6 +198,9 @@ func (cfg Config) proxyReportToAnalyzer(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 	req.Header.Set("Accept", "application/pdf, application/json")
+	if cfg.AnalyzerToken != "" {
+		req.Header.Set("Authorization", "Bearer "+cfg.AnalyzerToken)
+	}
 
 	resp, err := analyzerHTTPClient.Do(req)
 	if err != nil {

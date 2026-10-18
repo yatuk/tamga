@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"net"
 	"net/netip"
 	"os"
@@ -152,6 +153,27 @@ type Config struct {
 	// TAMGA_CLASSIFIER_ADDR; the policy's scan.classifier turns it on.
 	ClassifierAddr string
 
+	// Tokens the proxy sends to its internal gRPC services, one per
+	// service, as "authorization: Bearer <token>" (TAMGA_ANALYZER_TOKEN,
+	// TAMGA_CLASSIFIER_TOKEN, TAMGA_SCANNER_SERVICE_TOKEN). Each must be the
+	// value the service itself is given. The analyzer token is sent to the
+	// analyzer's HTTP API as well. Empty sends none.
+	AnalyzerToken       string
+	ClassifierToken     string
+	ScannerServiceToken string
+	// RequireServiceTokens refuses to start when a service has an address
+	// and no token (TAMGA_REQUIRE_SERVICE_TOKENS). The services read the same
+	// setting and refuse to start without their own token. Compose turns it
+	// on in the full profile.
+	RequireServiceTokens bool
+	// TLS for the connections to the gRPC services, all optional:
+	// TAMGA_SERVICE_TLS_CA verifies the services' certificates, and
+	// TAMGA_SERVICE_TLS_CERT with TAMGA_SERVICE_TLS_KEY is the client
+	// certificate for a service that requires one. All empty: plain gRPC.
+	ServiceTLSCA   string
+	ServiceTLSCert string
+	ServiceTLSKey  string
+
 	// RequireKey refuses proxy requests that carry no valid X-Tamga-Key.
 	// Off by default so an existing deployment keeps working; turn it on once
 	// every application has a key. Set via TAMGA_REQUIRE_KEY=true.
@@ -276,7 +298,7 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
-	return &Config{
+	cfg := &Config{
 		TrustedProxies:           trustedProxies,
 		AlertAllowNets:           alertNets,
 		AlertAllowHosts:          alertHosts,
@@ -333,7 +355,37 @@ func Load() (*Config, error) {
 		ICAPAddr:                 strings.TrimSpace(os.Getenv("TAMGA_ICAP_ADDR")),
 		ICAPAllowedClients:       icapClients,
 		ICAPMaxConnections:       envOrDefaultInt("TAMGA_ICAP_MAX_CONNECTIONS", 256),
-	}, nil
+		AnalyzerToken:            strings.TrimSpace(os.Getenv("TAMGA_ANALYZER_TOKEN")),
+		ClassifierToken:          strings.TrimSpace(os.Getenv("TAMGA_CLASSIFIER_TOKEN")),
+		ScannerServiceToken:      strings.TrimSpace(os.Getenv("TAMGA_SCANNER_SERVICE_TOKEN")),
+		RequireServiceTokens:     envOrDefaultBool("TAMGA_REQUIRE_SERVICE_TOKENS", false),
+		ServiceTLSCA:             envOrDefault("TAMGA_SERVICE_TLS_CA", ""),
+		ServiceTLSCert:           envOrDefault("TAMGA_SERVICE_TLS_CERT", ""),
+		ServiceTLSKey:            envOrDefault("TAMGA_SERVICE_TLS_KEY", ""),
+	}
+	if err := cfg.checkServiceTokens(); err != nil {
+		return nil, err
+	}
+	return cfg, nil
+}
+
+// checkServiceTokens refuses, under TAMGA_REQUIRE_SERVICE_TOKENS, a service
+// address without its token. The analyzer always has an address (it
+// defaults to localhost:50051), so it always needs one then.
+func (c *Config) checkServiceTokens() error {
+	if !c.RequireServiceTokens {
+		return nil
+	}
+	for _, s := range []struct{ addrEnv, addr, tokenEnv, token string }{
+		{"TAMGA_ANALYZER_ADDR", c.AnalyzerAddr, "TAMGA_ANALYZER_TOKEN", c.AnalyzerToken},
+		{"TAMGA_CLASSIFIER_ADDR", c.ClassifierAddr, "TAMGA_CLASSIFIER_TOKEN", c.ClassifierToken},
+		{"TAMGA_SCANNER_SERVICE_ADDR", c.ScannerServiceAddr, "TAMGA_SCANNER_SERVICE_TOKEN", c.ScannerServiceToken},
+	} {
+		if s.addr != "" && s.token == "" {
+			return fmt.Errorf("%s is set (%s) but %s is empty, and TAMGA_REQUIRE_SERVICE_TOKENS is on: generate a token with `openssl rand -hex 32` and give the same value to the service", s.addrEnv, s.addr, s.tokenEnv)
+		}
+	}
+	return nil
 }
 
 func envOrDefault(key, fallback string) string {

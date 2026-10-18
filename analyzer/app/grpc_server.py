@@ -30,6 +30,7 @@ from analyzer.v1.tamga_pb2_grpc import (  # type: ignore[import-untyped]
     add_AnalyzerServiceServicer_to_server,
 )
 
+from app import service_auth
 from app.scanners.base import BaseScanner, Finding as AppFinding
 from app.scanners.base import ScanResult
 from app.scanners.egress import content_is_blocked
@@ -162,13 +163,17 @@ async def serve_grpc(
     injection_scanner: LLMInjectionScanner,
     custom_scanners: list[BaseScanner] | None = None,
     port: int = 50051,
+    token: str = "",
+    credentials: grpc.ServerCredentials | None = None,
 ) -> grpc.aio.Server:
     """Start the gRPC server and return it (caller manages lifecycle).
 
     The server listens on all interfaces on *port*.  It runs in the same
-    asyncio event loop as the FastAPI application.
+    asyncio event loop as the FastAPI application. With *token*, a call
+    without it is refused; with *credentials*, the port speaks TLS.
     """
     server = grpc.aio.server(
+        interceptors=[service_auth.TokenInterceptor(token)],
         options=[
             ("grpc.keepalive_time_ms", 30000),
             ("grpc.keepalive_timeout_ms", 5000),
@@ -181,8 +186,11 @@ async def serve_grpc(
     add_AnalyzerServiceServicer_to_server(servicer, server)
 
     listen_addr = f"[::]:{port}"
-    server.add_insecure_port(listen_addr)
+    if credentials is not None:
+        server.add_secure_port(listen_addr, credentials)
+    else:
+        server.add_insecure_port(listen_addr)
 
     await server.start()
-    logger.info("gRPC server listening on %s", listen_addr)
+    logger.info("gRPC server listening on %s (token %s, tls %s)", listen_addr, bool(token), credentials is not None)
     return server

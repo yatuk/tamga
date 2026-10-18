@@ -95,6 +95,9 @@ type Config struct {
 	// AnalyzerHTTPURL is the HTTP base URL for the analyzer REST API
 	// (e.g. "http://analyzer:8444"). The PDF reports are fetched from it.
 	AnalyzerHTTPURL string
+	// AnalyzerToken is sent to that API as "Authorization: Bearer <token>"
+	// (TAMGA_ANALYZER_TOKEN). Empty sends none.
+	AnalyzerToken string
 	// CustomScanner is refreshed after policy reload (nil-safe).
 	CustomScanner *scanner.CustomScanner
 	// CompetitorScanner is refreshed after policy reload (nil-safe).

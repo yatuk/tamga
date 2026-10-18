@@ -33,12 +33,15 @@ type GRPCClient struct {
 //
 // Keepalive parameters are tuned for container-to-container communication on
 // an internal Docker bridge network (low latency, reliable).
-func NewGRPCClient(_ context.Context, addr string) (*GRPCClient, error) {
+//
+// extra is applied after these options: the service token and TLS from
+// grpcauth.DialOptions go there.
+func NewGRPCClient(_ context.Context, addr string, extra ...grpc.DialOption) (*GRPCClient, error) {
 	if addr == "" {
 		return nil, nil
 	}
 
-	conn, err := grpc.NewClient(addr,
+	opts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{
 			Time:                30 * time.Second, // send pings every 30s
@@ -51,7 +54,8 @@ func NewGRPCClient(_ context.Context, addr string) (*GRPCClient, error) {
 				"serviceName": "proto.analyzer.v1.AnalyzerService"
 			}
 		}`),
-	)
+	}
+	conn, err := grpc.NewClient(addr, append(opts, extra...)...)
 	if err != nil {
 		return nil, fmt.Errorf("gRPC dial %s: %w", addr, err)
 	}

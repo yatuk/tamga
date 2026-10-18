@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/yatuk/tamga/internal/classifier"
+	"github.com/yatuk/tamga/internal/grpcauth"
 	"github.com/yatuk/tamga/internal/policy"
 	"github.com/yatuk/tamga/internal/scanner"
 )
@@ -83,7 +84,14 @@ func main() {
 	var cls *classifier.Client
 	clsModel := ""
 	if *clsAddr != "" {
-		cls, err = classifier.NewClient(*clsAddr)
+		// A classifier started with a token (TAMGA_CLASSIFIER_TOKEN) wants
+		// it from this client too.
+		dial, derr := grpcauth.DialOptions(os.Getenv("TAMGA_CLASSIFIER_TOKEN"), grpcauth.ClientTLS{})
+		if derr != nil {
+			fmt.Fprintf(os.Stderr, "classifier: %v\n", derr)
+			os.Exit(2)
+		}
+		cls, err = classifier.NewClient(*clsAddr, dial...)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "classifier: %v\n", err)
 			os.Exit(2)

@@ -7,6 +7,7 @@
 # optional model for banned topics at TAMGA_TOPICS_MODEL_DIR, and an optional
 # candidate injection model to score in shadow at
 # TAMGA_CLASSIFIER_SHADOW_MODEL_DIR.
+# TODO: pin by digest (image:tag@sha256:...): docs/operations.md, "Image pins".
 FROM python:3.11-slim AS builder
 
 RUN python -m venv /opt/venv
@@ -15,6 +16,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# TODO: pin by digest (image:tag@sha256:...): docs/operations.md, "Image pins".
 FROM python:3.11-slim
 
 LABEL org.opencontainers.image.title="Tamga classifier" \

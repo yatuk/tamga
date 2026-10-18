@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"google.golang.org/grpc"
 
 	"github.com/yatuk/tamga/internal/analyzer"
 	"github.com/yatuk/tamga/internal/api"
@@ -30,6 +31,7 @@ import (
 	"github.com/yatuk/tamga/internal/config"
 	"github.com/yatuk/tamga/internal/docstore"
 	"github.com/yatuk/tamga/internal/events"
+	"github.com/yatuk/tamga/internal/grpcauth"
 	"github.com/yatuk/tamga/internal/incidents"
 	"github.com/yatuk/tamga/internal/patterns"
 	"github.com/yatuk/tamga/internal/policy"
@@ -416,8 +418,20 @@ func main() {
 		eventBus.Subscribe(store.DBHandler(log.Logger, requestStore, cfg.DefaultOrgID, getPolicy))
 	}
 
+	// Connections to the internal gRPC services: each one's token, and TLS
+	// when TAMGA_SERVICE_TLS_* is set. A TLS file that cannot be read stops
+	// the start, as an invalid setting does.
+	serviceTLS := grpcauth.ClientTLS{CAFile: cfg.ServiceTLSCA, CertFile: cfg.ServiceTLSCert, KeyFile: cfg.ServiceTLSKey}
+	serviceDial := func(token string) []grpc.DialOption {
+		opts, err := grpcauth.DialOptions(token, serviceTLS)
+		if err != nil {
+			log.Fatal().Err(err).Msg("internal service connection settings")
+		}
+		return opts
+	}
+
 	// Analyzer: deep NLP scan (stays in-memory for decision gating).
-	analyzerClient, err := analyzer.NewGRPCClient(context.Background(), cfg.AnalyzerAddr)
+	analyzerClient, err := analyzer.NewGRPCClient(context.Background(), cfg.AnalyzerAddr, serviceDial(cfg.AnalyzerToken)...)
 	if err != nil {
 		log.Warn().Err(err).Str("addr", cfg.AnalyzerAddr).Msg("analyzer gRPC client unavailable — running without deep NLP")
 	}
@@ -436,7 +450,7 @@ func main() {
 	// guards of their own: a service without a topic model fails every
 	// topic call, and that must not open the injection breaker.
 	var topicGuard, scanTopicGuard *classifier.TopicGuard
-	if classifierClient, err := classifier.NewClient(cfg.ClassifierAddr); err != nil {
+	if classifierClient, err := classifier.NewClient(cfg.ClassifierAddr, serviceDial(cfg.ClassifierToken)...); err != nil {
 		log.Warn().Err(err).Str("addr", cfg.ClassifierAddr).Msg("classifier client unavailable")
 	} else if classifierClient != nil {
 		classifierGuard = classifier.NewGuard(classifierClient)
@@ -745,7 +759,7 @@ func main() {
 	if cfg.ScannerServiceAddr != "" {
 		var scErr error
 		scannerClient, scErr = scanner.NewGRPCScannerClient(context.Background(),
-			scanner.GRPCScannerConfig{Addr: cfg.ScannerServiceAddr})
+			scanner.GRPCScannerConfig{Addr: cfg.ScannerServiceAddr, DialOptions: serviceDial(cfg.ScannerServiceToken)})
 		if scErr != nil {
 			log.Warn().Err(scErr).Str("addr", cfg.ScannerServiceAddr).
 				Msg("scanner gRPC client unavailable -- using local scanner registry")
@@ -864,6 +878,7 @@ func main() {
 		GitHubOAuthCallbackURL: cfg.GitHubOAuthCallbackURL,
 		SSODefaultRole:         cfg.SSODefaultRole,
 		AnalyzerHTTPURL:        cfg.AnalyzerHTTPURL,
+		AnalyzerToken:          cfg.AnalyzerToken,
 		ClientAddr:             func(r *http.Request) string { return proxy.ClientIP(r, cfg.TrustedProxies) },
 		SSOSettings:            ssoStore,
 		Scan:                   scanAPI,

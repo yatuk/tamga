@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/keepalive"
 
+	"github.com/yatuk/tamga/internal/grpcauth"
 	"github.com/yatuk/tamga/internal/scanner"
 	"github.com/yatuk/tamga/internal/scannerservice"
 	"github.com/yatuk/tamga/internal/telemetry"
@@ -67,20 +69,37 @@ func main() {
 		}
 	}
 
+	// The proxy's token for this service. With TAMGA_REQUIRE_SERVICE_TOKENS
+	// on, the service does not start without one; with a token, a call
+	// without it is refused. The health service answers either way.
+	token := strings.TrimSpace(os.Getenv("TAMGA_SCANNER_SERVICE_TOKEN"))
+	if err := grpcauth.CheckToken("TAMGA_SCANNER_SERVICE_TOKEN", token, grpcauth.Required()); err != nil {
+		log.Fatal().Err(err).Msg("refusing to start")
+	}
+	creds, err := grpcauth.ServerCredentials(os.Getenv("TAMGA_GRPC_TLS_CERT"), os.Getenv("TAMGA_GRPC_TLS_KEY"), os.Getenv("TAMGA_GRPC_TLS_CLIENT_CA"))
+	if err != nil {
+		log.Fatal().Err(err).Msg("refusing to start")
+	}
+
 	listener, err := net.Listen("tcp", ":"+port)
 	if err != nil {
 		log.Fatal().Err(err).Str("port", port).Msg("failed to listen")
 	}
 
-	server := grpc.NewServer(
+	opts := []grpc.ServerOption{
 		grpc.KeepaliveParams(keepalive.ServerParameters{
 			MaxConnectionIdle: 5 * time.Minute,
 			Time:              30 * time.Second,
 			Timeout:           5 * time.Second,
 		}),
 		grpc.MaxConcurrentStreams(1000),
-		grpc.UnaryInterceptor(telemetry.UnaryServerTraceInterceptor()),
-	)
+		grpc.ChainUnaryInterceptor(grpcauth.UnaryServerInterceptor(token), telemetry.UnaryServerTraceInterceptor()),
+		grpc.ChainStreamInterceptor(grpcauth.StreamServerInterceptor(token)),
+	}
+	if creds != nil {
+		opts = append(opts, grpc.Creds(creds))
+	}
+	server := grpc.NewServer(opts...)
 
 	pb.RegisterScannerServiceServer(server, scannerservice.New(registry, mode, pool))
 	healthServer := health.NewServer()
@@ -92,6 +111,8 @@ func main() {
 		Str("mode", string(mode)).
 		Bool("worker_pool", pool != nil).
 		Int("scanners", registry.Count()).
+		Bool("token", token != "").
+		Bool("tls", creds != nil).
 		Msg("tamga scanner service starting")
 
 	// Start gRPC server in a goroutine.

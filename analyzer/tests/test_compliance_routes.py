@@ -470,3 +470,40 @@ class TestHealthEndpoint:
         body = client.get("/health").json()
         assert "llm_guard_available" not in body
         assert "toxicity" not in body["scanners"]
+
+class TestServiceToken:
+    """With TAMGA_ANALYZER_TOKEN set (app.state.service_token at startup),
+    every path but /health needs it."""
+
+    TOKEN = "test-analyzer-token-not-a-secret"
+
+    @pytest.fixture(autouse=True)
+    def token(self):
+        app.state.service_token = self.TOKEN
+        yield
+        app.state.service_token = ""
+
+    def test_without_the_token_is_401(self):
+        assert client.get("/api/v1/compliance/owasp").status_code == 401
+        assert client.get("/api/v1/reports/owasp/pdf").status_code == 401
+        assert client.post("/api/v1/analyze", json={"request_id": "r", "content": "x"}).status_code == 401
+
+    def test_wrong_token_is_401(self):
+        headers = {"Authorization": "Bearer test-other-token"}
+        assert client.get("/api/v1/compliance/owasp", headers=headers).status_code == 401
+
+    def test_with_the_token(self):
+        headers = {"Authorization": f"Bearer {self.TOKEN}"}
+        assert client.get("/api/v1/compliance/owasp", headers=headers).status_code == 200
+
+    def test_health_needs_none(self):
+        assert client.get("/health").status_code == 200
+
+    def test_start_is_refused_without_a_required_token(self, monkeypatch):
+        from app import service_auth
+
+        monkeypatch.setenv("TAMGA_REQUIRE_SERVICE_TOKENS", "true")
+        monkeypatch.delenv("TAMGA_ANALYZER_TOKEN", raising=False)
+        with pytest.raises(service_auth.ServiceAuthError, match="TAMGA_ANALYZER_TOKEN"):
+            with TestClient(app):
+                pass
