@@ -1,0 +1,15 @@
+# Layered on docker-compose.yml when TAMGA_PROXY_SITE and TAMGA_CONSOLE_SITE
+# name a public DNS name, for example https://tamga.example.com:8443. The
+# edge then asks Let's Encrypt for a certificate, and Let's Encrypt checks
+# the name by connecting to it on port 80, so port 80 of the host must reach
+# the edge:
+#
+#   docker compose --env-file .env -f deploy/docker-compose.yml \
+#     -f deploy/docker-compose.public.yml up -d
+#
+# The edge answers on port 80 with the check and with redirects to HTTPS.
+# See docs/operations.md, "TLS".
+services:
+  edge:
+    ports:
+      - "${TAMGA_EDGE_HTTP_BIND:-0.0.0.0}:80:80"

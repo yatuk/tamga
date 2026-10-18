@@ -3,6 +3,8 @@
 | Path | What it is |
 |---|---|
 | `docker-compose.yml` | Profile `full`: the full stack on one host: proxy, analyzer, scanner service, console, PostgreSQL, Redis, NATS, Jaeger. Profile `minimal`: the proxy alone, with no database. See the [root README](../README.md#quick-start) and [Docker Compose profiles](../docs/operations.md#docker-compose-profiles). |
+| `edge/Caddyfile` | The TLS edge of the full profile, in front of the proxy and the console. See [TLS](../docs/operations.md#tls). |
+| `docker-compose.public.yml` | Added to `docker-compose.yml` when the edge serves a public DNS name: publishes port 80 for Let's Encrypt. |
 | `helm/tamga-proxy/` | A Helm chart for the proxy alone. |
 | `terraform/aws/` | An EKS cluster on AWS with that chart installed in it. |
 | `migrations/` | The PostgreSQL schema. |
@@ -12,9 +14,15 @@ No container image is published. For Helm and Terraform, build the proxy
 image from `proxy/Dockerfile`, push it to a registry your cluster can pull
 from, and pass its repository and tag.
 
-In the Compose stack only the proxy and console bind to all host interfaces.
-The Jaeger UI and NATS monitoring endpoints bind to `127.0.0.1`; every other
-supporting service is available only on the Compose network. The complete
+In the full Compose stack only the TLS edge binds to all host interfaces:
+HTTPS on 8443 for the proxy and on 3000 for the console, plain HTTP only when
+the operator sets `http://` site addresses. The Jaeger UI and NATS
+monitoring endpoints bind to `127.0.0.1`; every other supporting service is
+available only on the Compose network, and the analyzer, classifier and
+scanner service accept calls only with their token
+([Internal service tokens](../docs/operations.md#internal-service-tokens)).
+Every service has CPU and memory limits
+([Resource limits](../docs/operations.md#resource-limits)). The complete
 environment and Compose setting table is in
 [operations.md](../docs/operations.md#configuration).
 
@@ -130,6 +138,11 @@ does not work then:
 
 Proxying, the inline scanners and the policy do not depend on the analyzer.
 The render fails when an address is given both here and under `env`.
+
+An analyzer started with `TAMGA_ANALYZER_TOKEN` refuses calls without it.
+The chart has no secret key for it: pass it as `env.TAMGA_ANALYZER_TOKEN`,
+which puts the value in the release like `secrets.adminKey` does
+([Internal service tokens](../docs/operations.md#internal-service-tokens)).
 
 The proxy sends the analyzer no request text unless `analyzer.sendContent` is
 `true`, which the chart passes as `TAMGA_ANALYZER_SEND_CONTENT=true`. With it
