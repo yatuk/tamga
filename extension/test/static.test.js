@@ -32,7 +32,10 @@ const rel = (path) => relative(root, path).replace(/\\/g, '/');
 test('manifest: version 3, the three sites and nothing wider', () => {
   assert.equal(manifest.manifest_version, 3);
   assert.deepEqual(manifest.host_permissions, siteMatches);
-  assert.deepEqual(manifest.permissions, ['storage']);
+  // The second sets the vendors' workspace headers (tenant-rules.js). It
+  // acts only where host access is granted, the three sites, and warns of
+  // nothing at install.
+  assert.deepEqual(manifest.permissions, ['storage', 'declarativeNetRequestWithHostAccess']);
   assert.equal(manifest.content_scripts.length, 1);
   assert.deepEqual(manifest.content_scripts[0].matches, siteMatches);
   assert.equal(manifest.content_scripts[0].all_frames, false);

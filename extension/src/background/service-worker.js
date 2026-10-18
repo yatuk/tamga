@@ -6,6 +6,8 @@
 
 import { ext } from '../shared/api.js';
 import { createHandler } from './handler.js';
+import { loadSettings } from './settings.js';
+import { syncTenantRules } from './tenant-rules.js';
 
 const extensionOrigin = ext.runtime.getURL('').replace(/\/$/, '');
 
@@ -40,3 +42,20 @@ ext.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 // The toolbar button has no popup: it opens the settings.
 ext.action.onClicked.addListener(() => ext.runtime.openOptionsPage());
+
+// The workspace headers follow the policy: set when the worker starts and
+// again whenever an administrator changes it. The rules outlive the worker,
+// so a failed update leaves the last good ones in place.
+const storageAreas = { managed: ext.storage.managed, local: ext.storage.local };
+async function applyTenantRules() {
+  try {
+    const { settings } = await loadSettings(storageAreas);
+    await syncTenantRules(ext.declarativeNetRequest, settings.allowedWorkspaces);
+  } catch {
+    // Not available in this browser, or the update was refused.
+  }
+}
+applyTenantRules();
+ext.storage.onChanged.addListener((_changes, areaName) => {
+  if (areaName === 'managed') applyTenantRules();
+});
