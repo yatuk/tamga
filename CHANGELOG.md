@@ -75,7 +75,11 @@
   `Toxicity`, `NoRefusal`, `BanCode` and `BanTopics` classifiers), which the
   proxy never asked for; the scanner is deleted, not rewritten. What the
   analyzer does for the proxy is unchanged: Presidio with spaCy for names
-  and places, the optional LLM judge, and the PDF reports. **What a
+  and places, the optional LLM judge, and the PDF reports. Per class:
+  `Toxicity` and `NoRefusal` are covered in part by the proxy's
+  `content_moderation` scanner, `BanCode` by its `code_leak` scanner on
+  responses, and `BanTopics` by the policy's `topics` section (table in
+  `docs/migrating-from-llm-guard.md`). **What a
   deployment will notice:** the scan type `toxicity` returns no findings and
   no scanner result; `TAMGA_BAN_TOPICS` is no longer read; the analyzer logs
   each once (the variable at start if it is set, the scan type the first
