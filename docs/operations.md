@@ -685,10 +685,34 @@ as anywhere else. The same holds for a Gemini thought that carries a
 signature. Reasoning nobody signs is masked like text. The vault leaves a
 placeholder in signed reasoning as it is.
 
-What is not read in a stream: a value written as a JSON number or as a key
-in a tool call's arguments (a buffered answer's are not read either);
-Gemini's partial function-call arguments; Anthropic citation deltas; and
-`content` sent as a list of parts in an OpenAI-style chunk.
+Other shapes a stream can carry the model's text in:
+
+- **Numbers and keys in a tool call's arguments.** An integer of six digits
+  or more and a key that is not made of ASCII letters, `_` and `-` are read
+  for values (PII, secrets, custom entities, tool destinations), in a stream
+  as in a buffered answer and in a request's tool calls. A masked number
+  becomes a string (`"id": "[tc_kimlik_REDACTED]"`); a key is masked where
+  it stands ([details](agents.md#numbers-and-keys-in-a-tool-calls-arguments)).
+- **Gemini's partial function-call arguments**
+  (`streamFunctionCallArguments`): each string argument is put together from
+  its pieces (`partialArgs` that share a `jsonPath`) and read when the call
+  ends (the empty `functionCall`), like any other tool call's arguments. A
+  number comes whole; masked, it goes out as `stringValue`.
+- **Anthropic citation deltas** (`citations_delta`): the quoted text and the
+  document's title are read whole and masked where they stand.
+- **`content` as a list of parts in an OpenAI-style chunk** (Mistral's
+  reasoning models): a `text` part is the answer's text and the text parts
+  of a `thinking` part are reasoning, each on its channel; any other part is
+  read whole.
+
+The vault's placeholders are restored in a tool call's arguments as in the
+text: in the document that goes out when the arguments were kept back, and
+as the pieces go by when they were not (the vault without
+`output_rules.streaming`), where a piece that ends in what may be the start
+of a placeholder waits for the next one. In a JSON document the value is
+written as a string's content is. Values that arrive whole (a Gemini
+function call, the closing events of the Responses API) have their
+placeholders restored too.
 
 ### Links in an answer
 

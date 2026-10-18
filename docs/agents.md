@@ -65,6 +65,26 @@ A rule can be limited to some of these with `applies_to`
 ([policy](operations.md#sample-policy-yaml)). Images, audio and PDFs are not
 read.
 
+### Numbers and keys in a tool call's arguments
+
+A tool reads `{"id": 10000000146}` and `{"10000000146": "vip"}` as well as
+`{"id": "10000000146"}`, so in a tool call's arguments the proxy reads a
+number and a key too: in an answer, buffered or streamed, and in the tool
+calls an agent sends back in its history. They are read for values only (PII,
+secrets, custom entities, competitor names, tool destinations), never for an
+instruction, a language or a topic. Read are an integer of six digits or more
+and a key that has anything besides ASCII letters, `_` and `-`; a count, a
+price and a field name such as `customer_id` are not, since no identifier
+the scanners know is written that way.
+
+`block_on` (or a request rule's `BLOCK`) blocks as for a string. `REDACT`
+masks a number as a string, `"id": "[tc_kimlik_REDACTED]"`, which keeps the
+document JSON but changes the type: a tool that checks its arguments may
+refuse the call, which is the point. A key is masked where it stands; two
+masked keys in one object are then the same key. The path of a finding in a
+key is the path of its object, so the value is not written to the event log
+in it.
+
 ### Tool results that are JSON
 
 MCP tools answer with a text block that holds the tool's JSON output, and
@@ -109,6 +129,8 @@ The shipped policy is written for chat traffic. For agents, look at:
 - **`rate_limit.max_tokens_per_day`** (500,000). A long session with a large
   context uses that in minutes.
 - **`canary`** and **`vault`** work on streams without holding them. The
+  vault restores its placeholders in the text and in a streamed tool call's
+  arguments, written there as a JSON string's content (a quote as `\"`). The
   canary token is the same on every request from one key, so the system
   prompt does not change between turns and the provider's prompt cache
   holds. Both rewrite the request body, though: the canary re-encodes it and
@@ -119,7 +141,12 @@ The shipped policy is written for chat traffic. For agents, look at:
   A tool call's arguments are scanned too: the agent sees the tool call
   start at once, with its name, and receives the arguments in one piece when
   the tool call is complete, masked where `redact_on` says so. A `block_on`
-  finding in them ends the stream before any of them is sent. Arguments
+  finding in them ends the stream before any of them is sent. This is on
+  purpose and is not going to become a 64-character window as for text: the
+  arguments are read as a document (the strings decoded, numbers, keys), the
+  way a buffered answer's are, which a window over the raw JSON cannot do
+  (an escape hides a digit, a masked number has to become a string); and the
+  agent cannot run the tool before the call is complete anyway. Arguments
   longer than `output_rules.buffer_bytes` (1 MiB by default) cannot be
   scanned as one document: the stream ends there, or with `fail_open` they
   go out unread. An agent that writes large files through a tool call needs
@@ -361,21 +388,19 @@ read that file, and the turns after it are not.
 
 ## What does not work yet
 
-- A streamed tool call is scanned whole, when it ends. Its arguments are not
-  streamed to the agent piece by piece while `output_rules.streaming` is on.
-- In a tool call's arguments the strings are read, as in a buffered answer.
-  A value written as a JSON number (`{"id": 10000000146}`) or as a key is
-  not.
+- In a tool call's arguments a number with a fraction or an exponent, an
+  integer of fewer than six digits and a key made of ASCII letters, `_` and
+  `-` only are not read (see above). Numbers and keys in a tool result are
+  read as written only.
 - A tool result that is JSON is still read as written too, and there the
   scanners can find an instruction across two records whose words only meet
   in the raw text (two search titles in a row). Two benign rows of the
   tool-JSON set are blocked that way, before and after the decoded reading.
 - A tool result that is plain text with JSON inside it (`Result: {...}`) is
   read as written only.
-- Some stream shapes are still unread: Gemini's partial function-call
-  arguments, Anthropic citation deltas, and `content` sent as a list of
-  parts in an OpenAI-style chunk.
-- The vault's placeholders are restored in the text of a stream, not in a
-  streamed tool call's arguments.
+- In Gemini's partial function-call arguments, a string under a `jsonPath`
+  that is not made of field names and indexes (`$.notes['10000000146']`) is
+  read piece by piece where it stands, so a value split between two of its
+  pieces is not found. Strings under other paths are put together first.
 - Traffic between the agent and its **MCP servers** does not pass through
   Tamga. What a tool returns does, in the next request, as a tool result.
