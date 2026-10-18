@@ -80,9 +80,31 @@ blur (`Şimşek` read as `Simgek`). The two e-mails missed are in the photo too
 (`ismal.ozturk@`, `guhen.ylldirim@`). Every TCKN, IBAN and card number was
 recovered, in the photo as well.
 
-**Tesseract**: not measured yet; the binary is not installed on the machine
-above. Measure it in the analyzer image built with
-`--build-arg OCR_TESSERACT=true`, from the repository root:
+**Tesseract** 5.5.0 (Debian trixie, `tur+eng`), measured on 2026-10-18 in the
+analyzer image built with `--build-arg OCR_TESSERACT=true`, 4 CPUs
+(`docker run --cpus 4`), median of three reads, Linux x86_64 under Docker
+Desktop on the same laptop; cold start 1,432 ms:
+
+| Image | CER | Turkish letters wrong | TCKN | IBAN | Card | E-mail | Latency |
+|---|---|---|---|---|---|---|---|
+| customer_table.png | 3.7% | 3/18 | 4/4 | 4/4 | 4/4 | 4/4 | 662 ms |
+| chat.png | 8.6% | 2/19 | 1/1 | 1/1 | 1/1 | 0/1 | 545 ms |
+| customer_table_photo.jpg | 53.6% | 10/18 | 2/4 | 0/4 | 1/4 | 0/4 | 651 ms |
+| turkish_text.png | 0.0% | 0/73 | - | - | - | - | 458 ms |
+| english_form.png | 0.0% | - | 1/1 | 1/1 | 1/1 | 1/1 | 597 ms |
+| small_font_10px.png | 0.9% | 0/9 | 1/1 | 1/1 | 1/1 | 1/1 | 232 ms |
+| small_font_8px.png | 53.5% | 8/9 | 0/1 | 0/1 | 0/1 | 0/1 | 439 ms |
+| dark_mono.png | 1.9% | 1/9 | 1/1 | 1/1 | 1/1 | 0/1 | 563 ms |
+| **All** | **15.8%** | **15.5%** of 155 | **10/13** | **8/13** | **9/13** | **6/13** | 554 ms median |
+
+Tesseract reads clean Turkish prose better than RapidOCR (no letter wrong in
+`turkish_text.png`, the capital İ wrong 2 times of 8 against 8 of 8) and is
+faster, but it loses most of the photo and all of the 8 px text, and with them
+the identifiers: 8 of 13 IBANs and 6 of 13 e-mail addresses. The two
+latencies were measured on different systems (Windows natively, Linux in
+Docker) and compare only roughly.
+
+To repeat it, from the repository root:
 
 ```
 docker build -t tamga-analyzer:ocr --build-arg OCR_TESSERACT=true analyzer
@@ -119,10 +141,11 @@ card number, including in the photo, at under a second per image on four
 threads, and needs nothing from the operating system. Its weak point for
 Turkish is the dotted capital İ and the dotless ı, which matters for names and
 little for the identifiers DLP acts on, since those are digits and ASCII.
-Revisit the choice when Tesseract has been measured with the command above:
-Tesseract has a Turkish language model of its own and may do better on the
-Turkish letters, at the cost of about 95 MB of system packages and a
-subprocess per image.
+Tesseract, measured with the command above, does better on the Turkish
+letters of clean text but finds far fewer identifiers in a photo or in small
+text (10, 8, 9 and 6 of 13 against 13, 13, 13 and 11), which is what DLP acts
+on; it also needs about 95 MB of system packages and a subprocess per image.
+RapidOCR stays the recommendation.
 
 ## Licences, sources and sizes
 
