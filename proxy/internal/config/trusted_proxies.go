@@ -11,6 +11,12 @@ import (
 // an error: a typo here would otherwise silently change whose address the
 // proxy believes.
 func ParseTrustedProxies(raw string) ([]*net.IPNet, error) {
+	return parseNetList("TAMGA_TRUSTED_PROXIES", raw)
+}
+
+// parseNetList parses a comma-separated list of IPs and CIDR ranges for the
+// variable name; a bad entry is an error that names it.
+func parseNetList(name, raw string) ([]*net.IPNet, error) {
 	var out []*net.IPNet
 	for _, p := range strings.Split(raw, ",") {
 		p = strings.TrimSpace(p)
@@ -20,7 +26,7 @@ func ParseTrustedProxies(raw string) ([]*net.IPNet, error) {
 		if !strings.Contains(p, "/") {
 			ip := net.ParseIP(p)
 			if ip == nil {
-				return nil, fmt.Errorf("TAMGA_TRUSTED_PROXIES: %q is not an IP address or CIDR range", p)
+				return nil, fmt.Errorf("%s: %q is not an IP address or CIDR range", name, p)
 			}
 			bits := 128
 			if v4 := ip.To4(); v4 != nil {
@@ -31,7 +37,7 @@ func ParseTrustedProxies(raw string) ([]*net.IPNet, error) {
 		}
 		_, n, err := net.ParseCIDR(p)
 		if err != nil {
-			return nil, fmt.Errorf("TAMGA_TRUSTED_PROXIES: %q is not an IP address or CIDR range", p)
+			return nil, fmt.Errorf("%s: %q is not an IP address or CIDR range", name, p)
 		}
 		out = append(out, n)
 	}

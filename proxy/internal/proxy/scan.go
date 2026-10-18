@@ -427,6 +427,9 @@ type scanEval struct {
 	// tools is the tool definitions as the proxy would forward them, set
 	// with rewritten when one of them was changed and nil otherwise.
 	tools []json.RawMessage
+	// body is the whole request as rewritten, in place of rewritten and
+	// tools, when the input was a whole request (scanInput.whole).
+	body []byte
 	// fallback says why a REDACT or a STRIP became a BLOCK, and is empty
 	// when the BLOCK is a rule's own.
 	fallback string
@@ -449,6 +452,23 @@ type scanInput struct {
 	body  []byte
 	segs  []extract.Segment
 	texts int
+	// The ICAP route (icap.go) scans a client's own request instead, as it
+	// was sent. provider is then the shape it is read and rewritten as,
+	// and whole says a rewrite is of the whole body: scanEval.body.
+	provider string
+	whole    bool
+	// locked, when set, is why nothing in the body may be rewritten: its
+	// segments were not read by the extractor and have no place in it. A
+	// REDACT or a STRIP is then a BLOCK.
+	locked string
+}
+
+// shape is the request shape the body is read as.
+func (in scanInput) shape() string {
+	if in.provider != "" {
+		return in.provider
+	}
+	return scanProvider
 }
 
 // scanWireMessage is one message of the request a scanInput is built as.
@@ -529,6 +549,14 @@ func (in scanInput) inToolCall(seg extract.Segment) bool {
 // all of them may. A value there that the policy wants masked or stripped
 // blocks the request.
 func (in scanInput) fixed(edited []int) string {
+	if in.locked != "" {
+		return in.locked
+	}
+	if in.whole {
+		// The body goes back as a whole, tool calls and names included,
+		// as on the proxy path.
+		return ""
+	}
 	for _, i := range edited {
 		if i < in.texts || i >= len(in.segs) {
 			continue
@@ -686,8 +714,10 @@ func (h *scanHandler) evaluateInput(ctx context.Context, call *scanCall, request
 				reason = redactNothing
 			} else if reason = in.fixed(edited); reason != "" {
 				// Nothing is rewritten: see scanInput.fixed.
-			} else if masked, rwErr := extract.RewriteChecked(scanProvider, body, segs, edits); rwErr != nil {
+			} else if masked, rwErr := extract.RewriteChecked(in.shape(), body, segs, edits); rwErr != nil {
 				reason = redactRewrite
+			} else if in.whole {
+				ev.body = masked
 			} else if ev.rewritten, ev.tools, rwErr = in.rewritten(masked, edited); rwErr != nil {
 				reason = redactRewrite
 			}
@@ -695,27 +725,33 @@ func (h *scanHandler) evaluateInput(ctx context.Context, call *scanCall, request
 		if reason != "" {
 			ev.headers = append(ev.headers, [2]string{"X-Tamga-Redact-Fallback", "block:" + reason})
 			ev.fallback = "REDACT could not be carried out (" + reason + ")"
-			ev.rewritten, ev.tools = nil, nil
+			ev.rewritten, ev.tools, ev.body = nil, nil, nil
 			action = policy.ActionBlock
 		}
 	}
 
 	// The same for STRIP.
 	if action == policy.ActionStrip {
-		res, stripErr := stripSegments(scanProvider, body, segs, findings, actionOf, false, newFieldStripper(ctx, pol, h.cfg.Registry.Without(scanExcluded...), pipelineCfg))
-		reason := ""
-		if stripErr == nil {
-			if reason = in.fixed(res.edited); reason == "" {
-				ev.rewritten, ev.tools, stripErr = in.rewritten(res.body, res.edited)
+		reason := in.locked
+		if reason == "" {
+			res, stripErr := stripSegments(in.shape(), body, segs, findings, actionOf, false, newFieldStripper(ctx, pol, h.cfg.Registry.Without(scanExcluded...), pipelineCfg))
+			if stripErr == nil {
+				if reason = in.fixed(res.edited); reason == "" {
+					if in.whole {
+						ev.body = res.body
+					} else {
+						ev.rewritten, ev.tools, stripErr = in.rewritten(res.body, res.edited)
+					}
+				}
 			}
-		}
-		if stripErr != nil {
-			reason = stripFailure(stripErr)
+			if stripErr != nil {
+				reason = stripFailure(stripErr)
+			}
 		}
 		if reason != "" {
 			ev.headers = append(ev.headers, [2]string{"X-Tamga-Strip-Fallback", "block:" + reason})
 			ev.fallback = "STRIP could not be carried out (" + reason + ")"
-			ev.rewritten, ev.tools = nil, nil
+			ev.rewritten, ev.tools, ev.body = nil, nil, nil
 			action = policy.ActionBlock
 		}
 	}

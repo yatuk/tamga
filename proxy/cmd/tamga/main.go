@@ -865,6 +865,10 @@ func main() {
 	}))
 	proxy.RegisterRoutes(root, proxyCfg)
 
+	// The ICAP server for a company's web proxy, on a port of its own. Off
+	// unless TAMGA_ICAP_ADDR is set.
+	icapSrv := startICAP(cfg, scanAPI)
+
 	// HTTP server
 	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Port),
@@ -933,6 +937,11 @@ func main() {
 	log.Info().Msg("shutting down...")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	if icapSrv != nil {
+		if err := icapSrv.Shutdown(ctx); err != nil {
+			log.Warn().Err(err).Msg("icap server shutdown timed out")
+		}
+	}
 	if err := srv.Shutdown(ctx); err != nil {
 		log.Fatal().Err(err).Msg("forced shutdown")
 	}
