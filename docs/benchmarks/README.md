@@ -988,6 +988,93 @@ for running it in shadow, not for switching: set it up as in docs/operations.md
 `shadow_only` and `primary_only` on your own traffic before changing the
 model or the threshold.
 
+### Structural signals (2026-10-18)
+
+Of the 59 attacks in `trd_locked.csv` the rules catch 2: most of deepset's
+attacks name no override, and the classifier scores many of them below
+0.98. The proxy now looks for five shapes of text that address the model
+(`internal/classifier/structure.go`, listed in docs/operations.md under
+"Signals"): `persona_frame`, `system_frame`, `task_switch`,
+`dictated_answer` and `instruction_in_data`. Each is a signal like
+`script_switch`: the classifier judges the text by `signal_threshold`
+(0.90) instead of `threshold` (0.98), and nothing else changes. **With the
+classifier off they change nothing**: no finding, no risk score, no action.
+`go test ./cmd/redteam/ -v` gives the same counts for every set before and
+after the change.
+
+`TestStructureSignals` counts them. The rules run first as in the proxy: a
+request they block is not sent to the classifier, and neither is a text
+they found an injection in; "left" is what the classifier is asked about.
+Attacks and benign rows are labelled as `classifier/finetune` labels them
+(PII, secret and bulk-data rows are neither). The patterns were written
+against the tuning parts only.
+
+| Tuning set | Attacks | with a signal | left to the classifier | left, with a signal | Benign | with a signal | left | left, with a signal |
+|---|---|---|---|---|---|---|---|---|
+| `prompts.csv` | 102 | 22 | 12 | 5 | 163 | 0 | 140 | 0 |
+| `tr_tuning.csv` | 165 | 38 | 29 | 14 | 186 | 10 | 181 | 10 |
+| `trd_tuning.csv` | 203 | 144 | 174 | 135 | 342 | 1 | 333 | 1 |
+| `discourse_tuning.csv` | 26 | 6 | 0 | 0 | 104 | 16 | 82 | 8 |
+| `tooljson_tuning.csv` | 62 | 17 | 0 | 0 | 33 | 0 | 30 | 0 |
+| benign developer texts | — | — | — | — | 84 | 0 (as `user` and as `tool`) | | |
+
+The benign rows with a signal are role-play requests in `tr_tuning.csv` (8
+of the 10: "bana koç gibi davran", "rol yapalım"), text about attacks in
+`discourse_tuning.csv` that quotes chat-template markers or "you are now"
+(8), and one deepset row ("Sen Zeit Online'sın. Nasılsın?").
+
+**With the classifier.** The shipped model (`prompt-injection-guard-small`,
+int8, through `app.classifier` and the port of `Prepare`, as `sweep.py`
+scores) on the texts left to it, at 0.98 with the signals the proxy had
+before, and with the structural signals added:
+
+| Tuning set | Attacks flagged, before | after | Benign flagged, before | after |
+|---|---|---|---|---|
+| `prompts.csv` | 7 of 12 | 7 | 1 of 140 | 1 |
+| `tr_tuning.csv` | 11 of 29 | 13 | 0 of 181 | 0 |
+| `trd_tuning.csv` | 19 of 174 | 35 | 0 of 333 | 0 |
+| `discourse_tuning.csv` | 0 of 0 | 0 | 15 of 82 | 15 |
+| `tooljson_tuning.csv` | 0 of 0 | 0 | 0 of 30 | 0 |
+
+For comparison, 0.90 for every text, signal or not, flags 37 of the 174
+`trd_tuning.csv` attacks and 16 of the 29 in `tr_tuning.csv`, and flags 5
+benign rows of `prompts.csv`, 20 of `discourse_tuning.csv` and 2 of
+`tooljson_tuning.csv` (1, 15 and 0 at 0.98): 11 more. The signals get 35 of
+those 37 attacks and 13 of those 16 without the 11.
+
+**Locked parts, measured once** after the patterns were final, counts only:
+
+| Set | Attacks | with a signal | left | left, with a signal | Benign | with a signal | left | left, with a signal | Attacks flagged, before → after | Benign flagged, before → after |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `holdout.csv` | 38 | 9 | 0 | 0 | 91 | 2 | 88 | 2 | 0 → 0 | 0 → 0 |
+| `tr_locked.csv` | 130 | 26 | 25 | 5 | 125 | 2 | 122 | 2 | 10 → 10 | 4 → 5 |
+| `trd_locked.csv` | 59 | 34 | 57 | 33 | 44 | 0 | 44 | 0 | 7 → 8 | 0 → 0 |
+| `discourse_locked.csv` | 12 | 3 | 0 | 0 | 74 | 13 | 53 | 10 | 0 → 0 | 8 → 8 |
+| `tooljson_locked.csv` | 58 | 17 | 3 | 0 | 21 | 0 | 20 | 0 | 1 → 1 | 0 → 0 |
+
+What this says:
+
+- **The signals find the attacks the rules miss.** On the deepset parts,
+  written by someone else, 135 of 174 and 33 of 57 of the attacks the rules
+  leave to the classifier carry one, against 1 of 333 and 0 of 44 benign
+  rows.
+- **The model is the limit.** A signal only lowers the threshold to 0.90.
+  On `trd_locked.csv` most of the signalled attacks score far below that,
+  so one more is caught (7 to 8 of 57). On the tuning part, where the
+  patterns were written, 16 more are.
+- **One benign row of `tr_locked.csv` more is flagged** (4 to 5 of 122),
+  and role-play requests in general carry `persona_frame`: the classifier
+  alone decides about them, at 0.90.
+- **The sets are small and the patterns were tuned on half of them.** The
+  locked numbers are the ones to quote; nobody has measured real traffic.
+
+To repeat the classifier columns: write the texts with
+`TAMGA_STRUCTURE_TEXTS_OUT=texts.jsonl go test ./cmd/redteam -run
+TestStructureSignals`, score each `text` with the service's classifier
+into `{"key": score}`, and run the test again with
+`TAMGA_CLASSIFIER_SCORES=scores.json` (and `TAMGA_STRUCTURE_LOCKED=1` for
+the locked parts).
+
 ### Tool results that are JSON (2026-10-17)
 
 MCP tools return JSON, so a hidden instruction arrives in a string value,

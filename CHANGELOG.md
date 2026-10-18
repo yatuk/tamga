@@ -1443,6 +1443,24 @@
 - New: [docs/agents.md](docs/agents.md).
 
 ### Inline classifier (optional)
+- **Text shaped like an order to the model is held to `signal_threshold`.**
+  Five structural signals, in English and Turkish
+  (`internal/classifier/structure.go`): `persona_frame` ("act as", "you are
+  now", "gibi davran", "artık sen ... sın"), `system_frame` (chat-template
+  tags, `[admin]`, "System note:", an `### Instructions` heading),
+  `task_switch` ("Very good. Now write ...", "bu kadar yeter", "her şeyi
+  unut"), `dictated_answer` ("repeat after me", "evet de") and
+  `instruction_in_data` (a note to the AI anywhere; orders to the reader in
+  a tool result). None is a finding and none acts with the classifier off.
+  On the tuning sets with the shipped model, 16 more of the 174
+  `trd_tuning.csv` attacks the rules leave to the classifier are caught and
+  no benign row more is flagged; on `trd_locked.csv` 1 more of 57, and on
+  `tr_locked.csv` 1 benign row more of 122 is flagged (docs/benchmarks,
+  "Structural signals"). **With `scan.classifier.enabled`, a text with one
+  of these shapes that scores from `signal_threshold` (0.90) up to
+  `threshold` (0.98) is now an injection finding, with `signal` naming the
+  shape in its metadata, and is acted on by the injection rule.** Set
+  `signal_threshold` equal to `threshold` to turn all signals off.
 - **A model on the decision path.** The analyzer's semantic checks ran after
   the response and could not change a verdict. A new classifier service runs
   a local ONNX prompt-injection model, and the proxy asks it inline about a
@@ -1700,6 +1718,19 @@
   and an unpaired surrogate inside a string value is still accepted.
 
 ### Output scanning
+- `output_rules.prompt_leak` (off unless set) looks for a leaked system
+  prompt in answers, buffered and streamed: `canaries`, strings the operator
+  wrote into its own system prompts (8 to 64 bytes, letter case aside), and
+  `system_prompt`, a word-for-word comparison with the request's system
+  prompt (`min_words` in a row, default 20, or `overlap` of its runs of
+  eight words, default 0.5). Only hashes of the prompt's runs of eight
+  words are kept, for the time of the request. A leak is a
+  `system_prompt_leak` finding of category `canary_string` or
+  `system_prompt_verbatim`, acted on by `block_on`; a buffered answer with
+  one carries `X-Tamga-System-Prompt-Leak: true`. The match of a
+  `system_prompt_verbatim` finding is a count of words and is no longer
+  replaced by `[canary token]` when it is recorded; the proxy's own canary
+  finding keeps that match.
 - **`output_rules.redact_on` is now applied.** REDACT was computed for a
   response and never carried out: the client received the original. For
   non-streamed OpenAI, Anthropic and Gemini responses the findings are now

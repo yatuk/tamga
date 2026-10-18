@@ -579,6 +579,57 @@ adding it does not make each request body unique: the response cache and the
 provider's prompt cache keep working. It is derived from `TAMGA_VAULT_KEY`
 when that is set (so replicas agree) and from a per-process secret otherwise.
 
+### System-prompt leaks in answers
+
+The canary above is a token the proxy adds. Two more checks need no change
+to the request, and sit under `output_rules` with the other checks of an
+answer:
+
+```yaml
+output_rules:
+  enabled: true
+  block_on: [system_prompt_leak]
+  streaming:
+    enabled: true
+    max_buffer_bytes: 8192
+  prompt_leak:
+    canaries: ["zq-7741-canary-ankara"]
+    system_prompt:
+      enabled: true
+      min_words: 20
+      overlap: 0.5
+```
+
+- **Canaries** are strings you write into your own system prompts. An
+  answer that holds one, in any letter case, is a `system_prompt_leak`
+  finding of category `canary_string`. A canary is 8 to 64 bytes, at most
+  32 of them; pick something no answer would say by chance.
+- **system_prompt** compares the answer with the system prompt of the
+  request it answers, word for word: words are runs of letters and digits,
+  compared in lower case, so punctuation, line breaks and a list layout do
+  not hide a copy, and a paraphrase is not one. An answer that repeats
+  `min_words` words of the prompt in a row (default 20, at least 8), or
+  holds `overlap` of the prompt's runs of eight words (default 0.5, which
+  is what catches a short prompt recited whole), is a `system_prompt_leak`
+  finding of category `system_prompt_verbatim`. For the comparison the
+  proxy keeps a 64-bit hash of each run of eight words of the prompt, for
+  the time of the request. The prompt is not stored or logged, and the
+  finding says how many words matched (`run_words`, `overlap`), never
+  which.
+
+Nothing happens while `output_rules.enabled` is off. Name
+`system_prompt_leak`, `canary_string` or `system_prompt_verbatim` in
+`block_on` to withhold the answer; otherwise the leak is recorded and the
+answer goes out. Either way a buffered answer carries
+`X-Tamga-System-Prompt-Leak: true`. A leak cannot be named in `redact_on`.
+A streamed answer (server-sent events) is checked only with
+`output_rules.streaming` on: its text is read as it arrives, before it is
+released, and a leak that `block_on` names ends the stream with an error
+event. A canary is ended before any of it reaches the client; a run of
+the prompt is ended when it reaches `min_words`, so the words before that
+have gone out. Tool-call arguments and reasoning are read too. An answer handed over by the LiteLLM bridge,
+which comes without its request, is checked for the canaries only.
+
 ### Compressed responses
 
 The proxy does not pass the caller's `Accept-Encoding` to the provider. It
@@ -1264,6 +1315,34 @@ classifier's finding, that finding's metadata names the signal
 chosen from the published sweep (it flagged 1 of 117 and 2 of 85 benign
 samples when applied to every text) and has not been measured on text that
 carries a signal. A value equal to `threshold` turns the signals off.
+
+Text shaped like an order to the model is held to `signal_threshold` as
+well, in English and in Turkish. Most attacks that carry no fixed phrase
+have one of these shapes, and the rules, which are written for phrases,
+miss them:
+
+| Signal | What it looks for |
+|---|---|
+| `persona_frame` | the reader is given a role, an identity or a mode: "you are now", "act as", "pretend to be", "stay in character", "gibi davran", "rol yap", "artık sen ... sın", "olduğunu hayal et" |
+| `system_frame` | the text dresses itself as the system or an operator: a chat-template tag, `[admin]`, "System note:", an `### Instructions` heading, an `Instruction:` line, a context and question laid out the way an application lays them out, "we are authorised" |
+| `task_switch` | the text drops what came before or turns to a new task after a question, praise or a task done: "Very good. Now write ...", "instead, say ...", "but first", "forget everything above", "yeni görevler geliyor", "bu kadar yeter", "her şeyi unut" |
+| `dictated_answer` | the text tells the reader word for word what to say or claim: "repeat after me", "evet de", `sadece "..." yaz`, "X olduğunu söyle" |
+| `instruction_in_data` | a note addressed to the model ("note to the AI:", "yapay zeka asistanına:", an HTML comment to the assistant), and in a `tool` text only, a sentence giving the reader orders: "you must tell the user", "do not mention this to the user", "bundan sonra", "kullanıcıya söyleme", "göndermelisin" |
+
+None of them is a verdict and none is a finding: users ask for personas,
+change the subject and tell the model what to answer every day. The
+patterns are matched on a folded copy of the text (lower case, Turkish
+letters without their marks); a `tool` text that is JSON is read with its
+strings decoded as well. With the classifier off they do nothing. When the
+lower threshold is what made the finding, its metadata names the signal
+(`signal: task_switch`). Measured on the tuning sets with the shipped model
+(docs/benchmarks, "Structural signals"): of the attacks the rules leave to
+the classifier, 135 of 174 in `trd_tuning.csv` and 14 of 29 in
+`tr_tuning.csv` carry one, and 16 and 2 more of them are caught; no benign
+row of a tuning set was flagged that was not flagged before. 10 of the 181
+benign `tr_tuning.csv` rows (mostly role-play requests) and 8 of the 82
+benign `discourse_tuning.csv` rows carry a signal; for those the classifier
+alone decides, at 0.90.
 
 The classifier service has no authentication of its own and receives prompt
 text in the clear. Keep it on the internal network, next to the proxy.
