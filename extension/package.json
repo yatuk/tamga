@@ -2,10 +2,11 @@
   "name": "tamga-browser-extension",
   "version": "0.9.0",
   "private": true,
-  "description": "Tamga browser extension for chat sites. No dependencies and no build step; this file exists so that Node reads the sources as ES modules and runs the tests.",
+  "description": "Tamga browser extension for chat sites. No dependencies and no build step; this file exists so that Node reads the sources as ES modules, runs the tests and packs the extension for each browser.",
   "license": "AGPL-3.0-only",
   "type": "module",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "package": "node tools/package.js"
   }
 }

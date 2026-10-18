@@ -1,15 +1,18 @@
 // The service worker: the only part of the extension that reads the key and
 // the only part that makes a network request. Content scripts send it text
-// and get back a verdict.
+// and get back a verdict. Firefox runs the same file as its background
+// script (an event page; Firefox has no extension service workers): nothing
+// here depends on which it is.
 
+import { ext } from '../shared/api.js';
 import { createHandler } from './handler.js';
 
-const extensionOrigin = chrome.runtime.getURL('').replace(/\/$/, '');
+const extensionOrigin = ext.runtime.getURL('').replace(/\/$/, '');
 
 // Content scripts do not need the stored settings, so the storage areas are
 // closed to them. The call is not available for every area in every browser
 // version; where it is not, the content script still never reads storage.
-for (const area of [chrome.storage.local, chrome.storage.managed]) {
+for (const area of [ext.storage.local, ext.storage.managed]) {
   try {
     const done = area?.setAccessLevel?.({ accessLevel: 'TRUSTED_CONTEXTS' });
     done?.catch?.(() => {});
@@ -19,16 +22,16 @@ for (const area of [chrome.storage.local, chrome.storage.managed]) {
 }
 
 const handle = createHandler({
-  storage: { managed: chrome.storage.managed, local: chrome.storage.local },
-  permissions: chrome.permissions,
+  storage: { managed: ext.storage.managed, local: ext.storage.local },
+  permissions: ext.permissions,
   // Bound here and passed in: no other module calls fetch.
   fetchImpl: (url, init) => fetch(url, init),
-  runtimeId: chrome.runtime.id,
+  runtimeId: ext.runtime.id,
   extensionOrigin,
-  openOptions: () => chrome.runtime.openOptionsPage(),
+  openOptions: () => ext.runtime.openOptionsPage(),
 });
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+ext.runtime.onMessage.addListener((message, sender, sendResponse) => {
   handle(message, sender).then(sendResponse, () => {
     sendResponse({ ok: false, behaviour: { failMode: 'closed', autoRedact: false }, reason: 'bad_message' });
   });
@@ -36,4 +39,4 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 // The toolbar button has no popup: it opens the settings.
-chrome.action.onClicked.addListener(() => chrome.runtime.openOptionsPage());
+ext.action.onClicked.addListener(() => ext.runtime.openOptionsPage());

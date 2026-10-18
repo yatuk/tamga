@@ -1,9 +1,10 @@
-// The settings page. It writes to chrome.storage.local and asks the browser
-// for permission to reach the Tamga origin; it makes no network request
-// itself. A setting that policy fixed is shown and cannot be changed. The
+// The settings page. It writes to the extension's local storage and asks the
+// browser for permission to reach the Tamga origin; it makes no network
+// request itself. A setting that policy fixed is shown and cannot be changed. The
 // stored key is never put back into the page.
 
 import { loadSettings, parseTamgaUrl } from '../src/background/settings.js';
+import { ext } from '../src/shared/api.js';
 import { MSG_TEST } from '../src/shared/protocol.js';
 import { reasonText } from '../src/content/decide.js';
 
@@ -13,15 +14,19 @@ const field = (name) => form.elements.namedItem(name);
 const siteBoxes = () => [...form.querySelectorAll('input[name="sites"]')];
 
 let managedKeys = [];
+// The origin of a Tamga URL set by policy, read when the page is drawn: Save
+// has to ask for the permission before it waits for anything (below).
+let managedOrigin = null;
 
 function say(text) {
   status.textContent = text;
 }
 
 async function render() {
-  const loaded = await loadSettings({ managed: chrome.storage.managed, local: chrome.storage.local });
+  const loaded = await loadSettings({ managed: ext.storage.managed, local: ext.storage.local });
   const { settings } = loaded;
   managedKeys = loaded.managedKeys;
+  managedOrigin = managedKeys.includes('tamgaUrl') ? (parseTamgaUrl(settings.tamgaUrl)?.origin ?? null) : null;
 
   field('tamgaUrl').value = settings.tamgaUrl;
   field('tamgaKey').value = '';
@@ -57,8 +62,7 @@ async function save(event) {
     next.tamgaUrl = value;
     origin = target.origin;
   } else {
-    const { settings } = await loadSettings({ managed: chrome.storage.managed, local: chrome.storage.local });
-    origin = parseTamgaUrl(settings.tamgaUrl)?.origin ?? null;
+    origin = managedOrigin;
   }
   if (free('tamgaKey') && field('tamgaKey').value.trim() !== '') next.tamgaKey = field('tamgaKey').value.trim();
   if (free('failMode')) next.failMode = field('failMode').value;
@@ -66,16 +70,18 @@ async function save(event) {
   if (free('sites')) next.sites = siteBoxes().filter((box) => box.checked).map((box) => box.value);
 
   // Asked from the click on Save: the browser shows its own prompt naming
-  // the one origin.
+  // the one origin. Nothing above waits: Firefox takes the request as the
+  // person's own only while the click's handler has not yet waited for
+  // anything.
   let granted = false;
   if (origin) {
     try {
-      granted = await chrome.permissions.request({ origins: [`${origin}/*`] });
+      granted = await ext.permissions.request({ origins: [`${origin}/*`] });
     } catch {
       granted = false;
     }
   }
-  await chrome.storage.local.set(next);
+  await ext.storage.local.set(next);
   await render();
   say(
     granted
@@ -88,7 +94,7 @@ async function test() {
   say('Asking Tamga...');
   let reply;
   try {
-    reply = await chrome.runtime.sendMessage({ type: MSG_TEST });
+    reply = await ext.runtime.sendMessage({ type: MSG_TEST });
   } catch {
     reply = undefined;
   }
