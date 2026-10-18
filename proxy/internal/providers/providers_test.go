@@ -76,16 +76,16 @@ func TestIsShadow(t *testing.T) {
 	}
 }
 
-// There is one list: every enterprise vendor and the bridge is in NotShadow,
-// nothing else is, and a caller cannot change it.
+// There is one list: every enterprise vendor, the bridge and the MCP gateway
+// are in NotShadow, nothing else is, and a caller cannot change it.
 func TestNotShadowIsTheOneList(t *testing.T) {
 	list := NotShadow()
-	if len(list) != len(enterprise)+1 {
+	if len(list) != len(enterprise)+2 {
 		t.Fatalf("NotShadow = %v", list)
 	}
 	for _, p := range list {
-		if p != LiteLLMBridge && !IsEnterprise(p) {
-			t.Errorf("%q is in NotShadow and is neither an enterprise vendor nor the bridge", p)
+		if p != LiteLLMBridge && p != MCPGateway && !IsEnterprise(p) {
+			t.Errorf("%q is in NotShadow and is neither an enterprise vendor, the bridge nor the MCP gateway", p)
 		}
 		if IsShadow(p) {
 			t.Errorf("%q is in NotShadow and IsShadow says it is shadow", p)

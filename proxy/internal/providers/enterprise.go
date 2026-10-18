@@ -8,6 +8,11 @@ import "strings"
 // shadow one either.
 const LiteLLMBridge = "litellm"
 
+// MCPGateway is the provider recorded for a message that passed the MCP
+// gateway (/mcp/<name>). It is not an LLM provider: the row names the way
+// the traffic came, and the server is named in its endpoint.
+const MCPGateway = "mcp"
+
 // enterprise is the one list of the first-party LLM vendors Tamga treats as
 // "enterprise" in dashboard filters. Lower case.
 var enterprise = []string{"openai", "anthropic", "google", "azure", "azure_openai", "google_vertex"}
@@ -24,11 +29,11 @@ func IsEnterprise(p string) bool {
 }
 
 // NotShadow returns the provider names that are not shadow AI: the
-// enterprise vendors and the LiteLLM bridge. Lower case; the caller owns
-// the slice. It is what the database filter is given, so the filter on the
-// table and IsShadow answer from the same list.
+// enterprise vendors, the LiteLLM bridge and the MCP gateway. Lower case;
+// the caller owns the slice. It is what the database filter is given, so
+// the filter on the table and IsShadow answer from the same list.
 func NotShadow() []string {
-	return append(append([]string(nil), enterprise...), LiteLLMBridge)
+	return append(append([]string(nil), enterprise...), LiteLLMBridge, MCPGateway)
 }
 
 // IsShadow reports whether a recorded provider is shadow AI: a provider was

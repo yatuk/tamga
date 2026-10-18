@@ -49,6 +49,12 @@ import (
 )
 
 func main() {
+	// tamga mcp-wrap serves a local stdio MCP server over Streamable HTTP, so
+	// that the gateway can stand in front of it (mcpwrap.go).
+	if len(os.Args) > 1 && os.Args[1] == "mcp-wrap" {
+		os.Exit(runMCPWrap(os.Args[2:], os.Stderr))
+	}
+
 	// Logger setup
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
@@ -868,6 +874,17 @@ func main() {
 	// The ICAP server for a company's web proxy, on a port of its own. Off
 	// unless TAMGA_ICAP_ADDR is set.
 	icapSrv := startICAP(cfg, scanAPI)
+	// The MCP gateway, when TAMGA_MCP_CONFIG names its servers (docs/mcp.md).
+	// A file that does not load stops the start: an agent would otherwise
+	// find out by its tools going away.
+	if mcpPath := strings.TrimSpace(os.Getenv("TAMGA_MCP_CONFIG")); mcpPath != "" {
+		mcpCfg, err := proxy.LoadMCPGatewayConfig(mcpPath)
+		if err != nil {
+			log.Fatal().Err(err).Msg("mcp gateway config did not load")
+		}
+		proxy.RegisterMCPGateway(root, proxyCfg, mcpCfg)
+		log.Info().Int("servers", len(mcpCfg.Servers)).Msg("mcp gateway serving /mcp/<name>")
+	}
 
 	// HTTP server
 	srv := &http.Server{

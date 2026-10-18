@@ -427,8 +427,10 @@ type scanEval struct {
 	// tools is the tool definitions as the proxy would forward them, set
 	// with rewritten when one of them was changed and nil otherwise.
 	tools []json.RawMessage
-	// body is the whole request as rewritten, in place of rewritten and
-	// tools, when the input was a whole request (scanInput.whole).
+	// body is the whole request as rewritten. With scanInput.whole it is set
+	// in place of rewritten and tools (the ICAP route); otherwise it is set
+	// with them, and the MCP gateway reads a tool call's masked arguments
+	// back out of it.
 	body []byte
 	// fallback says why a REDACT or a STRIP became a BLOCK, and is empty
 	// when the BLOCK is a rule's own.
@@ -461,6 +463,9 @@ type scanInput struct {
 	// segments were not read by the extractor and have no place in it. A
 	// REDACT or a STRIP is then a BLOCK.
 	locked string
+	// callsWritable lets a value in the tool calls be masked. The MCP
+	// gateway sets it: it sends the arguments on itself (mcp_scan.go).
+	callsWritable bool
 }
 
 // shape is the request shape the body is read as.
@@ -562,7 +567,7 @@ func (in scanInput) fixed(edited []int) string {
 			continue
 		}
 		switch seg := in.segs[i]; {
-		case in.inToolCall(seg):
+		case in.inToolCall(seg) && !in.callsWritable:
 			return redactToolCall
 		case toolNamePath.MatchString(seg.Path):
 			return redactToolName
@@ -720,6 +725,8 @@ func (h *scanHandler) evaluateInput(ctx context.Context, call *scanCall, request
 				ev.body = masked
 			} else if ev.rewritten, ev.tools, rwErr = in.rewritten(masked, edited); rwErr != nil {
 				reason = redactRewrite
+			} else {
+				ev.body = masked
 			}
 		}
 		if reason != "" {
@@ -741,6 +748,7 @@ func (h *scanHandler) evaluateInput(ctx context.Context, call *scanCall, request
 						ev.body = res.body
 					} else {
 						ev.rewritten, ev.tools, stripErr = in.rewritten(res.body, res.edited)
+						ev.body = res.body
 					}
 				}
 			}
