@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // ---------------------------------------------------------------------------
@@ -77,6 +78,7 @@ func (m *mockIncidentRows) FieldDescriptions() []pgconn.FieldDescription { retur
 func (m *mockIncidentRows) Values() ([]any, error)                       { return nil, nil }
 func (m *mockIncidentRows) RawValues() [][]byte                          { return nil }
 func (m *mockIncidentRows) Conn() *pgx.Conn                              { return nil }
+func (m *mockIncidentRows) TypeMap() *pgtype.Map                         { return nil }
 
 func (m *mockIncidentRows) Next() bool {
 	m.idx++
