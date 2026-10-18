@@ -26,6 +26,9 @@ type GRPCScannerConfig struct {
 	Addr        string
 	DialTimeout time.Duration
 	CallTimeout time.Duration
+	// DialOptions are applied after the client's own: the service token and
+	// TLS from grpcauth.DialOptions go here.
+	DialOptions []grpc.DialOption
 }
 
 // NewGRPCScannerClient connects to a scanner-service at addr. Returns nil if
@@ -41,7 +44,7 @@ func NewGRPCScannerClient(ctx context.Context, cfg GRPCScannerConfig) (*GRPCScan
 		cfg.CallTimeout = 5 * time.Second
 	}
 
-	conn, err := grpc.NewClient(cfg.Addr,
+	opts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{
 			Time:                30 * time.Second,
@@ -50,7 +53,8 @@ func NewGRPCScannerClient(ctx context.Context, cfg GRPCScannerConfig) (*GRPCScan
 		}),
 		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"round_robin"}`),
 		grpc.WithUnaryInterceptor(telemetry.UnaryClientTraceInterceptor()),
-	)
+	}
+	conn, err := grpc.NewClient(cfg.Addr, append(opts, cfg.DialOptions...)...)
 	if err != nil {
 		return nil, err
 	}

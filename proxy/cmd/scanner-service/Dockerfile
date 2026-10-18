@@ -1,4 +1,5 @@
 # Stage 1 — build the binary.
+# TODO: pin by digest (image:tag@sha256:...): docs/operations.md, "Image pins".
 FROM golang:1.26-alpine AS builder
 WORKDIR /build
 COPY go.mod go.sum ./
@@ -7,6 +8,7 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o scanner-service ./cmd/scanner-service
 
 # Stage 2 — minimal runtime.
+# TODO: pin by digest (image:tag@sha256:...): docs/operations.md, "Image pins".
 FROM alpine:3.21
 
 LABEL org.opencontainers.image.title="Tamga scanner service" \

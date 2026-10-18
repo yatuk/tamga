@@ -22,7 +22,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 import structlog
-from fastapi import FastAPI, BackgroundTasks, Query
+from fastapi import FastAPI, BackgroundTasks, Query, Request
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -35,6 +35,7 @@ from app.compliance import compute_compliance_report
 from app.reports import generate_owasp_pdf_report
 from tamga_sdk.discovery import discover_scanners, get_custom_scanners
 from app.grpc_server import serve_grpc
+from app import service_auth
 from app.executors import shutdown_pools
 from app.removed import report_removed_env, report_removed_scan_types
 
@@ -111,12 +112,24 @@ async def lifespan(app: FastAPI):
     global _grpc_server
     logger.info("analyzer_starting")
     report_removed_env()
+    # The proxy's token, for the gRPC port and the HTTP API. A missing
+    # token under TAMGA_REQUIRE_SERVICE_TOKENS, or a broken TLS setting,
+    # raises here and the start fails.
+    try:
+        token = service_auth.load_token("TAMGA_ANALYZER_TOKEN")
+        credentials = service_auth.server_credentials()
+    except service_auth.ServiceAuthError as exc:
+        logger.error("analyzer_refusing_to_start", reason=str(exc))
+        raise
+    app.state.service_token = token
     await _init_db()
 
     # Start gRPC server alongside FastAPI on port 50051.
     # Both share the same asyncio event loop.
     grpc_port = int(os.environ.get("TAMGA_GRPC_PORT", "50051"))
-    _grpc_server = await serve_grpc(deep_pii, injection, _custom_scanner_instances, grpc_port)
+    _grpc_server = await serve_grpc(
+        deep_pii, injection, _custom_scanner_instances, grpc_port, token=token, credentials=credentials
+    )
 
     yield
 
@@ -136,6 +149,20 @@ app = FastAPI(
     version="0.2.0",
     lifespan=lifespan,
 )
+
+
+@app.middleware("http")
+async def require_service_token(request: Request, call_next):
+    """With TAMGA_ANALYZER_TOKEN set, every path but /health needs it.
+
+    The reports read the request log, and /api/v1/analyze takes request
+    text: neither is for whoever else is on the network.
+    """
+    token = getattr(request.app.state, "service_token", "")
+    if token and request.url.path != "/health":
+        if not service_auth.token_matches(request.headers.get("authorization"), token):
+            return JSONResponse(status_code=401, content={"detail": service_auth.REFUSED})
+    return await call_next(request)
 
 
 class AnalyzeRequest(BaseModel):

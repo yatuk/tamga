@@ -1,4 +1,5 @@
 # ── Build stage: compilers and wheels stay here ─────────────────────────────
+# TODO: pin by digest (image:tag@sha256:...): docs/operations.md, "Image pins".
 FROM python:3.11-slim AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -15,6 +16,7 @@ RUN pip install --no-cache-dir -r requirements.txt && \
     python -m spacy download en_core_web_sm
 
 # ── Runtime stage ───────────────────────────────────────────────────────────
+# TODO: pin by digest (image:tag@sha256:...): docs/operations.md, "Image pins".
 FROM python:3.11-slim
 
 LABEL org.opencontainers.image.title="Tamga analyzer" \

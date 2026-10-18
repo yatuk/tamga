@@ -1,3 +1,4 @@
+# TODO: pin by digest (image:tag@sha256:...): docs/operations.md, "Image pins".
 FROM golang:1.26-alpine AS builder
 
 WORKDIR /build
@@ -17,6 +18,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
     -ldflags="-s -w -X github.com/yatuk/tamga/internal/buildinfo.Version=${VERSION} -X github.com/yatuk/tamga/internal/buildinfo.Revision=${REVISION}" \
     -o tamga ./cmd/tamga
 
+# TODO: pin by digest (image:tag@sha256:...): docs/operations.md, "Image pins".
 FROM alpine:3.21
 
 ARG VERSION=""

@@ -24,6 +24,7 @@ from classifier.v1.classifier_pb2_grpc import (  # type: ignore[import-untyped]
     add_ClassifierServiceServicer_to_server,
 )
 
+from app import service_auth
 from app.classifier import Classifier, ClassifierUnavailable
 from app.shadow import Shadow
 from app.topics import TopicModel, TopicsUnavailable
@@ -144,8 +145,18 @@ class ClassifierServicer(ClassifierServiceServicer):
         )
 
 
-async def serve(classifier: Classifier, port: int, topics: TopicModel | None = None, shadow: Shadow | None = None) -> grpc.aio.Server:
+async def serve(
+    classifier: Classifier,
+    port: int,
+    topics: TopicModel | None = None,
+    shadow: Shadow | None = None,
+    token: str = "",
+    credentials: grpc.ServerCredentials | None = None,
+) -> grpc.aio.Server:
+    """Start the server. With *token*, a call without it is refused; with
+    *credentials*, the port speaks TLS."""
     server = grpc.aio.server(
+        interceptors=[service_auth.TokenInterceptor(token)],
         options=[
             ("grpc.keepalive_time_ms", 30000),
             ("grpc.keepalive_timeout_ms", 5000),
@@ -155,11 +166,16 @@ async def serve(classifier: Classifier, port: int, topics: TopicModel | None = N
     )
     servicer = ClassifierServicer(classifier, topics, shadow)
     add_ClassifierServiceServicer_to_server(servicer, server)
-    server.add_insecure_port(f"[::]:{port}")
+    if credentials is not None:
+        server.add_secure_port(f"[::]:{port}", credentials)
+    else:
+        server.add_insecure_port(f"[::]:{port}")
     await server.start()
     logger.info(
         "classifier_listening",
         port=port,
+        token=bool(token),
+        tls=credentials is not None,
         available=classifier.available,
         model=classifier.model_name,
         topics_available=servicer._topics.available,
@@ -172,7 +188,11 @@ async def serve(classifier: Classifier, port: int, topics: TopicModel | None = N
 
 async def main() -> None:
     port = int(os.environ.get("TAMGA_CLASSIFIER_PORT", "50052"))
-    server = await serve(Classifier(), port, TopicModel(), Shadow())
+    # Read before any model is loaded: a missing token or a broken TLS
+    # setting stops the start at once.
+    token = service_auth.load_token("TAMGA_CLASSIFIER_TOKEN")
+    credentials = service_auth.server_credentials()
+    server = await serve(Classifier(), port, TopicModel(), Shadow(), token=token, credentials=credentials)
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
@@ -185,4 +205,8 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except service_auth.ServiceAuthError as exc:
+        logger.error("classifier_refusing_to_start", reason=str(exc))
+        raise SystemExit(2) from None

@@ -67,19 +67,22 @@ type Client struct {
 }
 
 // NewClient connects to addr (e.g. "classifier:50052"). An empty addr
-// returns nil: no classifier is configured.
-func NewClient(addr string) (*Client, error) {
+// returns nil: no classifier is configured. extra is applied after the
+// client's own options: the service token and TLS from
+// grpcauth.DialOptions go there.
+func NewClient(addr string, extra ...grpc.DialOption) (*Client, error) {
 	if addr == "" {
 		return nil, nil
 	}
-	conn, err := grpc.NewClient(addr,
+	opts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{
 			Time:                30 * time.Second,
 			Timeout:             5 * time.Second,
 			PermitWithoutStream: true,
 		}),
-	)
+	}
+	conn, err := grpc.NewClient(addr, append(opts, extra...)...)
 	if err != nil {
 		return nil, fmt.Errorf("classifier: dial %s: %w", addr, err)
 	}

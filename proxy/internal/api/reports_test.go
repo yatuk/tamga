@@ -674,3 +674,33 @@ func TestBuildAnalyzerURL(t *testing.T) {
 		})
 	}
 }
+
+// The analyzer token goes to the analyzer's HTTP API with each report call;
+// without one no Authorization header is sent, whatever the caller sent.
+func TestReports_SendsTheAnalyzerToken(t *testing.T) {
+	var got atomic.Value
+	fakeAnalyzer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got.Store(r.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "application/pdf")
+		_, _ = w.Write([]byte("%PDF-1.4 fake"))
+	}))
+	defer fakeAnalyzer.Close()
+
+	resp, body := reportGet(t, Config{AnalyzerHTTPURL: fakeAnalyzer.URL, AnalyzerToken: "test-analyzer-token"},
+		"/api/v1/reports/owasp/pdf", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", resp.StatusCode, body)
+	}
+	if v := got.Load(); v != "Bearer test-analyzer-token" {
+		t.Fatalf("Authorization = %q, want the analyzer token", v)
+	}
+
+	resp, body = reportGet(t, Config{AnalyzerHTTPURL: fakeAnalyzer.URL},
+		"/api/v1/reports/owasp/pdf", http.Header{"Authorization": {"Bearer from-the-caller"}})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", resp.StatusCode, body)
+	}
+	if v := got.Load(); v != "" {
+		t.Fatalf("Authorization = %q, want none without a token", v)
+	}
+}
