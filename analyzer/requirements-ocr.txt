@@ -1,0 +1,22 @@
+# Optional: the OCR engines of app/ocr. The analyzer runs without them, and
+# app/ocr imports them only when TAMGA_OCR_ENGINE picks an engine.
+#
+#   pip install -r requirements-ocr.txt
+#
+# The Dockerfile installs the lines an engine needs when built with
+# --build-arg OCR_RAPIDOCR=true or OCR_TESSERACT=true.
+
+# Both engines: decoding and checking the image (reportlab brings Pillow too).
+pillow==13.0.0
+
+# TAMGA_OCR_ENGINE=rapidocr (Apache-2.0; onnxruntime MIT). rapidocr brings
+# opencv-python-headless (Apache-2.0), the largest of its dependencies, pinned
+# here so the image does not change under it. The model files are fetched
+# separately: scripts/fetch_ocr_models.py.
+rapidocr==3.10.0
+onnxruntime==1.31.0
+opencv-python-headless==5.0.0.93
+
+# TAMGA_OCR_ENGINE=tesseract (Apache-2.0). Needs the tesseract binary and the
+# tur traineddata from the system: apt-get install tesseract-ocr tesseract-ocr-tur.
+pytesseract==0.3.13
