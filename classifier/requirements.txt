@@ -1,4 +1,4 @@
-grpcio==1.81.1
+grpcio==1.84.0
 protobuf>=6.33.5,<7
 onnxruntime>=1.20,<2
 tokenizers>=0.21,<1
