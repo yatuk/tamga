@@ -1526,6 +1526,39 @@
   Without a model there, Docker creates the empty directory, the service
   logs `topics_unavailable` once at startup, and nothing else changes.
 
+### Business accounts only (optional)
+- A `provider_accounts` policy section, off unless present and enabled,
+  lists per route the provider accounts a request may use: fingerprints of
+  the provider keys that may be sent (`sha256:<hex>`, never the key), the
+  `OpenAI-Organization` and `OpenAI-Project` values, the
+  `anthropic-workspace-id` values. A request whose key or header is not on
+  the list gets 403 `provider_account_not_allowed` with a `reason`, and
+  nothing is sent; `action: LOG` forwards it and logs. A header with a list
+  must be sent, once. Policies without the section load and behave as
+  before, with the same digest.
+- `replace_key_env` makes a route send the organisation's own key, read
+  from that variable, in place of every credential the caller sent (the
+  `key` query parameter included). Only requests with a verified Tamga key
+  are served this way (401 `tamga_key_required` otherwise); an unset
+  variable gives 503 `provider_key_unavailable`, never the caller's key. The
+  cache names such requests by Tamga key. A pool endpoint with `api_key_env`
+  on the same route is refused at load. The section is privileged, like
+  `providers`.
+- `proxy/internal/tenantheaders` sets the tenant-restriction headers
+  Microsoft (tenant restrictions v2), OpenAI (ChatGPT workspaces), Anthropic,
+  Google Workspace and GitHub document for a corporate proxy, overwriting any
+  copy the client sent. Nothing calls it yet; it is for the ICAP mode.
+  The vendor research, with sources and what is verified, is in
+  `docs/enterprise-accounts.md`.
+- Browser extension: a managed setting `allowedWorkspaces` (ChatGPT
+  workspace ids, Claude organisation ids) makes the extension set the
+  vendor's header on every request to chatgpt.com and claude.ai through a
+  `declarativeNetRequest` rule. **The manifest asks for one more
+  permission, `declarativeNetRequestWithHostAccess`; it shows no install
+  warning and acts only on the three sites.** Nothing changes for a browser
+  whose policy does not set `allowedWorkspaces`. There is no reading of the
+  workspace from the page: no vendor documents one.
+
 ### Keys
 - **API keys are stored in PostgreSQL.** They were kept in memory and lost on
   every restart, and differed between replicas. With a database configured
