@@ -28,41 +28,40 @@ the others are in the module graph for tests or tools only.
 
 | Module | Version | Licence (detected) | In binaries | Read from |
 |---|---|---|---|---|
-| github.com/coregx/ahocorasick | v0.2.1 | MIT | yes | LICENSE |
-| github.com/fsnotify/fsnotify | v1.8.0 | BSD-3-Clause | yes | LICENSE |
+| github.com/coregx/ahocorasick | v0.3.1 | MIT | yes | LICENSE |
+| github.com/fsnotify/fsnotify | v1.10.1 | BSD-3-Clause | yes | LICENSE |
 | github.com/google/uuid | v1.6.0 | BSD-3-Clause | yes | LICENSE |
-| github.com/jackc/pgx/v5 | v5.9.2 | MIT | yes | LICENSE |
-| github.com/nats-io/nats.go | v1.52.0 | Apache-2.0 | yes | LICENSE |
+| github.com/jackc/pgx/v5 | v5.11.0 | MIT | yes | LICENSE |
+| github.com/nats-io/nats.go | v1.54.0 | Apache-2.0 | yes | LICENSE |
 | github.com/pemistahl/lingua-go | v1.4.0 | Apache-2.0 | yes | LICENSE |
-| github.com/prometheus/client_golang | v1.23.2 | Apache-2.0 | yes | LICENSE |
-| github.com/prometheus/client_model | v0.6.2 | Apache-2.0 | yes | LICENSE |
-| github.com/redis/go-redis/v9 | v9.18.0 | BSD-2-Clause | yes | LICENSE |
-| github.com/rs/zerolog | v1.33.0 | MIT | yes | LICENSE |
+| github.com/prometheus/client_golang | v1.25.0 | Apache-2.0 | yes | LICENSE |
+| github.com/prometheus/client_model | v0.6.3 | Apache-2.0 | yes | LICENSE |
+| github.com/redis/go-redis/v9 | v9.23.0 | BSD-2-Clause | yes | LICENSE |
+| github.com/rs/zerolog | v1.35.1 | MIT | yes | LICENSE |
 | github.com/sony/gobreaker/v2 | v2.4.0 | MIT | yes | LICENSE |
-| github.com/testcontainers/testcontainers-go | v0.42.0 | MIT | no | LICENSE |
-| github.com/testcontainers/testcontainers-go/modules/postgres | v0.42.0 | MIT | no | LICENSE |
-| go.opentelemetry.io/otel | v1.45.0 | Apache-2.0 AND BSD-3-Clause | yes | LICENSE |
-| go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp | v1.45.0 | Apache-2.0 AND BSD-3-Clause | yes | LICENSE |
-| go.opentelemetry.io/otel/sdk | v1.45.0 | Apache-2.0 AND BSD-3-Clause | yes | LICENSE |
-| go.opentelemetry.io/otel/trace | v1.45.0 | Apache-2.0 AND BSD-3-Clause | yes | LICENSE |
-| golang.org/x/text | v0.42.0 | BSD-3-Clause | yes | LICENSE |
-| golang.org/x/time | v0.15.0 | BSD-3-Clause | yes | LICENSE |
-| google.golang.org/grpc | v1.83.2 | Apache-2.0 | yes | LICENSE |
-| google.golang.org/protobuf | v1.36.11 | BSD-3-Clause | yes | LICENSE |
+| github.com/testcontainers/testcontainers-go | v0.44.0 | MIT | no | LICENSE |
+| github.com/testcontainers/testcontainers-go/modules/postgres | v0.44.0 | MIT | no | LICENSE |
+| go.opentelemetry.io/otel | v1.47.0 | Apache-2.0 AND BSD-3-Clause | yes | LICENSE |
+| go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp | v1.47.0 | Apache-2.0 AND BSD-3-Clause | yes | LICENSE |
+| go.opentelemetry.io/otel/sdk | v1.47.0 | Apache-2.0 AND BSD-3-Clause | yes | LICENSE |
+| go.opentelemetry.io/otel/trace | v1.47.0 | Apache-2.0 AND BSD-3-Clause | yes | LICENSE |
+| golang.org/x/text | v0.43.0 | BSD-3-Clause | yes | LICENSE |
+| golang.org/x/time | v0.16.0 | BSD-3-Clause | yes | LICENSE |
+| google.golang.org/grpc | v1.84.0 | Apache-2.0 | yes | LICENSE |
+| google.golang.org/protobuf | v1.36.12 | BSD-3-Clause | yes | LICENSE |
 | gopkg.in/yaml.v3 | v3.0.1 | Apache-2.0 AND MIT | yes | LICENSE |
 | pgregory.net/rapid | v1.3.0 | MPL-2.0 | no | LICENSE |
 
 ### Transitive, compiled into the binaries
 
-Modules: 32.
+Modules: 31.
 
 | Licence | Count |
 |---|---|
-| MIT | 11 |
 | Apache-2.0 | 10 |
+| MIT | 10 |
 | BSD-3-Clause | 7 |
-| Apache-2.0 AND BSD-3-Clause | 2 |
-| Apache-2.0 AND MIT | 1 |
+| Apache-2.0 AND BSD-3-Clause | 3 |
 | Apache-2.0 AND MIT AND BSD-3-Clause | 1 |
 
 None outside the permissive set.
@@ -72,49 +71,48 @@ None outside the permissive set.
 | github.com/beorn7/perks | v1.0.1 | MIT |
 | github.com/cenkalti/backoff/v5 | v5.0.3 | MIT |
 | github.com/cespare/xxhash/v2 | v2.3.0 | MIT |
-| github.com/dgryski/go-rendezvous | v0.0.0-20200823014737-9f7001d12a5f | MIT |
 | github.com/go-logr/logr | v1.4.4 | Apache-2.0 |
 | github.com/go-logr/stdr | v1.2.2 | Apache-2.0 |
-| github.com/grpc-ecosystem/grpc-gateway/v2 | v2.29.0 | BSD-3-Clause |
+| github.com/grpc-ecosystem/grpc-gateway/v2 | v2.30.0 | BSD-3-Clause |
 | github.com/jackc/pgpassfile | v1.0.0 | MIT |
 | github.com/jackc/pgservicefile | v0.0.0-20240606120523-5a60cdf6a761 | MIT |
 | github.com/jackc/puddle/v2 | v2.2.2 | MIT |
-| github.com/klauspost/compress | v1.18.7 | Apache-2.0 AND MIT AND BSD-3-Clause |
-| github.com/mattn/go-colorable | v0.1.13 | MIT |
-| github.com/mattn/go-isatty | v0.0.19 | MIT |
+| github.com/klauspost/compress | v1.20.1 | Apache-2.0 AND MIT AND BSD-3-Clause |
+| github.com/mattn/go-colorable | v0.1.14 | MIT |
+| github.com/mattn/go-isatty | v0.0.20 | MIT |
 | github.com/munnerz/goautoneg | v0.0.0-20191010083416-a7dc8b61c822 | BSD-3-Clause |
-| github.com/nats-io/nkeys | v0.4.15 | Apache-2.0 |
+| github.com/nats-io/nkeys | v0.4.16 | Apache-2.0 |
 | github.com/nats-io/nuid | v1.0.1 | Apache-2.0 |
-| github.com/prometheus/common | v0.66.1 | Apache-2.0 |
-| github.com/prometheus/procfs | v0.16.1 | Apache-2.0 |
+| github.com/prometheus/common | v0.72.0 | Apache-2.0 |
+| github.com/prometheus/procfs | v0.22.0 | Apache-2.0 |
 | github.com/shopspring/decimal | v1.4.0 | MIT |
 | go.opentelemetry.io/auto/sdk | v1.2.1 | Apache-2.0 |
-| go.opentelemetry.io/otel/exporters/otlp/otlptrace | v1.45.0 | Apache-2.0 AND BSD-3-Clause |
-| go.opentelemetry.io/otel/metric | v1.45.0 | Apache-2.0 AND BSD-3-Clause |
+| go.opentelemetry.io/otel/exporters/otlp/otlptrace | v1.47.0 | Apache-2.0 AND BSD-3-Clause |
+| go.opentelemetry.io/otel/log | v1.47.0 | Apache-2.0 AND BSD-3-Clause |
+| go.opentelemetry.io/otel/metric | v1.47.0 | Apache-2.0 AND BSD-3-Clause |
 | go.opentelemetry.io/proto/otlp | v1.11.0 | Apache-2.0 |
-| go.uber.org/atomic | v1.11.0 | MIT |
-| go.yaml.in/yaml/v2 | v2.4.2 | Apache-2.0 AND MIT |
+| go.uber.org/atomic | v1.12.0 | MIT |
 | golang.org/x/crypto | v0.57.0 | BSD-3-Clause |
 | golang.org/x/exp | v0.0.0-20250218142911-aa4b98e5adaa | BSD-3-Clause |
 | golang.org/x/net | v0.60.0 | BSD-3-Clause |
-| golang.org/x/sync | v0.23.0 | BSD-3-Clause |
+| golang.org/x/sync | v0.24.0 | BSD-3-Clause |
 | golang.org/x/sys | v0.48.0 | BSD-3-Clause |
-| google.golang.org/genproto/googleapis/api | v0.0.0-20260803160001-6ac0973c030d | Apache-2.0 |
-| google.golang.org/genproto/googleapis/rpc | v0.0.0-20260803160001-6ac0973c030d | Apache-2.0 |
+| google.golang.org/genproto/googleapis/api | v0.0.0-20260928230214-8a89bd6388cc | Apache-2.0 |
+| google.golang.org/genproto/googleapis/rpc | v0.0.0-20260928230214-8a89bd6388cc | Apache-2.0 |
 
 ### Transitive, in the module graph only (tests, tools; not in the binaries)
 
-Modules: 103.
+Modules: 131.
 
 | Licence | Count |
 |---|---|
-| NOT-INSPECTED | 36 |
-| Apache-2.0 | 27 |
-| MIT | 20 |
+| NOT-INSPECTED | 61 |
+| Apache-2.0 | 26 |
+| MIT | 22 |
 | BSD-3-Clause | 13 |
 | BSD-2-Clause | 4 |
-| Apache-2.0 AND BSD-3-Clause | 1 |
-| Apache-2.0 AND MIT | 1 |
+| Apache-2.0 AND BSD-3-Clause | 2 |
+| Apache-2.0 AND MIT | 2 |
 | ISC | 1 |
 
 Not plainly permissive, unrecognised, not inspected or missing:
@@ -122,23 +120,43 @@ Not plainly permissive, unrecognised, not inspected or missing:
 | Package | Version | Licence | Read from |
 |---|---|---|---|
 | cel.dev/expr | v0.25.2 | NOT-INSPECTED | module not in the local module cache |
-| cloud.google.com/go/auth | v0.18.2 | NOT-INSPECTED | module not in the local module cache |
+| cloud.google.com/go/auth | v0.20.0 | NOT-INSPECTED | module not in the local module cache |
 | github.com/alecthomas/kingpin/v2 | v2.4.0 | NOT-INSPECTED | module not in the local module cache |
-| github.com/alecthomas/units | v0.0.0-20211218093645-b94a6e3cc137 | NOT-INSPECTED | module not in the local module cache |
-| github.com/antihax/optional | v1.0.0 | NOT-INSPECTED | module not in the local module cache |
+| github.com/alecthomas/units | v0.0.0-20240927000941-0f3dac36c52b | NOT-INSPECTED | module not in the local module cache |
+| github.com/apapsch/go-jsonmerge/v2 | v2.0.0 | NOT-INSPECTED | module not in the local module cache |
 | github.com/cncf/xds/go | v0.0.0-20260202195803-dba9d589def2 | NOT-INSPECTED | module not in the local module cache |
 | github.com/containerd/typeurl/v2 | v2.2.0 | NOT-INSPECTED | module not in the local module cache |
-| github.com/coreos/go-systemd/v22 | v22.5.0 | NOT-INSPECTED | module not in the local module cache |
+| github.com/coreos/go-systemd/v22 | v22.7.0 | NOT-INSPECTED | module not in the local module cache |
 | github.com/envoyproxy/go-control-plane | v0.14.0 | NOT-INSPECTED | module not in the local module cache |
 | github.com/envoyproxy/go-control-plane/envoy | v1.37.0 | NOT-INSPECTED | module not in the local module cache |
 | github.com/envoyproxy/go-control-plane/ratelimit | v0.1.0 | NOT-INSPECTED | module not in the local module cache |
 | github.com/envoyproxy/protoc-gen-validate | v1.3.3 | NOT-INSPECTED | module not in the local module cache |
-| github.com/godbus/dbus/v5 | v5.0.4 | NOT-INSPECTED | module not in the local module cache |
+| github.com/go-openapi/analysis | v0.25.5 | NOT-INSPECTED | module not in the local module cache |
+| github.com/go-openapi/errors | v0.22.8 | NOT-INSPECTED | module not in the local module cache |
+| github.com/go-openapi/jsonpointer | v1.0.0 | NOT-INSPECTED | module not in the local module cache |
+| github.com/go-openapi/jsonreference | v1.0.0 | NOT-INSPECTED | module not in the local module cache |
+| github.com/go-openapi/loads | v0.25.0 | NOT-INSPECTED | module not in the local module cache |
+| github.com/go-openapi/runtime | v0.33.0 | NOT-INSPECTED | module not in the local module cache |
+| github.com/go-openapi/runtime/server-middleware | v0.30.0 | NOT-INSPECTED | module not in the local module cache |
+| github.com/go-openapi/spec | v0.22.9 | NOT-INSPECTED | module not in the local module cache |
+| github.com/go-openapi/strfmt | v0.27.0 | NOT-INSPECTED | module not in the local module cache |
+| github.com/go-openapi/swag | v0.28.0 | NOT-INSPECTED | module not in the local module cache |
+| github.com/go-openapi/swag/cmdutils | v0.28.0 | NOT-INSPECTED | module not in the local module cache |
+| github.com/go-openapi/swag/conv | v0.28.0 | NOT-INSPECTED | module not in the local module cache |
+| github.com/go-openapi/swag/fileutils | v0.28.0 | NOT-INSPECTED | module not in the local module cache |
+| github.com/go-openapi/swag/jsonutils | v0.28.0 | NOT-INSPECTED | module not in the local module cache |
+| github.com/go-openapi/swag/loading | v0.28.0 | NOT-INSPECTED | module not in the local module cache |
+| github.com/go-openapi/swag/mangling | v0.28.0 | NOT-INSPECTED | module not in the local module cache |
+| github.com/go-openapi/swag/netutils | v0.28.0 | NOT-INSPECTED | module not in the local module cache |
+| github.com/go-openapi/swag/pools | v0.28.0 | NOT-INSPECTED | module not in the local module cache |
+| github.com/go-openapi/swag/stringutils | v0.28.0 | NOT-INSPECTED | module not in the local module cache |
+| github.com/go-openapi/swag/typeutils | v0.28.0 | NOT-INSPECTED | module not in the local module cache |
+| github.com/go-openapi/swag/yamlutils | v0.28.0 | NOT-INSPECTED | module not in the local module cache |
+| github.com/go-openapi/validate | v0.26.1 | NOT-INSPECTED | module not in the local module cache |
 | github.com/gogo/protobuf | v1.3.2 | NOT-INSPECTED | module not in the local module cache |
 | github.com/golang/glog | v1.2.5 | NOT-INSPECTED | module not in the local module cache |
-| github.com/googleapis/enterprise-certificate-proxy | v0.3.11 | NOT-INSPECTED | module not in the local module cache |
-| github.com/googleapis/gax-go/v2 | v2.17.0 | NOT-INSPECTED | module not in the local module cache |
-| github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp | v1.33.0 | NOT-INSPECTED | module not in the local module cache |
+| github.com/googleapis/enterprise-certificate-proxy | v0.3.15 | NOT-INSPECTED | module not in the local module cache |
+| github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp | v1.34.0 | NOT-INSPECTED | module not in the local module cache |
 | github.com/jpillora/backoff | v1.0.0 | NOT-INSPECTED | module not in the local module cache |
 | github.com/json-iterator/go | v1.1.12 | NOT-INSPECTED | module not in the local module cache |
 | github.com/julienschmidt/httprouter | v1.3.0 | NOT-INSPECTED | module not in the local module cache |
@@ -148,15 +166,20 @@ Not plainly permissive, unrecognised, not inspected or missing:
 | github.com/modern-go/concurrent | v0.0.0-20180306012644-bacd9c7ef1dd | NOT-INSPECTED | module not in the local module cache |
 | github.com/modern-go/reflect2 | v1.0.2 | NOT-INSPECTED | module not in the local module cache |
 | github.com/mwitkow/go-conntrack | v0.0.0-20190716064945-2f068394615f | NOT-INSPECTED | module not in the local module cache |
+| github.com/oapi-codegen/runtime | v1.6.0 | NOT-INSPECTED | module not in the local module cache |
+| github.com/oklog/ulid/v2 | v2.1.1 | NOT-INSPECTED | module not in the local module cache |
 | github.com/planetscale/vtprotobuf | v0.6.1-0.20240319094008-0393e58bdf10 | NOT-INSPECTED | module not in the local module cache |
 | github.com/rogpeppe/fastuuid | v1.2.0 | NOT-INSPECTED | module not in the local module cache |
-| github.com/rs/xid | v1.5.0 | NOT-INSPECTED | module not in the local module cache |
+| github.com/rs/xid | v1.6.0 | NOT-INSPECTED | module not in the local module cache |
 | github.com/russross/blackfriday | v1.6.0 | NOT-INSPECTED | module not in the local module cache |
 | github.com/santhosh-tekuri/jsonschema/v5 | v5.3.1 | NOT-INSPECTED | module not in the local module cache |
-| github.com/spiffe/go-spiffe/v2 | v2.7.0 | NOT-INSPECTED | module not in the local module cache |
+| github.com/spiffe/go-spiffe/v2 | v2.8.1 | NOT-INSPECTED | module not in the local module cache |
 | github.com/xhit/go-str2duration/v2 | v2.1.0 | NOT-INSPECTED | module not in the local module cache |
 | go.opentelemetry.io/contrib/detectors/gcp | v1.44.0 | NOT-INSPECTED | module not in the local module cache |
-| golang.org/x/xerrors | v0.0.0-20191204190536-9bdfabe68543 | NOT-INSPECTED | module not in the local module cache |
+| go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc | v0.70.0 | NOT-INSPECTED | module not in the local module cache |
+| go.opentelemetry.io/otel/exporters/stdout/stdouttrace | v1.45.0 | NOT-INSPECTED | module not in the local module cache |
+| golang.org/x/oauth2 | v0.37.0 | NOT-INSPECTED | module not in the local module cache |
+| google.golang.org/api | v0.278.0 | NOT-INSPECTED | module not in the local module cache |
 
 ## npm: console (`dashboard/`)
 
