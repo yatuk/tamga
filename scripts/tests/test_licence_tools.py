@@ -2,9 +2,11 @@ import hashlib
 import importlib.util
 import json
 import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -91,18 +93,31 @@ class GoInventoryTests(unittest.TestCase):
         self.assertTrue(rows, info)
         self.assertEqual(before, after)
 
+    def test_a_failed_go_list_carries_its_stderr(self):
+        lookup = "go: module lookup disabled by GOPROXY=off"
+        failure = subprocess.CalledProcessError(1, ["go", "list", "-m", "-json", "all"],
+                                                stderr=f"{lookup}\n{lookup}\n")
+        with mock.patch.object(inventory.subprocess, "run", side_effect=failure):
+            rows, info = inventory.go_modules()
+        self.assertEqual(rows, [])
+        self.assertIn("`go list -m -json all` exited 1", info)
+        # Repeated lines once, and what to do about it.
+        self.assertEqual(info.count(lookup), 1)
+        self.assertIn("go mod download", info)
+
 
 class FakeInventory:
     """Stands in for third-party-licenses.py in gate.collect."""
 
-    def __init__(self, go_rows=None, missing=None):
+    def __init__(self, go_rows=None, missing=None, go_info="test go"):
         self.go_rows = go_rows or []
+        self.go_info = go_info
         self.missing = missing or []
         self.evidence_seen: dict[str, object] = {}
         self._components = iter(("analyzer", "classifier", "sdk-python"))
 
     def go_modules(self):
-        return self.go_rows, "test go"
+        return self.go_rows, self.go_info
 
     @staticmethod
     def npm_packages(_project):
@@ -122,7 +137,7 @@ class FakeInventory:
 
     @staticmethod
     def dump_pip():
-        return {"distributions": {}}
+        return {"distributions": {"local": {}}}
 
     def python_component(self, _lines, _env, evidence=None):
         self.evidence_seen[next(self._components)] = evidence
@@ -168,23 +183,79 @@ class PolicyAndSbomTests(unittest.TestCase):
             {"name": "example.invalid/test-only", "version": "v1.0.0", "license": "MIT",
              "source": "LICENSE", "direct": True, "linked": False},
         ])
-        rows, notes = gate.collect(fake, {}, self.policy())
+        rows, notes, _ = gate.collect(fake, {}, self.policy())
         go_names = [row["name"] for row in rows if row["ecosystem"] == "go"]
         self.assertEqual(go_names, ["example.invalid/runtime"])
         self.assertTrue(any("not in the binaries" in note for note in notes))
 
     def test_records_are_not_used_for_a_component_given_with_pip(self):
         fake = FakeInventory()
-        gate.collect(fake, {"classifier": {"distributions": {}}}, self.policy())
+        gate.collect(fake, {"classifier": {"distributions": {"x": {}}}}, self.policy())
         self.assertIsNone(fake.evidence_seen["classifier"])
         self.assertEqual(fake.evidence_seen["analyzer"], {"x": {}})
 
     def test_a_missing_transitive_dependency_is_judged_only_without_pip(self):
         fake = FakeInventory(missing=["absent"])
-        rows, _ = gate.collect(fake, {"classifier": {"distributions": {}}}, self.policy())
+        rows, _, _ = gate.collect(fake, {"classifier": {"distributions": {"x": {}}}}, self.policy())
         judged = {(row["component"], row["name"]) for row in rows if row["ecosystem"] == "python"}
         self.assertIn(("analyzer", "absent"), judged)
         self.assertNotIn(("classifier", "absent"), judged)
+
+    LINKED = {"name": "example.invalid/runtime", "version": "v1.0.0", "license": "MIT",
+              "source": "LICENSE", "direct": True, "linked": True}
+
+    def test_every_ecosystem_read_leaves_nothing_unread(self):
+        envs = {name: {"distributions": {"x": {}}} for name in ("analyzer", "classifier", "sdk-python")}
+        _, _, unread = gate.collect(FakeInventory(go_rows=[self.LINKED]), envs, self.policy())
+        self.assertEqual(unread, [])
+
+    def test_no_go_module_read_fails_enforce_mode(self):
+        fake = FakeInventory(go_info="go list failed: `go list -m -json all` exited 1: test stderr")
+        rows, notes, unread = gate.collect(fake, {}, self.policy())
+        self.assertEqual([row for row in rows if row["ecosystem"] == "go"], [])
+        self.assertEqual(len(unread), 1)
+        self.assertIn("go proxy: no modules read", unread[0])
+        self.assertIn("test stderr", unread[0])
+        self.assertFalse(any("go:" in note for note in notes))
+        # Every row that was read passes; the gate still fails.
+        items = gate.judge([{"ecosystem": "npm", "component": "dashboard", "name": "fine", "version": "1",
+                             "licence": "MIT", "source": "test"}], self.policy())
+        text, code = gate.render(items, notes, self.policy(), "enforce", unread)
+        self.assertEqual(code, 2)
+        self.assertIn("Not read at all, so not judged:", text)
+        self.assertIn("could not be read", text.splitlines()[-1])
+        text, code = gate.render(items, notes, self.policy(), "report", unread)
+        self.assertEqual(code, 0)
+        self.assertIn("go proxy: no modules read", text)
+        self.assertIn("go proxy: no modules read", gate.summary_markdown(items, "enforce", unread))
+
+    def test_go_modules_none_of_them_linked_is_unread(self):
+        unlinked = dict(self.LINKED, linked=False)
+        _, _, unread = gate.collect(FakeInventory(go_rows=[unlinked]), {}, self.policy())
+        self.assertEqual(len(unread), 1)
+        self.assertIn("no module is linked", unread[0])
+
+    def test_a_missing_lockfile_is_unread(self):
+        with tempfile.TemporaryDirectory() as temp, mock.patch.object(gate, "ROOT", Path(temp)):
+            _, notes, unread = gate.collect(FakeInventory(go_rows=[self.LINKED]), {}, self.policy())
+        self.assertEqual(sorted(u.split(":")[0] for u in unread), ["npm dashboard", "npm sdk-typescript"])
+        self.assertFalse(any("package-lock.json" in note for note in notes))
+
+    def test_an_empty_python_environment_is_unread(self):
+        fake = FakeInventory(go_rows=[self.LINKED])
+        rows, _, unread = gate.collect(fake, {"classifier": {"distributions": {}}}, self.policy())
+        self.assertEqual(unread, ["python classifier: the --pip file lists no distributions"])
+        self.assertEqual(len(fake.evidence_seen), 2)  # classifier is not inspected
+        self.assertFalse(any(row["component"] == "classifier" for row in rows))
+
+    def test_a_package_that_cannot_be_read_is_still_a_finding_not_an_unread_ecosystem(self):
+        fake = FakeInventory(go_rows=[dict(self.LINKED, license="NOT-INSPECTED")])
+        rows, _, unread = gate.collect(fake, {}, self.policy())
+        self.assertEqual(unread, [])
+        items = gate.judge([row for row in rows if row["ecosystem"] == "go"], self.policy())
+        self.assertEqual([(i["category"], i["outcome"]) for i in items], [("unreadable", "fail")])
+        _, code = gate.render(items, [], self.policy(), "enforce", unread)
+        self.assertEqual(code, 1)
 
     def test_cyclonedx_uses_the_judged_inventory(self):
         rows = [
