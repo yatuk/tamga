@@ -121,11 +121,13 @@ decisions:
     note: >-
       Prebuilt libvips, one package per platform. Optional dependencies of
       sharp, which is an optional dependency of next (image optimisation).
-      The question: does the published console image contain one, and if so
-      are LGPL-3.0's conditions (licence text, source offer, replaceable
-      library) met by pointing at the upstream package. Allowed by the
-      maintainer on 2026-10-17; whether the published image holds libvips
-      is still to be checked, and if it does its licence text ships with it.
+      Installed for the build and not shipped: the console does not use
+      next/image, next.config.js sets images.unoptimized and leaves sharp
+      and @img/* out of the standalone trace, and dashboard/Dockerfile
+      deletes any that are left before the runtime stage copies the output,
+      so no layer of the console image holds libvips. Allowed by the
+      maintainer on 2026-10-17; the decision stays for the build and for
+      anyone who runs the console from source.
   - ecosystem: npm
     component: dashboard
     package: "@img/sharp-w*"
@@ -134,8 +136,10 @@ decisions:
     note: >-
       sharp for Windows and WebAssembly (`@img/sharp-win32-*`,
       `@img/sharp-wasm32`, the latter also MIT), with libvips inside. Not
-      installed in the Linux image. Same question as above for anyone who runs
-      the console on those platforms. Allowed by the maintainer on 2026-10-17.
+      installed in the Linux image, and sharp is not shipped in it at all
+      (see above). The decision stays for anyone who builds or runs the
+      console from source on those platforms. Allowed by the maintainer on
+      2026-10-17.
   - ecosystem: npm
     component: dashboard
     package: "@ibm/plex*"
