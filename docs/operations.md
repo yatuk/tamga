@@ -942,6 +942,34 @@ Numbers are compared as 64-bit floats. A schema is at most 64 KiB as JSON,
 
 An answer the schema does not apply to streams as it always did.
 
+### High-risk tool calls after untrusted content
+
+```yaml
+agents:
+  provenance:
+    enabled: true
+    high_risk_tools: [bash, write_file, send_email, "http_*"]
+    action: BLOCK
+```
+
+Off unless `enabled` is true. A request whose conversation holds tool
+content with a finding the policy let through is tainted, and a call in
+its answer to a tool `high_risk_tools` names is withheld or recorded. How
+it behaves, buffered and streamed, is in
+[Running agents through Tamga](agents.md#hold-high-risk-tool-calls-after-untrusted-content).
+
+| Key | Value |
+|---|---|
+| `enabled` | `true` turns it on; left out or `false`, nothing is read |
+| `high_risk_tools` | tool names, `*` for any run of characters; required when enabled, up to 100, each up to 128 bytes |
+| `taint_on` | finding types and categories, as in `output_rules.block_on`; default `[injection, quoted_injection, hidden_text]`; `[A-Za-z0-9_]`, up to 64 bytes each, up to 100 |
+| `min_severity` | `low` (default), `medium`, `high` or `critical`; a signal named in `taint_on` taints at any severity |
+| `classifier_score` | 0 to 1; above 0, tool content the classifier scored at or above it taints. Validation warns when `scan.classifier` is off or does not read the `tool` role |
+| `action` | `BLOCK` (default) or `WARN`. Any other value does not load |
+
+The finding is of type `tool_provenance`, category `tainted_tool_call`. It
+cannot be named in `output_rules.redact_on`: a call has no part to mask.
+
 ### Limits on patterns and settings
 
 Patterns in the policy and in the patterns API are written by whoever can
@@ -1012,7 +1040,7 @@ for changes made through the API and the console.
 
 Everything else needs the admin role: `providers`, `exceptions`,
 `governance`, `data`, `vault`, `cache`, `body_limits`,
-`rate_limit`, `cost`, `scan`, `operator_state`, `canary`, and where a rule
+`rate_limit`, `cost`, `scan`, `operator_state`, `canary`, `agents`, and where a rule
 sends its alerts. A write that touches one of these with an analyst key is
 refused whole with 403, and the body lists the sections under
 `privileged_sections`. The comparison is of the decoded policy against the
