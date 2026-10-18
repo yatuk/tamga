@@ -185,7 +185,7 @@ Not plainly permissive, unrecognised, not inspected or missing:
 
 Source: `dashboard/package-lock.json` (lockfileVersion 3) for the set,
 each package's own `package.json` `license` field for the licence.
-Development dependencies are left out (520 lockfile entries marked `dev` or `devOptional`).
+Development dependencies are left out (517 lockfile entries marked `dev` or `devOptional`).
 
 ### Direct (production)
 
@@ -195,17 +195,17 @@ Development dependencies are left out (520 lockfile entries marked `dev` or `dev
 | @carbon/react | ^1.118.0 | 1.118.0 | Apache-2.0 | node_modules package.json |
 | @carbon/styles | ^1.117.0 | 1.117.0 | Apache-2.0 | node_modules package.json |
 | @codemirror/lang-json | ^6.0.2 | 6.0.2 | MIT | node_modules package.json |
-| @codemirror/language | ^6.12.4 | 6.12.4 | MIT | node_modules package.json |
-| @codemirror/view | ^6.43.13 | 6.43.13 | MIT | node_modules package.json |
+| @codemirror/language | ^6.13.1 | 6.13.1 | MIT | node_modules package.json |
+| @codemirror/view | ^6.43.14 | 6.43.14 | MIT | node_modules package.json |
 | @lezer/highlight | ^1.2.5 | 1.2.5 | MIT | node_modules package.json |
-| @tanstack/react-query | ^5.60.0 | 5.95.0 | MIT | node_modules package.json |
+| @tanstack/react-query | ^5.104.3 | 5.104.3 | MIT | node_modules package.json |
 | @uiw/react-codemirror | ^4.25.12 | 4.25.12 | MIT | node_modules package.json |
-| motion | ^14.0.0 | 14.0.0 | MIT | node_modules package.json |
+| motion | ^14.2.0 | 14.2.0 | MIT | node_modules package.json |
 | next | ^15.0.0 | 15.5.14 | MIT | node_modules package.json |
-| nuqs | ^2.10.1 | 2.10.1 | MIT | node_modules package.json |
-| react | ^19.0.0 | 19.2.4 | MIT | node_modules package.json |
-| react-dom | ^19.0.0 | 19.2.4 | MIT | node_modules package.json |
-| sonner | ^2.0.7 | 2.0.7 | MIT | node_modules package.json |
+| nuqs | ^2.10.2 | 2.10.2 | MIT | node_modules package.json |
+| react | ^19.3.1 | 19.3.1 | MIT | node_modules package.json |
+| react-dom | ^19.3.1 | 19.3.1 | MIT | node_modules package.json |
+| sonner | ^2.0.8 | 2.0.8 | MIT | node_modules package.json |
 
 ### Transitive (production)
 
@@ -257,7 +257,7 @@ Not plainly permissive, unrecognised, not inspected or missing:
 
 Source: `sdk/typescript/tamga-client/package-lock.json` (lockfileVersion 3) for the set,
 each package's own `package.json` `license` field for the licence.
-Development dependencies are left out (123 lockfile entries marked `dev` or `devOptional`).
+Development dependencies are left out (143 lockfile entries marked `dev` or `devOptional`).
 
 ### Direct (production)
 
@@ -278,20 +278,20 @@ packages that are not installed are marked NOT-INSPECTED unless
 
 | Package | Declared | Inspected version | Licence (declared) | Read from |
 |---|---|---|---|---|
-| grpcio | ==1.81.1 | 1.81.1 | Apache-2.0 | License-Expression |
-| grpcio-tools | ==1.81.1 | 1.81.1 | Apache-2.0 | License-Expression |
-| fastapi | ==0.115.0 | 0.136.3 (differs from the pin) | MIT | License-Expression |
-| uvicorn | ==0.31.0 | 0.51.0 (differs from the pin) | BSD-3-Clause | License-Expression |
-| pydantic | ==2.9.0 | 2.13.4 (differs from the pin) | MIT | License-Expression |
-| pydantic-settings | ==2.5.0 | 2.14.2 (differs from the pin) | MIT | License-Expression |
-| anthropic | ==0.39.0 | 0.109.1 (differs from the pin) | MIT | License field |
-| presidio-analyzer | ==2.2.355 | 2.2.359 (differs from the pin) | MIT | License field |
-| spacy | >=3.7,<4.0 | 3.8.13 | MIT | License field |
-| asyncpg | ==0.30.0 | - | NOT-INSPECTED | not installed in the inspected environment |
-| reportlab | >=4.5.0 | 4.5.1 | BSD-3-Clause | licence file in dist-info (detected; metadata says only "BSD (unspecified)") |
-| httpx | ==0.27.2 | 0.28.1 (differs from the pin) | BSD-3-Clause | License field |
-| structlog | ==24.4.0 | 26.1.0 (differs from the pin) | MIT OR Apache-2.0 | License-Expression |
-| jinja2 | ==3.1.4 | 3.1.6 (differs from the pin) | BSD-3-Clause | licence file in dist-info (detected; metadata says only "BSD (unspecified)") |
+| grpcio | ==1.84.0 | 1.81.1 (differs from the pin) | Apache-2.0 | License-Expression |
+| grpcio-tools | ==1.84.0 | 1.81.1 (differs from the pin) | Apache-2.0 | License-Expression |
+| fastapi | ==0.143.1 | 0.136.3 (differs from the pin) | MIT | License-Expression |
+| uvicorn | ==0.54.0 | 0.51.0 (differs from the pin) | BSD-3-Clause | License-Expression |
+| pydantic | ==2.14.1 | 2.13.4 (differs from the pin) | MIT | License-Expression |
+| pydantic-settings | ==2.16.0 | 2.14.2 (differs from the pin) | MIT | License-Expression |
+| anthropic | ==1.14.0 | 0.109.1 (differs from the pin) | MIT | License field |
+| presidio-analyzer | ==2.2.364 | 2.2.359 (differs from the pin) | MIT | License field |
+| spacy | >=3.8.16,<4.0 | 3.8.13 | MIT | License field |
+| asyncpg | ==0.32.0 | - | NOT-INSPECTED | not installed in the inspected environment |
+| reportlab | >=5.0.1 | 4.5.1 | BSD-3-Clause | licence file in dist-info (detected; metadata says only "BSD (unspecified)") |
+| httpx | ==0.28.1 | 0.28.1 | BSD-3-Clause | License field |
+| structlog | ==26.1.0 | 26.1.0 | MIT OR Apache-2.0 | License-Expression |
+| jinja2 | ==3.1.6 | 3.1.6 | BSD-3-Clause | licence file in dist-info (detected; metadata says only "BSD (unspecified)") |
 | pypdf | ==6.21.1 | 6.19.0 (differs from the pin) | BSD-3-Clause | License-Expression |
 | pdfminer.six | ==20260107 | 20260107 | MIT | License-Expression (recorded wheel metadata) |
 | python-docx | ==1.2.0 | 1.2.0 | MIT | License field |
@@ -340,12 +340,12 @@ packages that are not installed are marked NOT-INSPECTED unless
 
 | Package | Declared | Inspected version | Licence (declared) | Read from |
 |---|---|---|---|---|
-| grpcio | ==1.81.1 | 1.81.1 | Apache-2.0 | License-Expression |
+| grpcio | ==1.84.0 | 1.81.1 (differs from the pin) | Apache-2.0 | License-Expression |
 | protobuf | >=6.33.5,<7 | 6.33.6 | BSD-3-Clause | License field |
 | onnxruntime | >=1.20,<2 | 1.31.0 | MIT | License field (recorded wheel metadata) |
 | tokenizers | >=0.21,<1 | 0.23.3 | Apache-2.0 | Trove classifier (recorded wheel metadata) |
 | numpy | >=1.26 | 2.4.6 | BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0 | License-Expression |
-| structlog | ==24.4.0 | 26.1.0 (differs from the pin) | MIT OR Apache-2.0 | License-Expression |
+| structlog | ==26.1.0 | 26.1.0 | MIT OR Apache-2.0 | License-Expression |
 
 ### Transitive
 

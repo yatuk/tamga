@@ -31,6 +31,21 @@
 - Dependabot opens its pull requests against `development`, at most three
   open per entry, and its LiteLLM ignore rule now matches the name it
   uses for the image (`berriai/litellm`).
+- The analyzer moves to FastAPI 0.143, Starlette 1.8, Pydantic 2.14,
+  uvicorn 0.54, the Anthropic SDK 1.14, structlog 26.1, ReportLab 5 and
+  Presidio 2.2.364; the classifier to grpcio 1.84 and structlog 26.1; the
+  console to React 19.3 and jsdom 30 (tests); the TypeScript SDK builds
+  with TypeScript 7, and its compiled output is unchanged. **`POST
+  /api/v1/analyze` now answers 422 to a body sent without a JSON
+  `Content-Type`; it used to read such a body as JSON.** The proxy reaches
+  the analyzer over gRPC, and with GET requests for reports, so only
+  hand-written clients of that endpoint are affected. **The analyzer's and
+  the classifier's log lines quote a value that holds a space
+  (`reason='a b'` where it was `reason=a b`).** The Anthropic SDK now
+  makes its requests with `httpx2`: **an APM or tracing hook on `httpx` no
+  longer sees the judge's calls.** The analyzer image now gets protobuf 7,
+  which grpcio-tools 1.84 allows; the committed gRPC stubs load under it
+  unchanged.
 
 ## v0.9.0 (2026-10-18)
 
