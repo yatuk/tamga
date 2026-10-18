@@ -21,9 +21,10 @@ type identityRig struct {
 	url  string
 	keys *apikeys.MemoryStore
 
-	mu       sync.Mutex
-	upstream http.Header
-	events   []events.Event
+	mu           sync.Mutex
+	upstream     http.Header
+	upstreamPath string
+	events       []events.Event
 }
 
 func (g *identityRig) lastEvent(t *testing.T) events.Event {
@@ -52,6 +53,7 @@ func newIdentityRig(t *testing.T, cfg *config.Config) *identityRig {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		g.mu.Lock()
 		g.upstream = r.Header.Clone()
+		g.upstreamPath = r.URL.Path
 		g.mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"ok"}}]}`))
