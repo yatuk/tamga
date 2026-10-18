@@ -54,7 +54,8 @@ type outputScanResult struct {
 // custom scanners read an answer as they read a request; the output-only
 // registry adds what only an answer is looked at for (source code, links).
 // When the answer is held to output_rules.json_schema, a mismatch is one
-// more finding.
+// more finding, and so is a leak output_rules.prompt_leak looks for: the
+// request's system prompt (decided from the request, on ctx) or a canary.
 //
 // outputReg is optional (may be nil) and contains scanners that should only
 // run on response bodies (e.g. code_leak).
@@ -81,6 +82,9 @@ func scanResponseBody(ctx context.Context, reg *scanner.Registry, outputReg *sca
 		// The places the answer's tool calls send data to, held to
 		// output_rules.tool_destinations.
 		findings = append(findings, toolDestinationFindings(pol, res.Segments)...)
+		// The system prompt, or a canary of the operator's, repeated in it
+		// (output_rules.prompt_leak).
+		findings = append(findings, promptLeakFindings(promptLeakFor(ctx, pol), res.Segments)...)
 		findings, err = withSchemaFindings(scanCtx, pol, raw, findings, err)
 		out := outputScanResult{findings: findings, action: pol.EvaluateOutput(findings)}
 		if out.action == policy.ActionRedact && err != nil {
@@ -123,6 +127,10 @@ func scanResponseBody(ctx context.Context, reg *scanner.Registry, outputReg *sca
 		if err == nil {
 			err = extraErr
 		}
+	}
+	for _, f := range promptLeakFindings(promptLeakFor(ctx, pol), []extract.Segment{{Role: extract.RoleAssistant, Kind: extract.KindText, Text: text}}) {
+		f.Seg = -1
+		findings = append(findings, f)
 	}
 	findings, err = withSchemaFindings(scanCtx, pol, raw, findings, err)
 

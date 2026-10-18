@@ -21,7 +21,9 @@ import (
 //   - the text is scanned, and a finding the policy blocks ends the stream
 //     while one it redacts is masked in place;
 //   - vault placeholders are turned back into the values they stand for;
-//   - the canary token is looked for.
+//   - the canary token is looked for, and so are the operator's canaries
+//     and the system prompt when output_rules.prompt_leak asks (leakCheck:
+//     on arrival, before any of the text is released).
 //
 // The difficulty is the same for all three: the text arrives in pieces, and
 // a value, a placeholder or the token can be cut anywhere. Scanning each
@@ -112,6 +114,13 @@ type streamGuard struct {
 	canary       string
 	canaryBlocks bool
 
+	// leak is what output_rules.prompt_leak looks for, nil for nothing;
+	// leakBlocks says whether a leak of a category ends the stream.
+	// leakSeen keeps a category from being recorded twice.
+	leak       *promptLeak
+	leakBlocks func(category string) bool
+	leakSeen   map[string]bool
+
 	holdback  int
 	maxHeld   int
 	tokenHold int
@@ -182,6 +191,10 @@ type streamChannel struct {
 	// template is the last event that carried text on this channel, kept so
 	// that held text can be sent in an event of the same shape.
 	template *streamTemplate
+	// leak reads the channel's text for output_rules.prompt_leak as it
+	// arrives; leakDone says its last word has been read.
+	leak     *leakScanner
+	leakDone bool
 }
 
 type streamTemplate struct {
@@ -309,7 +322,7 @@ func (g *streamGuard) event(raw []byte) (out []byte, stop bool) {
 		if d.Kind == extract.KindToolArgs {
 			released, stopped = g.takeArgs(ch, d, final)
 		} else {
-			if g.take(ch, d.Text) {
+			if g.take(ch, d.Text) || (final && g.leakEnd(ch)) {
 				return g.termination(), true
 			}
 			released, stopped = g.release(ch, final)
@@ -432,6 +445,9 @@ func (g *streamGuard) flush(name string) ([]byte, bool) {
 	if !ok {
 		return nil, false
 	}
+	if g.leakEnd(ch) {
+		return g.termination(), true
+	}
 	var released string
 	var stopped bool
 	switch {
@@ -466,6 +482,9 @@ func (g *streamGuard) flush(name string) ([]byte, bool) {
 // says this event ends the tool call.
 func (g *streamGuard) takeArgs(ch *streamChannel, d extract.StreamDelta, final bool) (released string, stopped bool) {
 	ch.plain = d.Plain
+	if g.leakCheck(ch, d.Text) || (final && g.leakEnd(ch)) {
+		return "", true
+	}
 	if !g.scans() || ch.unread {
 		// Not read: the pieces go out as they come, with the vault's
 		// values in place of their placeholders.
@@ -621,6 +640,14 @@ const maxJudgedBytes = 4 << 20
 // by piece (the closing events of the Responses API): what was recorded for
 // that text is not recorded a second time. It is acted on every time.
 func (g *streamGuard) judgeSegments(segs []extract.Segment, sealedThinking, repeats bool) (edits []extract.Edit, stopped bool) {
+	if g.leak != nil {
+		for _, s := range segs {
+			r := g.leak.scanner()
+			if g.leakFound(append(r.feed(s.Text), r.end()...)) {
+				return nil, true
+			}
+		}
+	}
 	if g.canary != "" {
 		for _, s := range segs {
 			if !strings.Contains(s.Text, g.canary) {
@@ -1030,6 +1057,9 @@ func runBreak(r rune) bool {
 
 // take adds a piece of text to a channel. stopped means the stream must end.
 func (g *streamGuard) take(ch *streamChannel, text string) (stopped bool) {
+	if g.leakCheck(ch, text) {
+		return true
+	}
 	if g.schema == nil || !ch.answer() {
 		ch.pending += text
 		return false
@@ -1060,6 +1090,47 @@ func (g *streamGuard) take(ch *streamChannel, text string) (stopped bool) {
 	}
 	ch.pending += text
 	return false
+}
+
+// leakCheck reads a piece of a channel's text for output_rules.prompt_leak
+// as it arrives, before any of it is released: a canary is no longer than
+// what the stream holds back. stopped means the stream must end.
+func (g *streamGuard) leakCheck(ch *streamChannel, text string) (stopped bool) {
+	if g.leak == nil || text == "" {
+		return false
+	}
+	if ch.leak == nil {
+		ch.leak = g.leak.scanner()
+	}
+	return g.leakFound(ch.leak.feed(text))
+}
+
+// leakEnd reads the last word of a channel that is over.
+func (g *streamGuard) leakEnd(ch *streamChannel) (stopped bool) {
+	if ch.leak == nil || ch.leakDone {
+		return false
+	}
+	ch.leakDone = true
+	return g.leakFound(ch.leak.end())
+}
+
+// leakFound records leak findings, once per category, and reports whether
+// one of them ends the stream.
+func (g *streamGuard) leakFound(found []scanner.Finding) (stopped bool) {
+	for _, f := range found {
+		if !g.leakSeen[f.Category] {
+			if g.leakSeen == nil {
+				g.leakSeen = map[string]bool{}
+			}
+			g.leakSeen[f.Category] = true
+			g.findings = append(g.findings, f)
+		}
+		if g.leakBlocks != nil && g.leakBlocks(f.Category) {
+			g.stopReason = "system_prompt_leak"
+			stopped = true
+		}
+	}
+	return stopped
 }
 
 // holds reports whether the channel's text is being kept back for the
