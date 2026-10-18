@@ -127,6 +127,17 @@ for, and what is there now:
   [where data goes](#where-secrets-and-data-go)). That, and rendering the PDF
   reports, is what the analyzer does.
 
+What was decided for each LLM Guard class the analyzer imported. "In the
+proxy" means a Go scanner already covers it on the traffic Tamga sees;
+nothing was reimplemented in the analyzer and no LLM Guard code was copied.
+
+| Class the analyzer imported | Decision | Where it is covered now |
+|---|---|---|
+| `output_scanners.Toxicity` | dropped; in the proxy, partly | `proxy/internal/scanner/content_moderation.go`, toxicity phrases in English and Turkish, no model |
+| `output_scanners.NoRefusal` | dropped; in the proxy, partly | `content_moderation.go`, categories `refusal` and `refusal_tr` |
+| `output_scanners.BanCode` | dropped; in the proxy, partly | `proxy/internal/scanner/codeleak.go`, responses only |
+| `output_scanners.BanTopics` | dropped; replaced on the request side | the policy's `topics` section in the proxy (requests only); `TAMGA_BAN_TOPICS` is no longer read |
+
 ## The mapping table
 
 Enumerated from the archived `main` branch: `llm_guard/input_scanners/__init__.py`
@@ -160,12 +171,12 @@ box nothing is scanned in responses.
 | `BanCode` | Detects code in the prompt with a classifier model and rejects it | none. The code-leak scanner reads responses only | **none** | — |
 | `BanCompetitors` | Finds organisation names with an NER model, checks them against your list, flags or redacts | Competitor scanner (`competitor.go`), policy section `competitors` (regular expressions per competitor, matched case-insensitively), decided by the entry's own `action`, a `competitor` rule (the stronger of the two wins) or, with neither, `scan.default_action` | **partial.** A pattern match on the names you list, no NER. A name can be blocked, masked (`[competitor_REDACTED]`), warned about or logged | Requests and responses |
 | `BanSubstrings` | Rejects or redacts text containing any (or all) of a list of substrings, by word or by string | `custom_entities` (one regular expression each, with its own action), or `competitors` | **partial.** You write each substring as a pattern. No "must contain all of them" mode. At most 100 custom entities, 1024 bytes per pattern | Requests and responses |
-| `BanTopics` | Rejects prompts about topics you name, using a zero-shot classifier | none. The content-moderation scanner has a fixed list of phrases about weapons, self-harm and drugs; you cannot name a topic | **none** | — |
+| `BanTopics` | Rejects prompts about topics you name, using a zero-shot classifier | Policy section `topics` ([Banned topics](operations.md#banned-topics)): topics in free text, scored by an optional multilingual NLI model in the classifier service; a match is a `topic` finding under the section's action | **partial.** Measured as a review signal, not a reliable block: at 0.8 with English descriptions it found 11 of 30 requests on the evaluation set. Needs the classifier service and the operator-supplied model. Off by default | Requests |
 | `Code` | Detects code in the prompt and allows or bans it by programming language | none | **none** | — |
 | `EmotionDetection` | Classifies the emotions in a prompt and blocks the ones you list (on `main` only, not in a release) | none | **none** | — |
 | `Gibberish` | Flags nonsensical English text with a classifier | none for prose. The `unreadable_block` signal (`obfuscation.go`) marks a block of 100 or more characters that looks encoded and cannot be decoded | **none.** The signal judges character statistics of encoded-looking blocks, not whether sentences make sense, and changes no verdict unless a rule names it | — |
 | `InvisibleText` | Detects and removes characters of Unicode categories Cf, Cc, Co and Cn | Normalization before scanning (`normalize/invisible.go`) and the `hidden_text` finding of the injection type (`obfuscation.go`) | **partial.** Detection is equivalent or wider: characters of Cf, Cc, Co and Cn, variation selectors and the other default-ignorable characters are dropped from the copy of the text the scanners match on, so a pattern split by them is found, and text written in tag characters or variation selectors is read out and scanned. Eight or more characters of such text is a finding the shipped policy blocks; a long run of zero-width characters or a bidi override is a signal that only a rule naming `hidden_text` acts on. Removal is not equivalent: the forwarded request keeps the characters. Tamga blocks or strips the text, it does not clean it | Requests and responses |
-| `Language` | Detects the language with a model and rejects prompts outside your list | none. A change of writing system inside a conversation (Latin to Cyrillic, Arabic, CJK) lowers the inline classifier's threshold for that text | **none.** No language is detected and nothing is rejected for its language; the change of script is not a finding | — |
+| `Language` | Detects the language with a model and rejects prompts outside your list | Policy section `language` ([Languages a request may be written in](operations.md#languages-a-request-may-be-written-in)): an allow-list of ISO 639-1 codes, a detector without a separate model service, code, logs and URLs left out | **yes**, for requests (user, system and tool text). Off by default; adds about 128 MB to the proxy image | Requests |
 | `PromptInjection` | Classifies the prompt with a DeBERTa model against a threshold | Injection and jailbreak scanners (`injection*.go`, `jailbreak.go`), rules `injection_detection` and `injection`; and the optional inline classifier, `scan.classifier`, off by default | **equivalent**, by different means. By default Tamga matches wording: a phrase list in English, Turkish, German and Russian, plus rules for role spoofing, encoded payloads and paraphrases. A model reads the text only when you run the classifier service and download a model for it; none ships. The classifier is asked about `user` and `tool` text only | Patterns: requests and responses. Classifier: requests |
 | `Regex` | Matches your regular expressions; treats a match as bad or as required; can redact | `custom_entities` | **partial.** A match is always a finding: there is no "valid only if it matches" mode and no full-match switch. Go RE2 syntax (no lookaround or backreferences); a pattern that can match the empty string is refused | Requests and responses |
 | `Secrets` | Finds secrets with the `detect-secrets` library, including high-entropy strings, and redacts them | Secret scanner (`secrets.go`), rule `secret_detection` | **partial.** A fixed set of formats: AWS access and secret keys, Azure storage keys, GitHub, GitLab, npm, PyPI, OpenAI, Anthropic, Stripe, SendGrid, Mailchimp, Square, Discord, Telegram and Artifactory keys and tokens, Slack tokens and webhooks, Google API keys, Twilio SIDs, JWTs, private keys, connection strings, credentials in URLs, basic auth, stated passwords, `.env` assignments, and a generic `key = value` form. Of the `detect-secrets` plugins, Cloudant, IBM and SoftLayer keys have no pattern of their own (they are found only next to a name, as `key = value`). No high-entropy detector for secrets. A secret under `REDACT` is masked with a fixed marker and is never put in the vault, so it is not restored in the answer | Requests and responses |
@@ -665,8 +676,8 @@ and did is stored with the request.
 
 ### What you lose
 
-- Every scanner marked "none": `BanCode` and `Code` on prompts, `BanTopics`,
-  `EmotionDetection`, `Gibberish`, `Language`, `LanguageSame`, `Sentiment`,
+- Every scanner marked "none": `BanCode` and `Code` on prompts, `BanTopics` on
+  answers, `EmotionDetection`, `Gibberish`, `Language` on answers, `LanguageSame`, `Sentiment`,
   `Bias`, `FactualConsistency`, `Relevance`, `JSON`, `MaliciousURLs`,
   `URLReachability`, `ReadingTime`.
 - Model-based PII detection: person and organisation names, and any entity
