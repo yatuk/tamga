@@ -1,5 +1,37 @@
 # Changelog
 
+## Unreleased
+
+### Dependencies
+- Go modules of the proxy move to their current minor and patch releases
+  (pgx 5.11, go-redis 9.23, nats.go 1.54, client_golang 1.25,
+  OpenTelemetry 1.47, gRPC 1.84 and others; `proxy/go.mod`). **go-redis
+  9.22 changed its defaults: a Redis command now waits up to 5 seconds
+  for a read or write (it was 3) before it fails, unless `REDIS_URL`
+  sets `read_timeout` and `write_timeout` (for example `?read_timeout=3s&write_timeout=3s`).**
+- The proxy and scanner-service images run on Alpine 3.24 (was 3.21,
+  which reaches end of life on 2026-11-01).
+- The full Compose profile moves NATS to 2.15 (was 2.10, out of
+  support) and Jaeger to 1.76.0, the last 1.x release (was 1.54).
+  **NATS 2.12 and later reject an invalid JetStream API request instead
+  of logging it.** As before, JetStream data and Jaeger traces are kept
+  inside the container and do not survive its recreation, which the new
+  image tag causes.
+- The TLS edge moves to Caddy 2.11.7 (was 2.10.2), which carries the
+  2.11 security fixes. **The edge now answers `431` to a request whose
+  headers exceed 16 KiB, drops request header fields whose names
+  contain `_` or `.`, and aborts a connection whose request-body read
+  or response write makes no progress for one minute** (pauses between
+  writes, as in a streamed answer, do not count). `max_header_size`,
+  `expected_underscore_headers`, `expected_dot_headers` and `timeouts`
+  in `deploy/edge/Caddyfile` change these.
+- GitHub Actions in the CI workflows move to their current major
+  versions (checkout 7, setup-go 7, upload-artifact 7, cache 6,
+  setup-buildx-action 4), as `release.yml` already uses.
+- Dependabot opens its pull requests against `development`, at most three
+  open per entry, and its LiteLLM ignore rule now matches the name it
+  uses for the image (`berriai/litellm`).
+
 ## v0.9.0 (2026-10-18)
 
 ### Licence
