@@ -58,9 +58,14 @@ verdict. `PASS` hands them on, `WARN` asks, and `BLOCK`, `STRIP` and
 `REDACT`: the extension does not hand the site a changed copy of a person's
 file that they have not seen, so the notice says to take those parts out or
 paste the text into the box, where the redacted text is offered. With no
-verdict the fail mode decides, as for a send. PDF files, images, office
-documents and other files that are not text are not read; they go to the
-site as they are, and the person is told so once for a page load
+verdict the fail mode decides, as for a send. A PDF, Word, Excel or
+PowerPoint file (and an image, when Tamga reads images by OCR) is sent as it
+is to the scan API and judged the same way, when your Tamga's policy reads
+files (the `attachments` section, [Files a request
+carries](operations.md#files-a-request-carries)); Tamga says in each scan
+answer which kinds it reads, and the extension sends no other. Every other
+file, and every file when Tamga does not read files, is not read; it goes to
+the site as it is, and the person is told so once for a page load
 ([details](../extension/README.md#attached-files)).
 
 When Tamga cannot be asked, the person is told before they try to send. If
@@ -143,9 +148,12 @@ with its status.
   the person allows them there (private windows can be switched off by
   policy: `IncognitoModeAvailability` in Chrome, `InPrivateModeAvailability`
   in Edge).
-- **Files that are not text, and large ones.** A PDF, an image, an office
-  document or an archive is not read, nor is a text file over 200 KB under
-  `failMode: open` (under `closed` it is not attached). A file renamed to a
+- **Files that are not text, and large ones.** An archive, a legacy office
+  file and any other file that is neither text nor a PDF, DOCX, XLSX, PPTX
+  or image is not read; those five are read only when Tamga's policy reads
+  files (images only with OCR), and then only up to the size Tamga says. A
+  text file over 200 KB is not read under `failMode: open` (under `closed` it
+  is not attached). A file renamed to a
   name the extension does not read is not read either. A file input the site
   never puts in the page, a file the site reads some other way than the
   input's events, a drop or a paste, and a file from the site's own
@@ -590,7 +598,9 @@ For whoever has to approve it:
 - It runs on the [sites](#sites) and nowhere else, in the top frame only;
   on huggingface.co, under `/chat` only.
 - It reads the text of the message box at paste and at send, and the
-  content of a text file the person attaches, before the site has it. It
+  content of a text file the person attaches, before the site has it. When
+  Tamga says it reads files, it also reads a PDF, office document or image
+  the person attaches, and sends it, as it is, to Tamga. It
   does not read the conversation, the site's answers, cookies or anything
   else on the page.
 - That text goes to the Tamga URL you configured, over https, from the

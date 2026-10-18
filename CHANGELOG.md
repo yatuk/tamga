@@ -1661,6 +1661,50 @@
   Without a model there, Docker creates the empty directory, the service
   logs `topics_unavailable` once at startup, and nothing else changes.
 
+### Files in requests (optional)
+- A new policy section, `attachments`, decides what happens to the files a
+  request carries that are not text (OpenAI `file`, `input_file` and
+  `image_url` data URIs, Anthropic base64 `document` and `image` sources,
+  Gemini `inline_data`). Without it nothing changes: such a file goes to
+  the provider unread, as before. With it, an encrypted file (an encrypted
+  ZIP entry, a password-protected Office file, an encrypted 7z or RAR, a PDF
+  that needs a password) and a text holding a PGP message or an encrypted
+  private key get an `attachment_unreadable` finding of category
+  `encrypted`, under `attachments.encrypted` (PASS, WARN or BLOCK; PASS when
+  left out). With `attachments.extract.enabled`, PDF, DOCX, XLSX and PPTX
+  files (and images with `attachments.ocr.enabled`) are sent to the
+  analyzer, and the text that comes back is scanned like any other text, in
+  the role of the message, with the file's path. What cannot be read gets
+  an `attachment_unreadable` finding (`unsupported_type`, `too_large`,
+  `extract_failed`, `ocr_unavailable`) under `attachments.unreadable`. The
+  findings carry nothing of the file. Changing the section needs the admin
+  role. See docs/operations.md, "Files a request carries".
+- **With the section, a REDACT or a STRIP that would change the text of a
+  file blocks the request** (`X-Tamga-Redact-Fallback: block:attachment`,
+  `X-Tamga-Strip-Fallback: block:attachment`): the proxy does not rewrite
+  files. A request the section looked at carries
+  `X-Tamga-Attachments: files=N; read=N; findings=N`. The proxy path, the
+  ICAP route and the scan API apply it.
+- The scan API takes a file (`{"file": {"data", "name", "mime"}}`) when the
+  policy has the section, and refuses one with 422 when it has not. **With
+  the section, every scan answer carries `files` (the kinds read and the
+  largest file), and the API reads bodies up to a file of
+  `attachments.extract.max_bytes` in base64 and 64 KiB more**; a text is
+  still held to 256 KB.
+- The analyzer's protocol gains `Extract` (pypdf with pdfminer.six as the
+  fallback, python-docx, openpyxl, python-pptx; new requirements, all MIT or
+  BSD), run on `TAMGA_EXTRACT_WORKERS` threads (2) with page, character,
+  time and unpacking limits. **The analyzer's gRPC port now takes messages
+  of up to 33 MiB, and sends up to 17 MiB (4 MiB each before).** OCR is a
+  separate analyzer module; without it images are `ocr_unavailable`.
+- The browser extension sends a PDF, Word, Excel or PowerPoint file (and an
+  image when Tamga reads images) to the scan API when Tamga's answers say
+  it reads that kind, and holds the attach for the verdict as it does for a
+  text file, with the same fail mode. **Against a Tamga whose policy reads
+  files, such files are no longer attached unchecked: a BLOCK, or no verdict
+  under `failMode: closed`, keeps them from the site.** Against any other
+  Tamga nothing changes.
+
 ### Business accounts only (optional)
 - A `provider_accounts` policy section, off unless present and enabled,
   lists per route the provider accounts a request may use: fingerprints of
