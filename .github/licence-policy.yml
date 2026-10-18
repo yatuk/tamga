@@ -109,8 +109,9 @@ deny:
 # `package` is a glob. `decision` is pending, allow or deny.
 # The entries below are every dependency that is in review today
 # (2026-10-17, from THIRD_PARTY_LICENSES.md). The maintainer allowed all
-# five on 2026-10-17; a new entry starts as pending and the gate fails on it
-# until it is decided.
+# five on 2026-10-17, and setuptools, which the release dry run found, on
+# 2026-10-18; a new entry starts as pending and the gate fails on it until it
+# is decided.
 decisions:
   - ecosystem: npm
     component: dashboard
@@ -159,3 +160,15 @@ decisions:
       Required by presidio-analyzer. Runs inside the analyzer service, a
       separate process from the proxy. See THIRD_PARTY_LICENSES.md, "Entries
       a person should look at". Allowed by the maintainer on 2026-10-17.
+  - ecosystem: python
+    component: analyzer
+    package: setuptools
+    licence: MIT AND LGPL AND Apache-2.0 AND BSD-2-Clause AND ISC
+    decision: allow
+    note: >-
+      Installer tooling present in the inspected environment; allowed by the
+      maintainer on 2026-10-18. It is reached through the Requires-Dist of
+      grpcio-tools (setuptools>=77.0.1), spacy and thinc, and the version
+      judged is the one the Python 3.11 venv starts with. The expression is
+      read from the licence files of the packages setuptools vendors; the
+      LGPL is that of the vendored autocommand (LGPLv3).
