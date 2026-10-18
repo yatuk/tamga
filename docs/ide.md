@@ -51,16 +51,43 @@ Keys and headers:
 - The provider's own key is sent as the client already sends it
   (`Authorization: Bearer` for OpenAI-style, `x-api-key` for Anthropic) and
   is forwarded to the provider. Tamga does not issue it.
-- A Tamga key goes in **`X-Tamga-Key`** only. Tamga does not read a Tamga key
-  from `Authorization` or `x-api-key`. It decides which organisation the
+- A Tamga key goes in **`X-Tamga-Key`**, or, for clients that cannot set a
+  header and only when `TAMGA_KEY_IN_PATH=true`, in the base URL (see the
+  next point). Tamga does not read a Tamga key from `Authorization` or
+  `x-api-key`. It decides which organisation the
   request is counted under and which rate limit applies
   ([keys](operations.md#keys-for-applications)).
 - Many editor clients have no field for an extra header. Such a client sends
   no Tamga key and is anonymous. That works while `TAMGA_REQUIRE_KEY` is off.
-  With it on, those clients get 401. Either leave it off until the clients
-  you use can send the header, or put a small reverse proxy in front of
-  Tamga that adds `X-Tamga-Key` per user, for example one that maps each
-  developer's network identity or client certificate to a Tamga key.
+  With it on, those clients get 401. There are three ways out: leave it off
+  until the clients you use can send the header; put a small reverse proxy in
+  front of Tamga that adds `X-Tamga-Key` per user, for example one that maps
+  each developer's network identity or client certificate to a Tamga key; or
+  turn on the key in the path, below.
+- **Key in the path** (`TAMGA_KEY_IN_PATH=true`, off by default). Put the key
+  in the base URL: `https://tamga.internal/k/tk_your_key_here/v1` for an
+  OpenAI-style client, `https://tamga.internal/k/tk_your_key_here/anthropic`
+  for an Anthropic one. Tamga cuts `/k/<key>` out of the path, verifies the
+  key as it does the header, and routes the rest as usual; the provider
+  never sees it. The same routes work behind it as without it (`/v1`,
+  `/openai`, `/anthropic`, `/gemini`, ...), and nothing else does: the
+  management API is not reachable through `/k/`. A request that also sends
+  `X-Tamga-Key` with another value gets 401 `tamga_key_conflict`. With the
+  setting off, `/k/...` is a 404.
+  The cost: **a URL is not a secret store.** The key is in the client's
+  settings and its own logs, in the access log of any load balancer, CDN or
+  reverse proxy between the client and Tamga, and in a proxy's or
+  inspection appliance's logs on the developer's network. Tamga itself
+  masks it everywhere it logs, stores or traces a path (the request is
+  rewritten before anything reads it), but it cannot do that for others.
+  Use a key with scope `proxy`, one per developer, give it an expiry, revoke
+  it when it leaks, and terminate TLS so the path is not in the clear.
+  A combined form in the provider key slot (`tamga:<key>:<provider-key>`)
+  is not offered: it would keep the key out of URLs, but the slot differs
+  per provider (`Authorization`, `x-api-key`, `x-goog-api-key`, `api-key`,
+  SigV4), clients validate or prefix what they send, and a rewrite there
+  touches the provider credential itself. The path works for every client
+  with a base URL.
 - Anonymous clients share a rate-limit bucket per client address. Behind a
   load balancer that is one bucket for everyone unless
   `TAMGA_TRUSTED_PROXIES` is set
@@ -195,7 +222,9 @@ file key for this in the pages read; it is set in the settings panel.
 
 The OpenAI Compatible page documents no custom header field, so a Tamga key
 cannot be sent from Cline (not verified for the current release). Cline is
-then anonymous at Tamga.
+then anonymous at Tamga, unless the key is in the base URL: with
+`TAMGA_KEY_IN_PATH=true` use `https://tamga.internal/k/tk_your_key_here/v1`
+(or `.../k/tk_your_key_here/anthropic` for the Anthropic provider).
 
 What Tamga sees: every request of the agent loop, including the tool
 results it sends back.
@@ -208,7 +237,9 @@ Source read 2026-10-17:
 Can the base URL and key be set: yes. API Provider "OpenAI Compatible",
 Base URL `https://tamga.internal/v1`, API Key, Model. The page says the model
 must support native tool calling. It documents no custom header field (not
-verified), so the client is anonymous at Tamga. It does not cover the
+verified), so the client is anonymous at Tamga, unless the key is in the base
+URL: with `TAMGA_KEY_IN_PATH=true`, Base URL
+`https://tamga.internal/k/tk_your_key_here/v1`. It does not cover the
 Anthropic provider, so a custom Anthropic base URL is not verified.
 
 What Tamga sees: every request of the agent loop.
@@ -338,7 +369,9 @@ Can it be pointed at Tamga: partly. In Settings, Tools, AI Assistant,
 Providers & API keys, choose OpenAI-compatible under Third-party AI
 providers, enter the endpoint URL (`https://tamga.internal/v1`) and the key,
 then Test Connection. The page names LiteLLM as an example endpoint. No
-custom header field was described, so the client is anonymous at Tamga.
+custom header field was described, so the client is anonymous at Tamga,
+unless the key is in the endpoint URL: with `TAMGA_KEY_IN_PATH=true` enter
+`https://tamga.internal/k/tk_your_key_here/v1`.
 
 - Models from such a provider appear in AI Chat. For other features they must
   be assigned by hand in Models Assignment; until then only AI Chat uses
@@ -381,7 +414,8 @@ plus `_API_KEY` (`tamga` gives `TAMGA_API_KEY`):
 The pages read give `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` for the built-in
 providers but show no `api_url` for them, so the Anthropic route is not
 verified. No header setting was described, so the client is anonymous at
-Tamga.
+Tamga, unless the key is in the URL: with `TAMGA_KEY_IN_PATH=true` set
+`api_url` to `https://tamga.internal/k/tk_your_key_here/v1`.
 
 Edit prediction (inline completion) has a provider setting. The default is
 Zed's own (`zed`); GitHub Copilot and Codestral are other choices and have no
