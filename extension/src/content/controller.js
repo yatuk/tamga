@@ -8,14 +8,38 @@
 // lands, the box is checked straight away, and the person is told early.
 // Attach (a file input's change, a drop or a paste that carries files): the
 // event is stopped before the page sees it, each text file is read and
-// checked, and only then is the event given to the page again. A file that
-// is not text is not read: the attach goes on and the person is told once.
+// checked, and only then is the event given to the page again. A PDF, an
+// office document or an image is sent as it is, and checked like a text
+// file when Tamga reads that kind; any other file, and one Tamga does not
+// read, is not read: the attach goes on and the person is told once.
 
-import { MAX_TEXT_CHARS, MSG_CONFIG, MSG_OPEN_OPTIONS, MSG_SCAN, parseConfigReply, parseScanReply } from '../shared/protocol.js';
+import {
+  FILE_SCAN_MAX_BYTES,
+  MAX_TEXT_CHARS,
+  MSG_CONFIG,
+  MSG_OPEN_OPTIONS,
+  MSG_SCAN,
+  MSG_SCAN_FILE,
+  fileKindsOf,
+  parseConfigReply,
+  parseScanReply,
+} from '../shared/protocol.js';
 import { first } from './adapters/base.js';
 import { attachState, generic, observePage, resolveBox, resolveFileInput, resolveSend } from './adapters/index.js';
 import { decide, isFileReason, needsSetup, reasonText } from './decide.js';
-import { FILE_MAX_BYTES, FILE_MAX_COUNT, filesOf, isTextFile, readTextFile, safeName, scanTextFor, signature } from './files.js';
+import {
+  FILE_MAX_BYTES,
+  FILE_MAX_COUNT,
+  filesOf,
+  isTextFile,
+  mimeOf,
+  readFileBase64,
+  readTextFile,
+  safeName,
+  scanTextFor,
+  sendKind,
+  signature,
+} from './files.js';
 
 // A text that was checked may be sent for this long without a second check,
 // so that a paste followed by Enter is one scan and not two.
@@ -57,6 +81,13 @@ function hold(event) {
 export function createController({ doc, site, ui, ask, timers = globalThis, now = Date.now }) {
   let enabled = true;
   let behaviour = CLOSED; // closed until the worker says otherwise
+  // The kinds of file Tamga reads, as the worker last said; none until it
+  // says so, and then a PDF, an office document or an image is checked.
+  let fileKinds = [];
+  const heard = (raw) => {
+    const kinds = fileKindsOf(raw);
+    if (kinds) fileKinds = kinds;
+  };
   let approval = null; // { text, until }
   let remembered = null; // { text, outcome, until }
   let checking = null; // the text being checked
@@ -336,6 +367,7 @@ export function createController({ doc, site, ui, ask, timers = globalThis, now 
     const outcome = decide(raw, behaviour);
     const reply = parseScanReply(raw);
     if (reply) behaviour = reply.behaviour;
+    heard(raw);
 
     if (ctx.adapter.readText(ctx.composer) !== text) {
       // The verdict is for a text that is no longer in the box.
@@ -552,7 +584,7 @@ export function createController({ doc, site, ui, ask, timers = globalThis, now 
     attach.checking = true;
     fileHold = attach;
     const slow = timers.setTimeout(() => {
-      ui.show({ tone: 'note', title: `Tamga is checking the ${plural(attach.text.length, 'file', 'files')}`, body: '', actions: [] }, () => {});
+      ui.show({ tone: 'note', title: `Tamga is checking the ${plural(attach.text.length + attach.sent.length, 'file', 'files')}`, body: '', actions: [] }, () => {});
     }, SLOW_CHECK_MS);
     const results = [];
     if (attach.text.length > FILE_MAX_COUNT) {
@@ -575,9 +607,33 @@ export function createController({ doc, site, ui, ask, timers = globalThis, now 
       }
       const reply = parseScanReply(raw);
       if (reply) behaviour = reply.behaviour;
+      heard(raw);
       const outcome = decide(raw, behaviour);
       results.push({ name, outcome });
       // One file stopped stops the attach: the rest need not cost a scan.
+      if (mine !== fileSeq || outcome.kind === 'block' || outcome.kind === 'redact') break;
+    }
+    const stopped = results.some((r) => r.outcome.kind === 'block' || r.outcome.kind === 'redact');
+    for (const file of mine !== fileSeq || stopped ? [] : attach.sent.slice(0, FILE_MAX_COUNT)) {
+      const name = safeName(file.name);
+      const read = await readFileBase64(file, FILE_SCAN_MAX_BYTES);
+      // A file the browser does not hand over, or one larger than any
+      // Tamga reads, goes on unread, as it always has.
+      if (!read.ok) continue;
+      let raw;
+      try {
+        raw = await ask({ type: MSG_SCAN_FILE, name, mime: mimeOf(file), kind: sendKind(file), data: read.data });
+      } catch {
+        raw = undefined; // the worker did not answer: no verdict
+      }
+      const reply = parseScanReply(raw);
+      if (reply) behaviour = reply.behaviour;
+      heard(raw);
+      // Tamga does not read this kind: not read, and told as before.
+      if (reply && !reply.ok && reply.reason === 'file_not_read') continue;
+      attach.other = attach.other.filter((f) => f !== file);
+      const outcome = decide(raw, behaviour);
+      results.push({ name, outcome });
       if (mine !== fileSeq || outcome.kind === 'block' || outcome.kind === 'redact') break;
     }
     timers.clearTimeout(slow);
@@ -594,7 +650,10 @@ export function createController({ doc, site, ui, ask, timers = globalThis, now 
   function onFiles(event, source, files) {
     const text = files.filter(isTextFile);
     const other = files.filter((f) => !isTextFile(f));
-    if (text.length === 0 || filesApproved(files)) {
+    // A paste that carries text as well (cells copied from a spreadsheet,
+    // and a picture of them) is a text paste: its text is checked.
+    const sent = source.hasText ? [] : other.filter((f) => fileKinds.includes(sendKind(f)));
+    if ((text.length === 0 && sent.length === 0) || filesApproved(files)) {
       if (!source.hasText) tellBinary(other);
       return false;
     }
@@ -603,7 +662,7 @@ export function createController({ doc, site, ui, ask, timers = globalThis, now 
     // The change event after the input event of the same pick: the check
     // has started already.
     if (fileHold && fileHold.checking && fileHold.key === key && fileHold.source.kind === source.kind) return true;
-    checkFiles({ source, files, text, other, key, checking: false });
+    checkFiles({ source, files, text, other, sent, key, checking: false });
     return true;
   }
 
@@ -748,6 +807,7 @@ export function createController({ doc, site, ui, ask, timers = globalThis, now 
       const config = parseConfigReply(await ask({ type: MSG_CONFIG }));
       if (config) {
         behaviour = config.behaviour;
+        fileKinds = config.fileKinds || [];
         enabled = config.enabled;
         // Known before anything is typed: say it now, not at the first send.
         if (enabled && !config.configured) tellUnchecked('not_configured', failOpen());

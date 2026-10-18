@@ -91,6 +91,8 @@ const REASON_TEXT = {
   file_too_large: 'The file is larger than Tamga checks (200 KB).',
   file_unreadable: 'The file could not be read as text.',
   too_many_files: 'More files were added at once than Tamga checks one by one (10).',
+  file_not_read: 'Your Tamga server does not read this kind of file.',
+  file_over_limit: 'The file is larger than your Tamga server reads.',
 };
 
 /** One sentence for why there is no verdict. */
@@ -100,7 +102,13 @@ export function reasonText(reason) {
 
 /** Reasons that trying again cannot change: they are about the file, not about Tamga. */
 export function isFileReason(reason) {
-  return reason === 'file_too_large' || reason === 'file_unreadable' || reason === 'too_many_files';
+  return (
+    reason === 'file_too_large' ||
+    reason === 'file_unreadable' ||
+    reason === 'too_many_files' ||
+    reason === 'file_not_read' ||
+    reason === 'file_over_limit'
+  );
 }
 
 /** Reasons a person can do something about in the options page. */
