@@ -5,6 +5,7 @@ import (
 	"net/netip"
 	"os"
 	"strconv"
+	"strings"
 )
 
 type Config struct {
@@ -216,6 +217,22 @@ type Config struct {
 	// _WEBHOOK_URL, that a rule's notify value may refer to as "${NAME}".
 	// Set via TAMGA_NOTIFY_URL_ENVS as a comma-separated list of exact names.
 	NotifyURLEnvs []string
+
+	// ICAPAddr is the address the ICAP server listens on, e.g. ":1344",
+	// for a web proxy that asks Tamga about requests to AI services (see
+	// docs/icap.md). Empty, the default, means there is no ICAP server.
+	// Set via TAMGA_ICAP_ADDR.
+	ICAPAddr string
+	// ICAPAllowedClients are the web proxies that may connect to the ICAP
+	// server. ICAP has no authentication of its own, so a connection from
+	// any other address is closed. Empty means loopback only. Set via
+	// TAMGA_ICAP_ALLOWED_CLIENTS as a comma-separated list of IPs and CIDR
+	// ranges.
+	ICAPAllowedClients []*net.IPNet
+	// ICAPMaxConnections is the most ICAP connections served at once; it is
+	// also what the server tells the web proxy in Max-Connections. Set via
+	// TAMGA_ICAP_MAX_CONNECTIONS (default 256).
+	ICAPMaxConnections int
 }
 
 // Load reads configuration from environment variables and returns a validated Config.
@@ -251,6 +268,10 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	notifyURLEnvs, err := ParseEnvNames("TAMGA_NOTIFY_URL_ENVS", os.Getenv("TAMGA_NOTIFY_URL_ENVS"))
+	if err != nil {
+		return nil, err
+	}
+	icapClients, err := parseNetList("TAMGA_ICAP_ALLOWED_CLIENTS", os.Getenv("TAMGA_ICAP_ALLOWED_CLIENTS"))
 	if err != nil {
 		return nil, err
 	}
@@ -309,6 +330,9 @@ func Load() (*Config, error) {
 		MTLSClientCAFile:         envOrDefault("TAMGA_MTLS_CLIENT_CA_FILE", ""),
 		MTLSStrictVerify:         envOrDefaultBool("TAMGA_MTLS_STRICT_VERIFY", false),
 		IPAllowlist:              envOrDefault("TAMGA_IP_ALLOWLIST", ""),
+		ICAPAddr:                 strings.TrimSpace(os.Getenv("TAMGA_ICAP_ADDR")),
+		ICAPAllowedClients:       icapClients,
+		ICAPMaxConnections:       envOrDefaultInt("TAMGA_ICAP_MAX_CONNECTIONS", 256),
 	}, nil
 }
 
