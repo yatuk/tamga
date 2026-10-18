@@ -30,7 +30,7 @@
     "prepublishOnly": "npm run build && npm run test"
   },
   "devDependencies": {
-    "typescript": "^5.4",
+    "typescript": "^7.0",
     "vitest": "^1.6"
   },
   "files": ["dist/", "README.md", "LICENSE"]
