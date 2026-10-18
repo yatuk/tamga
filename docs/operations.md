@@ -111,7 +111,7 @@ in the same override.
 
 ### TLS
 
-The full profile puts Caddy (service `edge`, `caddy:2.10.2-alpine`) in front
+The full profile puts Caddy (service `edge`, `caddy:2.11.7-alpine`) in front
 of the proxy and the console. It is the only service with ports on the host:
 
 | Host port | Default address | Behind it |

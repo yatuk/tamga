@@ -19,7 +19,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
     -o tamga ./cmd/tamga
 
 # TODO: pin by digest (image:tag@sha256:...): docs/operations.md, "Image pins".
-FROM alpine:3.21
+FROM alpine:3.24
 
 ARG VERSION=""
 ARG REVISION=""

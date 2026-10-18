@@ -82,7 +82,7 @@ Full docs: [tests/stress/README.md](../tests/stress/README.md).
 | Deep Analysis | Python 3.11+ — FastAPI, Presidio, spaCy |
 | Dashboard | Next.js 15, TypeScript 5, Carbon (`@carbon/react`) |
 | Storage | PostgreSQL 16, Redis 7 |
-| Observability | OpenTelemetry, Jaeger 1.54 |
+| Observability | OpenTelemetry, Jaeger 1.76 |
 | Deployment | Docker Compose, Helm, Terraform (AWS) |
 
 The table lists what the repository uses. It does not say the tests run
