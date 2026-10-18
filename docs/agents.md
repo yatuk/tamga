@@ -290,6 +290,56 @@ Things to know:
   `tool_destination` (the findings are then only recorded) and when
   `output_rules.streaming` is off.
 
+## The agent's own environment
+
+Tamga sees the requests an agent sends to a model and the answers that come
+back. It does not see what the agent does on its machine: the files it
+reads, the commands it runs, the connections it opens. Everything below is
+for the operator to set up alongside Tamga; nothing here is something Tamga
+can do for the agent.
+
+- **No production credentials.** Give the agent short-lived,
+  least-privilege tokens, from a separate account made for it. A key that
+  lives in its environment, its shell history or a file in its workspace is
+  a key a model can be talked into using or printing.
+- **A short allow-list for network egress**, set at the firewall, the
+  container network or the host, not in Tamga. `output_rules.tool_destinations`
+  ([above](#limit-where-tools-may-send-data)) reads the arguments of the tool
+  calls in the model's answers, for the tools it names. It does not see a
+  connection the agent opens by itself, a command the agent runs
+  (`curl`, `git push`), or a call made by a tool that no entry names. It
+  does not resolve or fetch anything either.
+- **A container or a VM without your home folder**: no SSH keys, cloud
+  credentials, browser profile or password store mounted into it. Mount
+  only the project, and read-only where the agent does not need to write.
+- **Isolation does not stop an injected instruction.** A model that reads a
+  file or a web page in its workspace can follow an instruction written in
+  it, and the container does not change that; it only limits what the
+  agent can reach once it does. Pair it with what Tamga does on the model
+  path: tool-result scanning with `STRIP` (and `scan.strip_scope: field`
+  where tool results are JSON with data you need), `scan.on_error: block` so
+  that a failed scan cannot let a tool result through, and
+  `output_rules.tool_destinations`. Then ask a person to approve the tools
+  that can do harm (shell, writing outside the project, sending mail,
+  network calls). That approval is a setting of the agent, not of Tamga.
+- **MCP servers.** The agent's traffic to them does not pass through Tamga.
+  Run only servers you trust, give each the least access it needs, and
+  remember that what they return reaches Tamga only in the next request, as
+  a tool result.
+
+A checklist before an agent runs unattended:
+
+- [ ] The agent has its own account, and its tokens are short-lived and
+      scoped to what it needs.
+- [ ] No long-lived or production key is in its environment or workspace.
+- [ ] It runs in a container or VM with no home folder, SSH keys, cloud
+      credentials or browser profile.
+- [ ] Egress is limited to the model route (Tamga) and the hosts it needs.
+- [ ] The tool-result rule is `STRIP`, `scan.on_error` is `block`, and
+      `output_rules.tool_destinations` lists where its tools may send data.
+- [ ] High-risk tools need a person's approval in the agent.
+- [ ] Its MCP servers are ones you chose, with the least access.
+
 ## Speed
 
 Scan time is under a millisecond for a chat message and grows with the text.
