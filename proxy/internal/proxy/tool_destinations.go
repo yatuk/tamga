@@ -24,7 +24,12 @@ func toolDestinationFindings(pol *policy.Policy, segs []extract.Segment) []scann
 		if s.Kind != extract.KindToolArgs || s.Text == "" || !rules.Checks(s.Tool) {
 			continue
 		}
-		for _, d := range rules.Disallowed(s.Tool, argumentKey(s.Path), s.Text) {
+		key := argumentKey(s.Path)
+		if s.Literal == extract.LiteralKey {
+			// A key is not a value under the key its path ends in.
+			key = ""
+		}
+		for _, d := range rules.Disallowed(s.Tool, key, s.Text) {
 			meta := map[string]string{"kind": d.Kind}
 			if s.Tool != "" {
 				meta["tool"] = s.Tool

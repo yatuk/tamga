@@ -31,7 +31,11 @@ func render(r *Result) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "format %s\n", r.Format)
 	for _, s := range r.Segments {
-		fmt.Fprintf(&b, "%-15s %-11s %s = %q\n", s.Role, s.Kind, s.Path, s.Text)
+		path := s.Path
+		if s.Literal != "" {
+			path += " {" + s.Literal + "}"
+		}
+		fmt.Fprintf(&b, "%-15s %-11s %s = %q\n", s.Role, s.Kind, path, s.Text)
 	}
 	for _, s := range r.Skipped {
 		fmt.Fprintf(&b, "skipped %-10s %s\n", s.Reason, s.Path)
@@ -154,6 +158,12 @@ func checkOffsets(t testing.TB, body []byte, res *Result) {
 		if s.Start < 0 || s.End > len(body) || s.Start >= s.End {
 			t.Fatalf("%s: range [%d,%d) outside the body", s.Path, s.Start, s.End)
 		}
+		if s.Literal == LiteralNumber && !s.Nested {
+			if string(body[s.Start:s.End]) != s.Text {
+				t.Fatalf("%s: body[%d:%d] is %q, segment says %q", s.Path, s.Start, s.End, body[s.Start:s.End], s.Text)
+			}
+			continue
+		}
 		var outer string
 		if err := json.Unmarshal(body[s.Start:s.End], &outer); err != nil {
 			t.Fatalf("%s: body[%d:%d] is not a JSON string: %v", s.Path, s.Start, s.End, err)
@@ -179,6 +189,12 @@ func checkOffsets(t testing.TB, body []byte, res *Result) {
 		}
 		if s.InnerStart < 0 || s.InnerEnd > len(outer) || s.InnerStart >= s.InnerEnd {
 			t.Fatalf("%s: inner range [%d,%d) outside the nested document", s.Path, s.InnerStart, s.InnerEnd)
+		}
+		if s.Literal == LiteralNumber {
+			if outer[s.InnerStart:s.InnerEnd] != s.Text {
+				t.Fatalf("%s: nested token is %q, segment says %q", s.Path, outer[s.InnerStart:s.InnerEnd], s.Text)
+			}
+			continue
 		}
 		var inner string
 		if err := json.Unmarshal([]byte(outer[s.InnerStart:s.InnerEnd]), &inner); err != nil || inner != s.Text {
@@ -444,5 +460,24 @@ func TestExtractResponse(t *testing.T) {
 		if res, ok := ExtractResponse("openai", []byte(body)); ok {
 			t.Errorf("%q recognised as a %s response", body, res.Format)
 		}
+	}
+}
+
+// Mistral's reasoning models answer with content as a list of parts, the
+// reasoning a "thinking" part that holds text parts
+// (https://docs.mistral.ai/capabilities/reasoning/). Its text was not read.
+func TestExtractResponse_ThinkingAsAListOfParts(t *testing.T) {
+	body := `{"choices":[{"index":0,"message":{"role":"assistant","content":[{"type":"thinking","thinking":[{"type":"text","text":"Adres ayse@example.com."}]},{"type":"text","text":"Tamam."}]}}]}`
+	res, ok := ExtractResponse("openai", []byte(body))
+	if !ok {
+		t.Fatal("not recognised")
+	}
+	var got []string
+	for _, s := range res.Segments {
+		got = append(got, s.Kind+" "+s.Path+" = "+s.Text)
+	}
+	want := []string{"thinking choices[0].message.content[0].thinking[0].text = Adres ayse@example.com.", "text choices[0].message.content[1].text = Tamam."}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("got\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
 	}
 }

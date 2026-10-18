@@ -48,6 +48,11 @@ type StreamDelta struct {
 	// leaves it empty (the name comes in StreamEvent.Tools); whoever keeps
 	// the channel sets it before ArgumentSegments.
 	Tool string
+	// Plain marks the pieces of a KindToolArgs channel that make up a text,
+	// not a JSON document: a custom tool's input, code to run, one string
+	// argument of a Gemini partial function call. ArgumentSegments reads
+	// such a text as it stands, as a buffered answer reads it.
+	Plain bool
 	// start and end delimit the JSON string token in the event's data.
 	start, end int
 	// objectArgs says the arguments are an object in the buffered shape
@@ -201,6 +206,8 @@ func (p *streamParser) openAIChat(choices *node) {
 		if d := c.get("delta"); d != nil && d.kind == 'o' {
 			if n := d.get("content"); isString(n) {
 				p.add(n, alone(StreamDelta{Channel: ch, Kind: KindText}, `"content":`, ``))
+			} else if n != nil && n.kind == 'a' {
+				p.contentParts(n, ch, msg+".content", alone)
 			}
 			if n := d.get("refusal"); isString(n) {
 				p.add(n, alone(StreamDelta{Channel: ch + ".refusal", Kind: KindText, Path: msg + ".refusal"}, `"refusal":`, ``))
@@ -234,7 +241,7 @@ func (p *streamParser) openAIChat(choices *node) {
 						p.add(fn.get("arguments"), alone(call, open+`"function":{"arguments":`, `}}]`))
 					}
 					if custom := tc.get("custom"); custom != nil && custom.kind == 'o' {
-						call.Path = path + ".custom.input"
+						call.Path, call.Plain = path+".custom.input", true
 						p.add(custom.get("input"), alone(call, open+`"custom":{"input":`, `}}]`))
 					}
 				}
@@ -254,6 +261,43 @@ func (p *streamParser) openAIChat(choices *node) {
 		}
 		if p.present(c.get("finish_reason")) {
 			p.ev.Ends = append(p.ev.Ends, ch)
+		}
+	}
+}
+
+// contentParts reads content sent as a list of parts in a chat chunk, as
+// some OpenAI-compatible servers stream it. Mistral's reasoning models send
+// the reasoning that way, a "thinking" part that holds text parts, then the
+// first text of the answer as a "text" part, then the rest as a string
+// (https://docs.mistral.ai/capabilities/reasoning/). The text of a text
+// part is a piece of the answer and the text parts of a thinking part are
+// pieces of reasoning; any other part, and what else a part holds, is read
+// whole.
+func (p *streamParser) contentParts(parts *node, ch, path string, alone func(StreamDelta, string, string) StreamDelta) {
+	for k, part := range parts.vals {
+		pp := index(path, k)
+		if part.kind != 'o' {
+			p.whole().payload(part, RoleAssistant, KindText, pp)
+			continue
+		}
+		switch t := p.str(part.get("type")); {
+		case t == "text" && isString(part.get("text")):
+			p.add(part.get("text"), alone(StreamDelta{Channel: ch, Kind: KindText}, `"content":[{"type":"text","text":`, `}]`))
+			p.whole().rest(part, map[string]bool{"text": true}, RoleAssistant, KindText, pp)
+		case t == "thinking" && part.get("thinking") != nil && part.get("thinking").kind == 'a':
+			for m, sub := range part.get("thinking").vals {
+				sp := index(pp+".thinking", m)
+				if sub.kind == 'o' && p.str(sub.get("type")) == "text" && isString(sub.get("text")) {
+					p.add(sub.get("text"), alone(StreamDelta{Channel: ch + ".thinking", Kind: KindThinking, Path: path + ".thinking"},
+						`"content":[{"type":"thinking","thinking":[{"type":"text","text":`, `}]}]`))
+					p.whole().rest(sub, map[string]bool{"text": true}, RoleAssistant, KindThinking, sp)
+					continue
+				}
+				p.whole().openAIPart(sub, RoleAssistant, KindThinking, sp)
+			}
+			p.whole().rest(part, map[string]bool{"thinking": true}, RoleAssistant, KindThinking, pp)
+		default:
+			p.whole().openAIPart(part, RoleAssistant, KindText, pp)
 		}
 	}
 }
@@ -288,6 +332,15 @@ func (p *streamParser) anthropic(typ string, root *node) {
 			p.add(d.get("thinking"), StreamDelta{Channel: ch, Kind: KindThinking, Path: "content[" + bi + "].thinking", Sealed: true})
 		case "input_json_delta":
 			p.add(d.get("partial_json"), StreamDelta{Channel: ch, Kind: KindToolArgs, Path: "content[" + bi + "].input", objectArgs: true})
+		case "citations_delta":
+			// One citation to add to the text block's list, whole: the text
+			// it quotes from a document and the document's title
+			// (https://platform.claude.com/docs/en/build-with-claude/citations#streaming-support).
+			// A buffered answer has the same fields in the block's
+			// "citations".
+			if c := d.get("citation"); c != nil && c.kind == 'o' {
+				p.whole().rest(c, nil, RoleAssistant, KindText, "content["+bi+"].citations")
+			}
 		}
 		// signature_delta and anything newer: opaque, or not known.
 	case "content_block_stop":
@@ -345,13 +398,13 @@ func (p *streamParser) responses(typ string, root *node) {
 		p.ev.WholeChannel = item + ".args"
 		p.whole().nestedJSON(root.get("arguments"), RoleAssistant, KindToolArgs, "arguments")
 	case "response.custom_tool_call_input.delta":
-		p.add(delta, StreamDelta{Channel: item + ".args", Kind: KindToolArgs, Path: out + ".input"})
+		p.add(delta, StreamDelta{Channel: item + ".args", Kind: KindToolArgs, Path: out + ".input", Plain: true})
 	case "response.custom_tool_call_input.done":
 		p.ev.Ends = append(p.ev.Ends, item+".args")
 		p.ev.WholeChannel = item + ".args"
 		p.whole().emit(root.get("input"), RoleAssistant, KindToolArgs, "input")
 	case "response.code_interpreter_call_code.delta":
-		p.add(delta, StreamDelta{Channel: item + ".code", Kind: KindToolArgs, Path: out + ".code"})
+		p.add(delta, StreamDelta{Channel: item + ".code", Kind: KindToolArgs, Path: out + ".code", Plain: true})
 	case "response.code_interpreter_call_code.done":
 		p.ev.Ends = append(p.ev.Ends, item+".code")
 		p.whole().emit(root.get("code"), RoleAssistant, KindToolArgs, "code")
@@ -422,11 +475,18 @@ func (p *streamParser) gemini(candidates *node) {
 							continue
 						}
 					}
+					partial := false
+					for _, key := range []string{"functionCall", "function_call"} {
+						if fc := part.get(key); fc != nil && fc.kind == 'o' && fc.get("args") == nil {
+							p.geminiPartialCall(fc, ch, ci, path, candidates)
+							partial = true
+						}
+					}
 					// Everything else a part can hold arrives whole: a
 					// function call, code to run, its result.
 					rest := &node{kind: 'o'}
 					for k, key := range part.keys {
-						if key != "text" || !isString(part.vals[k]) {
+						if (key != "text" || !isString(part.vals[k])) && !(partial && (key == "functionCall" || key == "function_call")) {
 							rest.keys = append(rest.keys, key)
 							rest.vals = append(rest.vals, part.vals[k])
 						}
@@ -439,6 +499,101 @@ func (p *streamParser) gemini(candidates *node) {
 			p.ev.Ends = append(p.ev.Ends, ch)
 		}
 	}
+}
+
+// geminiPartialCall reads a function call whose arguments are streamed
+// (functionCallingConfig.streamFunctionCallArguments, Gemini 3 on Vertex
+// AI). The first event of a call names it; each event after it carries
+// partialArgs, values each at a jsonPath of the arguments, a string in
+// pieces that share their jsonPath; an event whose functionCall is empty,
+// without willContinue, ends the call
+// (https://docs.cloud.google.com/vertex-ai/generative-ai/docs/multimodal/function-calling,
+// "Streaming function call arguments").
+//
+// A string is a channel of its own, "g0.f.<jsonPath>", whose pieces are put
+// together and read when the call ends, as the arguments of a call that is
+// streamed another way are. A number, a boolean or null comes whole. A
+// jsonPath that is not made of field names and indexes is read as a key of
+// the arguments, and the string under it is read piece by piece where it
+// stands: held, it would go out again with the jsonPath as it came.
+func (p *streamParser) geminiPartialCall(fc *node, ch, ci, path string, candidates *node) {
+	call := ch + ".f"
+	p.name(call, fc.get("name"))
+	args := path + ".functionCall.args"
+	for _, key := range []string{"partialArgs", "partial_args"} {
+		list := fc.get(key)
+		if list == nil || list.kind != 'a' {
+			continue
+		}
+		p.ev.WholeChannel = call
+		for _, a := range list.vals {
+			if a.kind != 'o' {
+				continue
+			}
+			jpNode := a.get("jsonPath")
+			if jpNode == nil {
+				jpNode = a.get("json_path")
+			}
+			jp := p.str(jpNode)
+			at := args + strings.TrimPrefix(jp, "$")
+			plain := plainJSONPath(jp)
+			if !plain && isString(jpNode) {
+				x := p.whole()
+				x.res.Segments = append(x.res.Segments, Segment{
+					Role: RoleAssistant, Kind: KindToolArgs, Path: args, Text: jp, Start: jpNode.start, End: jpNode.end, Literal: LiteralKey,
+				})
+			}
+			for i, k := range a.keys {
+				v := a.vals[i]
+				switch k {
+				case "stringValue", "string_value":
+					if !plain {
+						p.whole().emit(v, RoleAssistant, KindToolArgs, at)
+						continue
+					}
+					d := StreamDelta{Channel: call + "." + jp, Kind: KindToolArgs, Path: at, Plain: true}
+					d.altStart, d.altEnd = candidates.start, candidates.end
+					d.altHead = `[{"content":{"role":"model","parts":[{"functionCall":{"partialArgs":[{"jsonPath":` + string(encodeString(jp)) + `,"stringValue":`
+					d.altTail = `,"willContinue":true}],"willContinue":true}}]},"index":` + ci + `}]`
+					p.add(v, d)
+				case "numberValue", "number_value":
+					x := p.whole()
+					n := len(x.res.Segments)
+					x.literalNumber(v, RoleAssistant, at)
+					if len(x.res.Segments) > n && i < len(a.keyNodes) {
+						// A mask is a string, and the member holds a number.
+						s := &x.res.Segments[n]
+						s.Start, s.Literal = a.keyNodes[i].start, LiteralNumberValue
+					}
+				}
+			}
+		}
+	}
+	more := fc.get("willContinue")
+	if more == nil {
+		more = fc.get("will_continue")
+	}
+	if more == nil || string(p.data[more.start:more.end]) != "true" {
+		p.ev.Ends = append(p.ev.Ends, call)
+	}
+}
+
+// plainJSONPath reports whether a JSONPath names a place in the arguments
+// with field names and short indexes alone ("$.items[0].title"), so that
+// it holds no value of its own.
+func plainJSONPath(jp string) bool {
+	rest, ok := strings.CutPrefix(jp, "$")
+	if !ok {
+		return false
+	}
+	for _, part := range strings.FieldsFunc(rest, func(r rune) bool { return r == '.' || r == '[' || r == ']' }) {
+		digits := strings.Trim(part, "0123456789") == ""
+		if digits && len(part) < minLiteralDigits || !digits && fieldName(part) {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 // ReplaceStreamText returns data with each delta's text replaced by the
@@ -508,11 +663,17 @@ func StandaloneStreamEvent(data []byte, deltas []StreamDelta, i int, text string
 // ArgumentSegments returns what is scanned of a tool call's arguments, put
 // together from the pieces of a KindToolArgs channel: the strings inside the
 // document when it is JSON, as a buffered answer's arguments are read, and
-// the text as it stands when it is not (a custom tool's input, a document
-// the stream cut short). doc is what RewriteArguments takes back.
+// the text as it stands when it is not (a document the stream cut short) or
+// is not meant to be (d.Plain: a custom tool's input). doc is what
+// RewriteArguments takes back.
 func ArgumentSegments(d StreamDelta, arguments string) (doc []byte, segs []Segment) {
 	doc = encodeString(arguments)
 	x := &extractor{src: doc, res: &Result{}}
+	if d.Plain {
+		x.emit(&node{kind: 's', start: 0, end: len(doc)}, RoleAssistant, KindToolArgs, d.Path)
+		x.nameTool(0, d.Tool)
+		return doc, x.res.Segments
+	}
 	x.nestedJSON(&node{kind: 's', start: 0, end: len(doc)}, RoleAssistant, KindToolArgs, d.Path)
 	x.nameTool(0, d.Tool)
 	if d.objectArgs {
@@ -521,7 +682,8 @@ func ArgumentSegments(d StreamDelta, arguments string) (doc []byte, segs []Segme
 		for i := range x.res.Segments {
 			s := &x.res.Segments[i]
 			if rest, ok := strings.CutPrefix(s.Path, d.Path+"#"); ok {
-				if !strings.HasPrefix(rest, "[") {
+				// A key of the top object is in the object itself.
+				if rest != "" && !strings.HasPrefix(rest, "[") {
 					rest = "." + rest
 				}
 				s.Path = d.Path + rest

@@ -14,6 +14,8 @@ type node struct {
 	start, end int  // body[start:end] is the value, quotes included for a string
 	keys       []string
 	vals       []*node // object values, parallel to keys; array elements
+	// keyNodes are the string tokens of an object's keys, parallel to keys.
+	keyNodes []*node
 }
 
 var errMalformed = errors.New("extract: malformed JSON")
@@ -126,6 +128,7 @@ func (p *treeParser) object(depth int) (*node, bool) {
 			return nil, false
 		}
 		n.keys = append(n.keys, decodeKey(p.b[key.start:key.end]))
+		n.keyNodes = append(n.keyNodes, key)
 		n.vals = append(n.vals, val)
 	}
 }
