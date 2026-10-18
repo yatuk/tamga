@@ -43,9 +43,12 @@ var errClassifierNotConfigured = errkind.New("not_configured", "scan.classifier 
 //
 // A segment that carries a signal is judged by signal_threshold, which is
 // lower. The signals are the rules' low-severity findings for text that
-// hides something (scanner.Signal) and a change of writing system against
-// the user's earlier messages or inside the text (classifier.ScriptSwitch).
-// None of them is a verdict, and the second is not a finding at all.
+// hides something (scanner.Signal), a change of writing system against
+// the user's earlier messages or inside the text (classifier.ScriptSwitch),
+// and a text shaped like an order to the model: a persona, a system label,
+// a turn to a new task, a dictated answer, an order inside a tool result
+// (classifier.Structure). None of them is a verdict, and the last two are
+// not findings at all.
 func classifySegments(ctx context.Context, guard *classifier.Guard, set policy.ClassifierSettings, requestID string, segs []extract.Segment, known []scanner.Finding) classifyOutcome {
 	var out classifyOutcome
 	flagged := make(map[int]bool)
@@ -95,6 +98,8 @@ func classifySegments(ctx context.Context, guard *classifier.Guard, set policy.C
 		if _, ok := signals[i]; !ok {
 			if _, switched := classifier.ScriptSwitch(before[i], seg.Text); switched {
 				signals[i] = "script_switch"
+			} else if shape := classifier.Structure(string(seg.Role), seg.Text); shape != "" {
+				signals[i] = shape
 			}
 		}
 	}

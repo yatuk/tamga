@@ -1004,6 +1004,10 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 		// no-op
 	}
 
+	// output_rules.prompt_leak compares the answer with the system prompt as
+	// the provider gets it, before the canary below is added to it.
+	leak := newPromptLeak(pol, provider, body)
+
 	// Canary: inject a unique token into the outgoing system prompt so a later
 	// appearance in the response reveals a system-prompt leak. Must happen
 	// before forwarding/signing since it changes the body.
@@ -1310,6 +1314,10 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 						g.argsMax = n
 					}
 					configureStreamSchema(ctx, g, pol, body)
+					if leak != nil {
+						g.leak = leak
+						g.leakBlocks = pol.PromptLeakBlocks
+					}
 					resp.Header.Set("X-Tamga-Stream-Scan", "enabled")
 				}
 				if vaultActive {
@@ -1416,7 +1424,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 					Pool:     cfg.ScannerPool,
 					LoadShed: cfg.Config.ScannerLoadShed,
 				}
-				res, err := scanResponseBody(withAnswerSchema(ctx, pol, body), cfg.Registry, cfg.OutputOnlyRegistry, pol, prov, respBody, winMs, outPipeCfg)
+				res, err := scanResponseBody(withPromptLeak(withAnswerSchema(ctx, pol, body), leak), cfg.Registry, cfg.OutputOnlyRegistry, pol, prov, respBody, winMs, outPipeCfg)
 				if err == nil && len(res.findings) == 0 {
 					recordOutput(ctx, nil, policy.ActionPass, true)
 				}
@@ -1446,6 +1454,9 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 					outputClean = false
 					resp.Header.Set("X-Tamga-Output-Findings", strconv.Itoa(len(res.findings)))
 					resp.Header.Set("X-Tamga-Output-Action", string(res.action))
+					if hasPromptLeak(res.findings) {
+						resp.Header.Set("X-Tamga-System-Prompt-Leak", "true")
+					}
 					if res.incomplete != "" {
 						// The answer was to be masked and its scan was cut
 						// short (scanResponseBody). An answer masked in part

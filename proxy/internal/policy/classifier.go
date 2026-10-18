@@ -25,8 +25,10 @@ type ClassifierConfig struct {
 	// an unreadable block or hidden characters in it (the low-severity
 	// injection findings unreadable_block and hidden_text), a request that
 	// is an attack or not depending on where it stands (above_text_request,
-	// translation_abandoned), or a change of
-	// writing system against the conversation so far. Such a text is not
+	// translation_abandoned), a change of writing system against the
+	// conversation so far, or the shape of an order to the model (a
+	// persona, a system label, a turn to a new task, a dictated answer, an
+	// order inside a tool result: classifier.Structure). Such a text is not
 	// an attack for that, and is judged more strictly. Default 0.90; a
 	// value above threshold is the same as threshold, which turns the
 	// signals off. Not measured with a model: on the published sweep 0.90

@@ -249,6 +249,20 @@ providers:
 #     - tools: [send_email, "mcp__mail__*"]
 #       allow: [example.com]
 #
+# An answer that repeats the request's system prompt word for word, or holds
+# a canary string you wrote into your system prompts, is a system_prompt_leak
+# finding (canary_string, system_prompt_verbatim); name it in block_on to
+# withhold the answer. Only hashes of the prompt's runs of eight words are
+# kept, for the time of the request. See docs/operations.md, "System-prompt
+# leaks in answers".
+#   block_on: [system_prompt_leak]
+#   prompt_leak:
+#     canaries: ["zq-7741-canary-ankara"]   # 8 to 64 bytes each
+#     system_prompt:
+#       enabled: true
+#       min_words: 20   # a run this long, word for word, is a leak
+#       overlap: 0.5    # so is this share of the prompt's runs of eight words
+#
 # An answer that is meant to be JSON can be held to a schema. A mismatch is
 # an output_schema finding (schema_mismatch, or not_json): in block_on it
 # withholds the answer, otherwise it is recorded. when: requested checks an
@@ -336,7 +350,9 @@ providers:
 #     timeout_ms: 150     # how long a request may wait; a miss follows on_error
 #     threshold: 0.98     # lower catches more and flags more ordinary text
 #     signal_threshold: 0.90  # for text with an unreadable block, hidden
-#                             # characters or a change of script in it
+#                             # characters, a change of script, or the shape
+#                             # of an order to the model (a persona, a
+#                             # system label, a new task, a dictated answer)
 #     shadow_threshold: 0.98  # only with a shadow model in the service: where
 #                             # its recorded scores count as "would flag"
 #     roles: [user, tool] # whose text is sent

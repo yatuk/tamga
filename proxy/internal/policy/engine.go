@@ -199,6 +199,9 @@ type OutputRules struct {
 	// (tool_destinations.go). Left out of the JSON form when unset, for the
 	// same reason.
 	ToolDestinations []ToolDestination `yaml:"tool_destinations" json:"tool_destinations,omitempty"`
+	// PromptLeak looks for the system prompt, or the operator's canaries,
+	// in answers (prompt_leak.go). Left out of the JSON form when unset.
+	PromptLeak *OutputPromptLeak `yaml:"prompt_leak" json:"prompt_leak,omitempty"`
 }
 
 // Governance controls dual-control and approval requirements.

@@ -85,7 +85,8 @@ func (o *requestOutcome) setCost(usd float64) {
 // The findings are stored as the request's are: the scanners mask what they
 // matched. A canary finding is made without the token (canaryLeakFinding);
 // its match is set again here, so that one built any other way is recorded
-// without it too.
+// without it too. A run of the system prompt repeated in the answer is
+// reported by its length (promptLeakFinding) and keeps its match.
 func (o *requestOutcome) recordOutput(findings []scanner.Finding, action policy.Action, scanned bool) {
 	if o == nil {
 		return
@@ -96,7 +97,7 @@ func (o *requestOutcome) recordOutput(findings []scanner.Finding, action policy.
 		o.outputScanned = true
 	}
 	for _, f := range findings {
-		if f.Type == "system_prompt_leak" {
+		if f.Type == "system_prompt_leak" && f.Category != policy.PromptLeakVerbatim {
 			f.Match = canaryMasked
 		}
 		o.outputFindings = append(o.outputFindings, f)
