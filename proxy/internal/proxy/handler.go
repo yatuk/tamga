@@ -335,6 +335,14 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 		return
 	}
 
+	// provider_accounts: the account the request uses, and the key sent in
+	// place of the caller's (provider_accounts.go).
+	accountKey, refused := applyProviderAccounts(w, r, pol, provider, who, requestID, logger)
+	if refused != "" {
+		span.SetStatus(codes.Error, refused)
+		return
+	}
+
 	if cfg.Budget != nil {
 		orgID := orgIDForRequest(r, cfg)
 		if over, reason := cfg.Budget.Over(orgID); over {
@@ -1149,6 +1157,9 @@ func handleProxy(w http.ResponseWriter, r *http.Request, provider, stripPrefix s
 			}
 			req.Header.Set("X-Tamga-Request-Id", requestID)
 			req.Header.Set("Content-Length", strconv.Itoa(len(body)))
+			if accountKey != "" {
+				setProviderCredential(req, provider, accountKey)
+			}
 
 			// Bedrock speaks SigV4, not bearer tokens, so we re-sign
 			// every request with the host's IAM credentials. When

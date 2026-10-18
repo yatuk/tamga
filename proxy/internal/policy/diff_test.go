@@ -43,6 +43,9 @@ var ownerPrivileged = []string{
 	// Turned on without a topic model and with scan.on_error: block, it
 	// refuses every request, as scan.classifier does.
 	"topics",
+	// Names the variable the organisation's provider key is read from, and
+	// can refuse every request on a route.
+	"provider_accounts",
 }
 
 func TestEverySectionIsClassified(t *testing.T) {

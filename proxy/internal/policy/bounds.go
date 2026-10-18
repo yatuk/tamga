@@ -97,6 +97,7 @@ func boundsIssues(p *Policy) []ValidationIssue {
 	issues = append(issues, classifierBoundIssues(p)...)
 	issues = append(issues, languageIssues(p)...)
 	issues = append(issues, topicIssues(p)...)
+	issues = append(issues, providerAccountIssues(p, ActiveUpstreamRules())...)
 	issues = append(issues, noEffectIssues(p)...)
 	return issues
 }
