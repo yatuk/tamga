@@ -1266,7 +1266,7 @@ for changes made through the API and the console.
 
 Everything else needs the admin role: `providers`, `exceptions`,
 `governance`, `data`, `vault`, `cache`, `body_limits`,
-`rate_limit`, `cost`, `scan`, `operator_state`, `canary`, `agents`, and where a rule
+`rate_limit`, `cost`, `scan`, `operator_state`, `canary`, `agents`, `attachments`, and where a rule
 sends its alerts. A write that touches one of these with an analyst key is
 refused whole with 403, and the body lists the sections under
 `privileged_sections`. The comparison is of the decoded policy against the
@@ -1458,6 +1458,21 @@ request store, the audit log or the live feed, and nothing is written to the
 vault. One log line per call records the key, the size, the verdict and the
 count of findings by type.
 
+**Files.** With the policy's `attachments` section, the scan API judges a
+file as the proxy path judges one attached to a message: send
+`{"file": {"data": "<base64>", "name": "report.pdf", "mime": "application/pdf"}, "role": "user"}`
+in place of `text` ([Files a request carries](#files-a-request-carries)).
+`name` and `mime` are optional; the file's own bytes decide how it is read,
+and the name is scanned as text. Findings in a file have no position, and a
+REDACT or a STRIP that would change the file is a BLOCK
+(`X-Tamga-Redact-Fallback: block:attachment`): no rewritten file is
+returned. Every answer, to a text or a file, then carries
+`"files": {"kinds": ["pdf", "docx", "xlsx", "pptx"], "max_bytes": 10485760}`,
+with `image` among the kinds when `attachments.ocr.enabled` is on: the
+kinds whose text is read, and the largest file read. The browser extension
+sends files only of those kinds. Without the section a file is refused with
+422, and answers have no `files`.
+
 The [LiteLLM route](litellm.md) runs the same scan and is the exception: its
 calls are real traffic, not questions about a text, so each is recorded as a
 request is, with the provider `litellm`, and its blocks fire the alerts. Its
@@ -1468,7 +1483,9 @@ Limits:
 - 60 calls a minute per key, or `rate_limit.max_requests_per_minute` when the
   policy sets it. Scans are counted apart from the key's proxy requests, and
   going over is always a 429, also when `action_on_exceed` is `WARN`.
-- A body of at most 256 KB (413), sent as `application/json` (415).
+- A body of at most 256 KB (413), sent as `application/json` (415). With the
+  `attachments` section a body may hold a file of `attachments.extract.max_bytes`
+  in base64 and 64 KiB more; a text is still held to 256 KB.
 - A few scans at a time, about half the processors. When all are busy the
   answer is 503 with `Retry-After`, so that scans cannot slow the proxy path.
 - A request from a web page is refused (403) unless its origin is in
@@ -2098,12 +2115,147 @@ deal.
 - The service receives the request text and the descriptions in the clear,
   as for the inline classifier. Keep it on the internal network.
 
+## Files a request carries
+
+A request can carry files: a PDF or an image in an OpenAI `file`,
+`input_file` or `image_url` part (as a `data:` URI), an Anthropic `document`
+or `image` block with a `base64` source, Gemini `inline_data`. A text file
+(a `text/*` type) has always been decoded and scanned like a message. Any
+other file goes to the provider unread, and without the `attachments`
+section of the policy that is still so: no file is looked at, nothing is
+sent to the analyzer, no verdict changes. The section is absent from the
+shipped policy.
+
+```yaml
+attachments:
+  unreadable: WARN       # PASS, WARN or BLOCK; PASS when left out
+  encrypted: BLOCK       # PASS, WARN or BLOCK; PASS when left out
+  extract:
+    enabled: true        # send PDF, DOCX, XLSX and PPTX files to the analyzer
+    max_bytes: 10485760  # the largest file read (1 KiB to 32 MiB)
+    max_pages: 200       # pages, sheets or slides read of one file (up to 2000)
+    timeout_ms: 10000    # for one file (100 to 60000)
+  ocr:
+    enabled: false       # images, and PDFs without a text layer, by OCR
+```
+
+**What happens to a file.** With the section, every file of a request is
+looked at in the proxy, from its own bytes (the declared type and name are
+the caller's words and are not trusted):
+
+- An encrypted file gets a finding of type `attachment_unreadable`, category
+  `encrypted`, and the action of `encrypted` applies. The proxy recognises,
+  without unpacking anything: a ZIP with an encrypted entry (general-purpose
+  flag bit 0, or the WinZip AES extra field), an Office file saved with a
+  password (a CFB container holding `EncryptionInfo` and `EncryptedPackage`),
+  a 7z archive whose header names the AES coder (its headers are encrypted,
+  or stored plain), a RAR 4 or 5 archive with encrypted headers or files,
+  and a PDF with an `/Encrypt` entry in its trailer or cross-reference
+  stream. A PDF encrypted with an empty user password (to set permissions)
+  can be opened by anyone: with `extract.enabled` it is sent to the analyzer,
+  which opens it, and it is `encrypted` only when it cannot. A text, in a
+  message or in a file, that holds `-----BEGIN PGP MESSAGE-----`,
+  `-----BEGIN ENCRYPTED PRIVATE KEY-----`, `-----BEGIN AGE ENCRYPTED FILE-----`
+  or a PEM header `Proc-Type: 4,ENCRYPTED` gets the same finding; the text
+  is scanned as well.
+- With `extract.enabled`, a PDF, DOCX, XLSX or PPTX file of up to
+  `max_bytes` is sent to the analyzer's `Extract` call, and with
+  `ocr.enabled` an image (PNG, JPEG, GIF, WebP, TIFF, BMP) too. The text that
+  comes back, one piece per page, sheet or slide, is scanned like any other
+  text: in the role of the message the file is in (`tool` for an Anthropic
+  `document`), kind `document`, and with the file's path, so a finding in a
+  file points at the file in the body. The rules apply to what is found
+  there as to anything else.
+- Any other file, or one the analyzer could not read, gets a finding of type
+  `attachment_unreadable` with the reason as its category, and the action of
+  `unreadable` applies:
+  - `unsupported_type`: a kind nothing here reads (an archive, a legacy
+    `.doc`/`.xls`/`.ppt`, OpenDocument, audio), or any file while
+    `extract.enabled` is off;
+  - `too_large`: over `max_bytes`; read in part because of `max_pages` or the
+    analyzer's limit of a million characters per file (the part read is
+    scanned, and the finding says the rest was not); one that would unpack
+    to far more than it weighs; or past the eighth file of a request;
+  - `extract_failed`: the analyzer could not read it (a damaged file, a
+    deadline passed, all its workers busy), is not reachable at
+    `TAMGA_ANALYZER_ADDR`, or did not answer in `timeout_ms`;
+  - `ocr_unavailable`: an image, or a PDF whose pages are images, while
+    `ocr.enabled` is off or the analyzer has no OCR engine.
+
+A text file sent with a type that is not `text/*` (`application/octet-stream`)
+is recognised as text and scanned in the proxy.
+
+**The finding.** Type `attachment_unreadable`, one of the five categories,
+severity `medium`, the role and path of the file, no position, no match, and
+`file_type` in its metadata (`pdf`, `docx`, `zip`, `image`, …). Nothing of
+the file is in it.
+
+**The actions.** `unreadable` and `encrypted` apply as a custom entity's own
+action applies to its matches: a rule keyed `attachment_unreadable` applies
+as well and the stronger action wins, `scan.default_action` does not apply,
+and an exception waives the rule but not the section's action. Left out, an
+action is `PASS`: the finding is recorded with the request and nothing is
+stopped. Only `PASS`, `WARN` and `BLOCK` load: a file that cannot be read has
+nothing in it to mask, strip or route on. `unreadable: BLOCK` with
+`extract.enabled` off blocks every request that carries a file that is not
+text; the policy editor warns about it. A response to a request that the
+section looked at carries `X-Tamga-Attachments: files=2; read=1; findings=1`.
+
+**Masking inside a file.** The text read out of a file cannot be written
+back into it: the proxy does not rewrite a PDF or a spreadsheet. When the
+verdict is `REDACT` and a value to mask is in a file's text, or `STRIP` and
+what is to be removed is, the request is blocked, with
+`X-Tamga-Redact-Fallback: block:attachment` or
+`X-Tamga-Strip-Fallback: block:attachment`, as for any other REDACT or STRIP
+that cannot be carried out. A value in the request's own text beside a
+clean file is masked as before, and the file is forwarded as it came.
+Stripping the file as a whole was not chosen: the request would reach the
+model without the document the user meant to send, and the model would
+answer as if it had read it.
+
+**The analyzer's side.** `Extract` reads the file's signature, refuses an
+encrypted ZIP entry or a ZIP whose entries would unpack to more than 256 MiB,
+or to more than 100 times the file's size once past 20 MiB, before anything
+is unpacked, and then reads: PDF with pypdf, and with pdfminer.six when pypdf
+finds no text; DOCX with python-docx (paragraphs, tables, text boxes, headers
+and footers); XLSX with openpyxl (every sheet by name, cell values, and for a
+formula the value the file last saved, not the formula); PPTX with
+python-pptx (every shape's text, tables, groups, speaker notes). It stops at
+`max_pages` and a million characters and says the text was truncated. Each
+file is read on a pool of `TAMGA_EXTRACT_WORKERS` threads (2 by default, at
+most 8) with the deadline checked between pages; a file still being read
+when its deadline passes is answered `extract_failed`, and its thread runs
+until the library returns (pypdf caps every decompressed stream at 75 MB).
+While every worker is busy, a new file is answered `extract_failed` at once.
+An image larger than 60 million pixels is not decoded. Errors are logged by
+the exception's type, never with the library's message, and no call fails:
+a file that cannot be read is a status in the answer. The analyzer's gRPC
+port takes messages of up to 33 MiB for this (it took 4 MiB before).
+
+OCR is a separate engine in the analyzer (`app/ocr`). Without it, or when it
+reports itself unavailable, images and scanned PDFs are `ocr_unavailable`
+whatever `ocr.enabled` says.
+
+**Where it applies.** On the proxy path, the ICAP route and the scan API
+(below), which accepts a file. A body the extractor does not know is scanned
+raw, as before, and its files are not looked at. Answers are not looked at.
+Changing the section needs the admin role, as `scan` does.
+
+**What it costs.** One call to the analyzer per file, in sequence, each up to
+`timeout_ms`: a request with eight PDFs can wait eight times that. The file
+is sent to the analyzer as it is, over the internal service connection
+(`TAMGA_ANALYZER_TOKEN`, and TLS when configured); the analyzer keeps
+nothing.
+
 ## Analyzer
 
 The analyzer is a separate Python service. It does two things: it renders
 the PDF reports, and it can look again, after the decision, at requests the
 proxy forwarded. Nothing it finds changes a verdict, and the proxy does not
-store it: the proxy logs how many findings came back.
+store it: the proxy logs how many findings came back. With the policy's
+`attachments.extract` on it does a third, on the decision path: it reads the
+text of the files a request carries ([Files a request
+carries](#files-a-request-carries)).
 
 **What the proxy sends it.** Nothing, unless `TAMGA_ANALYZER_SEND_CONTENT=true`.
 With it on, the proxy sends over gRPC the body of a request (up to 65,536

@@ -68,8 +68,8 @@ Tamga sees only the requests that are sent to it. It does not see:
   paste and at send. It was run once on the first three sites (2026-10-11: a block and a
   redaction seen on all three; a paste, a clean send and Tamga being down
   not tried) and on none of the others, it is not in any store (you load or pack it yourself), and it
-  reads attached text files but not PDF, office documents or images, and
-  does not cover the sites' apps.
+  reads attached text files, sends PDF and office files (and images) to Tamga
+  only when its policy reads files, and does not cover the sites' apps.
 - **Traffic between an agent and its MCP servers.** The agent talks to them
   directly. What a tool returned reaches Tamga only when the agent puts it in
   its next model request, as a tool result.
@@ -79,8 +79,13 @@ Tamga sees only the requests that are sent to it. It does not see:
   about requests to the main AI APIs and chat sites over
   [ICAP](docs/icap.md); that was tested with a test client only, and the
   chat sites' request formats were not verified.
-- **Images, audio and PDFs.** They are forwarded without being read. An
-  attached text file is decoded and scanned.
+- **Images, audio and PDFs.** They are forwarded without being read unless
+  the policy has an `attachments` section: then encrypted files are
+  recognised, and PDF, DOCX, XLSX and PPTX files (and images with OCR) are
+  read by the analyzer and their text scanned
+  ([Files a request carries](docs/operations.md#files-a-request-carries)).
+  Audio, archives and legacy office files are never read. An attached text
+  file is decoded and scanned.
 
 More limits are listed under [Project status](#project-status).
 
@@ -538,7 +543,8 @@ custom entity UI · the security fixes listed in the [changelog](CHANGELOG.md).
   needs the optional [classifier](docs/operations.md#inline-classifier), and
   that has not been measured on a set its author did not write (see
   [Benchmarks](#benchmarks)).
-- Images, audio and PDFs are not read.
+- Images, audio and PDFs are not read unless the policy's `attachments`
+  section turns extraction on; audio and archives are never read.
 - Callers are authenticated only when you issue keys; requests without one
   are refused only with `TAMGA_REQUIRE_KEY=true`. See [SECURITY.md](SECURITY.md).
 - Streamed responses are scanned only with `output_rules.streaming` on, and
