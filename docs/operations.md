@@ -1600,8 +1600,10 @@ benign `tr_tuning.csv` rows (mostly role-play requests) and 8 of the 82
 benign `discourse_tuning.csv` rows carry a signal; for those the classifier
 alone decides, at 0.90.
 
-The classifier service has no authentication of its own and receives prompt
-text in the clear. Keep it on the internal network, next to the proxy.
+The classifier service receives prompt text in the clear. It refuses calls
+without its service token when one is configured (see "Internal service
+tokens"), and TLS is optional; keep it on the internal network, next to the
+proxy, either way.
 
 ### Shadow mode
 
@@ -2157,8 +2159,63 @@ and returns nothing until that model is in the image. The inline
 classifier (above) loads its model from a mounted directory and downloads
 nothing.
 
-The analyzer has no authentication of its own. Keep it on the internal
-network.
+The analyzer refuses calls without its service token when one is configured
+(see "Internal service tokens"). Keep it on the internal network either way.
+
+### OCR engine choice
+
+The analyzer can read the text in an image (`analyzer/app/ocr`), so that text
+in a screenshot or a photo can be scanned like any other text. It is off
+unless `TAMGA_OCR_ENGINE` names an engine, and the default image has neither
+engine:
+
+| `TAMGA_OCR_ENGINE` | What runs | Image build |
+|---|---|---|
+| `off` (default) | nothing | |
+| `rapidocr` | PP-OCRv6 models on onnxruntime, in the analyzer process | `--build-arg OCR_RAPIDOCR=true`, about 205 MB more |
+| `tesseract` | the `tesseract` binary with the `tur` traineddata, one subprocess per image | `--build-arg OCR_TESSERACT=true`, about 95 MB more |
+
+Measured on the repository's sample set (`analyzer/tests/ocr_samples`: a
+customer table, a chat, a phone photo of the table, Turkish sentences, small
+and dark text, every identifier fake), 4 threads on an Intel Core Ultra 7
+255H:
+
+| Engine | CER | Turkish letters wrong | TCKN | IBAN | Card | E-mail | Latency per image |
+|---|---|---|---|---|---|---|---|
+| RapidOCR 3.10.0 | 1.9% | 21.9% of 155 | 13/13 | 13/13 | 13/13 | 11/13 | 766 ms median, 948 ms max |
+| Tesseract | not measured yet | | | | | | |
+
+**Recommendation: `rapidocr`.** It recovered every TC identity number, IBAN
+and card number, in the photo too, and needs nothing from the operating
+system. Its Turkish errors are mostly the capital İ and the dotless ı, read as
+I and i: names suffer, the identifiers do not. The method, the per-image table
+and the command that measures Tesseract in the image are in
+`analyzer/docs/ocr.md`.
+
+The engine never downloads at run time. RapidOCR loads its three model files
+from `TAMGA_OCR_MODEL_DIR` (`/opt/ocr-models` in the image, filled at build
+time) and refuses to start when one is missing or its SHA-256 differs from
+the pin in `analyzer/app/ocr/model_pins.py`. Tesseract is available only when
+`tesseract --list-langs` lists `tur` and `eng`.
+
+Limits, each an environment variable of the analyzer:
+
+| Variable | Default | What it limits |
+|---|---|---|
+| `TAMGA_OCR_MAX_BYTES` | 20 MiB | the encoded image |
+| `TAMGA_OCR_MAX_PIXELS` | 25,000,000 | width x height, checked from the header before decoding; at most 89,478,485 |
+| `TAMGA_OCR_MAX_IMAGES` | 16 | images read in one call; the rest are skipped and the result says so |
+| `TAMGA_OCR_TIMEOUT_SECONDS` | 30 | one image, or all the images of one call |
+| `TAMGA_OCR_THREADS` | 2 | CPU threads for recognition (the Compose file gives the analyzer two CPUs) |
+| `TAMGA_OCR_MAX_CHARS` | 200,000 | text kept per image |
+
+Only PNG, JPEG, WebP, GIF (first frame) and BMP are decoded; the format is
+taken from the file's first bytes and Pillow is allowed that one decoder.
+One image is recognised at a time per analyzer process. RapidOCR cannot be
+interrupted: a call that reaches its timeout returns, and the recognition
+behind it finishes before the next one starts. Tesseract is killed at the
+timeout; pytesseract hands it the image through a temporary file in `TMPDIR`,
+removed afterwards. The text read from an image is never logged.
 
 ## What survives a restart
 
