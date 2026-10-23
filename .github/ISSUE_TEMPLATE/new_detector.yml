@@ -1,0 +1,87 @@
+name: New detector
+description: Propose an identifier, phone format or secret format the scanners should find.
+title: "feat(scanner): find "
+labels: [enhancement, detector]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A detector is a pattern in the proxy's scanners (`proxy/internal/scanner/`) with a
+        check that keeps false positives down. `pii_tr_ids.go` is the model for an
+        identifier that is only taken where the text names it. Agreeing on the format
+        here first saves a round of review.
+
+        **Use only made-up or published specimen values.** Do not paste a real person's
+        number, a live key or a token, even an expired one.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind
+      options:
+        - National identity number
+        - Tax or company registration number
+        - Phone number format
+        - Bank, card or payment identifier
+        - Health identifier
+        - Secret, key or token format
+        - Other personal data
+    validations:
+      required: true
+  - type: input
+    id: name
+    attributes:
+      label: Identifier and country or issuer
+      placeholder: Dutch citizen service number (BSN), Netherlands
+    validations:
+      required: true
+  - type: input
+    id: category
+    attributes:
+      label: Proposed category name
+      description: Lower case with underscores, as findings carry it. Existing names are in `proxy/internal/scanner/pii.go` and `secrets.go`.
+      placeholder: bsn_nl
+  - type: textarea
+    id: format
+    attributes:
+      label: Format
+      description: Length, character set, separators, and how it is usually written.
+    validations:
+      required: true
+  - type: textarea
+    id: check
+    attributes:
+      label: Check digit or validation
+      description: The algorithm (mod 11, Luhn, a check letter, ...) or "none". Without a check, say which words must stand next to it.
+    validations:
+      required: true
+  - type: input
+    id: source
+    attributes:
+      label: Specification
+      description: A link to the official or a public description of the format and its check.
+    validations:
+      required: true
+  - type: textarea
+    id: examples
+    attributes:
+      label: Examples
+      description: Specimen values that should match, and look-alikes that should not (an order number, a date, a part number).
+      placeholder: |
+        Should match: ...
+        Should not match: ...
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Words that name it
+      description: Words or labels that usually stand next to the value, in the languages it is written in.
+      placeholder: BSN, burgerservicenummer, sofinummer
+  - type: dropdown
+    id: contribute
+    attributes:
+      label: Would you write it?
+      options:
+        - "Yes, I would open a pull request"
+        - "Maybe, with some guidance"
+        - "No"

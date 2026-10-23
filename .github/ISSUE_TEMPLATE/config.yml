@@ -1,11 +1,11 @@
-blank_issues_enabled: true
+blank_issues_enabled: false
 contact_links:
-  - name: Security Vulnerability
+  - name: Report a security vulnerability
     url: https://github.com/yatuk/tamga/security/advisories/new
-    about: Report a security vulnerability privately. DO NOT open a public issue.
-  - name: Discussions
+    about: Report privately, as SECURITY.md describes. Do not open a public issue.
+  - name: Ask a question
     url: https://github.com/yatuk/tamga/discussions
-    about: Ask questions, share ideas, and discuss with the community.
+    about: Questions about setting up or using Tamga go to GitHub Discussions.
   - name: Documentation
     url: https://github.com/yatuk/tamga/tree/main/docs
-    about: Read the docs before opening an issue.
+    about: Installation, operations, policy and integration guides.
