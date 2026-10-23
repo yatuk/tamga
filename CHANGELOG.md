@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Benchmarks
+- `docs/benchmarks/comparison.md` measures Tamga (rules, rules with the
+  classifier, the classifier alone) beside LLM Guard's `PromptInjection`
+  scanner on four public sets and the two locked Turkish sets, at each
+  default and at a 1% false-positive rate. `scripts/bench/compare.py`
+  reproduces it; `proxy/cmd/benchscore` writes the rules' verdict per
+  text. Bench tooling only: nothing a deployment runs changes.
+
 ### Dependencies
 - Go modules of the proxy move to their current minor and patch releases
   (pgx 5.11, go-redis 9.23, nats.go 1.54, client_golang 1.25,
