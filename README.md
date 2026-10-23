@@ -302,8 +302,37 @@ office files are never read.
 ## Configuration
 
 The shipped policy is [proxy/tamga-policy.yaml](proxy/tamga-policy.yaml);
-edit it and the proxy reloads it. Starting points for KVKK, banks, public
-bodies and software teams are in [docs/policy-templates.md](docs/policy-templates.md).
+edit it and the proxy reloads it. A small one:
+
+```yaml
+version: "1.0"
+name: "default-policy"
+
+rules:
+  pii_detection:            # contact details are redacted
+    action: REDACT
+    sensitivity: medium
+    types: [iban, email, phone_tr, phone, vkn, ip_public]
+
+  pii:                      # national IDs and cards are blocked
+    action: BLOCK
+    sensitivity: medium
+    types: [tc_kimlik, credit_card, ssn]
+
+  secret_detection:
+    action: BLOCK
+    sensitivity: low
+
+  injection:
+    action: BLOCK
+    sensitivity: medium
+
+providers:
+  allowed: [openai, anthropic, azure, gemini]
+```
+
+Starting points for KVKK, banks, public bodies and software teams are in
+[docs/policy-templates.md](docs/policy-templates.md).
 Every environment variable is described in
 [docs/operations.md](docs/operations.md#configuration) and in
 [`.env.example`](.env.example).
