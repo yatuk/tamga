@@ -25,12 +25,20 @@ tamga/
 # Go proxy
 cd proxy
 go run ./cmd/tamga                              # Start proxy
-go test ./... -v -count=1                       # Run tests
+TAMGA_STORE_NO_DOCKER=1 go test ./... -count=1 # Run tests (store's Postgres tests skip)
 go test ./internal/scanner/ -bench=. -benchmem  # Scanner benchmarks
 
-# Python analyzer
+# Python analyzer (pytest is not in requirements.txt)
 cd analyzer
-pytest tests/ -v
+python -m pytest -q tests
+
+# Classifier (a stand-in model; nothing is downloaded)
+cd classifier
+python -m pytest -q tests
+
+# Browser extension (no dependencies, no build step)
+cd extension
+node --test
 
 # Next.js dashboard
 cd dashboard
