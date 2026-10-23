@@ -59,6 +59,13 @@
 - The issue templates are GitHub issue forms (bug report, feature
   request, and a new "New detector" form), and blank issues are off;
   questions go to GitHub Discussions.
+### Fixed
+- The proxy without a database (the `minimal` Compose profile, or
+  `TAMGA_DB_URL` empty) panicked when the answer to a forwarded request
+  came back, while working out its cost, and the caller got an empty reply.
+  `TAMGA_MOCK_UPSTREAM=true` and blocked requests never reached that
+  code. **Such responses now reach the caller, priced from the built-in
+  list** (`proxy/cmd/tamga/main.go`, `proxy/internal/billing/calculator.go`).
 
 ## v0.9.0 (2026-10-18)
 

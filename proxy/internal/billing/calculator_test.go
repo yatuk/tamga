@@ -643,6 +643,17 @@ func TestCalculator_Calculate_DifferentBucketsDifferentKeys(t *testing.T) {
 
 // ── ResolveUSD() tests ─────────────────────────────────────────────────────────
 
+// The proxy alone has no database and so no calculator. A nil *Calculator
+// must answer "not found" rather than panic: it panicked on every forwarded
+// response that named a model.
+func TestCalculator_ResolveUSD_NilCalculator(t *testing.T) {
+	var calc *Calculator
+	inPer1M, outPer1M := calc.ResolveUSD("openai", "gpt-4o-mini")
+	if inPer1M != 0 || outPer1M != 0 {
+		t.Fatalf("nil calculator = %v, %v; want 0, 0", inPer1M, outPer1M)
+	}
+}
+
 func TestCalculator_ResolveUSD_PrefixMatch(t *testing.T) {
 	// Model "anthropic-claude-3-5-sonnet-20241022" should prefix-match
 	// ModelFamily "claude-3-5-sonnet" from the pricing entry.

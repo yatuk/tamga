@@ -288,6 +288,12 @@ func main() {
 		savedHuntStore = store.NewSavedHuntStore(pgStore.Pool())
 		log.Info().Msg("model pricing store + cost calculator + saved hunts wired")
 	}
+	// Only a calculator that exists goes into the interface: a nil pointer in
+	// it would be called on every priced response.
+	var pricingResolver proxy.PricingResolver
+	if costCalculator != nil {
+		pricingResolver = costCalculator
+	}
 
 	// Data residency validation — warn when deployment region doesn't match policy.
 	if cfg.Region != "" && pol.Data != nil && pol.Data.Residency != "" {
@@ -811,7 +817,7 @@ func main() {
 		},
 		UpstreamRegistry:   upstreamReg,
 		UpstreamTransport:  upstreamTransport,
-		PricingResolver:    costCalculator,
+		PricingResolver:    pricingResolver,
 		ScannerPool:        scannerPool,
 		ScannerClient:      scannerClient,
 		ProxyBoundRegistry: proxyBoundRegistry,

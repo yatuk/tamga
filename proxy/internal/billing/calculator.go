@@ -97,6 +97,12 @@ func (c *Calculator) Calculate(ctx context.Context, provider, family, version st
 // USD rates for a provider+model pair using the DB-backed cache (5-min TTL).
 // Falls back to 0,0 for unknown models — callers should treat 0 as "not found".
 func (c *Calculator) ResolveUSD(provider, model string) (inputPer1M, outputPer1M float64) {
+	// Without a database there is no calculator. A nil *Calculator held in
+	// the proxy's PricingResolver interface is not a nil interface, so it is
+	// still called: answer "not found" and let the built-in list decide.
+	if c == nil {
+		return 0, 0
+	}
 	// Round to 5-minute buckets for cache key (matches Calculate).
 	bucket := time.Now().UTC().Truncate(5 * time.Minute)
 	key := fmt.Sprintf("%s|%s|resolver|%d", provider, model, bucket.Unix())
