@@ -47,6 +47,19 @@
   which grpcio-tools 1.84 allows; the committed gRPC stubs load under it
   unchanged.
 
+### Contributing
+- Commits in a pull request need a Developer Certificate of Origin
+  sign-off (`git commit -s`). The `DCO` workflow
+  (`.github/workflows/dco.yml`, running `scripts/check-dco.sh`) fails a
+  pull request into `main` or `development` in which a commit has no
+  `Signed-off-by:` line with its author's email; merge commits and
+  dependabot's are not checked. **A pull request opened before this
+  change fails the new check on its next push until its commits are
+  signed off** (`git rebase --signoff`). `CONTRIBUTING.md` says how.
+- The issue templates are GitHub issue forms (bug report, feature
+  request, and a new "New detector" form), and blank issues are off;
+  questions go to GitHub Discussions.
+
 ## v0.9.0 (2026-10-18)
 
 ### Licence
