@@ -1,0 +1,28 @@
+# Environment of scripts/bench/compare.py, as measured on 2026-10-23.
+# Bench tooling only: nothing here is part of Tamga or its images.
+#
+# llm-guard 0.3.16 declares Python < 3.13 and pins regex 2024.11.6, which
+# has no wheel for newer Pythons. On Python 3.14 it was installed without
+# its declared dependencies, and those below were installed instead:
+#
+#   python -m pip install torch==2.14.1 --index-url https://download.pytorch.org/whl/cpu
+#   python -m pip install llm-guard==0.3.16 --no-deps --ignore-requires-python
+#   python -m pip install -r scripts/bench/requirements.txt
+#
+# On Python 3.12 or older, `pip install llm-guard==0.3.16` and the rest of
+# this file is the plain way.
+transformers==4.51.3
+tokenizers==0.21.4
+huggingface_hub==0.36.2
+onnxruntime==1.31.0
+numpy==2.5.4
+pyarrow==26.0.0
+structlog==26.1.0
+presidio-analyzer==2.2.358
+presidio-anonymizer==2.2.358
+nltk==3.10.4
+tiktoken==0.14.0
+faker==37.12.0
+fuzzysearch==0.8.1
+json-repair==0.44.1
+bc-detect-secrets==1.5.43

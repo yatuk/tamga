@@ -21,6 +21,10 @@ A second set, `holdout.csv`, is run the same way and published as
 [`redteam_holdout.json`](./redteam_holdout.json). See
 [Two sets](#two-sets-and-what-each-is-worth) for why it exists.
 
+Tamga set beside LLM Guard on public sets, with the same texts given to
+both and each read at its default and at the same false-positive rate, is
+in [comparison.md](./comparison.md) (`scripts/bench/compare.py`).
+
 ## Latest run
 
 - **File:** [`redteam_latest.json`](./redteam_latest.json)

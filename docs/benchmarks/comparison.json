@@ -1,0 +1,353 @@
+{
+  "generated_at": "2026-10-23T16:20:15Z",
+  "fpr_target": 0.01,
+  "pooled_benign": 1364,
+  "machine": {
+    "cpu": "Intel(R) Core(TM) Ultra 7 255H",
+    "logical_cpus": 16,
+    "os": "Windows-11-10.0.26300-SP0",
+    "llm-guard": "0.3.16",
+    "torch": "2.14.1+cpu",
+    "transformers": "4.51.3",
+    "onnxruntime": "1.31.0",
+    "tokenizers": "0.21.4",
+    "go": "go version go1.27.0 windows/amd64",
+    "python": "3.14.7"
+  },
+  "datasets": [
+    {
+      "name": "deepset-test",
+      "source": "deepset/prompt-injections",
+      "revision": "4f61ecb038e9c3fb77e21034b22511b523772cdd",
+      "split": "test",
+      "licence": "Apache-2.0",
+      "language": "en, de",
+      "attacks": 60,
+      "benign": 56,
+      "duplicates_removed": 0,
+      "conflicting_labels_removed": 0,
+      "notes": [
+        "0 texts also in the train split"
+      ]
+    },
+    {
+      "name": "jackhhao-test",
+      "source": "jackhhao/jailbreak-classification",
+      "revision": "2f2ceeb39658696fd3f462403562b6eea5306287",
+      "split": "test (default)",
+      "licence": "Apache-2.0",
+      "language": "en",
+      "attacks": 140,
+      "benign": 259,
+      "duplicates_removed": 1,
+      "conflicting_labels_removed": 0,
+      "notes": [
+        "6 texts also in the train split"
+      ]
+    },
+    {
+      "name": "notinject",
+      "source": "leolee99/NotInject",
+      "revision": "847ae76cf8fea5ed325429e569ae8cfef022d2e0",
+      "split": "NotInject_one, _two, _three",
+      "licence": "MIT",
+      "language": "en",
+      "attacks": 0,
+      "benign": 339,
+      "duplicates_removed": 0,
+      "conflicting_labels_removed": 0,
+      "notes": []
+    },
+    {
+      "name": "ifeval",
+      "source": "google/IFEval",
+      "revision": "966cd89545d6b6acfd7638bc708b98261ca58e84",
+      "split": "train (all 541 prompts)",
+      "licence": "Apache-2.0",
+      "language": "en",
+      "attacks": 0,
+      "benign": 541,
+      "duplicates_removed": 0,
+      "conflicting_labels_removed": 0,
+      "notes": []
+    },
+    {
+      "name": "trd_locked",
+      "source": "proxy/testdata/redteam/trd_locked.csv (beratcmn/turkish-prompt-injections, corrected)",
+      "revision": "this commit",
+      "split": "locked",
+      "licence": "Apache-2.0",
+      "language": "tr",
+      "attacks": 59,
+      "benign": 44,
+      "duplicates_removed": 0,
+      "conflicting_labels_removed": 0,
+      "notes": []
+    },
+    {
+      "name": "tr_locked",
+      "source": "proxy/testdata/redteam/tr_locked.csv",
+      "revision": "this commit",
+      "split": "locked",
+      "licence": "AGPL-3.0 (this repository)",
+      "language": "tr",
+      "attacks": 130,
+      "benign": 125,
+      "duplicates_removed": 0,
+      "conflicting_labels_removed": 0,
+      "notes": []
+    }
+  ],
+  "systems": [
+    "tamga_rules",
+    "tamga_rules_classifier",
+    "tamga_classifier",
+    "llm_guard"
+  ],
+  "labels": {
+    "tamga_rules": "Tamga rules (default)",
+    "tamga_rules_classifier": "Tamga rules + classifier",
+    "tamga_classifier": "Tamga classifier alone",
+    "llm_guard": "LLM Guard PromptInjection",
+    "prompt_guard_2_86m": "Prompt Guard 2 86M",
+    "prompt_guard_2_22m": "Prompt Guard 2 22M",
+    "llama_guard_3_1b": "Llama Guard 3 1B"
+  },
+  "models": {
+    "tamga_classifier": "prompt-injection-guard-small, model_quantized.onnx sha256 541471ab9de1af3e0db63b8208ec7fdc3ef74202b76c5470115e153c052dae02",
+    "llm_guard": "protectai/deberta-v3-base-prompt-injection-v2 @ 89b085cd330414d3e7d9dd787870f315957e1e9f"
+  },
+  "skipped": {
+    "prompt_guard_2_86m": "OSError: You are trying to access a gated repo.",
+    "prompt_guard_2_22m": "OSError: You are trying to access a gated repo.",
+    "llama_guard_3_1b": "OSError: You are trying to access a gated repo."
+  },
+  "thresholds": {
+    "tamga_rules": null,
+    "tamga_classifier": 0.9503084313629308,
+    "tamga_rules_classifier": null,
+    "llm_guard": 0.9999993294539378
+  },
+  "latency": {
+    "tamga_rules": {
+      "median_ms": 0.506,
+      "p95_ms": 3.193,
+      "texts": 1753
+    },
+    "tamga_classifier": {
+      "median_ms": 17.498900007922202,
+      "p95_ms": 133.2507999613881,
+      "texts": 1753
+    },
+    "tamga_rules_classifier": {
+      "median_ms": 16.643200048666447,
+      "p95_ms": 82.43609995986522,
+      "texts": 1753
+    },
+    "llm_guard": {
+      "median_ms": 78.4109000233002,
+      "p95_ms": 277.90569997159764,
+      "texts": 1753
+    }
+  },
+  "results": {
+    "tamga_rules": {
+      "deepset-test": {
+        "attacks": 60,
+        "benign": 56,
+        "recall": 0.1,
+        "fpr": 0.0
+      },
+      "jackhhao-test": {
+        "attacks": 140,
+        "benign": 259,
+        "recall": 0.45714285714285713,
+        "fpr": 0.011583011583011582
+      },
+      "notinject": {
+        "attacks": 0,
+        "benign": 339,
+        "recall": null,
+        "fpr": 0.035398230088495575
+      },
+      "ifeval": {
+        "attacks": 0,
+        "benign": 541,
+        "recall": null,
+        "fpr": 0.0
+      },
+      "trd_locked": {
+        "attacks": 59,
+        "benign": 44,
+        "recall": 0.03389830508474576,
+        "fpr": 0.0
+      },
+      "tr_locked": {
+        "attacks": 130,
+        "benign": 125,
+        "recall": 0.8,
+        "fpr": 0.024
+      }
+    },
+    "tamga_classifier": {
+      "deepset-test": {
+        "attacks": 60,
+        "benign": 56,
+        "recall": 0.21666666666666667,
+        "fpr": 0.0,
+        "recall_at_fixed_fpr": 0.25,
+        "fpr_at_fixed_fpr": 0.0
+      },
+      "jackhhao-test": {
+        "attacks": 140,
+        "benign": 259,
+        "recall": 0.30714285714285716,
+        "fpr": 0.0,
+        "recall_at_fixed_fpr": 0.4928571428571429,
+        "fpr_at_fixed_fpr": 0.003861003861003861
+      },
+      "notinject": {
+        "attacks": 0,
+        "benign": 339,
+        "recall": null,
+        "fpr": 0.011799410029498525,
+        "recall_at_fixed_fpr": null,
+        "fpr_at_fixed_fpr": 0.02064896755162242
+      },
+      "ifeval": {
+        "attacks": 0,
+        "benign": 541,
+        "recall": null,
+        "fpr": 0.0,
+        "recall_at_fixed_fpr": null,
+        "fpr_at_fixed_fpr": 0.0
+      },
+      "trd_locked": {
+        "attacks": 59,
+        "benign": 44,
+        "recall": 0.13559322033898305,
+        "fpr": 0.0,
+        "recall_at_fixed_fpr": 0.15254237288135594,
+        "fpr_at_fixed_fpr": 0.0
+      },
+      "tr_locked": {
+        "attacks": 130,
+        "benign": 125,
+        "recall": 0.5153846153846153,
+        "fpr": 0.032,
+        "recall_at_fixed_fpr": 0.6153846153846154,
+        "fpr_at_fixed_fpr": 0.04
+      }
+    },
+    "tamga_rules_classifier": {
+      "deepset-test": {
+        "attacks": 60,
+        "benign": 56,
+        "recall": 0.3,
+        "fpr": 0.0
+      },
+      "jackhhao-test": {
+        "attacks": 140,
+        "benign": 259,
+        "recall": 0.6714285714285714,
+        "fpr": 0.011583011583011582
+      },
+      "notinject": {
+        "attacks": 0,
+        "benign": 339,
+        "recall": null,
+        "fpr": 0.04424778761061947
+      },
+      "ifeval": {
+        "attacks": 0,
+        "benign": 541,
+        "recall": null,
+        "fpr": 0.0
+      },
+      "trd_locked": {
+        "attacks": 59,
+        "benign": 44,
+        "recall": 0.1694915254237288,
+        "fpr": 0.0
+      },
+      "tr_locked": {
+        "attacks": 130,
+        "benign": 125,
+        "recall": 0.8769230769230769,
+        "fpr": 0.064
+      }
+    },
+    "llm_guard": {
+      "deepset-test": {
+        "attacks": 60,
+        "benign": 56,
+        "recall": 0.31666666666666665,
+        "fpr": 0.0,
+        "recall_at_fixed_fpr": 0.08333333333333333,
+        "fpr_at_fixed_fpr": 0.0
+      },
+      "jackhhao-test": {
+        "attacks": 140,
+        "benign": 259,
+        "recall": 0.7857142857142857,
+        "fpr": 0.019305019305019305,
+        "recall_at_fixed_fpr": 0.1357142857142857,
+        "fpr_at_fixed_fpr": 0.0
+      },
+      "notinject": {
+        "attacks": 0,
+        "benign": 339,
+        "recall": null,
+        "fpr": 0.3746312684365782,
+        "recall_at_fixed_fpr": null,
+        "fpr_at_fixed_fpr": 0.038348082595870206
+      },
+      "ifeval": {
+        "attacks": 0,
+        "benign": 541,
+        "recall": null,
+        "fpr": 0.04621072088724584,
+        "recall_at_fixed_fpr": null,
+        "fpr_at_fixed_fpr": 0.0
+      },
+      "trd_locked": {
+        "attacks": 59,
+        "benign": 44,
+        "recall": 0.2542372881355932,
+        "fpr": 0.09090909090909091,
+        "recall_at_fixed_fpr": 0.0,
+        "fpr_at_fixed_fpr": 0.0
+      },
+      "tr_locked": {
+        "attacks": 130,
+        "benign": 125,
+        "recall": 0.4461538461538462,
+        "fpr": 0.448,
+        "recall_at_fixed_fpr": 0.015384615384615385,
+        "fpr_at_fixed_fpr": 0.0
+      }
+    }
+  },
+  "tamga_rules_any_action_fpr": {
+    "deepset-test": 0.0,
+    "jackhhao-test": 0.019305019305019305,
+    "notinject": 0.035398230088495575,
+    "ifeval": 0.0,
+    "trd_locked": 0.0,
+    "tr_locked": 0.024
+  },
+  "tamga_classifier_asked": {
+    "asked": 1535,
+    "with_signal": 128,
+    "over_max_chars": 3,
+    "texts": 1753
+  },
+  "texts_over_2000_chars": {
+    "deepset-test": 0,
+    "jackhhao-test": 78,
+    "notinject": 0,
+    "ifeval": 0,
+    "trd_locked": 0,
+    "tr_locked": 0
+  }
+}
