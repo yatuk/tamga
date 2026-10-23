@@ -1,0 +1,45 @@
+name: DCO
+
+# Every commit of a pull request must carry a Developer Certificate of Origin
+# sign-off (https://developercertificate.org/): a "Signed-off-by:" trailer
+# with the commit author's email, as `git commit -s` writes it. Merge commits
+# and commits by dependabot[bot] are skipped. The check is
+# scripts/check-dco.sh; run it locally the same way before pushing.
+#
+# Only the commits of the pull request are read, so the history already on
+# main and development (which has no sign-offs) is not checked.
+#
+# The script runs from the pull request's own merge commit, so a pull request
+# could change it. It is a check of a habit, not a security boundary; the
+# reviewer reads the diff of scripts/ and .github/ like any other.
+#
+# Actions are pinned to a commit, as in release.yml.
+
+on:
+  pull_request:
+    branches: [main, development]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dco-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  sign-off:
+    name: Signed-off-by on every commit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The base and head commits must both be present to list the
+          # range between them.
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check sign-offs
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: bash scripts/check-dco.sh "$BASE_SHA" "$HEAD_SHA"
