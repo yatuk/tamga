@@ -1,0 +1,108 @@
+name: Bug report
+description: Something in Tamga does not work as documented.
+title: "fix: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for the report. A security vulnerability does not belong here:
+        report it privately as [SECURITY.md](https://github.com/yatuk/tamga/blob/main/SECURITY.md) says.
+
+        **Before you paste anything, remove API keys, tokens, admin keys, passwords and
+        personal data** (names, email addresses, national ids, card numbers) from logs,
+        requests and policy files. Replace them with obviously fake values.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The release tag or commit. The proxy prints it in its startup banner.
+      placeholder: v0.9.0, or commit 3a94508
+    validations:
+      required: true
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Deployment mode
+      options:
+        - Docker Compose, full profile
+        - Docker Compose, full and classifier profiles
+        - Docker Compose, minimal profile (proxy only)
+        - Helm / Kubernetes
+        - Binary or go run, no containers
+        - Browser extension against a Tamga server
+        - Other (say below)
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Where you saw the problem. Pick more than one if needed.
+      multiple: true
+      options:
+        - Proxy (forwarding, providers, routing)
+        - Scanners and policy (a finding, a verdict, redaction)
+        - Management API
+        - Console (dashboard)
+        - Analyzer
+        - Classifier
+        - Browser extension
+        - Python SDK
+        - TypeScript SDK
+        - Deployment (Compose, Helm, Terraform, migrations)
+        - Documentation
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Operating system, and the browser or the Go, Python or Node version if relevant.
+      placeholder: Ubuntu 24.04, Docker 28; Chrome 141
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The smallest set of steps, with the request (curl is best) and the policy rule involved.
+      placeholder: |
+        1. Start the stack with ...
+        2. Send `curl -s http://localhost:8443/v1/chat/completions ...`
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      description: What happened instead, with the error message or the response status and body.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        Proxy, analyzer or console logs around the failure (for example
+        `docker compose --env-file .env -f deploy/docker-compose.yml logs proxy`).
+        Redact keys, tokens and personal data first.
+      render: shell
+  - type: textarea
+    id: policy
+    attributes:
+      label: Policy
+      description: The part of the policy YAML involved, if any, with secrets and webhook URLs removed.
+      render: yaml
+  - type: checkboxes
+    id: redacted
+    attributes:
+      label: Before submitting
+      options:
+        - label: I removed API keys, tokens and personal data from everything above.
+          required: true

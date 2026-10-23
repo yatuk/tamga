@@ -1,0 +1,60 @@
+name: Feature request
+description: Suggest a change or a new capability.
+title: "feat: "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For a new identifier, phone format or secret format the scanners should find,
+        use the **New detector** form instead. Questions go to GitHub Discussions.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What you are trying to do, and what stops you today.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: How Tamga could address it. Name the setting, endpoint or screen if you have one in mind.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other ways to get there, including a policy rule or custom entity that comes close.
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      multiple: true
+      options:
+        - Proxy
+        - Scanners and policy
+        - Management API
+        - Console (dashboard)
+        - Analyzer
+        - Classifier
+        - Browser extension
+        - SDKs
+        - Deployment
+        - Documentation
+    validations:
+      required: true
+  - type: textarea
+    id: testing
+    attributes:
+      label: How it would be tested
+      description: What a test or a manual check would show once the change is in.
+  - type: dropdown
+    id: contribute
+    attributes:
+      label: Would you work on it?
+      options:
+        - "Yes, I would open a pull request"
+        - "Maybe, with some guidance"
+        - "No"
