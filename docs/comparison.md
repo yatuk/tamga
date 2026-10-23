@@ -1,7 +1,7 @@
 # How Tamga compares
 
-Full comparison against the three alternative categories. The short version
-lives in the [main README](../README.md#how-it-compares).
+Full comparison against the three alternative categories. The main README
+compares Tamga with [LLM Guard and NeMo Guardrails](../README.md#compared-with-llm-guard-and-nemo-guardrails).
 
 | Feature | Tamga | Cloud Services | Open-Source Gateways | Legacy DLP |
 |---------|-------|---------------|---------------------|------------|

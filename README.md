@@ -7,10 +7,8 @@
 
 # Tamga
 
-**A guardrail for LLM traffic that you run on your own servers.**<br/>
-Tamga sits in front of the model APIs your applications, RAG pipelines and
-agents call. It scans each request routed through it and blocks or redacts
-PII, secrets and prompt injection before the request is forwarded to the provider.
+**A self-hosted LLM security gateway that understands Turkish and English
+traffic and keeps the data on your own servers.**
 
 [![Tests](https://img.shields.io/github/actions/workflow/status/yatuk/tamga/proxy-ci.yml?branch=main&label=tests&style=flat-square)](https://github.com/yatuk/tamga/actions/workflows/proxy-ci.yml)
 [![Version](https://img.shields.io/badge/version-v0.9.0-blue?style=flat-square)](CHANGELOG.md)
@@ -18,151 +16,254 @@ PII, secrets and prompt injection before the request is forwarded to the provide
 [![Go](https://img.shields.io/badge/go-1.26-00ADD8?logo=go&logoColor=white&style=flat-square)](proxy/go.mod)
 [![Stars](https://img.shields.io/github/stars/yatuk/tamga?style=flat-square)](https://github.com/yatuk/tamga/stargazers)
 
-[Website](https://tamgaproxy.com) ·
 [Quick start](#quick-start) ·
-[How it works](#how-it-works) ·
-[Benchmarks](#benchmarks) ·
+[What it catches](#what-it-catches) ·
+[Integrations](#integrations) ·
+[Compared with](#compared-with-llm-guard-and-nemo-guardrails) ·
 [Docs](#documentation) ·
-[Status](#project-status)
+[Website](https://tamgaproxy.com)
 
 <img src="docs/demo/demo.gif" alt="Four requests through Tamga: a clean prompt passes, an email address is redacted and forwarded, a card number and a prompt injection are blocked before they reach the provider" width="820" />
 
 </div>
 
-## Why Tamga
-
-An application that calls a model API forwards whatever it is handed. A
-support bot passes on a ticket with the customer's national ID in it, and a
-RAG pipeline retrieves a document that holds an IBAN or an API key. An agent
-reads a web page that carries instructions written for the model, and that
-text arrives in its next request as a tool result. The usual controls do not
-help:
-
-- **Network DLP** sees an encrypted request to an API, not what the prompt says.
-- **Hosted LLM gateways** inspect your prompts on *their* servers, which is the
-  data transfer you were trying to avoid.
-- **Provider guardrails** cover one vendor and leave no audit trail of your own.
-
-Tamga is a reverse proxy you run yourself. It speaks the OpenAI and Anthropic
-APIs, so applications only change their base URL. It reads each request
-message by message and knows whether a piece of text is the user's prompt, a
-tool result, a tool description or the system prompt. Scanners look for PII,
-secrets and injection wording in that text, and a YAML policy turns each
-finding into a block, a redaction, a warning or a pass. A rule can be limited
-to some of those roles, and a tool result that carries an injection can be
-stripped so the agent's session continues. Responses are scanned too when the
-policy's `output_rules` are on. Every decision is recorded in your own
-Postgres. Built for KVKK, GDPR and
-BDDK workloads, with first-class Turkish PII (TC Kimlik, Turkish IBAN and phone formats).
-
-## What Tamga does not cover
-
-Tamga sees only the requests that are sent to it. It does not see:
-
-- **Chat websites.** Text someone types or pastes into chatgpt.com, claude.ai,
-  gemini.google.com or another chat site in a browser goes from the browser
-  to that site and never reaches the proxy. A [browser extension](docs/browser-extension.md)
-  for those and fourteen other chat sites ([the list](docs/browser-extension.md#sites):
-  DeepSeek, Copilot, Perplexity, Grok, Mistral, Meta AI, Qwen, Kimi, Poe,
-  HuggingChat, AI Studio and others) exists as an MVP: it asks your Tamga for a verdict at
-  paste and at send. It was run once on the first three sites (2026-10-11: a block and a
-  redaction seen on all three; a paste, a clean send and Tamga being down
-  not tried) and on none of the others, it is not in any store (you load or pack it yourself), and it
-  reads attached text files, sends PDF and office files (and images) to Tamga
-  only when its policy reads files, and does not cover the sites' apps.
-- **Traffic between an agent and its MCP servers.** The agent talks to them
-  directly. What a tool returned reaches Tamga only when the agent puts it in
-  its next model request, as a tool result.
-- **Anything else that does not pass through the proxy.** An application that
-  still calls the provider's own URL is not scanned. Tamga does not discover
-  or stop such calls. A company web proxy that terminates TLS can ask Tamga
-  about requests to the main AI APIs and chat sites over
-  [ICAP](docs/icap.md); that was tested with a test client only, and the
-  chat sites' request formats were not verified.
-- **Images, audio and PDFs.** They are forwarded without being read unless
-  the policy has an `attachments` section: then encrypted files are
-  recognised, and PDF, DOCX, XLSX and PPTX files (and images with OCR) are
-  read by the analyzer and their text scanned
-  ([Files a request carries](docs/operations.md#files-a-request-carries)).
-  Audio, archives and legacy office files are never read. An attached text
-  file is decoded and scanned.
-
-More limits are listed under [Project status](#project-status).
+Tamga is a reverse proxy that speaks the OpenAI and Anthropic APIs. Your
+application changes its base URL and nothing else. Tamga reads each request
+message by message, finds PII, secrets and prompt injection, and a YAML
+policy decides whether the request is blocked, redacted or passed on to the
+provider. Decisions are recorded in your own Postgres; prompt and response
+bodies are not stored.
 
 ## Quick start
 
-Start with the proxy alone. It needs Docker and nothing else: no database,
-no keys.
+You need git and Docker with Compose v2. The commands are for a POSIX shell
+(Linux, macOS, WSL or Git Bash).
 
 ```bash
 git clone https://github.com/yatuk/tamga.git
 cd tamga
-cp .env.example .env    # set TAMGA_MOCK_UPSTREAM=true to try it without provider keys
-
-docker compose --env-file .env -f deploy/docker-compose.yml --profile minimal up -d
+TAMGA_MOCK_UPSTREAM=true docker compose -f deploy/docker-compose.yml --profile minimal up -d
 ```
 
-The proxy is on `http://localhost:8443`. Send a prompt carrying a Turkish
-national ID. It is blocked before it reaches any provider:
+This builds and starts the proxy alone, on `http://localhost:8443`. The first
+build takes a few minutes. `TAMGA_MOCK_UPSTREAM=true` makes Tamga answer with
+a canned reply instead of calling a provider, so nothing leaves your machine
+and no provider key is needed. In PowerShell, run
+`$env:TAMGA_MOCK_UPSTREAM="true"` first and leave it out of the command. If
+port 8443 is taken, put `TAMGA_PROXY_PORT=8543` in front of the command as
+well and use that port below.
+
+Send three requests:
 
 ```bash
-curl -s -o /dev/null -w "%{http_code}\n" \
-  -X POST http://localhost:8443/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"Müşteri TC 10000000146"}]}'
-# 403
+# A clean prompt is forwarded (here: to the mock), 200
+curl -s http://localhost:8443/v1/chat/completions -H "Content-Type: application/json" \
+  -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"Summarise our refund policy"}]}'
+
+# A Turkish national ID (TC Kimlik) is blocked before any provider sees it, 403
+curl -s http://localhost:8443/v1/chat/completions -H "Content-Type: application/json" \
+  -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"Customer TC 10000000146"}]}'
+
+# An email address is masked and the request forwarded, 200 with X-Tamga-Redacted-Count: 1
+curl -s -D - http://localhost:8443/v1/chat/completions -H "Content-Type: application/json" \
+  -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"Write to ayse@example.com"}]}'
 ```
 
-The proxy alone scans, applies the policy and forwards, but keeps no record:
-there is no request log, no dashboard, and API keys and settings made
-through the API are lost on restart. What it does and does not do is listed
-in [docs/operations.md](docs/operations.md#proxy-only).
+The 403 body lists each finding: its type, where it was found and a masked
+match. Stop it with
+`docker compose -f deploy/docker-compose.yml --profile minimal down`.
 
-**The full stack** adds the request log in Postgres, the dashboard, the
-analyzer (PDF reports), Redis, NATS and Jaeger. Stop the proxy-only
-container first, as both use port 8443:
+The proxy alone keeps no record: no request log, no console, and keys made
+through the API are lost on restart
+([what it does and does not do](docs/operations.md#proxy-only)).
+
+### With the console
+
+The full stack adds the console, the request log in Postgres, the analyzer,
+Redis, NATS and Jaeger. It needs six secrets in `.env`; the loop below fills
+them with random values:
 
 ```bash
-docker compose --env-file .env -f deploy/docker-compose.yml --profile minimal down
-docker compose --env-file .env -f deploy/docker-compose.yml up -d
+docker compose -f deploy/docker-compose.yml --profile minimal down
+cp .env.example .env
+for v in TAMGA_ADMIN_KEY POSTGRES_PASSWORD REDIS_PASSWORD \
+         TAMGA_ANALYZER_TOKEN TAMGA_SCANNER_SERVICE_TOKEN TAMGA_CLASSIFIER_TOKEN; do
+  sed -i.bak "s/^$v=\$/$v=$(openssl rand -hex 32)/" .env
+done
+rm .env.bak
+TAMGA_MOCK_UPSTREAM=true docker compose --env-file .env -f deploy/docker-compose.yml up -d
 ```
 
-`.env.example` sets `COMPOSE_PROFILES=full`, so this starts the full stack;
-`--profile full` does the same. It needs the three passwords and the three
-internal service tokens in `.env` (`openssl rand -hex 32` each). Proxy on
-`https://localhost:8443`, dashboard on `https://localhost:3000`, both behind
-a TLS edge whose certificate comes from its own local CA: trust that CA's
-root once, or give the edge a public name
-([TLS](docs/operations.md#tls)). The dashboard holds no key: on first use it
-asks for the admin key (`TAMGA_ADMIN_KEY` from `.env`) under Settings and
-keeps it in that browser.
+Building all the images takes a few minutes more. A TLS edge then serves the
+proxy on `https://localhost:8443` and the console on `https://localhost:3000`,
+with a certificate from a local CA of its own. Browsers and clients warn about
+it until you trust that CA's root ([TLS](docs/operations.md#tls)):
 
-The other services are not published to the host. Jaeger's UI on `16686` and
-NATS monitoring on `8222` are local diagnostics bound to `127.0.0.1`; set
-`TAMGA_OBSERVABILITY_BIND=0.0.0.0` only if you deliberately want those
-unauthenticated endpoints reachable from the network.
+```bash
+docker compose --env-file .env -f deploy/docker-compose.yml cp \
+  edge:/data/caddy/pki/authorities/local/root.crt ./tamga-edge-root.crt
+curl --cacert tamga-edge-root.crt https://localhost:8443/health   # Git Bash: add --ssl-no-revoke
+```
 
-> `--env-file .env` is required. Compose only auto-loads a `.env` next to the
-> compose file, so without it the database password is empty, Postgres will
-> not start, and `COMPOSE_PROFILES` is not read. An `.env` made before 0.9.0
-> has no `COMPOSE_PROFILES` line: add `COMPOSE_PROFILES=full` to it.
+Add `tamga-edge-root.crt` to your operating system's or browser's trust
+store and open `https://localhost:3000`. The console holds no key: under
+Settings it asks for the admin key (`grep TAMGA_ADMIN_KEY .env`) and keeps it
+in that browser. Requests you send to `https://localhost:8443` now appear
+under Overview, Incidents and Events.
 
-Point an existing SDK at the proxy:
+- `--env-file .env` is required: without it Compose does not read `.env` and
+  Postgres does not start.
+- If Compose says a network pool overlaps (another Tamga stack on the same
+  host, for example), set `TAMGA_EDGE_SUBNET`, `TAMGA_EDGE_IP_RANGE` and
+  `TAMGA_EDGE_ADDR` together ([TLS](docs/operations.md#tls)).
+- Without `TAMGA_MOCK_UPSTREAM=true`, clean requests go to the real provider
+  with the caller's own API key.
+
+More in [docs/operations.md](docs/operations.md#docker-compose-profiles), and
+in Turkish in [docs/tr/kurulum-ve-isletim.md](docs/tr/kurulum-ve-isletim.md).
+
+## What it catches
+
+Each row links to the tests or the measurement behind it. The numbers come
+from [docs/benchmarks](docs/benchmarks/README.md); read the caveats there.
+
+| | What | Shipped policy | Backed by |
+|---|---|---|---|
+| **Turkish PII** | TC Kimlik (checksum), VKN, MERSIS number, Turkish passport, Turkish IBAN and phone numbers | TC Kimlik blocked, the rest redacted | [`pii_tr_ids_test.go`](proxy/internal/scanner/pii_tr_ids_test.go), [`pii_test.go`](proxy/internal/scanner/pii_test.go) |
+| **Other PII** | Card numbers (Luhn), IBAN, email, phone, US SSN, IP addresses, IMEI | Cards and SSN blocked, the rest redacted | [`pii_test.go`](proxy/internal/scanner/pii_test.go), [`pii_card_mask_test.go`](proxy/internal/scanner/pii_card_mask_test.go) |
+| **Secrets** | Cloud, code-host, payment and LLM provider keys, JWTs, private keys, connection strings, credentials in URLs ([formats](proxy/internal/scanner/patterns/README.md#secret-formats)) | Blocked | [`secrets_formats_test.go`](proxy/internal/scanner/secrets_formats_test.go) |
+| **Prompt injection** | Instruction override, role play, jailbreak wording, in English, Turkish and German | Blocked | [`injection_test.go`](proxy/internal/scanner/injection_test.go), [`injection_turkish_test.go`](proxy/internal/scanner/injection_turkish_test.go), [`injection_i18n_test.go`](proxy/internal/scanner/injection_i18n_test.go) |
+| **Hidden text** | Base64, hex and other encodings, zero-width and look-alike characters, leetspeak, words spelled one letter at a time | Read before scanning | [Encoded and invisible text](docs/benchmarks/README.md#encoded-and-invisible-text), [`normalize/`](proxy/internal/scanner/normalize/) |
+| **Injection in tool results** | Text an agent fetched and sent back as a tool result; the scanners know the role of each piece of text | `STRIP` removes it and the session goes on | [`strip_test.go`](proxy/internal/proxy/strip_test.go), [docs/agents.md](docs/agents.md) |
+| **Files** | PDF, DOCX, XLSX, PPTX and images (OCR) in a request, and encrypted files | Off until the policy has an `attachments` section | [`attachments_test.go`](proxy/internal/proxy/attachments_test.go), [Files a request carries](docs/operations.md#files-a-request-carries) |
+
+How well the injection rules do depends on who wrote the test set:
+
+| Set | Result |
+|---|---|
+| Tuning corpus, written with the rules (361 prompts, 2026-10-11) | precision 1.000, recall 0.910 |
+| Held-out set, same author (169 prompts, 2026-10-11) | precision 1.000, recall 1.000 |
+| Turkish sets written by others, rules alone | 27 of 203 and 2 of 59 attacks caught, no benign prompt flagged |
+| Adversarial suite (84 vectors, run of 2026-10-03) | 78 caught, 6 bypass, [published](tests/stress/baseline.json) |
+
+The rules match wording. Attacks with no override phrase (a persona, a task
+slipped in after a question) mostly get past them; the optional
+[inline classifier](docs/operations.md#inline-classifier), a small local
+model, is for those. Sources:
+[tuning and held-out](docs/benchmarks/README.md#changes-to-the-corpus-after-that-run-2026-10-11),
+[sets written by others](docs/benchmarks/README.md#two-turkish-sets-written-by-someone-else-2026-10-17),
+[adversarial suite](tests/stress/README.md). Expect less on your own traffic,
+and measure there.
+
+**Latency.** The scan stage takes p50 0.2 ms and p95 0.7 to 0.8 ms
+([benchmarks](docs/benchmarks/README.md#aggregate)). End to end through the
+Compose stack with a mocked upstream (2026-10-03, 16-core laptop CPU), P95
+was 4.0 ms at 100 requests a second, 3.3 ms at 500 and 5.0 ms at 1000, with
+no errors. Medians repeat between runs, tails do not, and a 4-core machine
+reached 130 ms at 1000 ([load suite](tests/stress/README.md)).
+
+## Integrations
+
+Examples use the quick start's `http://localhost:8443`; replace it with your
+own host. Your provider key is sent as before and goes to the provider.
+
+**OpenAI SDK.** Change the base URL; the key is read from `OPENAI_API_KEY`
+as before ([agents](docs/agents.md#agent-sdks-and-your-own-agents)):
 
 ```python
-import os
 from openai import OpenAI
-
-client = OpenAI(
-    base_url="http://localhost:8443/v1",   # was https://api.openai.com/v1
-    api_key=os.environ["OPENAI_API_KEY"],
-)
+client = OpenAI(base_url="http://localhost:8443/v1")   # was https://api.openai.com/v1
+client.chat.completions.create(model="gpt-4o-mini",
+    messages=[{"role": "user", "content": "Customer TC 10000000146"}])   # raises PermissionDeniedError (403)
 ```
 
-Provider routes: `/v1` (OpenAI), `/anthropic`, `/gemini`, `/azure`, `/bedrock`,
-`/mistral`, `/local`. The default policy allows the first four. Only the first
-three are tested by forwarding a request to a stand-in provider; see
-[Project status](#project-status).
+**Anthropic SDK.** The `/anthropic` route, also for Claude Code with
+`ANTHROPIC_BASE_URL` ([agents](docs/agents.md)):
+
+```python
+import anthropic
+client = anthropic.Anthropic(base_url="http://localhost:8443/anthropic")
+client.messages.create(model="claude-sonnet-4-5", max_tokens=256,
+    messages=[{"role": "user", "content": "Summarise our refund policy"}])
+```
+
+**LiteLLM guardrail.** Tamga checks a LiteLLM proxy's traffic without being
+in its path ([docs/litellm.md](docs/litellm.md)):
+
+```yaml
+guardrails:
+  - guardrail_name: tamga
+    litellm_params:
+      guardrail: generic_guardrail_api
+      mode: [pre_call, post_call]
+      api_base: http://localhost:8443/api/v1
+      api_key: os.environ/TAMGA_KEY        # a Tamga key with scope "proxy"
+      default_on: true
+```
+
+**Ollama, or Open WebUI in front of it.** The `/local` route speaks the
+OpenAI API. Point it at Ollama, allow it in the policy, and restart the
+proxy:
+
+```bash
+echo 'TAMGA_LOCAL_URL=http://host.docker.internal:11434' >> .env   # Ollama on the Docker host
+# proxy/tamga-policy.yaml:  providers: allowed: [openai, anthropic, azure, gemini, local]
+```
+
+Clients, Open WebUI among them (as an OpenAI API connection), then use
+`http://localhost:8443/local/v1` as their base URL. On Linux,
+`host.docker.internal` needs an `extra_hosts` entry, or use the host's
+address. This was tried against a stand-in for Ollama only; no test runs
+the `/local` route end to end
+([`TAMGA_<PROVIDER>_URL`](docs/operations.md#configuration)).
+
+**Browser extension.** For text typed into chat sites, which never passes
+through a proxy. It asks your Tamga for a verdict at paste and at send. In
+Chrome: `chrome://extensions`, Developer mode, Load unpacked, choose
+`extension/`, then set your Tamga URL and a `proxy` key in its options. It is
+an MVP, run once on three live sites
+([docs/browser-extension.md](docs/browser-extension.md)).
+
+**MCP gateway.** Tamga in front of an agent's MCP servers: tool lists, tool
+results and tool-call arguments are judged by the policy
+([docs/mcp.md](docs/mcp.md)):
+
+```yaml
+# file named by TAMGA_MCP_CONFIG; the agent then uses http://localhost:8443/mcp/github
+servers:
+  - name: github
+    url: https://mcp.example.com/mcp
+    tools: [search_issues, "get_*"]
+```
+
+Other routes: `/gemini`, `/azure`, `/bedrock`, `/mistral`, `/local`. Editors
+and coding assistants: [docs/ide.md](docs/ide.md). A company web proxy can
+ask Tamga over [ICAP](docs/icap.md).
+
+## Compared with LLM Guard and NeMo Guardrails
+
+All three are open source and run on your own machines.
+
+- **[LLM Guard](https://pypi.org/project/llm-guard/)** is a Python library
+  of input and output scanners (MIT). You call it from your code around each
+  model call; it can also run as an API server. Its repository was archived
+  in July 2026. The [migration page](docs/migrating-from-llm-guard.md) goes
+  scanner by scanner through what Tamga replaces, in part or not at all.
+- **[NeMo Guardrails](https://pypi.org/project/nemoguardrails/)** is a
+  Python toolkit (Apache-2.0) for programmable rails around a conversational
+  application: input, dialog, retrieval, execution and output rails, with
+  dialogue flows written in its own language, Colang. Some of its rails ask
+  an LLM to check the text. It can steer what a bot says and does, which
+  Tamga does not try to do.
+- **Tamga** is a proxy in front of the provider API, so applications change
+  only their base URL and need no new library. Its scanners are Go code in
+  the request path (a scan takes under a millisecond at the median); a model
+  is optional. Around them are a policy file, a request log, a console and
+  alerts. Its rules are written for Turkish identifiers and Turkish
+  injection wording as well as English.
+
+Measured side by side: [docs/benchmarks/comparison.md](docs/benchmarks/comparison.md).
+A wider comparison by product class is in [docs/comparison.md](docs/comparison.md).
 
 ## How it works
 
@@ -178,424 +279,94 @@ flowchart LR
     G --> A
 ```
 
-1. **Scan.** Deterministic scanners run in-process on every request: an
-   Aho-Corasick automaton plus validators (Luhn, TCKN and IBAN checksums) and
-   Unicode normalization against homoglyph and zero-width evasion.
-   Optionally, a local model then reads what the rules did not block and
-   flags injection by meaning rather than wording
-   ([inline classifier](docs/operations.md#inline-classifier)).
-2. **Decide.** A YAML policy maps findings to `BLOCK`, `REDACT`, `WARN` or
-   `PASS`. It hot-reloads, is parsed strictly, and warns at startup if nothing
-   acts on PII, secrets or injection.
+1. **Scan.** Deterministic scanners run in the proxy on every request, with
+   checksum validators (Luhn, TC Kimlik, IBAN) and Unicode normalization.
+   An optional local classifier reads what the rules did not block.
+2. **Decide.** A YAML policy maps findings to `BLOCK`, `REDACT`, `STRIP`,
+   `WARN` or `PASS`. It hot-reloads, and an unknown key is a load error.
 3. **Forward.** Clean or redacted requests go to the provider. Responses are
-   scanned on the way back when the policy's `output_rules` are on; they are
-   off in the shipped policy.
-4. **Record.** Every decision becomes an event in the Postgres request log
-   and the dashboard (full stack only; the proxy alone keeps the last 1000
-   in memory). A blocked, stripped or warned request is also posted to
-   the [alert destinations](docs/operations.md#alerts) you have connected,
-   and to the `notify:` URL of the rule that matched.
+   scanned too when the policy's `output_rules` are on (off by default).
+4. **Record.** Each decision is an event in the Postgres request log and the
+   console, and can be sent to [alert destinations](docs/operations.md#alerts).
 
-Diagrams for the request lifecycle, scanner pipeline, policy flow and database
-schema are in [docs/architecture](docs/architecture/README.md).
+Diagrams: [docs/architecture](docs/architecture/README.md).
 
-## What it catches
+### What Tamga does not see
 
-| | Detects | Default action |
-|---|---|---|
-| **PII** | TC Kimlik, credit cards (Luhn + BIN), IBAN, email, phone, IP | Block IDs and cards, redact the rest |
-| **Secrets** | AWS, Azure storage, GitHub, GitLab, OpenAI, Anthropic, Stripe, Slack, npm and PyPI keys and tokens, JWTs, private keys, connection strings, credentials in URLs ([all formats](proxy/internal/scanner/patterns/README.md#secret-formats)) | Block |
-| **Prompt injection** | Instruction override, role manipulation, jailbreak patterns, encoded payloads, text hidden in invisible characters; EN/TR/DE | Block |
-| **Custom entities** | Your own regex patterns (customer numbers, file IDs), editable from the dashboard | Per entity |
-| **System-prompt leaks** | Canary token injected into the system prompt and looked for in the response | Block (opt-in) |
-| **Decision governance** | Prompts that contradict a locked decision in a [jugeni](https://github.com/jugeni/jugeni-contracts) audit log | Per assertion (opt-in) |
-
-Also in the box: reversible PII tokenization (vault), per-key rate limits, a
-daily budget per organisation, provider allowlists, a response cache, and a SOC dashboard with
-an incident queue. See [docs/operations.md](docs/operations.md), and
-[docs/agents.md](docs/agents.md) for running Claude Code and other agents through it, and
-[docs/mcp.md](docs/mcp.md) for putting their MCP servers behind it.
-
-Six pages of the dashboard, on made-up data
-([how the pictures are taken](dashboard/e2e/screenshots.spec.ts)):
-
-<p align="center">
-  <img src="docs/images/console-overview.png" alt="The Overview page: 214 of 18,412 requests stopped in the last 7 days, a table of what was found by kind, the seven requests stopped most recently, and a column chart of requests by day" width="820" />
-  <br />
-  <sub>Overview: what the proxy scanned in the last 7 days, what it found and what it stopped most recently.</sub>
-</p>
-
-<p align="center">
-  <img src="docs/images/console-incidents.png" alt="The Incidents page: the proxy's counts of stopped, redacted and warned requests in the last 7 days above a table of the latest 200, each row with its time, action, finding, where it was found, provider and model" width="820" />
-  <br />
-  <sub>Incidents: the requests the proxy acted on, newest first, with the proxy's own counts for the week.</sub>
-</p>
-
-<p align="center">
-  <img src="docs/images/console-event-detail.png" alt="The Event explorer with one stopped request open beside the list: an instruction override and an email address found in a tool result, each with its location and masked match, the triage buttons, and the request's ID, endpoint and policy version" width="820" />
-  <br />
-  <sub>Event explorer: every scanned request, with one stopped request open to show what was found and where.</sub>
-</p>
-
-<p align="center">
-  <img src="docs/images/console-playground.png" alt="The Playground: a prompt beside the running policy, the verdict Stopped, the prompt with an email address and an injected instruction marked in it, and a table of the two findings" width="820" />
-  <br />
-  <sub>Playground: a prompt tried against the running policy, with the text behind the verdict marked.</sub>
-</p>
-
-<p align="center">
-  <img src="docs/images/console-policy-editor.png" alt="The Policies page: the policy document open in a code editor, with tabs for changes, history and custom entities, and buttons to reload it from disk or save and apply it" width="820" />
-  <br />
-  <sub>Policies: the policy document in the editor, saved and applied without a restart.</sub>
-</p>
-
-<p align="center">
-  <img src="docs/images/console-traffic.png" alt="The Traffic page: 18,412 requests in the last 7 days, a column chart of requests by day, and tables of requests by provider and by model family" width="820" />
-  <br />
-  <sub>Traffic: how many requests went through, by day, by provider and by model family.</sub>
-</p>
-
-## Benchmarks
-
-Measured on 2026-10-03. Everything here is reproducible from this repository.
-
-**Accuracy**, as precision / recall, on two sets of prompts written for this
-repository. The inline classifier is optional: a local model asked about what
-the rules did not block, here
-[`prompt-injection-guard-small`](https://huggingface.co/Horizon-Labs/prompt-injection-guard-small)
-at threshold 0.98.
-
-| Set | Prompts | Deterministic scanners alone | With the inline classifier |
-|---|---|---|---|
-| Tuning corpus `prompts.csv` (gates CI) | 309, of which 117 benign | 1.000 / 0.896 | 1.000 / 0.927 |
-| Held-out set `holdout.csv` | 163, of which 85 benign | 1.000 / 1.000 | 1.000 / 1.000 |
-
-On 2026-10-11 the tuning corpus grew by 22 prompts written together with new
-detectors (331, of which 121 benign). The deterministic scanners score
-1.000 / 0.905 on it: the 18 added attacks are caught and the 20 misses are
-the same 20. A second change that day (translation requests no longer
-blocked, a URL's user and password no longer read as an e-mail address,
-instructions spelled one letter at a time read) added 30 more (361, of which
-138 benign; the held-out set got 6 benign translation requests, 169 of which
-91 benign): 1.000 / 0.910 and 1.000 / 1.000, with the same 20 misses. The
-classifier has not been run on the larger corpus.
-
-Source: [docs/benchmarks/README.md](docs/benchmarks/README.md#with-the-inline-classifier),
-from the reports
-[redteam_latest.json](docs/benchmarks/redteam_latest.json),
-[redteam_holdout.json](docs/benchmarks/redteam_holdout.json),
-[redteam_classifier_latest.json](docs/benchmarks/redteam_classifier_latest.json) and
-[redteam_classifier_holdout.json](docs/benchmarks/redteam_classifier_holdout.json).
-
-Read that honestly. The rules were written against the misses in the tuning
-corpus, so its recall says how well they fit it, not how they do on new
-traffic; on 2026-10-01, before that work, the same corpus scored 0.969 / 0.495. The
-held-out set was written separately but by the same author, in the same attack
-families, so it overstates too. Expect less on your own traffic and measure
-there. What the rules still miss in the corpus is semantic: fictional and
-hypothetical framings, data-exfiltration requests, health data, street
-addresses.
-
-**What the classifier added.** On the tuning corpus it caught 6 attacks the
-rules missed and flagged no benign sample. On the held-out set it added
-nothing: the rules already caught every attack. The threshold was chosen on the tuning corpus as the lowest that flagged no
-benign sample, then run unchanged on the held-out set. The gain is small
-because both sets were built around what rules can catch; they are the wrong
-instrument for a model whose purpose is phrasing nobody anticipated, and no
-independent set has been run yet. A classifier call took p50 14–24 ms and
-p95 23–58 ms across runs on the machine below; text seen in the last ten
-minutes is answered from memory. At threshold 0.9 the classifier catches two
-more attacks in the tuning corpus and flags 1 of its 117 benign samples, and
-2 of the 85 in the held-out set. It did not catch the three injection vectors
-that bypass the adversarial suite.
-
-**Latency.** Scan stage: p50 0.2 ms, p95 0.7–0.8 ms. End to end through the
-Docker Compose stack with a mocked upstream:
-
-| Load | P50 | P95 | P99 | Errors |
-|---|---|---|---|---|
-| 100 RPS | 2.6 ms | 4.0 ms | 5.4 ms | 0% |
-| 500 RPS | 1.6 ms | 3.3 ms | 6.6 ms | 0% |
-| 1000 RPS | 1.6 ms | 5.0 ms | 9.9 ms | 0% |
-
-16-core laptop CPU, Docker limited to 12 GB. The medians repeat from run to
-run; the tails do not: runs on this day gave a P95 at 1000 RPS anywhere from
-3.0 to 5.0 ms. These also depend on hardware: an earlier run on a 4-core
-machine held the same P95 to 500 RPS and reached 130 ms at 1000. The prompts
-are chat-sized; for large requests see [docs/agents.md](docs/agents.md#speed).
-
-**Adversarial suite.** 84 attack vectors written to evade the scanners: 78
-detected, 6 bypass. Nineteen of them attack the structure of the request
-rather than its wording: text in JSON escapes, in tool results, tool call
-arguments, tool descriptions and attachments, and bodies that parsers read
-differently. The bypasses are published in
-[tests/stress/baseline.json](tests/stress/baseline.json) and include leetspeak
-and character-by-character smuggling. That is the run of 2026-10-03: since
-2026-10-11 the scanners read the two character-by-character vectors and the
-leetspeak one (measured in-process,
-[docs/benchmarks](docs/benchmarks/README.md#letter-by-letter-spelling),
-[leetspeak](docs/benchmarks/README.md#leetspeak)), and
-the suite has not been run again, so the baseline still lists them. The vectors are known to the authors, so this is a regression
-suite, not an independent evaluation. With the classifier on, the result was
-the same 78 and 6, and the load figures were within the run-to-run spread of
-the table above (the load test repeats its prompts, so it exercises the
-classifier's cache, not the model). No result file for that run is in the
-repository; the baseline describes the run without the classifier.
-
-```bash
-cd proxy && go run ./cmd/redteam -in ./testdata/redteam/prompts.csv   # accuracy
-./tests/stress/run_stress_suite.sh                                    # adversarial + load
-```
-
-Method and per-category results: [docs/benchmarks](docs/benchmarks/README.md) ·
-[tests/stress](tests/stress/README.md)
-
-## How it compares
-
-| | Tamga | Hosted gateways | OSS gateways | Network DLP |
-|---|---|---|---|---|
-| Runs entirely on your infrastructure | Yes | No | Yes | Usually |
-| Turkish PII (TCKN, IBAN, phone) | Native | Not checked | Not checked | Not checked |
-| KVKK / BDDK control mapping | Documented | Not checked | Not checked | Not checked |
-| Inline redaction | Yes | Varies | Varies | Only on traffic it can decrypt |
-| Reversible tokenization | Yes | Varies | Varies | Varies |
-| Hash-chained audit log | Admin actions | Not checked | Not checked | Not checked |
-| Published bypasses | Yes | Not checked | Not checked | Not checked |
-| Open source | AGPL-3.0 | Mostly no | Yes, licence varies | Mostly no |
-
-The three columns on the right describe a class of product, not a product. No
-product or version was tested for this table; "Not checked" means that.
-
-Tamga is a security layer, not a general LLM gateway. If you mainly need
-routing, load balancing and semantic caching across many providers, a
-dedicated gateway does that better; Tamga can sit in front of or behind one.
-More in [docs/comparison.md](docs/comparison.md).
+Only requests sent to it are scanned. An
+application that still calls the provider's own URL, text typed into a chat
+website (see the browser extension), and traffic between an agent and its
+MCP servers (see the MCP gateway) pass it by. Audio, archives and legacy
+office files are never read.
 
 ## Configuration
 
-<details>
-<summary><b>Policy</b> — one YAML file, hot-reloaded</summary>
+The shipped policy is [proxy/tamga-policy.yaml](proxy/tamga-policy.yaml);
+edit it and the proxy reloads it. Starting points for KVKK, banks, public
+bodies and software teams are in [docs/policy-templates.md](docs/policy-templates.md).
+Every environment variable is described in
+[docs/operations.md](docs/operations.md#configuration) and in
+[`.env.example`](.env.example).
 
-```yaml
-version: "1.0"
-name: "default-policy"
-
-rules:
-  pii_detection:            # contact-style PII is redacted
-    action: REDACT
-    sensitivity: medium
-    types: [iban, email, phone_tr, phone, vkn, ip_public]
-
-  pii:                      # critical identifiers are blocked
-    action: BLOCK
-    sensitivity: medium
-    types: [tc_kimlik, credit_card, ssn]
-
-  secret_detection:
-    action: BLOCK
-    sensitivity: low
-
-  injection:
-    action: BLOCK
-    sensitivity: medium
-
-vault:                      # reversible tokenization instead of masking
-  enabled: false
-
-canary:                     # system-prompt leak detection
-  enabled: false
-  block_on_leak: true
-
-providers:
-  allowed: [openai, anthropic, azure, gemini]
-
-rate_limit:
-  max_requests_per_minute: 60
-  max_tokens_per_day: 500000
-  action_on_exceed: BLOCK
-```
-
-The shipped policy is [proxy/tamga-policy.yaml](proxy/tamga-policy.yaml). An
-unknown or misplaced key is a load error, not a silent no-op.
-
-</details>
-
-<details>
-<summary><b>Environment variables</b></summary>
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `TAMGA_PROXY_PORT` | `8443` | Listen port (proxy and management API) |
-| `TAMGA_POLICY_PATH` | `./tamga-policy.yaml` | Policy file. The default is relative to the proxy's working directory; the file in this repository is `proxy/tamga-policy.yaml` |
-| `TAMGA_ADMIN_KEY` | — | Key for the management API |
-| `TAMGA_DB_URL` | — | PostgreSQL DSN; empty disables persistence |
-| `REDIS_URL` | — | Rate limiting, cache, vault store |
-| `TAMGA_MOCK_UPSTREAM` | `false` | Answer with a canned response instead of calling a provider |
-| `TAMGA_VAULT_KEY` | — | Base64 32-byte AES key for vault entries at rest |
-| `TAMGA_FINDING_HASH_KEY` | — | Base64 key (32 bytes or more) for the hashes of finding matches in the request log (`data.hash_findings`); empty derives one from `TAMGA_VAULT_KEY` |
-| `TAMGA_TRUST_ROLE_HEADER` | `false` | Honour `X-Tamga-Role` for policy exceptions; only behind an authenticating gateway |
-| `TAMGA_REQUIRE_KEY` | `false` | Refuse proxy requests that carry no valid `X-Tamga-Key` |
-| `TAMGA_CLASSIFIER_ADDR` | — | gRPC address of the optional classifier service; the policy's `scan.classifier` turns it on |
-| `TAMGA_UPSTREAM_ALLOW` | — | Hosts a policy's provider pool may point at beyond the vendors' own |
-| `TAMGA_ALERT_ALLOW_PRIVATE` | — | Internal receivers alerts may be sent to (CIDR ranges, exact host names). Empty: internal addresses are refused |
-| `TAMGA_TRUSTED_PROXIES` | — | IPs / CIDR ranges of the load balancers allowed to set `X-Forwarded-For`. Empty: the header is ignored |
-| `TAMGA_SCANNER_SERVICE_ADDR` | — | Delegate stateless scanners to a scanner-service over gRPC |
-| `TAMGA_RETENTION_REQUEST_LOGS_DAYS` | `30` | How long request metadata is kept |
-
-Full list: [docs/operations.md](docs/operations.md) · [proxy/README.md](proxy/README.md)
-
-</details>
-
-<details>
-<summary><b>Kubernetes</b></summary>
-
-```bash
-helm install tamga ./deploy/helm/tamga-proxy -n security --create-namespace
-```
-
-No public container image is published yet: build one from `proxy/Dockerfile`,
-push it to your registry, and set `image.repository` in `values.yaml`.
-
-The chart has not been tested: nothing in this repository lints, renders or
-installs it, and its version fields are behind the release. Read the
-templates before you rely on it.
-
-</details>
-
-**What is stored.** Request metadata and masked findings, for 30 days by
-default. Prompt and response bodies are not written to the database.
+A Helm chart is in [`deploy/helm/tamga-proxy`](deploy/helm/tamga-proxy); it
+has not been tested, and no public image is published yet.
 
 ## Documentation
 
 | | |
 |---|---|
-| [Architecture](docs/architecture/README.md) | Deployment topology, request lifecycle, scanner pipeline, schema |
-| [Operations](docs/operations.md) | Configuration, vault, canary tokens, budgets, management API |
+| [Operations](docs/operations.md) | Compose profiles, TLS, configuration, keys, vault, alerts, management API |
+| [Architecture](docs/architecture/README.md) | Topology, request lifecycle, scanner pipeline, schema |
+| [Benchmarks](docs/benchmarks/README.md) | Method, corpora and per-category results |
+| [Agents](docs/agents.md) · [Editors](docs/ide.md) · [MCP](docs/mcp.md) | Coding agents, editor assistants and MCP servers through Tamga |
+| [LiteLLM](docs/litellm.md) · [ICAP](docs/icap.md) · [Browser extension](docs/browser-extension.md) | Other ways in |
 | [Compliance](docs/compliance/) | KVKK, BDDK, GDPR and OWASP LLM Top 10 mappings |
-| [Benchmarks](docs/benchmarks/README.md) | Method, corpus and per-category results |
-| [Development](docs/development.md) | Repository layout, local commands, tech stack |
-| [Writing a scanner](docs/scanner-development.md) | Stateful scanners with request context |
-| [Migrating from LLM Guard](docs/migrating-from-llm-guard.md) | Scanner by scanner: what Tamga replaces, in part or not at all |
-| [MCP gateway](docs/mcp.md) | Tamga in front of an agent's MCP servers: tool lists, tool results, resources and tool-call arguments judged by the policy, per-server tool lists, changed tool definitions flagged |
-| [LiteLLM guardrail](docs/litellm.md) | Adding Tamga to a LiteLLM proxy as a guardrail, without its proxy in the path |
-| [Behind a company web proxy (ICAP)](docs/icap.md) | Letting Squid or a secure web gateway that intercepts TLS ask Tamga about requests to AI services. Not run against a real web proxy |
-| [Coding assistants in editors](docs/ide.md) | Which of Claude Code, Continue, Cline, Roo Code, Aider, Copilot, Cursor, JetBrains AI Assistant, Zed and Windsurf can be pointed at Tamga, the setting for each, and what Tamga then sees |
-| [Browser extension](docs/browser-extension.md) | Checking what is pasted or sent on three chat sites against your own Tamga |
-| [Policy templates](docs/policy-templates.md) | Starting-point policies for KVKK, banks, public bodies and software teams. Not legal advice |
-| [Threat model](docs/threat-model.md) | Trust boundaries, adversaries, the control for each with its code and test, and what remains |
-| [Verifying a release](docs/verifying-a-release.md) | Checking signatures, provenance and SBOMs. No release has been made yet |
-| [Kurulum ve işletim (Türkçe)](docs/tr/kurulum-ve-isletim.md) | Installation and operations guide in Turkish, for the Compose stack |
-| [jugeni integration](docs/integrations/jugeni.md) | Operator-state decision governance |
-| [Use cases](docs/use-cases.md) · [FAQ](docs/faq.md) | Where it fits, common questions |
+| [Threat model](docs/threat-model.md) · [SECURITY.md](SECURITY.md) | Trust boundaries and reporting a vulnerability |
+| [Development](docs/development.md) · [Writing a scanner](docs/scanner-development.md) | Repository layout, local commands |
+| [Kurulum ve işletim](docs/tr/kurulum-ve-isletim.md) | Installation and operations in Turkish |
+| [Use cases](docs/use-cases.md) · [FAQ](docs/faq.md) · [Changelog](CHANGELOG.md) | |
 
 ## Project status
 
-Pre-1.0 and maintained by one person. Use it, test it against your own traffic,
-and expect rough edges.
+Pre-1.0 and maintained by one person. Test it against your own traffic and
+expect rough edges.
 
-**Works today**, each with a test that runs the whole path against a stand-in
-for the other side: inline PII, secret and injection scanning · YAML policy
-with hot reload · the OpenAI, Anthropic and Gemini routes · role-aware
-scanning of tool results, and `STRIP` · the optional inline classifier ·
-per-key rate limits · a daily token and cost cap per organisation · response
-cache · the Postgres request
-log · `POST /api/v1/scan` · the endpoint a LiteLLM proxy calls as a
-guardrail ([LiteLLM](docs/litellm.md)) · the MCP gateway, against a fake
-MCP server ([MCP](docs/mcp.md)) · Docker Compose.
+- **Tested end to end against a stand-in for the other side:** the scanners
+  and policy, the OpenAI, Anthropic and Gemini routes, tool-result scanning
+  and `STRIP`, the inline classifier, rate limits and budgets, the response
+  cache, the Postgres request log, `POST /api/v1/scan`, the LiteLLM
+  endpoint (CI also runs a real LiteLLM container against it) and the MCP
+  gateway. No test calls a real provider.
+- **In the repository, not tested end to end:** the `/azure`, `/bedrock`,
+  `/mistral` and `/local` routes, delivery to real alert services, streamed
+  scanning outside OpenAI chat completions, the Helm chart and Terraform
+  module, the Python and TypeScript SDKs, mTLS, the remote scanner service
+  and SCIM.
+- **Known limits:** the rules match wording (see
+  [What it catches](#what-it-catches)); callers are authenticated only when
+  you issue keys, and a request without one is refused only with
+  `TAMGA_REQUIRE_KEY=true` ([SECURITY.md](SECURITY.md));
+  streamed answers are scanned only with `output_rules.streaming` on; the
+  audit log's hash chain covers administrative actions, not request
+  decisions; the only sign-in besides keys is GitHub OAuth.
 
-None of it has been run against a real provider or a real third-party service
-as part of the tests: the other side is always a stand-in. The one
-exception is LiteLLM: a CI job runs a real LiteLLM container (v1.104.2)
-against the endpoint, in front of a fake model.
-
-**In the repository, not tested end to end.** The code is there; nothing
-exercises the whole path, so treat these as experimental:
-
-- The `/azure`, `/bedrock`, `/mistral` and `/local` routes. No test forwards a
-  request through them; the Bedrock signature is checked only for its headers.
-- Alert destinations (Slack, Teams, Splunk, Sentinel, QRadar, Datadog, Jira,
-  PagerDuty, Opsgenie, ServiceNow). Decisions are delivered to them, each in
-  its own format, and that is tested against local stand-ins. None has been
-  tried against the real service, and several need their authentication
-  header added by hand ([alerts](docs/operations.md#alerts)).
-- Streamed-response scanning outside OpenAI chat completions. The Anthropic,
-  Gemini and OpenAI Responses stream formats are tested at parsing level only.
-- The Helm chart and the Terraform module (never linted, rendered or applied).
-- The Python and TypeScript SDKs (unit tests with a mocked transport, not
-  run in CI).
-- The analyzer (its tests mock Presidio and the LLM judge).
-- Redis, NATS and OpenTelemetry export: tested with in-memory or mocked
-  substitutes, not against the real servers.
-- mTLS as the proxy sets it up, the remote scanner service, and SCIM (no
-  tests at all).
-- The dashboard against a real proxy: the browser tests in CI answer the API
-  themselves; the suite that drives a real proxy is run by hand.
-
-The audit log's hash chain covers administrative actions. Request decisions
-are stored in the request log, which is not chained.
-
-**On `main`, not yet released (v0.9.0):** vault · canary tokens · trend graphs ·
-custom entity UI · the security fixes listed in the [changelog](CHANGELOG.md).
-
-**Known limits:**
-
-- The rules match wording. An attack phrased in a way no rule anticipates
-  needs the optional [classifier](docs/operations.md#inline-classifier), and
-  that has not been measured on a set its author did not write (see
-  [Benchmarks](#benchmarks)).
-- Images, audio and PDFs are not read unless the policy's `attachments`
-  section turns extraction on; audio and archives are never read.
-- Callers are authenticated only when you issue keys; requests without one
-  are refused only with `TAMGA_REQUIRE_KEY=true`. See [SECURITY.md](SECURITY.md).
-- Streamed responses are scanned only with `output_rules.streaming` on, and
-  then only the model's text: tool-call arguments and thinking pass unread.
-- The first scan of a very large request is slow, about 250 KB of new text a
-  second per core ([agents](docs/agents.md#speed)).
-- Traffic from a browser to a chat site, and between an agent and its MCP
-  servers, does not pass through a proxy at all. For three chat sites there
-  is a [browser extension](docs/browser-extension.md), an MVP run once on
-  the live sites, with some flows not yet tried there
-  ([record](extension/README.md)).
-- There is no multi-region replication, no SSO sign-in beyond GitHub OAuth
-  (SSO settings are stored and used by no sign-in; the SCIM routes have no
-  store behind them) and no custom roles.
-
-**Planned next,** in this order, with no dates and no promise: a locked
-evaluation set for the scanners and the classifier · response scanners for
-malicious links and for JSON that does not match a schema · the browser
-extension's remaining flows tried on the live chat sites. MCP inspection is not in the
-plan.
-
-## Related projects
-
-- **[jugeni](https://github.com/jugeni/jugeni-contracts)** by Mike Czerwiński —
-  an operator-state framework. Tamga reads its audit log to enforce locked
-  decisions before a call is made.
-- **[MCPRadar](https://github.com/yatuk/mcpradar)** — a pre-deployment security
-  scanner for MCP servers. Static analysis before you deploy; Tamga at runtime.
+Changes per release: [CHANGELOG.md](CHANGELOG.md).
 
 ## Contributing
 
-Issues and pull requests are welcome. Start with
-[CONTRIBUTING.md](CONTRIBUTING.md); `cd proxy && go test ./...` runs the suite,
-and the Postgres integration tests need Docker.
+Issues and pull requests are welcome; start with
+[CONTRIBUTING.md](CONTRIBUTING.md). `cd proxy && go test ./...` runs the
+proxy's tests. Found a way past a scanner? Send the vector to the
+[adversarial suite](tests/stress/README.md) as an issue or a pull request.
+For anything exploitable, follow [SECURITY.md](SECURITY.md).
 
-Found a way past a scanner? That is exactly what the
-[adversarial suite](tests/stress/README.md) is for — open an issue or send the
-vector as a pull request. For anything exploitable, follow
-[SECURITY.md](SECURITY.md) instead.
-
-## License
+## Licence
 
 Tamga is free software under the
-[GNU Affero General Public License, version 3](LICENSE) (AGPL-3.0). That is
-the only licence and this repository is the only edition: nothing is held
-back for a paid one.
-
-You may run, study, change and share it under that licence. If you change it
-and let people use your version over a network, section 13 requires you to
-offer those users the source code of your version, at no charge. The
-[licence text](LICENSE) is what applies; this paragraph only points at it.
+[GNU Affero General Public License, version 3](LICENSE). It is the only
+licence and this repository is the only edition. If you change Tamga and
+let people use your version over a network, section 13 requires you to
+offer them its source code.
 
 <div align="center">
 <br/>
