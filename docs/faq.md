@@ -46,7 +46,7 @@ requests in a middle band of risk score. It does not change the verdict, and
 what it finds is logged by the proxy as a count and stored nowhere. The measured figures
 for the scan stage and for the whole proxy path are in
 [benchmarks](benchmarks/README.md), the
-[README](../README.md#benchmarks) and `tests/stress/baseline.json`; they
+[README](../README.md#what-it-catches) and `tests/stress/baseline.json`; they
 are not repeated here.
 
 **Q: Can I run Tamga without Docker?**

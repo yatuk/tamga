@@ -14,7 +14,7 @@ to the alert destinations the bank has connected ([alerts](operations.md#alerts)
 
 **What it does not cover:** text typed or pasted into chatgpt.com in a
 browser never reaches the proxy. Tamga does not see or stop it; see
-[What Tamga does not cover](../README.md#what-tamga-does-not-cover).
+[What Tamga does not see](../README.md#what-tamga-does-not-see).
 
 **Result:** on the traffic routed through Tamga, the identifiers the
 scanners recognise are blocked or masked, and each decision is on record to
