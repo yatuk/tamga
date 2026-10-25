@@ -13,7 +13,7 @@ name: tamga-litellm-e2e
 services:
   # The fake model, and the place the checks are run from.
   upstream:
-    image: python:3.12.7-alpine3.20  # TODO: pin by digest (docs/operations.md, "Image pins")
+    image: python:3.13.3-alpine3.20  # TODO: pin by digest (docs/operations.md, "Image pins")
     command: ["python", "/e2e/fake_upstream.py"]
     volumes:
       - ./fake_upstream.py:/e2e/fake_upstream.py:ro
@@ -36,7 +36,7 @@ services:
   litellm:
     # Pinned by tag: the release the bridge was written against. See
     # docs/litellm.md before changing it.
-    image: ghcr.io/berriai/litellm:v1.104.2  # TODO: pin by digest (docs/operations.md, "Image pins")
+    image: ghcr.io/berriai/litellm:v1.106.3  # TODO: pin by digest (docs/operations.md, "Image pins")
     command: ["--config", "/e2e/litellm-config.yaml", "--port", "4000"]
     environment:
       LITELLM_MASTER_KEY: sk-e2e-litellm-master-key-opens-only-this-test

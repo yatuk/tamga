@@ -42,7 +42,7 @@ services:
   # TAMGA_PROXY_PORT and TAMGA_DASHBOARD_PORT choose the host ports.
   edge:
     profiles: ["full"]
-    image: caddy:2.10.2-alpine  # TODO: pin by digest (see IMAGES above)
+    image: caddy:2.11.6-alpine  # TODO: pin by digest (see IMAGES above)
     ports:
       - "${TAMGA_PROXY_BIND:-0.0.0.0}:${TAMGA_PROXY_PORT:-8443}:8443"
       - "${TAMGA_DASHBOARD_BIND:-0.0.0.0}:${TAMGA_DASHBOARD_PORT:-3000}:3000"
@@ -485,7 +485,7 @@ services:
 
   jaeger:
     profiles: ["full"]
-    image: jaegertracing/all-in-one:1.54  # TODO: pin by digest (see IMAGES above)
+    image: jaegertracing/all-in-one:1.60  # TODO: pin by digest (see IMAGES above)
     expose:
       - "4318"
     ports:
@@ -508,7 +508,7 @@ services:
 
   nats:
     profiles: ["full"]
-    image: nats:2.10-alpine  # TODO: pin by digest (see IMAGES above)
+    image: nats:2.12-alpine  # TODO: pin by digest (see IMAGES above)
     command: ["-js", "-m", "8222"]
     expose:
       - "4222"
