@@ -44,7 +44,7 @@
     "@testing-library/user-event": "^14.6.1",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
-    "@vitest/coverage-v8": "^4.1.8",
+    "@vitest/coverage-v8": "^5.0.5",
     "@vitest/ui": "^4.1.8",
     "eslint": "^9.0.0",
     "eslint-config-next": "^15.0.0",
