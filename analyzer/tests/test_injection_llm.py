@@ -264,6 +264,11 @@ def test_judge_call_goes_through_the_installed_sdk():
 
     assert len(requests) == 1
     assert requests[0].url.path == "/v1/messages"
+    # SDK 2.x speaks API version 2026-10-21 and sends the key as a bearer
+    # token (1.x sent it in X-Api-Key); a gateway in between must read it there.
+    assert requests[0].headers["anthropic-version"] == "2026-10-21"
+    assert requests[0].headers["authorization"] == f"Bearer {_REAL_LOOKING_KEY}"
+    assert "x-api-key" not in requests[0].headers
     body = json.loads(requests[0].content)
     assert body["model"] == LLMInjectionScanner._MODEL
     assert body["max_tokens"] == LLMInjectionScanner._MAX_TOKENS
