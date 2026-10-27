@@ -69,6 +69,24 @@
   longer sees the judge's calls.** The analyzer image now gets protobuf 7,
   which grpcio-tools 1.84 allows; the committed gRPC stubs load under it
   unchanged.
+- The console moves to Carbon 1.119 (`@carbon/react`; icons 11.91,
+  styles 1.118), motion 14.5, TanStack Query 5.104.5 and CodeMirror view
+  6.43.15, and its tests to Vitest 5 and MSW 3. Vite is now a listed dev
+  dependency: Vitest 5 takes it as a peer, which `npm ci --legacy-peer-deps`
+  in CI would not install. Carbon 1.119 no longer pulls in `sass`; the
+  console uses Carbon's compiled CSS.
+- The analyzer moves to FastAPI 0.159, pydantic-settings 2.16.1, pypdf
+  6.21.2 and the Anthropic SDK 2.1. The FastAPI releases in between
+  change how form fields, files and parameter models are read, which the
+  analyzer does not use. **The LLM judge's calls now use API version
+  `2026-10-21` and carry the key in `Authorization: Bearer` instead of
+  `X-Api-Key`**: a gateway that `ANTHROPIC_BASE_URL` points the analyzer
+  at must read the key there (the Compose file does not set it). The
+  judge sends no sampling parameters, which that API version rejects.
+  The Anthropic SDK is Apache-2.0 from 2.0 on (it was MIT).
+- The classifier requires protobuf 7 (`>=7.36.2,<8`, as the analyzer
+  already runs) and onnxruntime 1.31 or later. The committed gRPC stubs
+  load under protobuf 7 unchanged.
 
 ### Contributing
 - Commits in a pull request need a Developer Certificate of Origin
