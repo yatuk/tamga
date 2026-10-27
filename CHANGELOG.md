@@ -10,6 +10,12 @@
   unmaintained `golang.org/x/crypto/openpgp` it lists is not called.
   **The release binaries and the CI builds move to 1.26.10; a self-built
   image picks up the newest 1.26 builder as before.**
+- `scripts/govulncheck.sh` runs govulncheck for CI and `make vuln` and
+  leaves out the IDs listed, with a reason, in `proxy/govulncheck.ignore`.
+  The list holds GO-2026-5932 (the unmaintained `openpgp`, not called).
+  An entry only hides a finding the code does not call: a called one
+  still fails the check, listed or not, and an entry that no longer
+  matches anything is named so it can be removed.
 
 ### Fixed
 - The ICAP server could count a connection accepted during `Shutdown`
@@ -51,6 +57,9 @@
 - GitHub Actions in the CI workflows move to their current major
   versions (checkout 7, setup-go 7, upload-artifact 7, cache 6,
   setup-buildx-action 4), as `release.yml` already uses.
+- The LiteLLM end-to-end test runs against LiteLLM v1.104.7 (was
+  v1.104.2) and passed on it on 2026-10-27; `docs/litellm.md` names both
+  releases.
 - Dependabot opens its pull requests against `development`, at most three
   open per entry, and its LiteLLM ignore rule now matches the name it
   uses for the image (`berriai/litellm`).
