@@ -11,6 +11,12 @@
   **The release binaries and the CI builds move to 1.26.10; a self-built
   image picks up the newest 1.26 builder as before.**
 
+### Fixed
+- The ICAP server could count a connection accepted during `Shutdown`
+  after it had begun waiting for the open ones (a race the race detector
+  reports). Such a connection is now closed and `Serve` returns
+  `ErrServerClosed` (`proxy/internal/icap/icap.go`).
+
 ### Benchmarks
 - `docs/benchmarks/comparison.md` measures Tamga (rules, rules with the
   classifier, the classifier alone) beside LLM Guard's `PromptInjection`
