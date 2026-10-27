@@ -1,0 +1,10 @@
+# govulncheck findings that scripts/govulncheck.sh leaves out of its output.
+#
+# One entry per line: the ID, then why it is safe to leave out. An entry
+# only hides a finding the code does not call (found in a required module
+# or an imported package). If the code ever calls the vulnerable symbol,
+# the finding is reported and the check fails, listed here or not. The
+# script names an entry that no longer matches any finding, so it can be
+# removed.
+
+GO-2026-5932  golang.org/x/crypto/openpgp is unmaintained (no fix will come). The proxy imports nothing from openpgp; the module is required for other x/crypto packages. Listed 2026-10-27.

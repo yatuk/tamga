@@ -33,7 +33,9 @@ jobs:
       - name: govulncheck
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@v1.7.0
-          govulncheck ./...
+          # Fails on a called vulnerability; leaves out the uncalled ones
+          # listed, with a reason, in proxy/govulncheck.ignore.
+          bash "$GITHUB_WORKSPACE/scripts/govulncheck.sh"
 
   gosec:
     name: Go Security Analysis
