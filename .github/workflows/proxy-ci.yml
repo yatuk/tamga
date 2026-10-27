@@ -41,7 +41,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: gosec
-        uses: securego/gosec@master
+        # Pinned: gosec v2.30.0 (2026-10-23) adds rules whose findings have
+        # not been triaged yet; master moves with it.
+        uses: securego/gosec@deb54465fea23d19a77f037e11e6589021f8501d # v2.29.0
         with:
           args: "-quiet -exclude-dir=scripts ./proxy/..."
 
