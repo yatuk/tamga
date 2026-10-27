@@ -44,7 +44,7 @@ TAMGA_MOCK_UPSTREAM=true go run ./cmd/tamga
 
 ## Gereksinimler
 
-- Go 1.26.9+ (`go.mod`: 1.26.9)
+- Go 1.26.10+ (`go.mod`: 1.26.10)
 
 ## Hızlı başlangıç
 
