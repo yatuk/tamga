@@ -7,7 +7,7 @@ import { server } from "./__mocks__/server";
 process.env.NEXT_PUBLIC_API_URL = "http://localhost:3000";
 
 // MSW lifecycle
-beforeAll(() => server.listen({ onUnhandledRequest: "warn" }));
+beforeAll(() => server.listen({ onUnhandledFrame: "warn" }));
 afterEach(() => {
   cleanup();
   server.resetHandlers();
