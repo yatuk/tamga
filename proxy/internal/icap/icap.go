@@ -227,10 +227,19 @@ func (s *Server) Serve(ln net.Listener) error {
 			_ = c.Close()
 			continue
 		}
+		// Shutdown sets closing under mu before it waits on wg, so a
+		// connection accepted while it runs is either counted before the
+		// wait or refused here; wg.Add never races the wait.
 		s.mu.Lock()
+		if s.closing {
+			s.mu.Unlock()
+			_ = c.Close()
+			<-s.slots
+			return ErrServerClosed
+		}
 		s.conns[c] = true
-		s.mu.Unlock()
 		s.wg.Add(1)
+		s.mu.Unlock()
 		go func() {
 			defer func() {
 				s.mu.Lock()
