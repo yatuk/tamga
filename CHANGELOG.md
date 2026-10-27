@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Security
+- The proxy is built with Go 1.26.10 (`proxy/go.mod`; was 1.26.9), which
+  fixes GO-2026-6809: crypto/x509 now distrusts the compromised
+  intermediate certificates that release names. govulncheck on
+  2026-10-27 finds nothing else reachable on the 1.26 line; the
+  unmaintained `golang.org/x/crypto/openpgp` it lists is not called.
+  **The release binaries and the CI builds move to 1.26.10; a self-built
+  image picks up the newest 1.26 builder as before.**
+
 ### Benchmarks
 - `docs/benchmarks/comparison.md` measures Tamga (rules, rules with the
   classifier, the classifier alone) beside LLM Guard's `PromptInjection`
