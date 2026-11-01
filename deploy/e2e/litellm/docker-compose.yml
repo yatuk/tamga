@@ -36,7 +36,7 @@ services:
   litellm:
     # Pinned by tag: the release the bridge was written against. See
     # docs/litellm.md before changing it.
-    image: ghcr.io/berriai/litellm:v1.104.7  # TODO: pin by digest (docs/operations.md, "Image pins")
+    image: ghcr.io/berriai/litellm:v1.104.8  # TODO: pin by digest (docs/operations.md, "Image pins")
     command: ["--config", "/e2e/litellm-config.yaml", "--port", "4000"]
     environment:
       LITELLM_MASTER_KEY: sk-e2e-litellm-master-key-opens-only-this-test
