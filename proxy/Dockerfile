@@ -1,5 +1,5 @@
 # TODO: pin by digest (image:tag@sha256:...): docs/operations.md, "Image pins".
-FROM golang:1.26-alpine AS builder
+FROM golang:1.27-alpine AS builder
 
 WORKDIR /build
 COPY go.mod go.sum ./
