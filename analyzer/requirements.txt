@@ -6,7 +6,7 @@ pydantic==2.14.1
 pydantic-settings==2.16.1
 anthropic==2.3.0
 presidio-analyzer==2.2.364
-spacy>=3.8.16,<4.0
+spacy>=3.8.18,<4.0
 asyncpg==0.32.0
 reportlab>=5.0.1
 httpx==0.28.1
