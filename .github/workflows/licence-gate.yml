@@ -37,7 +37,7 @@ jobs:
 
       # Go: the inventory reads each module's licence file from the module
       # cache with GOPROXY=off, so the modules have to be there first.
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: proxy/go.mod
           # The release calls this workflow, and a release reads no cache an
