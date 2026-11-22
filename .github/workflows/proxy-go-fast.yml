@@ -35,7 +35,7 @@ jobs:
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@v7.1.0
         with:
           go-version-file: proxy/go.mod
           cache: true
