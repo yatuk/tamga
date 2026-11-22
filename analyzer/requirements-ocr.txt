@@ -14,8 +14,8 @@ pillow==13.0.0
 # here so the image does not change under it. The model files are fetched
 # separately: scripts/fetch_ocr_models.py.
 rapidocr==3.10.0
-onnxruntime==1.31.0
-opencv-python-headless==5.0.0.93
+onnxruntime==1.32.0
+opencv-python-headless==5.1.0.95
 
 # TAMGA_OCR_ENGINE=tesseract (Apache-2.0). Needs the tesseract binary and the
 # tur traineddata from the system: apt-get install tesseract-ocr tesseract-ocr-tur.

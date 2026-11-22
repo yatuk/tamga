@@ -1,10 +1,10 @@
-grpcio==1.84.1
-grpcio-tools==1.84.1
-fastapi==0.162.0
+grpcio==1.85.3
+grpcio-tools==1.85.3
+fastapi==0.165.0
 uvicorn[standard]==0.54.0
-pydantic==2.14.1
-pydantic-settings==2.16.1
-anthropic==2.3.0
+pydantic==2.14.3
+pydantic-settings==2.16.3
+anthropic==2.10.0
 presidio-analyzer==2.2.364
 spacy>=3.8.16,<4.0
 asyncpg==0.32.0
